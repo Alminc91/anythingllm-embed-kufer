@@ -49,12 +49,18 @@ export default function ChatWindowHeader({
       className="allm-flex allm-items-center allm-relative allm-rounded-t-2xl"
       id="anything-llm-header"
     >
-      <div className="allm-flex allm-justify-center allm-items-center allm-w-full allm-h-[76px]">
+      <div className="allm-flex allm-items-center allm-px-4 allm-h-[76px] allm-flex-1">
         <img
-          style={{ maxWidth: 48, maxHeight: 48 }}
           src={iconUrl ?? AnythingLLMIcon}
           alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
+          className="allm-flex-shrink-0"
+          style={{ maxWidth: "40px", maxHeight: "40px" }}
         />
+        {settings.brandText && (
+          <span className="allm-ml-3 allm-text-gray-800 allm-font-semibold allm-text-sm allm-truncate allm-font-sans">
+            {settings.brandText}
+          </span>
+        )}
       </div>
       <div className="allm-absolute allm-right-0 allm-flex allm-gap-x-1 allm-items-center allm-px-[22px]">
         {settings.loaded && (
@@ -100,15 +106,17 @@ function OptionsMenu({ settings, showing, resetChat, sessionId, menuRef }) {
         className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
       >
         <ArrowCounterClockwise size={24} />
-        <p className="allm-text-[14px]">Reset Chat</p>
+        <p className="allm-text-[14px] allm-font-sans">
+          {settings.resetBurgerText || "Reset Chat"}
+        </p>
       </button>
-      <ContactSupport email={settings.supportEmail} />
-      <SessionID sessionId={sessionId} />
+      <ContactSupport email={settings.supportEmail} settings={settings} />
+      <SessionID sessionId={sessionId} settings={settings} />
     </div>
   );
 }
 
-function SessionID({ sessionId }) {
+function SessionID({ sessionId, settings }) {
   if (!sessionId) return null;
 
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
@@ -134,12 +142,14 @@ function SessionID({ sessionId }) {
       className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
     >
       <Copy size={24} />
-      <p className="allm-text-[14px]">Session ID</p>
+      <p className="allm-text-[14px] allm-font-sans">
+        {settings.sessionBurgerText || "Session ID"}
+      </p>
     </button>
   );
 }
 
-function ContactSupport({ email = null }) {
+function ContactSupport({ email = null, settings }) {
   if (!email) return null;
 
   const subject = `Inquiry from ${window.location.origin}`;
@@ -149,7 +159,9 @@ function ContactSupport({ email = null }) {
       className="allm-no-underline hover:allm-underline hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
     >
       <Envelope size={24} />
-      <p className="allm-text-[14px] allm-font-sans">Email Support</p>
+      <p className="allm-text-[14px] allm-font-sans">
+        {settings.emailBurgerText || "Email Support"}
+      </p>
     </a>
   );
 }

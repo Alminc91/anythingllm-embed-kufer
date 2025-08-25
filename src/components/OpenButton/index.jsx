@@ -19,74 +19,64 @@ const CHAT_ICONS = {
 
 export default function OpenButton({ settings, isOpen, toggleOpen }) {
   // Default welcome messages - can be customized via settings
-  const defaultMessages = [
-    "Hi! Ich bin heiße Kuno, ich bin dein Kursberater!",
-    "Frage mich gerne, was immer du möchtest! Ich berate dich gerne!"
+  const defaultBubbleMessages = [
+    "Hallo! Ich bin Kuno, Ihr Online-Berater!",
+    "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!"
   ];
   
-  const welcomeMessages = settings?.welcomeMessages || defaultMessages;
-  const [visibleBubbles, setVisibleBubbles] = useState(
-    welcomeMessages.map((_, index) => ({ id: index, visible: true }))
-  );
+  const welcomeMessages = settings?.chatbotBubblesMessages?.length > 0 
+    ? settings.chatbotBubblesMessages 
+    : defaultBubbleMessages;
+  const [bubblesVisible, setBubblesVisible] = useState(true);
   
   if (isOpen) return null;
   
   const ChatIcon = CHAT_ICONS.hasOwnProperty(settings?.chatIcon)
     ? CHAT_ICONS[settings.chatIcon]
     : CHAT_ICONS.plus;
-    
-  const closeBubble = (bubbleId, e) => {
-    e.stopPropagation();
-    setVisibleBubbles(prev => 
-      prev.map(bubble => 
-        bubble.id === bubbleId ? { ...bubble, visible: false } : bubble
-      )
-    );
-  };
-  
-  const visibleBubblesList = visibleBubbles.filter(bubble => bubble.visible);
   
   return (
     <div className="allm-relative">
       {/* Welcome message bubbles */}
-      {visibleBubblesList.length > 0 && (
-        <div className="allm-absolute allm-bottom-full allm-mb-2 allm-right-0 allm-flex allm-flex-col allm-gap-2">
-          {visibleBubblesList.map((bubble, index) => {
-            const messageIndex = bubble.id;
-            const message = welcomeMessages[messageIndex];
-            const isLast = index === visibleBubblesList.length - 1;
-            
-            return (
-              <div
-                key={bubble.id}
-                className="allm-group allm-relative allm-bg-white allm-text-[#222628] allm-rounded-lg allm-shadow-lg allm-p-3 allm-max-w-xs allm-text-sm allm-cursor-pointer allm-transition-all allm-duration-200 hover:allm-shadow-xl allm-border allm-border-gray-100"
-                onClick={toggleOpen}
-                style={{
-                  animationDelay: `${index * 1000}ms`,
-                  animation: 'slideInRight 0.3s ease-out forwards'
-                }}
-              >
-                {/* Message content */}
-                <div className="allm-pr-6">
-                  <span className="allm-leading-relaxed">{message}</span>
-                </div>
-                
-                {/* Close button - only visible on hover */}
-                <button
-                  className="allm-absolute allm-top-2 allm-right-2 allm-text-gray-400 hover:allm-text-gray-600 allm-rounded-full allm-p-1 allm-w-6 allm-h-6 allm-flex allm-items-center allm-justify-center allm-text-xs allm-transition-all allm-duration-200 allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-gray-100"
-                  onClick={(e) => closeBubble(bubble.id, e)}
-                  aria-label="Close chat bubble"
-                >
-                  ×
-                </button>
-                
-                {/* Speech bubble tail */}
-                {isLast && (
-                  <div className="allm-absolute allm-top-full allm-right-4 allm-w-0 allm-h-0 allm-border-l-8 allm-border-r-8 allm-border-t-8 allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm"></div>
-                )}
-              </div>
-            );
-          })}
+      {settings.displayChatbotBubbles && bubblesVisible && (
+        <div 
+          className="allm-absolute allm-bottom-full allm-mb-3 allm-right-4 allm-flex allm-flex-col allm-gap-3 allm-group allm-cursor-pointer"
+          onClick={toggleOpen}
+        >
+          {/* Single X button for entire group */}
+          <button
+            className="allm-absolute allm-top-0 allm-z-10 allm-text-gray-400 hover:allm-text-gray-600 allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-200 allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-gray-100 allm-bg-white allm-shadow-sm allm-border"
+            style={{ right: '-12px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setBubblesVisible(false);
+            }}
+            aria-label="Close all chat bubbles"
+          >
+            ×
+          </button>
+          
+          {/* First bubble */}
+          <div 
+            className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]"
+            style={{ animation: '0.4s ease-out 0s 1 normal forwards running slideInRight' }}
+          >
+            <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
+              {welcomeMessages[0]}
+            </div>
+          </div>
+          
+          {/* Second bubble with tail */}
+          <div 
+            className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"
+            style={{ animation: '0.4s ease-out 0s 1 normal forwards running slideInRight' }}
+          >
+            <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
+              {welcomeMessages[1]}
+            </div>
+            {/* Speech bubble tail */}
+            <div className="allm-absolute allm-top-full allm-right-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm"></div>
+          </div>
         </div>
       )}
       

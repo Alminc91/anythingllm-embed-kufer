@@ -12,31 +12,37 @@ const DEFAULT_SETTINGS = {
   showThoughts: false, // show the AI's thought process in responses.
 
   // style parameters
-  chatIcon: "plus",
-  brandImageUrl: null, // will be forced into 100x50px container
-  greeting: null, // empty chat window greeting.
-  buttonColor: "#262626", // must be hex color code
-  userBgColor: "#2C2F35", // user text bubble color
+  chatIcon: "chatBubble",
+  brandImageUrl: "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // will be forced into 100x50px container
+  brandText: "Kuno, Ihr Online-Berater", // brand text to display next to brand image
+  greeting: "Hallo. Ich bin Kuno, Ihr Online-Berater. Gerne helfe ich bei Fragen weiter.", // Kufer chat window greeting.
+  buttonColor: "#607D8B", // must be hex color code
+  userBgColor: "#607D8B", // user text bubble color
   assistantBgColor: "#2563eb", // assistant text bubble color
-  noSponsor: null, // Shows sponsor in footer of chat
-  sponsorText: "Powered by AnythingLLM", // default sponsor text
+  noSponsor: true, // Shows sponsor in footer of chat
+  sponsorText: "Powered by AnythingLLM", // default sponsor textNo
   sponsorLink: "https://anythingllm.com", // default sponsor link
   position: "bottom-right", // position of chat button/window
   assistantName: "AnythingLLM Chat Assistant", // default assistant name
-  assistantIcon: null, // default assistant icon
-  windowHeight: null, // height of chat window in number:css-prefix
-  windowWidth: null, // width of chat window in number:css-prefix
-  textSize: null, // text size in px (number only)
+  assistantIcon: "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // default assistant icon
+  windowHeight: "90%", // height of chat window in number:css-prefix
+  windowWidth: "25%", // width of chat window in number:css-prefix
+  textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
-  language: "en", // language of chat interface
-  sendMessageText: null, // override text for send message button
-  resetChatText: null, // override text for reset chat button
+  language: "de", // language of chat interface
+  sendMessageText: "Sende Nachricht", // override text for send message button
+  resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
+  resetBurgerText: null, // override text for reset option in burger menu
+  emailBurgerText: null, // override text for email support option in burger menu
+  sessionBurgerText: null, // override text for session ID option in burger menu
 
   // behaviors
   openOnLoad: "off", // or "on"
-  supportEmail: null, // string of email for contact
+  supportEmail: "info@kufer.de", // string of email for contact
   username: null, // The display or readable name set on a script
   defaultMessages: [], // list of strings for default messages.
+  displayChatbotBubbles: true, // controls whether welcome message bubbles are shown
+  chatbotBubblesMessages: [], // messages to display in welcome bubbles
 };
 
 export default function useGetScriptAttributes() {
@@ -71,6 +77,7 @@ export default function useGetScriptAttributes() {
 const validations = {
   _fallbacks: {
     defaultMessages: [],
+    chatbotBubblesMessages: [],
   },
 
   defaultMessages: function (value = null) {
@@ -89,6 +96,25 @@ const validations = {
     } catch (e) {
       console.error("AnythingLLMEmbed", e);
       return this._fallbacks.defaultMessages;
+    }
+  },
+
+  chatbotBubblesMessages: function (value = null) {
+    if (typeof value !== "string") return this._fallbacks.chatbotBubblesMessages;
+    try {
+      const list = value.split(",");
+      if (
+        !Array.isArray(list) ||
+        list.length === 0 ||
+        !list.every((v) => typeof v === "string" && v.length > 0)
+      )
+        throw new Error(
+          "Invalid chatbot-bubbles-messages attribute value. Must be array of strings"
+        );
+      return list.map((v) => v.trim());
+    } catch (e) {
+      console.error("AnythingLLMEmbed", e);
+      return this._fallbacks.chatbotBubblesMessages;
     }
   },
 };
