@@ -20,8 +20,8 @@ const CHAT_ICONS = {
 export default function OpenButton({ settings, isOpen, toggleOpen }) {
   // Default welcome messages - can be customized via settings
   const defaultMessages = [
-    "👋 Hi! Ich bin heiße Kuno, ich bin dein Kursberater!",
-    "🤖 Frage mich gerne, was immer du möchtest! Ich berate dich gerne! 😊"
+    "Hi! Ich bin heiße Kuno, ich bin dein Kursberater!",
+    "Frage mich gerne, was immer du möchtest! Ich berate dich gerne!"
   ];
   
   const welcomeMessages = settings?.welcomeMessages || defaultMessages;
