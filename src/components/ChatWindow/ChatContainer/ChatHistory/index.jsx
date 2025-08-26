@@ -153,7 +153,9 @@ function SuggestedMessages({ settings }) {
           type="button"
           onClick={() => {
             window.dispatchEvent(
-              new CustomEvent(SEND_TEXT_EVENT, { detail: { command: content } })
+              new CustomEvent(SEND_TEXT_EVENT, {
+                detail: { command: content },
+              }),
             );
           }}
           className={`msg-suggestion allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-text-white allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}

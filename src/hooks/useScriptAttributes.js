@@ -13,9 +13,11 @@ const DEFAULT_SETTINGS = {
 
   // style parameters
   chatIcon: "chatBubble",
-  brandImageUrl: "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // will be forced into 100x50px container
+  brandImageUrl:
+    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // will be forced into 100x50px container
   brandText: "Kuno, Ihr Online-Berater", // brand text to display next to brand image
-  greeting: "Hallo. Ich bin Kuno, Ihr Online-Berater. Gerne helfe ich bei Fragen weiter.", // Kufer chat window greeting.
+  greeting:
+    "Hallo. Ich bin Kuno, Ihr Online-Berater. Gerne helfe ich bei Fragen weiter.", // Kufer chat window greeting.
   buttonColor: "#607D8B", // must be hex color code
   userBgColor: "#607D8B", // user text bubble color
   assistantBgColor: "#2563eb", // assistant text bubble color
@@ -24,7 +26,8 @@ const DEFAULT_SETTINGS = {
   sponsorLink: "https://anythingllm.com", // default sponsor link
   position: "bottom-right", // position of chat button/window
   assistantName: "AnythingLLM Chat Assistant", // default assistant name
-  assistantIcon: "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // default assistant icon
+  assistantIcon:
+    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // default assistant icon
   windowHeight: "90%", // height of chat window in number:css-prefix
   windowWidth: "25%", // width of chat window in number:css-prefix
   textSize: 14, // text size in px (number only)
@@ -59,7 +62,7 @@ export default function useGetScriptAttributes() {
         !embedderSettings.settings.embedId
       )
         throw new Error(
-          "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!"
+          "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!",
         );
 
       setSettings({
@@ -90,7 +93,7 @@ const validations = {
         !list.every((v) => typeof v === "string" && v.length > 0)
       )
         throw new Error(
-          "Invalid default-messages attribute value. Must be array of strings"
+          "Invalid default-messages attribute value. Must be array of strings",
         );
       return list.map((v) => v.trim());
     } catch (e) {
@@ -100,7 +103,8 @@ const validations = {
   },
 
   chatbotBubblesMessages: function (value = null) {
-    if (typeof value !== "string") return this._fallbacks.chatbotBubblesMessages;
+    if (typeof value !== "string")
+      return this._fallbacks.chatbotBubblesMessages;
     try {
       const list = value.split(",");
       if (
@@ -109,7 +113,7 @@ const validations = {
         !list.every((v) => typeof v === "string" && v.length > 0)
       )
         throw new Error(
-          "Invalid chatbot-bubbles-messages attribute value. Must be array of strings"
+          "Invalid chatbot-bubbles-messages attribute value. Must be array of strings",
         );
       return list.map((v) => v.trim());
     } catch (e) {

@@ -108,8 +108,8 @@ export default function ChatContainer({
             setLoadingResponse,
             setChatHistory,
             remHistory,
-            _chatHistory
-          )
+            _chatHistory,
+          ),
       );
       return;
     }

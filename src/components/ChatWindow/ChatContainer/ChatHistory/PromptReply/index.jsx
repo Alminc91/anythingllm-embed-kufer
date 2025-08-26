@@ -55,7 +55,7 @@ const PromptReply = forwardRef(
     // Extract content between think tags if they exist
     const thinkMatches = reply?.match(/<think>([\s\S]*?)<\/think>/g) || [];
     const thoughts = thinkMatches.map((match) =>
-      match.replace(/<\/?think>/g, "").trim()
+      match.replace(/<\/?think>/g, "").trim(),
     );
 
     const hasIncompleteThinkTag =
@@ -180,7 +180,7 @@ const PromptReply = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 
 export default memo(PromptReply);

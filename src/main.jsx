@@ -10,7 +10,7 @@ document.body.appendChild(appElement);
 
 const scriptSettings = Object.assign(
   {},
-  document?.currentScript?.dataset || {}
+  document?.currentScript?.dataset || {},
 );
 
 export const embedderSettings = {
@@ -33,5 +33,5 @@ const root = ReactDOM.createRoot(appElement);
 root.render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
 );

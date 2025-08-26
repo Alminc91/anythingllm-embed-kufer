@@ -46,7 +46,7 @@ const HistoricalMessage = forwardRef(
       errorMsg = null,
       sentAt,
     },
-    ref
+    ref,
   ) => {
     const textSize = !!embedderSettings.settings.textSize
       ? `allm-text-[${embedderSettings.settings.textSize}px]`
@@ -56,7 +56,7 @@ const HistoricalMessage = forwardRef(
     // Extract content between think tags if they exist
     const thinkMatches = message?.match(/<think>([\s\S]*?)<\/think>/g) || [];
     const thoughts = thinkMatches.map((match) =>
-      match.replace(/<think>|<\/think>/g, "").trim()
+      match.replace(/<think>|<\/think>/g, "").trim(),
     );
 
     // Get the response content without the think tags
@@ -123,7 +123,7 @@ const HistoricalMessage = forwardRef(
                     className={`allm-whitespace-pre-line allm-flex allm-flex-col allm-gap-y-1 ${textSize} allm-leading-[20px]`}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(
-                        renderMarkdown(responseContent || message)
+                        renderMarkdown(responseContent || message),
                       ),
                     }}
                   />
@@ -142,7 +142,7 @@ const HistoricalMessage = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 
 export default memo(HistoricalMessage);

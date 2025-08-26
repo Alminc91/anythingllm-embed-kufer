@@ -6,7 +6,7 @@ export function parseStylesSrc(scriptSrc = null) {
       .replace("anythingllm-chat-widget.js", "anythingllm-chat-widget.min.css")
       .replace(
         "anythingllm-chat-widget.min.js",
-        "anythingllm-chat-widget.min.css"
+        "anythingllm-chat-widget.min.css",
       );
     return _url.toString();
   } catch {

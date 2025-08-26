@@ -11,7 +11,7 @@ export default function useChatHistory(settings = null, sessionId = null) {
       try {
         const formattedMessages = await ChatService.embedSessionHistory(
           settings,
-          sessionId
+          sessionId,
         );
         setMessages(formattedMessages);
         setLoading(false);
