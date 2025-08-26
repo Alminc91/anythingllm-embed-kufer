@@ -6,7 +6,7 @@ import {
   MagnifyingGlass,
   MagicWand,
 } from "@phosphor-icons/react";
-import { useState } from "react";
+import useBubbleDismissal from "@/hooks/useBubbleDismissal";
 
 const CHAT_ICONS = {
   plus: Plus,
@@ -21,55 +21,62 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
   // Default welcome messages - can be customized via settings
   const defaultBubbleMessages = [
     "Hallo! Ich bin Kuno, Ihr Online-Berater!",
-    "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!"
+    "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!",
   ];
-  
-  const welcomeMessages = settings?.chatbotBubblesMessages?.length > 0 
-    ? settings.chatbotBubblesMessages 
-    : defaultBubbleMessages;
-  const [bubblesVisible, setBubblesVisible] = useState(true);
-  
+
+  const welcomeMessages =
+    settings?.chatbotBubblesMessages?.length > 0
+      ? settings.chatbotBubblesMessages
+      : defaultBubbleMessages;
+  const { bubblesVisible, dismissBubbles } = useBubbleDismissal(settings);
+
   if (isOpen) return null;
-  
+
   const ChatIcon = CHAT_ICONS.hasOwnProperty(settings?.chatIcon)
     ? CHAT_ICONS[settings.chatIcon]
     : CHAT_ICONS.plus;
-  
+
   return (
     <div className="allm-relative">
       {/* Welcome message bubbles */}
       {settings.displayChatbotBubbles && bubblesVisible && (
-        <div 
+        <div
           className="allm-absolute allm-bottom-full allm-mb-3 allm-right-4 allm-flex allm-flex-col allm-gap-3 allm-group allm-cursor-pointer"
           onClick={toggleOpen}
         >
           {/* Single X button for entire group */}
           <button
             className="allm-absolute allm-top-0 allm-z-10 allm-text-gray-400 hover:allm-text-gray-600 allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-200 allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-gray-100 allm-bg-white allm-shadow-sm allm-border"
-            style={{ right: '-12px' }}
+            style={{ right: "-12px" }}
             onClick={(e) => {
               e.stopPropagation();
-              setBubblesVisible(false);
+              dismissBubbles();
             }}
             aria-label="Close all chat bubbles"
           >
             ×
           </button>
-          
+
           {/* First bubble */}
-          <div 
+          <div
             className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]"
-            style={{ animation: '0.4s ease-out 0s 1 normal forwards running slideInRight' }}
+            style={{
+              animation:
+                "0.4s ease-out 0s 1 normal forwards running slideInRight",
+            }}
           >
             <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
               {welcomeMessages[0]}
             </div>
           </div>
-          
+
           {/* Second bubble with tail */}
-          <div 
+          <div
             className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"
-            style={{ animation: '0.4s ease-out 0s 1 normal forwards running slideInRight' }}
+            style={{
+              animation:
+                "0.4s ease-out 0s 1 normal forwards running slideInRight",
+            }}
           >
             <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
               {welcomeMessages[1]}
@@ -79,7 +86,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           </div>
         </div>
       )}
-      
+
       {/* Chat button */}
       <button
         style={{ backgroundColor: settings.buttonColor }}
@@ -90,7 +97,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       >
         <ChatIcon className="text-white" />
       </button>
-      
+
       {/* Custom styles for animations */}
       <style jsx>{`
         @keyframes slideInRight {
