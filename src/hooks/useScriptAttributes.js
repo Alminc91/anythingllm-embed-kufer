@@ -14,30 +14,30 @@ const DEFAULT_SETTINGS = {
   // style parameters
   chatIcon: "chatBubble",
   brandImageUrl:
-    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // will be forced into 100x50px container
-  brandText: "Kuno, Ihr Online-Berater", // brand text to display next to brand image
+    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // will be forced into 100x50px container
+  brandText: "Ihr Online-Berater", // brand text to display next to brand image
   greeting:
-    "Hallo. Ich bin Kuno, Ihr Online-Berater. Gerne helfe ich bei Fragen weiter.", // Kufer chat window greeting.
+    "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gest&uuml;tzten Antworten.", // Kufer chat window greeting.
   buttonColor: "#607D8B", // must be hex color code
   userBgColor: "#607D8B", // user text bubble color
   assistantBgColor: "#2563eb", // assistant text bubble color
   noSponsor: true, // Shows sponsor in footer of chat
-  sponsorText: "Powered by AnythingLLM", // default sponsor textNo
-  sponsorLink: "https://anythingllm.com", // default sponsor link
-  position: "bottom-right", // position of chat button/window
-  assistantName: "AnythingLLM Chat Assistant", // default assistant name
+  sponsorText: "Ein Dienst der Kufer Software GmbH", // default sponsor textNo
+  sponsorLink: "https://kufer.de", // default sponsor link
+  position: "bottom-left", // position of chat button/window
+  assistantName: "Ihr Online-Berater", // default assistant name
   assistantIcon:
-    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/Kuno_7_Wuerfel.png", // default assistant icon
-  windowHeight: "90%", // height of chat window in number:css-prefix
+    "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
+  windowHeight: "80%", // height of chat window in number:css-prefix
   windowWidth: "25%", // width of chat window in number:css-prefix
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
-  sendMessageText: "Sende Nachricht", // override text for send message button
+  sendMessageText: "Wie kann ich Ihnen helfen?", // override text for send message button
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
-  resetBurgerText: null, // override text for reset option in burger menu
-  emailBurgerText: null, // override text for email support option in burger menu
-  sessionBurgerText: null, // override text for session ID option in burger menu
+  resetBurgerText: "Chat zurücksetzen", // override text for reset option in burger menu
+  emailBurgerText: "E-Mail Support", // override text for email support option in burger menu
+  sessionBurgerText: "Sitzungs-ID", // override text for session ID option in burger menu
 
   // behaviors
   openOnLoad: "off", // or "on"

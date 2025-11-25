@@ -28,7 +28,26 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
     settings?.chatbotBubblesMessages?.length > 0
       ? settings.chatbotBubblesMessages
       : defaultBubbleMessages;
-  const { bubblesVisible, dismissBubbles } = useBubbleDismissal(settings);
+  const { bubblesVisible, dismissBubbles, dismissBubblesOnChatOpen } =
+    useBubbleDismissal(settings);
+
+  // Auto-detect bubble direction based on button position to prevent overflow
+  const position = settings?.position || "bottom-right";
+  const isButtonOnLeft = position.includes("left");
+
+  // If button is on left side: bubbles appear RIGHT of button (point left toward button)
+  // If button is on right side: bubbles appear LEFT of button (point right toward button)
+  const isRightDirection = isButtonOnLeft;
+  const bubbleContainerClasses = isRightDirection
+    ? "allm-absolute allm-bottom-full allm-mb-3 allm-left-4 allm-flex allm-flex-col allm-gap-3 allm-group allm-cursor-pointer"
+    : "allm-absolute allm-bottom-full allm-mb-3 allm-right-4 allm-flex allm-flex-col allm-gap-3 allm-group allm-cursor-pointer";
+  const closeButtonPosition = isRightDirection
+    ? { left: "-12px" }
+    : { right: "-12px" };
+  const tailClasses = isRightDirection
+    ? "allm-absolute allm-top-full allm-left-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm"
+    : "allm-absolute allm-top-full allm-right-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm";
+  const animationName = isRightDirection ? "slideInLeft" : "slideInRight";
 
   if (isOpen) return null;
 
@@ -41,13 +60,16 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       {/* Welcome message bubbles */}
       {settings.displayChatbotBubbles && bubblesVisible && (
         <div
-          className="allm-absolute allm-bottom-full allm-mb-3 allm-right-4 allm-flex allm-flex-col allm-gap-3 allm-group allm-cursor-pointer"
-          onClick={toggleOpen}
+          className={bubbleContainerClasses}
+          onClick={() => {
+            dismissBubblesOnChatOpen();
+            toggleOpen();
+          }}
         >
           {/* Single X button for entire group */}
           <button
             className="allm-absolute allm-top-0 allm-z-10 allm-text-gray-400 hover:allm-text-gray-600 allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-200 allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-gray-100 allm-bg-white allm-shadow-sm allm-border"
-            style={{ right: "-12px" }}
+            style={closeButtonPosition}
             onClick={(e) => {
               e.stopPropagation();
               dismissBubbles();
@@ -61,8 +83,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           <div
             className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]"
             style={{
-              animation:
-                "0.4s ease-out 0s 1 normal forwards running slideInRight",
+              animation: `0.4s ease-out 0s 1 normal forwards running ${animationName}`,
             }}
           >
             <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
@@ -74,15 +95,14 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           <div
             className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"
             style={{
-              animation:
-                "0.4s ease-out 0s 1 normal forwards running slideInRight",
+              animation: `0.4s ease-out 0s 1 normal forwards running ${animationName}`,
             }}
           >
             <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
               {welcomeMessages[1]}
             </div>
             {/* Speech bubble tail */}
-            <div className="allm-absolute allm-top-full allm-right-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm"></div>
+            <div className={tailClasses}></div>
           </div>
         </div>
       )}
@@ -91,7 +111,10 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       <button
         style={{ backgroundColor: settings.buttonColor }}
         id="anything-llm-embed-chat-button"
-        onClick={toggleOpen}
+        onClick={() => {
+          dismissBubblesOnChatOpen();
+          toggleOpen();
+        }}
         className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-200 hover:allm-scale-105`}
         aria-label="Toggle Menu"
       >
@@ -104,6 +127,16 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           from {
             opacity: 0;
             transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
           }
           to {
             opacity: 1;

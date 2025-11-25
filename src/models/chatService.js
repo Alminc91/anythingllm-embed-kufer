@@ -2,6 +2,20 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
 
 const ChatService = {
+  // Check if embed is enabled (returns true if enabled, false if disabled)
+  checkEmbedStatus: async function (embedSettings) {
+    const { embedId, baseApiUrl } = embedSettings;
+    try {
+      const res = await fetch(`${baseApiUrl}/${embedId}/status`);
+      if (!res.ok) return true; // If endpoint doesn't exist, assume enabled
+      const data = await res.json();
+      return data.enabled !== false;
+    } catch (e) {
+      console.error("AnythingLLM Embed: Could not check embed status", e);
+      return true; // On error, assume enabled
+    }
+  },
+
   embedSessionHistory: async function (embedSettings, sessionId) {
     const { embedId, baseApiUrl } = embedSettings;
     return await fetch(`${baseApiUrl}/${embedId}/${sessionId}`)

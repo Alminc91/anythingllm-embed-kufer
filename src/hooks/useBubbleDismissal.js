@@ -24,39 +24,78 @@ export default function useBubbleDismissal(settings = {}) {
     return `${STORAGE_KEY}-${baseUrl}-${embedId}`;
   };
 
-  useEffect(() => {
+  const getDismissalState = () => {
+    const storage = getStorageType();
+    if (!storage) return { manuallyDismissed: false, chatOpened: false };
+
+    try {
+      const storageKey = createStorageKey();
+      const storedData = storage.getItem(storageKey);
+      
+      if (!storedData) {
+        return { manuallyDismissed: false, chatOpened: false };
+      }
+
+      // Handle legacy boolean storage format
+      if (storedData === "true") {
+        return { manuallyDismissed: true, chatOpened: false };
+      }
+
+      // Parse new JSON format
+      const parsed = JSON.parse(storedData);
+      return {
+        manuallyDismissed: parsed.manuallyDismissed || false,
+        chatOpened: parsed.chatOpened || false,
+      };
+    } catch (error) {
+      console.warn(
+        "AnythingLLM Embed: Unable to access storage for bubble dismissal state",
+      );
+      return { manuallyDismissed: false, chatOpened: false };
+    }
+  };
+
+  const saveDismissalState = (state) => {
     const storage = getStorageType();
     if (!storage) return;
 
     try {
       const storageKey = createStorageKey();
-      const isDismissed = storage.getItem(storageKey) === "true";
-      setBubblesVisible(!isDismissed);
+      storage.setItem(storageKey, JSON.stringify(state));
     } catch (error) {
       console.warn(
-        "AnythingLLM Embed: Unable to access storage for bubble dismissal state",
+        "AnythingLLM Embed: Unable to save bubble dismissal state to storage",
       );
     }
+  };
+
+  useEffect(() => {
+    const dismissalState = getDismissalState();
+    const shouldHideBubbles = dismissalState.manuallyDismissed || dismissalState.chatOpened;
+    setBubblesVisible(!shouldHideBubbles);
   }, [settings.bubblePersistence, settings.embedId]);
 
   const dismissBubbles = () => {
     setBubblesVisible(false);
+    const currentState = getDismissalState();
+    saveDismissalState({
+      ...currentState,
+      manuallyDismissed: true,
+    });
+  };
 
-    const storage = getStorageType();
-    if (storage) {
-      try {
-        const storageKey = createStorageKey();
-        storage.setItem(storageKey, "true");
-      } catch (error) {
-        console.warn(
-          "AnythingLLM Embed: Unable to save bubble dismissal state to storage",
-        );
-      }
-    }
+  const dismissBubblesOnChatOpen = () => {
+    setBubblesVisible(false);
+    const currentState = getDismissalState();
+    saveDismissalState({
+      ...currentState,
+      chatOpened: true,
+    });
   };
 
   return {
     bubblesVisible,
     dismissBubbles,
+    dismissBubblesOnChatOpen,
   };
 }

@@ -123,12 +123,13 @@ const PromptReply = forwardRef(
               alt="Anything LLM Icon"
               className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2"
             />
-            <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-red-200 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
+            <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-amber-100 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
               <div className="allm-flex allm-gap-x-5">
-                <span className="allm-inline-block allm-p-2 allm-rounded-lg allm-bg-red-50 allm-text-red-500">
+                <span className="allm-inline-block allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
                   <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
-                  Could not respond to message.
-                  <span className="allm-text-xs">Server error</span>
+                  Unser Chatbot ist vorübergehend nicht verfügbar.
+                  <br />
+                  <span className="allm-text-xs">Bitte versuchen Sie es später erneut.</span>
                 </span>
               </div>
             </div>

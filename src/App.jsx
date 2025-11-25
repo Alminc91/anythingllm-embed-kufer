@@ -4,22 +4,38 @@ import useOpenChat from "@/hooks/useOpen";
 import Head from "@/components/Head";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
+import ChatService from "@/models/chatService";
 
 export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
+  const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
 
+  // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
-    if (embedSettings.openOnLoad === "on") {
-      toggleOpenChat(true);
+    async function checkStatus() {
+      if (!embedSettings.loaded) return;
+      const enabled = await ChatService.checkEmbedStatus(embedSettings);
+      setIsEnabled(enabled);
     }
+    checkStatus();
   }, [embedSettings.loaded]);
 
-  if (!embedSettings.loaded) return null;
+  useEffect(() => {
+    if (embedSettings.openOnLoad === "on" && isEnabled) {
+      toggleOpenChat(true);
+    }
+  }, [embedSettings.loaded, isEnabled]);
+
+  // Don't render until we know the embed status
+  if (!embedSettings.loaded || isEnabled === null) return null;
+
+  // If embed is disabled, don't render anything (hide completely)
+  if (isEnabled === false) return null;
 
   const positionClasses = {
     "bottom-left": "allm-bottom-0 allm-left-0 allm-ml-4",
@@ -37,7 +53,7 @@ export default function App() {
       <Head />
       <div
         id="anything-llm-embed-chat-container"
-        className={`allm-fixed allm-inset-0 allm-z-50 ${isChatOpen ? "allm-block" : "allm-hidden"}`}
+        className={`allm-fixed allm-z-50 ${isChatOpen ? "allm-block" : "allm-hidden"}`}
       >
         <div
           style={{
