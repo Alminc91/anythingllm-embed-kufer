@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnythingLLM Embed - Local Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    .info {
+      background: #e3f2fd;
+      border: 1px solid #2196f3;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background: #fff3e0;
+      border: 1px solid #ff9800;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    code {
+      background: #263238;
+      color: #80cbc4;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    pre {
+      background: #263238;
+      color: #eceff1;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>AnythingLLM Embed Widget - Local Testing</h1>
+
+  <div class="warning">
+    <strong>Before using:</strong>
+    <ol>
+      <li>Start the embed dev server: <code>npm run dev</code> (runs on port 3000)</li>
+      <li>Replace <code>YOUR-EMBED-ID-HERE</code> below with your actual embed ID from AnythingLLM</li>
+      <li>Update <code>data-base-api-url</code> if your backend runs on a different URL</li>
+    </ol>
+  </div>
+
+  <div class="info">
+    <strong>Local Development Ports:</strong>
+    <ul>
+      <li>Embed Widget Dev Server: <code>http://localhost:3000</code></li>
+      <li>AnythingLLM Frontend: <code>http://localhost:3002</code></li>
+      <li>AnythingLLM Backend API: <code>http://localhost:3001</code></li>
+    </ul>
+  </div>
+
+  <h2>Test Content</h2>
+  <p>This is a test page to verify the embed widget works correctly during local development.</p>
+  <p>The chat widget should appear in the bottom-right corner of the page.</p>
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+
+  <h2>Getting Your Embed ID</h2>
+  <pre>
+1. Go to AnythingLLM: http://localhost:3002
+2. Navigate to Settings > Workspaces > [Your Workspace]
+3. Click "Chat Embed" tab
+4. Create or copy an existing embed ID
+  </pre>
+
+  <!--
+    =====================================================
+    EMBED WIDGET SCRIPT - UPDATE THESE VALUES:
+    =====================================================
+    - data-embed-id: Your embed ID from AnythingLLM
+    - data-base-api-url: Your AnythingLLM backend URL
+    =====================================================
+  -->
+  <script
+    data-embed-id="YOUR-EMBED-ID-HERE"
+    data-base-api-url="http://localhost:3001/api/embed"
+    data-chat-icon="chatBubble"
+    data-position="bottom-right"
+    data-greeting="Hello! How can I help you today?"
+    data-no-sponsor="true"
+    src="http://localhost:3000/dist/anythingllm-chat-widget.min.js">
+  </script>
+
+  <!--
+    For production, use:
+    <script
+      data-embed-id="YOUR-EMBED-ID"
+      data-base-api-url="https://your-anythingllm-server.com/api/embed"
+      src="https://your-anythingllm-server.com/embed/anythingllm-chat-widget.min.js">
+    </script>
+  -->
+</body>
+</html>
