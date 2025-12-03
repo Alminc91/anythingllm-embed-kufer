@@ -14,6 +14,7 @@ Alle wichtigen Änderungen am Embed Widget werden hier dokumentiert.
   - Desktop (≥1280px): 25% Breite, 77% Höhe
 - **ATTRIBUTES.md**: Vollständige Dokumentation aller Script-Attribute
 - **DEV_SETUP.md**: Anleitung für lokale Entwicklung mit Hot-Reload
+- **Prompt Evaluation Framework**: Test-Suite für System-Prompt Regression-Tests (`tests/prompt-evaluation/`)
 
 ### Geändert
 - **Tailwind px statt rem**: Alle Größen in festen px-Werten für konsistente Darstellung

@@ -1,0 +1,92 @@
+{
+  "version": "1.0",
+  "description": "Regression test cases for VHS course advisor prompt",
+  "test_cases": [
+    {
+      "id": "basic_search_de",
+      "category": "search",
+      "question": "Gibt es Yoga-Kurse?",
+      "expected": {
+        "language": "de",
+        "has_courses": true,
+        "has_emoji_status": true,
+        "has_footer": true,
+        "max_courses": 3,
+        "uses_bullet_points": "▪"
+      }
+    },
+    {
+      "id": "basic_search_en",
+      "category": "multilingual",
+      "question": "Do you have swimming courses?",
+      "expected": {
+        "language": "en",
+        "no_german_words": true,
+        "field_labels_translated": true,
+        "has_footer_in_english": true
+      }
+    },
+    {
+      "id": "basic_search_fr",
+      "category": "multilingual",
+      "question": "Avez-vous des cours de danse?",
+      "expected": {
+        "language": "fr",
+        "no_german_words": true,
+        "field_labels_translated": true
+      }
+    },
+    {
+      "id": "no_results",
+      "category": "edge_case",
+      "question": "Gibt es Fallschirmspringen-Kurse?",
+      "expected": {
+        "admits_no_results": true,
+        "suggests_alternatives": true,
+        "no_invented_courses": true,
+        "asks_clarifying_question": true
+      }
+    },
+    {
+      "id": "status_available",
+      "category": "status_emoji",
+      "question": "Welche Excel-Kurse haben noch Plätze?",
+      "expected": {
+        "has_emoji_status": true,
+        "status_emoji_correct": "✅ for available courses"
+      }
+    },
+    {
+      "id": "status_full",
+      "category": "status_emoji",
+      "question": "Sind die Spanisch-Kurse ausgebucht?",
+      "expected": {
+        "has_emoji_status": true,
+        "status_emoji_matches_availability": true
+      }
+    },
+    {
+      "id": "formatting",
+      "category": "format",
+      "question": "Zeig mir Computerkurse",
+      "expected": {
+        "has_numbered_list": true,
+        "has_course_links": true,
+        "has_price": true,
+        "has_location": true,
+        "has_start_date": true,
+        "description_max_words": 15
+      }
+    },
+    {
+      "id": "follow_up",
+      "category": "interaction",
+      "question": "Ich möchte eine neue Sprache lernen",
+      "expected": {
+        "asks_follow_up_question": true,
+        "follow_up_is_specific": true,
+        "suggests_actual_languages": true
+      }
+    }
+  ]
+}
