@@ -24,8 +24,7 @@ export default function ChatWindow({ closeChat, settings, sessionId }) {
           setChatHistory={setChatHistory}
         />
         <ChatHistoryLoading />
-        <div className="allm-pt-4 allm-pb-2 allm-h-fit allm-gap-y-1">
-          <SessionId />
+        <div className="allm-pt-2 allm-pb-2 allm-h-fit">
           <Sponsor settings={settings} />
         </div>
       </div>
@@ -52,9 +51,8 @@ export default function ChatWindow({ closeChat, settings, sessionId }) {
           knownHistory={chatHistory}
         />
       </div>
-      <div className="allm-mt-4 allm-pb-4 allm-h-fit allm-gap-y-2 allm-z-10">
+      <div className="allm-mt-2 allm-pb-2 allm-h-fit allm-z-10">
         <Sponsor settings={settings} />
-        {/* ResetChat entfernt - verfügbar im Burger-Menü */}
       </div>
     </div>
   );
