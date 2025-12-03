@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 EMBED_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAIN_REPO_DIR="../anything-llm"
+MAIN_REPO_DIR="../anythingllm"
 TARGET_DIR="$MAIN_REPO_DIR/frontend/public/embed"
 
 echo -e "${BLUE}🚀 Building and Deploying AnythingLLM Embed Widget${NC}"

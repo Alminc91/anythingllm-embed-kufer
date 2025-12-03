@@ -105,13 +105,13 @@ const HistoricalMessage = forwardRef(
           >
             <div className="allm-flex allm-flex-col">
               {error ? (
-                <div className="allm-p-2 allm-rounded-lg allm-bg-red-50 allm-text-red-500">
+                <div className="allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
                   <span className="allm-inline-block">
                     <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
-                    Could not respond to message.
+                    Unser Chatbot ist vorübergehend nicht verfügbar.
                   </span>
-                  <p className="allm-text-xs allm-font-mono allm-mt-2 allm-border-l-2 allm-border-red-500 allm-pl-2 allm-bg-red-300 allm-p-2 allm-rounded-sm">
-                    {errorMsg || "Server error"}
+                  <p className="allm-text-xs allm-mt-2">
+                    Bitte versuchen Sie es später erneut.
                   </p>
                 </div>
               ) : (

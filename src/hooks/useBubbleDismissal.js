@@ -6,14 +6,16 @@ export default function useBubbleDismissal(settings = {}) {
   const [bubblesVisible, setBubblesVisible] = useState(true);
 
   const getStorageType = () => {
+    // Default: localStorage (bubbles nur einmal pro Browser, wie Chatbase)
+    // Option: sessionStorage wenn explizit gewünscht
     if (
-      settings.bubblePersistence === "localStorage" &&
-      typeof localStorage !== "undefined"
+      settings.bubblePersistence === "sessionStorage" &&
+      typeof sessionStorage !== "undefined"
     ) {
-      return localStorage;
-    }
-    if (typeof sessionStorage !== "undefined") {
       return sessionStorage;
+    }
+    if (typeof localStorage !== "undefined") {
+      return localStorage;
     }
     return null;
   };
