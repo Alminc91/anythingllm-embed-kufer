@@ -73,13 +73,16 @@ export default function PromptInput({
                   adjustTextArea(e);
                 }}
                 value={message}
+                rows={1}
                 style={{
                   minHeight: '44px',
-                  lineHeight: '20px',
-                  paddingTop: '12px',
-                  paddingBottom: '12px',
+                  lineHeight: '22px',
+                  paddingTop: '11px',
+                  paddingBottom: '11px',
+                  paddingLeft: '8px',
+                  paddingRight: '8px',
                 }}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-mx-2 allm-px-2 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-mx-2 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow allm-self-center"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
