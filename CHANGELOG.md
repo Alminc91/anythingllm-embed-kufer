@@ -2,46 +2,10 @@
 
 Alle wichtigen Änderungen am Embed Widget werden hier dokumentiert.
 
-## Geplant (Roadmap)
-
-### Status-Emojis für Kursverfügbarkeit
-Einheitliche visuelle Darstellung der Kursverfügbarkeit durch Emoji-Normalisierung.
-
-**Datenfluss-Architektur:**
-```
-Backend (Kunde)          Normalisierung           LLM/RAG              Frontend
-─────────────────────────────────────────────────────────────────────────────────
-"freie Plätze"     →                         →                    →
-"noch buchbar"     →     status: "AVAILABLE" →  "✅ Plätze frei"  →  grün
-"verfügbar"        →                         →                    →
-
-"Warteliste"       →                         →                    →
-"fast ausgebucht"  →     status: "WAITLIST"  →  "⚠️ Warteliste"   →  gelb
-"wenige Plätze"    →                         →                    →
-
-"ausgebucht"       →                         →                    →
-"keine Plätze"     →     status: "FULL"      →  "❌ Ausgebucht"   →  rot
-"belegt"           →                         →                    →
-```
-
-**Mapping-Tabelle:**
-
-| Backend-Status (variiert je Kunde) | Normalisiert | LLM-Ausgabe |
-|------------------------------------|--------------|-------------|
-| "freie Plätze", "noch buchbar", "verfügbar" | `AVAILABLE` | ✅ Plätze frei |
-| "Warteliste", "fast ausgebucht", "wenige Plätze" | `WAITLIST` | ⚠️ Warteliste |
-| "ausgebucht", "keine Plätze", "belegt" | `FULL` | ❌ Ausgebucht |
-
-**Umsetzung:**
-1. Normalisierung beim Daten-Import (kundenspezifische Begriffe → Standard)
-2. System-Prompt Anweisung für einheitliche Emoji-Ausgabe
-3. Kompakt, barrierefrei, universal verständlich
-
----
-
-## [2.4.0] - 2024-12-03
+## [2.5.0] - 2024-12-03
 
 ### Hinzugefügt
+- **Status-Emojis**: Visuelle Kursverfügbarkeit via System-Prompt (✅ frei, ❌ ausgebucht, ⚠️ eingeschränkt, 📞 Kontakt nötig)
 - **Shadow DOM**: Widget ist jetzt CSS-isoliert von der Host-Website
 - **Accent Color**: Neues Attribut `data-accent-color` für Brand-Farben (Links + Titel)
 - **Responsive Layout**:
