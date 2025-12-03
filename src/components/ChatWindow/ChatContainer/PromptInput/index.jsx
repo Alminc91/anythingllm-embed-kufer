@@ -57,8 +57,8 @@ export default function PromptInput({
         <div className="allm-flex allm-items-center allm-w-full">
           <div className="allm-bg-white allm-flex allm-flex-col allm-px-4 allm-overflow-hidden allm-w-full">
             <div
-              style={{ border: "1.5px solid #22262833", minHeight: '48px' }}
-              className="allm-flex allm-items-center allm-w-full allm-rounded-2xl allm-py-[12px]"
+              style={{ border: "1.5px solid #22262833" }}
+              className="allm-flex allm-items-center allm-w-full allm-rounded-2xl"
             >
               <textarea
                 ref={textareaRef}
@@ -75,12 +75,13 @@ export default function PromptInput({
                 value={message}
                 rows={1}
                 style={{
-                  height: '24px',
-                  lineHeight: '24px',
-                  padding: '0',
+                  height: '20px',
+                  minHeight: '20px',
+                  lineHeight: '20px',
+                  padding: '12px 12px',
                   margin: '0',
                 }}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-mx-4 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
