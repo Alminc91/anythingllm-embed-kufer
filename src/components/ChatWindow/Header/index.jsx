@@ -9,6 +9,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { embedderSettings } from "@/main";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -37,9 +38,11 @@ export default function ChatWindowHeader({
         setShowOptions(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
+    // Use Shadow Root for event listeners (works with closed Shadow DOM)
+    const eventTarget = embedderSettings.shadowRoot || document;
+    eventTarget.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      eventTarget.removeEventListener("mousedown", handleClickOutside);
     };
   }, [menuRef]);
 

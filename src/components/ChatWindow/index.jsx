@@ -5,6 +5,7 @@ import ChatContainer from "./ChatContainer";
 import Sponsor from "../Sponsor";
 import { ChatHistoryLoading } from "./ChatContainer/ChatHistory";
 import ResetChat from "../ResetChat";
+import { embedderSettings } from "@/main";
 
 export default function ChatWindow({ closeChat, settings, sessionId }) {
   const { chatHistory, setChatHistory, loading } = useChatHistory(
@@ -63,7 +64,9 @@ export default function ChatWindow({ closeChat, settings, sessionId }) {
 // but still be able to attach a handler to copy code snippets on all elements
 // that are code snippets.
 function copyCodeSnippet(uuid) {
-  const target = document.querySelector(`[data-code="${uuid}"]`);
+  // Use Shadow Root for querySelector (works with closed Shadow DOM)
+  const root = embedderSettings.shadowRoot || document;
+  const target = root.querySelector(`[data-code="${uuid}"]`);
   if (!target) return false;
 
   const markdown =
@@ -88,7 +91,9 @@ function copyCodeSnippet(uuid) {
 
 // Listens and hunts for all data-code-snippet clicks.
 function setEventDelegatorForCodeSnippets() {
-  document?.addEventListener("click", function (e) {
+  // Use Shadow Root for event listeners (works with closed Shadow DOM)
+  const eventTarget = embedderSettings.shadowRoot || document;
+  eventTarget.addEventListener("click", function (e) {
     const target = e.target.closest("[data-code-snippet]");
     const uuidCode = target?.dataset?.code;
     if (!uuidCode) return false;

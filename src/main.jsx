@@ -182,6 +182,7 @@ shadow.appendChild(appElement);
 export const embedderSettings = {
   settings: scriptSettings,
   stylesSrc: stylesSrc,
+  shadowRoot: shadow, // Export Shadow Root for event listeners
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
     base: `allm-text-white allm-rounded-t-[18px] allm-rounded-bl-[18px] allm-rounded-br-[4px] allm-mx-[20px]`,
