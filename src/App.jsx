@@ -65,7 +65,7 @@ export default function App() {
         className={`allm-fixed allm-z-[9999] ${isChatOpen ? "allm-block" : "allm-hidden"}`}
       >
         <div
-          className={`allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col ${responsiveClasses} ${positionClasses[position]}`}
+          className={`allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
           id="anything-llm-chat"
         >
           {isChatOpen && (
