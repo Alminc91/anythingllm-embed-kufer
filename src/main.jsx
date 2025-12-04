@@ -134,11 +134,11 @@ const scriptSettings = Object.assign(
 
 const stylesSrc = parseStylesSrc(document?.currentScript?.src);
 
-// Accent Color CSS generieren (für Links und Titel)
+// Accent Color CSS generieren (nur für Links, nicht für bold/labels)
 const getAccentColorCss = (accentColor) => {
   if (!accentColor) return '';
   return `
-    /* Accent Color für Links und Titel */
+    /* Accent Color nur für Links */
     .allm-anything-llm-assistant-message a {
       color: ${accentColor} !important;
     }
@@ -146,10 +146,7 @@ const getAccentColorCss = (accentColor) => {
       color: ${accentColor} !important;
       opacity: 0.8;
     }
-    .allm-anything-llm-assistant-message strong,
-    .allm-anything-llm-assistant-message b {
-      color: ${accentColor};
-    }
+    /* Labels (strong/bold) bleiben in Standard-Textfarbe */
   `;
 };
 

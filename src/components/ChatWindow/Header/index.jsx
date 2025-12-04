@@ -46,9 +46,23 @@ export default function ChatWindowHeader({
     };
   }, [menuRef]);
 
+  // Header styling with optional custom colors
+  const headerStyle = {
+    borderBottom: settings.headerBgColor ? "none" : "1px solid #E9E9E9",
+    backgroundColor: settings.headerBgColor || "transparent",
+  };
+
+  // Icon button styling - adapt to header background
+  const iconButtonClass = settings.headerBgColor
+    ? "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-white/20 allm-rounded-sm"
+    : "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm allm-text-slate-800/60";
+
+  // Icon color based on header background
+  const iconColor = settings.headerTextColor || (settings.headerBgColor ? "#FFFFFF" : undefined);
+
   return (
     <div
-      style={{ borderBottom: "1px solid #E9E9E9" }}
+      style={headerStyle}
       className="allm-flex allm-items-center allm-relative allm-rounded-t-2xl"
       id="anything-llm-header"
     >
@@ -60,7 +74,10 @@ export default function ChatWindowHeader({
           style={{ maxWidth: "40px", maxHeight: "40px" }}
         />
         {settings.brandText && (
-          <span className="allm-ml-3 allm-text-gray-800 allm-font-semibold allm-text-sm allm-truncate allm-font-sans">
+          <span
+            className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
+            style={{ color: settings.headerTextColor || "#1f2937" }}
+          >
             {settings.brandText}
           </span>
         )}
@@ -71,19 +88,19 @@ export default function ChatWindowHeader({
             ref={buttonRef}
             type="button"
             onClick={() => setShowOptions(!showingOptions)}
-            className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm allm-text-slate-800/60"
+            className={iconButtonClass}
             aria-label="Options"
           >
-            <DotsThreeOutlineVertical size={20} weight="fill" />
+            <DotsThreeOutlineVertical size={20} weight="fill" color={iconColor} />
           </button>
         )}
         <button
           type="button"
           onClick={closeChat}
-          className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm allm-text-slate-800/60"
+          className={iconButtonClass}
           aria-label="Close"
         >
-          <X size={20} weight="bold" />
+          <X size={20} weight="bold" color={iconColor} />
         </button>
       </div>
       <OptionsMenu
