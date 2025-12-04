@@ -79,6 +79,14 @@ export default function ChatWindowHeader({
       return { ...baseStyle, borderRadius: "50%", backgroundColor: "#FFFFFF" };
     }
 
+    if (iconStyle === "shadow") {
+      return {
+        ...baseStyle,
+        backgroundColor: "transparent",
+        filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.6))"
+      };
+    }
+
     // Default: rounded
     return { ...baseStyle, borderRadius: "8px", backgroundColor: "#FFFFFF" };
   };
