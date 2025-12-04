@@ -35,7 +35,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |
 | `data-header-bg-color` | `null` | Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
 | `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
-| `data-icon-style` | `rounded` | Icon-Hintergrund im Header: `none` (transparent), `rounded` (weißes Rechteck), `circle` (weißer Kreis), `shadow` (weißer Glüh-Schatten), `glass` (Glasmorphismus-Effekt), `border` (weißer Rahmen). Nur aktiv wenn `header-bg-color` gesetzt. |
+| `data-icon-style` | `rounded` | Icon-Hintergrund im Header. Optionen: `none`, `rounded`, `circle`, `border`, `border-dark`, `soft`, `glass`, `adaptive`, `shadow`, `pill`. Nur aktiv wenn `header-bg-color` gesetzt. Siehe Tabelle unten. |
 | `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
 | `data-brand-text` | `Ihr Online-Berater` | Text neben dem Logo |
 | `data-assistant-name` | `Ihr Online-Berater` | Name des Assistenten |
@@ -46,6 +46,21 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-window-width` | `25%` | Breite des Chat-Fensters (CSS-Wert) |
 | `data-text-size` | `14` | Textgröße in px (nur Zahl) |
 | `data-no-header` | `null` | Header ausblenden wenn gesetzt |
+
+### Icon Style Optionen
+
+| Wert | Beschreibung |
+|------|--------------|
+| `none` | Transparent, kein Hintergrund |
+| `rounded` | Weißes abgerundetes Rechteck (Standard) |
+| `circle` | Weißer Kreis |
+| `border` | Weißer Rahmen, transparenter Hintergrund |
+| `border-dark` | Dunkler Rahmen, transparenter Hintergrund |
+| `soft` | Semi-transparenter weißer Hintergrund (rgba 0.2) |
+| `glass` | Glasmorphismus-Effekt mit Blur |
+| `adaptive` | Subtil heller als Header-Farbe |
+| `shadow` | Weißer Glüh-Schatten um das Icon |
+| `pill` | Pill-Form (breiter als hoch, weiß) |
 
 ---
 

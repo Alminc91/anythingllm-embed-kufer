@@ -71,6 +71,12 @@ export default function ChatWindowHeader({
       height: "44px",
     };
 
+    // Pill style is wider
+    const pillStyle = {
+      width: "52px",
+      height: "40px",
+    };
+
     if (iconStyle === "none" || !hasHeaderBg) {
       return { ...baseStyle, backgroundColor: "transparent" };
     }
@@ -79,14 +85,36 @@ export default function ChatWindowHeader({
       return { ...baseStyle, borderRadius: "50%", backgroundColor: "#FFFFFF" };
     }
 
-    if (iconStyle === "shadow") {
+    // 1. White/Light Border (outline)
+    if (iconStyle === "border") {
       return {
         ...baseStyle,
+        borderRadius: "8px",
         backgroundColor: "transparent",
-        filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.6))"
+        border: "2px solid rgba(255, 255, 255, 0.6)"
       };
     }
 
+    // Dark border variant
+    if (iconStyle === "border-dark") {
+      return {
+        ...baseStyle,
+        borderRadius: "8px",
+        backgroundColor: "transparent",
+        border: "2px solid rgba(0, 0, 0, 0.4)"
+      };
+    }
+
+    // 2. Semi-transparent white background
+    if (iconStyle === "soft") {
+      return {
+        ...baseStyle,
+        borderRadius: "10px",
+        backgroundColor: "rgba(255, 255, 255, 0.2)"
+      };
+    }
+
+    // 3. Glassmorphism / Frosted glass
     if (iconStyle === "glass") {
       return {
         ...baseStyle,
@@ -97,16 +125,35 @@ export default function ChatWindowHeader({
       };
     }
 
-    if (iconStyle === "border") {
+    // 4. Adaptive - slightly lighter than header
+    if (iconStyle === "adaptive") {
       return {
         ...baseStyle,
         borderRadius: "8px",
-        backgroundColor: "transparent",
-        border: "2px solid rgba(255, 255, 255, 0.6)"
+        backgroundColor: "rgba(255, 255, 255, 0.1)",
+        boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.1)"
       };
     }
 
-    // Default: rounded
+    // 5. Shadow / glow effect
+    if (iconStyle === "shadow") {
+      return {
+        ...baseStyle,
+        backgroundColor: "transparent",
+        filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.6))"
+      };
+    }
+
+    // 6. Pill shape - wider than tall
+    if (iconStyle === "pill") {
+      return {
+        ...pillStyle,
+        borderRadius: "20px",
+        backgroundColor: "#FFFFFF"
+      };
+    }
+
+    // Default: rounded (white rounded square)
     return { ...baseStyle, borderRadius: "8px", backgroundColor: "#FFFFFF" };
   };
 
