@@ -134,19 +134,20 @@ const scriptSettings = Object.assign(
 
 const stylesSrc = parseStylesSrc(document?.currentScript?.src);
 
-// Accent Color CSS generieren (nur für Links, nicht für bold/labels)
-const getAccentColorCss = (accentColor) => {
-  if (!accentColor) return '';
+// Link Color CSS generieren (für Links in Assistant-Nachrichten)
+const getLinkColorCss = (linkColor) => {
+  if (!linkColor) return '';
   return `
-    /* Accent Color nur für Links */
-    .allm-anything-llm-assistant-message a {
-      color: ${accentColor} !important;
+    /* Link Color - sowohl für historische als auch streaming Nachrichten */
+    .allm-anything-llm-assistant-message a,
+    .allm-reply a {
+      color: ${linkColor} !important;
     }
-    .allm-anything-llm-assistant-message a:hover {
-      color: ${accentColor} !important;
+    .allm-anything-llm-assistant-message a:hover,
+    .allm-reply a:hover {
+      color: ${linkColor} !important;
       opacity: 0.8;
     }
-    /* Labels (strong/bold) bleiben in Standard-Textfarbe */
   `;
 };
 
@@ -158,10 +159,10 @@ document.body.appendChild(hostElement);
 // Shadow DOM anhängen (closed = CSS komplett isoliert, nicht von außen zugreifbar)
 const shadow = hostElement.attachShadow({ mode: "closed" });
 
-// Inline Styles in Shadow DOM laden (inkl. Accent Color)
-const accentColorCss = getAccentColorCss(scriptSettings?.accentColor);
+// Inline Styles in Shadow DOM laden (inkl. Link Color)
+const linkColorCss = getLinkColorCss(scriptSettings?.linkColor);
 const inlineStyles = document.createElement("style");
-inlineStyles.textContent = hljsCss + customCss + accentColorCss;
+inlineStyles.textContent = hljsCss + customCss + linkColorCss;
 shadow.appendChild(inlineStyles);
 
 // External CSS (Tailwind) in Shadow DOM laden
