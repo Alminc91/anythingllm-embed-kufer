@@ -32,9 +32,10 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-button-color` | `#607D8B` | Farbe des Chat-Buttons (Hex) |
 | `data-user-bg-color` | `#607D8B` | Hintergrundfarbe User-Nachrichten |
 | `data-assistant-bg-color` | `#2563eb` | Hintergrundfarbe Bot-Nachrichten |
-| `data-accent-color` | `null` | Brand-Farbe für Links (z.B. `#8B0000` für VHS-Rot). Nur für Links, nicht für Labels! |
-| `data-header-bg-color` | `null` | **NEU:** Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
-| `data-header-text-color` | `null` | **NEU:** Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
+| `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |
+| `data-header-bg-color` | `null` | Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
+| `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
+| `data-icon-style` | `rounded` | Icon-Hintergrund im Header: `none` (transparent), `rounded` (weißes Rechteck), `circle` (weißer Kreis). Nur aktiv wenn `header-bg-color` gesetzt. |
 | `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
 | `data-brand-text` | `Ihr Online-Berater` | Text neben dem Logo |
 | `data-assistant-name` | `Ihr Online-Berater` | Name des Assistenten |
@@ -115,9 +116,10 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
   data-button-color="#E63946"
   data-user-bg-color="#E63946"
   data-assistant-bg-color="#1D3557"
-  data-accent-color="#8B0000"
+  data-link-color="#8B0000"
   data-header-bg-color="#8B1A1A"
   data-header-text-color="#FFFFFF"
+  data-icon-style="rounded"
   data-position="bottom-right"
   data-window-height="77%"
   data-window-width="25%"
