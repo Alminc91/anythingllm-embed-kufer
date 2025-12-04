@@ -35,7 +35,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |
 | `data-header-bg-color` | `null` | Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
 | `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
-| `data-icon-style` | `rounded` | Icon-Hintergrund im Header: `none` (transparent), `rounded` (weißes Rechteck), `circle` (weißer Kreis), `shadow` (weißer Glüh-Schatten). Nur aktiv wenn `header-bg-color` gesetzt. |
+| `data-icon-style` | `rounded` | Icon-Hintergrund im Header: `none` (transparent), `rounded` (weißes Rechteck), `circle` (weißer Kreis), `shadow` (weißer Glüh-Schatten), `glass` (Glasmorphismus-Effekt), `border` (weißer Rahmen). Nur aktiv wenn `header-bg-color` gesetzt. |
 | `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
 | `data-brand-text` | `Ihr Online-Berater` | Text neben dem Logo |
 | `data-assistant-name` | `Ihr Online-Berater` | Name des Assistenten |

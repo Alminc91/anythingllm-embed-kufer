@@ -87,6 +87,25 @@ export default function ChatWindowHeader({
       };
     }
 
+    if (iconStyle === "glass") {
+      return {
+        ...baseStyle,
+        borderRadius: "10px",
+        backgroundColor: "rgba(255, 255, 255, 0.15)",
+        backdropFilter: "blur(4px)",
+        border: "1px solid rgba(255, 255, 255, 0.2)"
+      };
+    }
+
+    if (iconStyle === "border") {
+      return {
+        ...baseStyle,
+        borderRadius: "8px",
+        backgroundColor: "transparent",
+        border: "2px solid rgba(255, 255, 255, 0.6)"
+      };
+    }
+
     // Default: rounded
     return { ...baseStyle, borderRadius: "8px", backgroundColor: "#FFFFFF" };
   };
