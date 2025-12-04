@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   linkColor: null, // color for links in assistant messages
   headerBgColor: null, // header background color (default: white)
   headerTextColor: null, // header text color for chatbot name (default: gray-800)
+  iconStyle: "rounded", // icon background style: "none", "rounded", or "circle"
   noSponsor: true, // Shows sponsor in footer of chat
   sponsorText: "Ein Dienst der Kufer Software GmbH", // default sponsor textNo
   sponsorLink: "https://kufer.de", // default sponsor link

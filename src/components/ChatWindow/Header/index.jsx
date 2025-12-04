@@ -60,6 +60,29 @@ export default function ChatWindowHeader({
   // Icon color based on header background
   const iconColor = settings.headerTextColor || (settings.headerBgColor ? "#FFFFFF" : undefined);
 
+  // Icon container style based on iconStyle setting
+  const getIconContainerStyle = () => {
+    const iconStyle = settings.iconStyle || "rounded";
+    const hasHeaderBg = !!settings.headerBgColor;
+
+    // Base style
+    const baseStyle = {
+      width: "44px",
+      height: "44px",
+    };
+
+    if (iconStyle === "none" || !hasHeaderBg) {
+      return { ...baseStyle, backgroundColor: "transparent" };
+    }
+
+    if (iconStyle === "circle") {
+      return { ...baseStyle, borderRadius: "50%", backgroundColor: "#FFFFFF" };
+    }
+
+    // Default: rounded
+    return { ...baseStyle, borderRadius: "8px", backgroundColor: "#FFFFFF" };
+  };
+
   return (
     <div
       style={headerStyle}
@@ -69,12 +92,7 @@ export default function ChatWindowHeader({
       <div className="allm-flex allm-items-center allm-px-4 allm-h-[76px] allm-flex-1">
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
-          style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "8px",
-            backgroundColor: settings.headerBgColor ? "#FFFFFF" : "transparent",
-          }}
+          style={getIconContainerStyle()}
         >
           <img
             src={iconUrl ?? AnythingLLMIcon}
