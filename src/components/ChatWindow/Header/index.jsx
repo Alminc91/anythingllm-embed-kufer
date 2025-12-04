@@ -67,12 +67,21 @@ export default function ChatWindowHeader({
       id="anything-llm-header"
     >
       <div className="allm-flex allm-items-center allm-px-4 allm-h-[76px] allm-flex-1">
-        <img
-          src={iconUrl ?? AnythingLLMIcon}
-          alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
-          className="allm-flex-shrink-0"
-          style={{ maxWidth: "40px", maxHeight: "40px" }}
-        />
+        <div
+          className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
+          style={{
+            width: "44px",
+            height: "44px",
+            borderRadius: "8px",
+            backgroundColor: settings.headerBgColor ? "#FFFFFF" : "transparent",
+          }}
+        >
+          <img
+            src={iconUrl ?? AnythingLLMIcon}
+            alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
+            style={{ maxWidth: "40px", maxHeight: "40px" }}
+          />
+        </div>
         {settings.brandText && (
           <span
             className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
