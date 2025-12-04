@@ -109,7 +109,17 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
 
       {/* Chat button */}
       <button
-        style={{ backgroundColor: settings.buttonColor }}
+        style={{
+          backgroundColor: settings.buttonColor,
+          ...(settings.buttonOutline === "white" && {
+            border: "2px solid rgba(255, 255, 255, 0.8)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)"
+          }),
+          ...(settings.buttonOutline === "black" && {
+            border: "2px solid rgba(0, 0, 0, 0.4)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)"
+          }),
+        }}
         id="anything-llm-embed-chat-button"
         onClick={() => {
           dismissBubblesOnChatOpen();

@@ -30,6 +30,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | Attribut | Default | Beschreibung |
 |----------|---------|--------------|
 | `data-button-color` | `#607D8B` | Farbe des Chat-Buttons (Hex) |
+| `data-button-outline` | `null` | Rahmen um Chat-Button: `none`, `white`, `black`. Nützlich wenn Button-Farbe dem Hintergrund ähnelt. |
 | `data-user-bg-color` | `#607D8B` | Hintergrundfarbe User-Nachrichten |
 | `data-assistant-bg-color` | `#2563eb` | Hintergrundfarbe Bot-Nachrichten |
 | `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |

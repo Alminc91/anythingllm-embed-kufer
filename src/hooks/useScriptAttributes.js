@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   greeting:
     "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gest&uuml;tzten Antworten.", // Kufer chat window greeting.
   buttonColor: "#607D8B", // must be hex color code
+  buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#607D8B", // user text bubble color
   assistantBgColor: "#2563eb", // assistant text bubble color
   linkColor: null, // color for links in assistant messages
