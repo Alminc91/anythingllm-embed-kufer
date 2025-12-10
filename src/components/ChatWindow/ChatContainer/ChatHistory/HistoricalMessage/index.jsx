@@ -137,20 +137,20 @@ const TTSButton = ({ text }) => {
   if (!ttsAvailable || !text) return null;
 
   return (
-    <div className="allm-mt-2">
+    <div className="allm-flex allm-justify-end allm-mt-1">
       <button
         onClick={handleClick}
         disabled={isLoading}
-        className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-gray-400 hover:allm-text-gray-600 disabled:allm-opacity-50 allm-p-1"
+        className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-gray-400 hover:allm-text-gray-600 disabled:allm-opacity-50 allm-p-0"
         aria-label={isPlaying ? "Stop speaking" : "Speak message"}
         title={isPlaying ? "Stop" : "Speak"}
       >
         {isLoading ? (
-          <CircleNotch size={16} className="allm-animate-spin" />
+          <CircleNotch size={14} className="allm-animate-spin" />
         ) : isPlaying ? (
-          <Stop size={16} weight="fill" className="allm-text-red-500" />
+          <Stop size={14} weight="fill" className="allm-text-red-500" />
         ) : (
-          <SpeakerHigh size={16} weight="fill" />
+          <SpeakerHigh size={14} weight="fill" />
         )}
       </button>
       {audioUrl && (
