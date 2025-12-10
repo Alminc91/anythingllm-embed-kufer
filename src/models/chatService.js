@@ -148,16 +148,16 @@ const ChatService = {
    * @returns {Promise<{success: boolean, text?: string, error?: string}>}
    */
   transcribeAudio: async function (embedSettings, audioBlob, language = null) {
-    const { baseApiUrl } = embedSettings;
+    const { embedId, baseApiUrl } = embedSettings;
     try {
       const formData = new FormData();
       formData.append("file", audioBlob, "recording.webm");
 
-      // STT endpoint is public at /api/audio/transcribe
-      const url = new URL(`${baseApiUrl}/audio/transcribe`.replace("/embed", "").replace("/api/embed", "/api"));
-      if (language) url.searchParams.set("language", language);
+      // Use embed-specific STT endpoint
+      let url = `${baseApiUrl}/${embedId}/audio/stt`;
+      if (language) url += `?language=${encodeURIComponent(language)}`;
 
-      const res = await fetch(url.toString(), {
+      const res = await fetch(url, {
         method: "POST",
         body: formData,
       });
