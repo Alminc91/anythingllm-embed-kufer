@@ -42,6 +42,7 @@ const TTSButton = ({ text }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [ttsAvailable, setTtsAvailable] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const audioRef = React.useRef(null);
 
   // Check if TTS is available on mount (only if enabled via attribute)
@@ -71,15 +72,28 @@ const TTSButton = ({ text }) => {
       setIsPlaying(false);
       audio.currentTime = 0;
     };
+    const handleCanPlayThrough = () => {
+      setIsReady(true);
+      setIsLoading(false);
+    };
+    const handleError = (e) => {
+      console.error("[TTS] Audio error:", e);
+      setIsLoading(false);
+      setIsReady(false);
+    };
 
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("canplaythrough", handleCanPlayThrough);
+    audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("canplaythrough", handleCanPlayThrough);
+      audio.removeEventListener("error", handleError);
     };
   }, [audioUrl]);
 
@@ -89,33 +103,36 @@ const TTSButton = ({ text }) => {
       return;
     }
 
-    if (audioUrl && audioRef.current) {
+    // If audio is ready and cached, just play it
+    if (audioUrl && audioRef.current && isReady) {
       audioRef.current.play();
       return;
     }
 
     // Fetch TTS audio
     setIsLoading(true);
+    setIsReady(false);
     try {
       const settings = embedderSettings.settings;
       const url = await ChatService.textToSpeech(settings, text);
       if (url) {
         setAudioUrl(url);
-        // Play will happen via useEffect when audioUrl changes and audio element is ready
+        // Don't set isLoading to false here - wait for canplaythrough event
+      } else {
+        setIsLoading(false);
       }
     } catch (e) {
       console.error("[TTS] Error:", e);
-    } finally {
       setIsLoading(false);
     }
   };
 
-  // Auto-play when audioUrl is set for the first time
+  // Auto-play when audio is fully loaded (canplaythrough fired)
   useEffect(() => {
-    if (audioUrl && audioRef.current && !isPlaying) {
+    if (audioUrl && audioRef.current && isReady && !isPlaying) {
       audioRef.current.play().catch(console.error);
     }
-  }, [audioUrl]);
+  }, [audioUrl, isReady]);
 
   if (!ttsAvailable || !text) return null;
 
@@ -137,7 +154,7 @@ const TTSButton = ({ text }) => {
         )}
       </button>
       {audioUrl && (
-        <audio ref={audioRef} src={audioUrl} hidden />
+        <audio ref={audioRef} src={audioUrl} preload="auto" hidden />
       )}
     </div>
   );
