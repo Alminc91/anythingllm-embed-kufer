@@ -96,6 +96,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 |----------|---------|--------------|
 | `data-enable-stt` | `true` | Speech-to-Text Mikrofon anzeigen: `true` / `false`. Nur wenn Server STT unterstützt. |
 | `data-enable-tts` | `true` | Text-to-Speech Lautsprecher anzeigen: `true` / `false`. Nur wenn Server TTS unterstützt. |
+| `data-tts-position` | `bottom-right` | Position des TTS-Icons: `bottom-right` (unten rechts in Bubble) oder `icon-left` (unter dem Avatar, wie AnythingLLM App) |
 
 **Hinweis:** STT und TTS müssen serverseitig konfiguriert sein (`.env`). Die Buttons erscheinen nur, wenn:
 1. Der Server STT/TTS unterstützt (`/embed/:embedId/audio/status` gibt `stt: true` / `tts: true` zurück)
@@ -167,6 +168,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
   <!-- Audio (optional - Default ist "true") -->
   data-enable-stt="true"
   data-enable-tts="true"
+  data-tts-position="icon-left"
 
   <!-- Welcome Bubbles -->
   data-display-chatbot-bubbles="true"

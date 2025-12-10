@@ -55,6 +55,7 @@ const DEFAULT_SETTINGS = {
   // audio features
   enableStt: true, // true/false - show STT microphone if server supports it
   enableTts: true, // true/false - show TTS speaker if server supports it
+  ttsPosition: "bottom-right", // "bottom-right" or "icon-left" (under avatar)
 };
 
 export default function useGetScriptAttributes() {

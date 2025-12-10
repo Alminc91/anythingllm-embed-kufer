@@ -37,7 +37,7 @@ const ThoughtBubble = ({ thought }) => {
 };
 
 // TTS Button Component
-const TTSButton = ({ text }) => {
+const TTSButton = ({ text, size = 14 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -146,11 +146,11 @@ const TTSButton = ({ text }) => {
         title={isPlaying ? "Stop" : "Speak"}
       >
         {isLoading ? (
-          <CircleNotch size={14} className="allm-animate-spin" />
+          <CircleNotch size={size} className="allm-animate-spin" />
         ) : isPlaying ? (
-          <Stop size={14} weight="fill" className="allm-text-red-500" />
+          <Stop size={size} weight="fill" className="allm-text-red-500" />
         ) : (
-          <SpeakerHigh size={14} weight="fill" />
+          <SpeakerHigh size={size} weight="fill" />
         )}
       </button>
       {audioUrl && (
@@ -195,6 +195,8 @@ const HistoricalMessage = forwardRef(
       ?.replace(/<[^>]*>/g, "") // Remove HTML tags
       ?.trim();
 
+    const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";
+
     return (
       <div className="allm-py-[5px]">
         {role === "assistant" && (
@@ -211,12 +213,20 @@ const HistoricalMessage = forwardRef(
           }`}
         >
           {role === "assistant" && (
-            <img
-              src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
-              alt="Anything LLM Icon"
-              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2"
-              id="anything-llm-icon"
-            />
+            <div className="allm-flex allm-flex-col allm-items-center allm-ml-2 allm-flex-shrink-0">
+              <img
+                src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
+                alt="Anything LLM Icon"
+                className="allm-w-9 allm-h-9"
+                id="anything-llm-icon"
+              />
+              {/* TTS Button under avatar (icon-left position) */}
+              {ttsPosition === "icon-left" && !error && plainTextForTTS && (
+                <div className="allm-mt-1">
+                  <TTSButton text={plainTextForTTS} size={16} />
+                </div>
+              )}
+            </div>
           )}
           <div
             style={{
@@ -258,9 +268,9 @@ const HistoricalMessage = forwardRef(
                       ),
                     }}
                   />
-                  {/* TTS Button for assistant messages */}
-                  {role === "assistant" && !error && plainTextForTTS && (
-                    <TTSButton text={plainTextForTTS} />
+                  {/* TTS Button for assistant messages (bottom-right position) */}
+                  {role === "assistant" && !error && plainTextForTTS && ttsPosition !== "icon-left" && (
+                    <TTSButton text={plainTextForTTS} size={14} />
                   )}
                 </>
               )}
