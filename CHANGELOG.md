@@ -2,6 +2,34 @@
 
 Alle wichtigen Änderungen am Embed Widget werden hier dokumentiert.
 
+## [2.6.0] - 2024-12-10
+
+### Hinzugefügt
+- **🎤 Speech-to-Text (STT)**: Mikrofon-Button im Chat-Input
+  - MediaRecorder API für Audio-Aufnahme
+  - Server-seitige Transkription via `/api/audio/transcribe`
+  - Automatische Spracherkennung basierend auf Browser-Sprache
+  - Button erscheint nur wenn Server-STT konfiguriert ist
+
+- **🔊 Text-to-Speech (TTS)**: Speaker-Button bei Assistant-Nachrichten
+  - Konvertiert Nachrichtentext zu Sprache via Server
+  - Ruft `POST /embed/:embedId/audio/tts` auf
+  - Play/Pause-Funktionalität mit Audio-Caching
+  - Button erscheint nur wenn Server-TTS konfiguriert ist
+
+- **Audio-Status Lazy Loading**:
+  - `GET /embed/:embedId/audio/status` beim Mount
+  - Zeigt/versteckt Buttons basierend auf Server-Konfiguration
+
+### Technisch
+- Neue Audio-Service-Funktionen in `chatService.js`:
+  - `getAudioStatus()` - Prüft STT/TTS Verfügbarkeit
+  - `transcribeAudio()` - STT via Server
+  - `textToSpeech()` - TTS via Server
+- Übersetzungen für DE/EN hinzugefügt
+
+---
+
 ## [2.5.0] - 2024-12-03
 
 ### Hinzugefügt
