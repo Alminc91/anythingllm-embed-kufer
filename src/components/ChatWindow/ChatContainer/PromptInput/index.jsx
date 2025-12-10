@@ -155,26 +155,6 @@ export default function PromptInput({
               style={{ border: "1.5px solid #22262833" }}
               className="allm-flex allm-items-center allm-w-full allm-rounded-2xl"
             >
-              {/* Microphone Button (STT) */}
-              {sttAvailable && (
-                <button
-                  type="button"
-                  onClick={handleMicrophoneClick}
-                  disabled={inputDisabled || isTranscribing}
-                  className="allm-bg-transparent allm-border-none allm-p-2 allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50"
-                  aria-label={isRecording ? "Stop recording" : "Start recording"}
-                  title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
-                >
-                  {isTranscribing ? (
-                    <CircleNotch size={20} className="allm-animate-spin" />
-                  ) : isRecording ? (
-                    <Stop size={20} weight="fill" className="allm-text-red-500 allm-animate-pulse" />
-                  ) : (
-                    <Microphone size={20} weight="fill" />
-                  )}
-                </button>
-              )}
-
               <textarea
                 ref={textareaRef}
                 onKeyUp={adjustTextArea}
@@ -200,11 +180,32 @@ export default function PromptInput({
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
+
+              {/* Microphone Button (STT) - right side */}
+              {sttAvailable && (
+                <button
+                  type="button"
+                  onClick={handleMicrophoneClick}
+                  disabled={inputDisabled || isTranscribing}
+                  className="allm-bg-transparent allm-border-none allm-p-1 allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-flex-shrink-0"
+                  aria-label={isRecording ? "Stop recording" : "Start recording"}
+                  title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
+                >
+                  {isTranscribing ? (
+                    <CircleNotch size={20} className="allm-animate-spin" />
+                  ) : isRecording ? (
+                    <Stop size={20} weight="fill" className="allm-text-red-500 allm-animate-pulse" />
+                  ) : (
+                    <Microphone size={20} weight="fill" />
+                  )}
+                </button>
+              )}
+
               <button
                 ref={formRef}
                 type="submit"
                 disabled={buttonDisabled}
-                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group"
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
                 id="send-message-button"
                 aria-label="Send message"
               >
