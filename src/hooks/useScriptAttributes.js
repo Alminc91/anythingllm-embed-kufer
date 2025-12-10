@@ -53,8 +53,8 @@ const DEFAULT_SETTINGS = {
   chatbotBubblesMessages: [], // messages to display in welcome bubbles
 
   // audio features
-  enableStt: "on", // "on" or "off" - show STT microphone if server supports it
-  enableTts: "on", // "on" or "off" - show TTS speaker if server supports it
+  enableStt: true, // true/false - show STT microphone if server supports it
+  enableTts: true, // true/false - show TTS speaker if server supports it
 };
 
 export default function useGetScriptAttributes() {

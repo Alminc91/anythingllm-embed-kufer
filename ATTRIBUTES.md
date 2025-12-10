@@ -94,12 +94,12 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 
 | Attribut | Default | Beschreibung |
 |----------|---------|--------------|
-| `data-enable-stt` | `on` | Speech-to-Text Mikrofon anzeigen: `on` / `off`. Nur wenn Server STT unterstützt. |
-| `data-enable-tts` | `on` | Text-to-Speech Lautsprecher anzeigen: `on` / `off`. Nur wenn Server TTS unterstützt. |
+| `data-enable-stt` | `true` | Speech-to-Text Mikrofon anzeigen: `true` / `false`. Nur wenn Server STT unterstützt. |
+| `data-enable-tts` | `true` | Text-to-Speech Lautsprecher anzeigen: `true` / `false`. Nur wenn Server TTS unterstützt. |
 
 **Hinweis:** STT und TTS müssen serverseitig konfiguriert sein (`.env`). Die Buttons erscheinen nur, wenn:
 1. Der Server STT/TTS unterstützt (`/embed/:embedId/audio/status` gibt `stt: true` / `tts: true` zurück)
-2. Das entsprechende Attribut nicht auf `off` gesetzt ist
+2. Das entsprechende Attribut nicht auf `false` gesetzt ist
 
 ---
 
@@ -164,9 +164,9 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
   data-open-on-load="off"
   data-support-email="support@example.de"
 
-  <!-- Audio (optional - Default ist "on") -->
-  data-enable-stt="on"
-  data-enable-tts="on"
+  <!-- Audio (optional - Default ist "true") -->
+  data-enable-stt="true"
+  data-enable-tts="true"
 
   <!-- Welcome Bubbles -->
   data-display-chatbot-bubbles="true"

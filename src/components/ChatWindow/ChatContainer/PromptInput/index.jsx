@@ -26,7 +26,7 @@ export default function PromptInput({
   useEffect(() => {
     async function checkAudioStatus() {
       // Skip if STT is disabled via widget attribute
-      if (settings?.enableStt === "off") {
+      if (settings?.enableStt === false || settings?.enableStt === "false") {
         setSttAvailable(false);
         return;
       }

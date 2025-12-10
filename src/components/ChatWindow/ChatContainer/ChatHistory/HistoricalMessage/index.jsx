@@ -49,7 +49,7 @@ const TTSButton = ({ text }) => {
     async function checkTTSStatus() {
       const settings = embedderSettings.settings;
       // Skip if TTS is disabled via widget attribute
-      if (settings?.enableTts === "off") {
+      if (settings?.enableTts === false || settings?.enableTts === "false") {
         setTtsAvailable(false);
         return;
       }
