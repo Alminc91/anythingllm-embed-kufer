@@ -22,15 +22,20 @@ export default function PromptInput({
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  // Check if STT is available on mount
+  // Check if STT is available on mount (only if enabled via attribute)
   useEffect(() => {
     async function checkAudioStatus() {
+      // Skip if STT is disabled via widget attribute
+      if (settings?.enableStt === "off") {
+        setSttAvailable(false);
+        return;
+      }
       if (!settings?.baseApiUrl || !settings?.embedId) return;
       const status = await ChatService.getAudioStatus(settings);
       setSttAvailable(status.stt === true);
     }
     checkAudioStatus();
-  }, [settings?.baseApiUrl, settings?.embedId]);
+  }, [settings?.baseApiUrl, settings?.embedId, settings?.enableStt]);
 
   useEffect(() => {
     if (!inputDisabled && textareaRef.current) {

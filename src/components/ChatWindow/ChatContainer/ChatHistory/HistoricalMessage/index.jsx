@@ -44,10 +44,15 @@ const TTSButton = ({ text }) => {
   const [ttsAvailable, setTtsAvailable] = useState(false);
   const audioRef = React.useRef(null);
 
-  // Check if TTS is available on mount
+  // Check if TTS is available on mount (only if enabled via attribute)
   useEffect(() => {
     async function checkTTSStatus() {
       const settings = embedderSettings.settings;
+      // Skip if TTS is disabled via widget attribute
+      if (settings?.enableTts === "off") {
+        setTtsAvailable(false);
+        return;
+      }
       if (!settings?.baseApiUrl || !settings?.embedId) return;
       const status = await ChatService.getAudioStatus(settings);
       setTtsAvailable(status.tts === true);

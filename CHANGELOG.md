@@ -21,6 +21,11 @@ Alle wichtigen Änderungen am Embed Widget werden hier dokumentiert.
   - `GET /embed/:embedId/audio/status` beim Mount
   - Zeigt/versteckt Buttons basierend auf Server-Konfiguration
 
+- **Widget Attribute für Audio**:
+  - `data-enable-stt="on|off"` - STT-Mikrofon ein/ausschalten
+  - `data-enable-tts="on|off"` - TTS-Lautsprecher ein/ausschalten
+  - Default: beide `on` (wenn Server unterstützt)
+
 ### Technisch
 - Neue Audio-Service-Funktionen in `chatService.js`:
   - `getAudioStatus()` - Prüft STT/TTS Verfügbarkeit
