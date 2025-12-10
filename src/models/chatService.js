@@ -118,6 +118,87 @@ const ChatService = {
       },
     });
   },
+
+  // ============================================
+  // Audio Services (STT/TTS)
+  // ============================================
+
+  /**
+   * Check if STT and TTS are available on the server
+   * @param {Object} embedSettings - The embed settings containing baseApiUrl and embedId
+   * @returns {Promise<{stt: boolean, tts: boolean}>}
+   */
+  getAudioStatus: async function (embedSettings) {
+    const { embedId, baseApiUrl } = embedSettings;
+    try {
+      const res = await fetch(`${baseApiUrl}/${embedId}/audio/status`);
+      if (!res.ok) return { stt: false, tts: false };
+      return await res.json();
+    } catch (e) {
+      console.error("AnythingLLM Embed: Could not check audio status", e);
+      return { stt: false, tts: false };
+    }
+  },
+
+  /**
+   * Transcribe audio to text using server-side STT
+   * @param {Object} embedSettings - The embed settings
+   * @param {Blob} audioBlob - The audio blob to transcribe
+   * @param {string} language - Optional language hint (e.g., 'de', 'en')
+   * @returns {Promise<{success: boolean, text?: string, error?: string}>}
+   */
+  transcribeAudio: async function (embedSettings, audioBlob, language = null) {
+    const { baseApiUrl } = embedSettings;
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob, "recording.webm");
+
+      // STT endpoint is public at /api/audio/transcribe
+      const url = new URL(`${baseApiUrl}/audio/transcribe`.replace("/embed", "").replace("/api/embed", "/api"));
+      if (language) url.searchParams.set("language", language);
+
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Transcription failed" }));
+        return { success: false, error: error.error || "Transcription failed" };
+      }
+
+      const data = await res.json();
+      return { success: true, text: data.text };
+    } catch (e) {
+      console.error("AnythingLLM Embed: Transcription error", e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Convert text to speech using server-side TTS
+   * @param {Object} embedSettings - The embed settings containing baseApiUrl and embedId
+   * @param {string} text - The text to convert to speech
+   * @returns {Promise<string|null>} - Audio URL (blob URL) or null on error
+   */
+  textToSpeech: async function (embedSettings, text) {
+    const { embedId, baseApiUrl } = embedSettings;
+    try {
+      const res = await fetch(`${baseApiUrl}/${embedId}/audio/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok || res.status === 204) return null;
+
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error("AnythingLLM Embed: TTS error", e);
+      return null;
+    }
+  },
 };
 
 export default ChatService;

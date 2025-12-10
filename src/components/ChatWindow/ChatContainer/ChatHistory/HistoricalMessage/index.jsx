@@ -1,11 +1,12 @@
-import React, { memo, forwardRef, useState } from "react";
-import { Warning, CaretDown } from "@phosphor-icons/react";
+import React, { memo, forwardRef, useState, useEffect } from "react";
+import { Warning, CaretDown, SpeakerHigh, Stop, CircleNotch } from "@phosphor-icons/react";
 import renderMarkdown from "@/utils/chat/markdown";
 import DOMPurify from "@/utils/chat/purify";
 import { embedderSettings } from "@/main";
 import { v4 } from "uuid";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
+import ChatService from "@/models/chatService";
 
 const ThoughtBubble = ({ thought }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -30,6 +31,108 @@ const ThoughtBubble = ({ thought }) => {
             {thought.trim()}
           </div>
         </div>
+      )}
+    </div>
+  );
+};
+
+// TTS Button Component
+const TTSButton = ({ text }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [ttsAvailable, setTtsAvailable] = useState(false);
+  const audioRef = React.useRef(null);
+
+  // Check if TTS is available on mount
+  useEffect(() => {
+    async function checkTTSStatus() {
+      const settings = embedderSettings.settings;
+      if (!settings?.baseApiUrl || !settings?.embedId) return;
+      const status = await ChatService.getAudioStatus(settings);
+      setTtsAvailable(status.tts === true);
+    }
+    checkTTSStatus();
+  }, []);
+
+  // Setup audio event listeners
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    const audio = audioRef.current;
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      audio.currentTime = 0;
+    };
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [audioUrl]);
+
+  const handleClick = async () => {
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      return;
+    }
+
+    if (audioUrl && audioRef.current) {
+      audioRef.current.play();
+      return;
+    }
+
+    // Fetch TTS audio
+    setIsLoading(true);
+    try {
+      const settings = embedderSettings.settings;
+      const url = await ChatService.textToSpeech(settings, text);
+      if (url) {
+        setAudioUrl(url);
+        // Play will happen via useEffect when audioUrl changes and audio element is ready
+      }
+    } catch (e) {
+      console.error("[TTS] Error:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Auto-play when audioUrl is set for the first time
+  useEffect(() => {
+    if (audioUrl && audioRef.current && !isPlaying) {
+      audioRef.current.play().catch(console.error);
+    }
+  }, [audioUrl]);
+
+  if (!ttsAvailable || !text) return null;
+
+  return (
+    <div className="allm-mt-2">
+      <button
+        onClick={handleClick}
+        disabled={isLoading}
+        className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-gray-400 hover:allm-text-gray-600 disabled:allm-opacity-50 allm-p-1"
+        aria-label={isPlaying ? "Stop speaking" : "Speak message"}
+        title={isPlaying ? "Stop" : "Speak"}
+      >
+        {isLoading ? (
+          <CircleNotch size={16} className="allm-animate-spin" />
+        ) : isPlaying ? (
+          <Stop size={16} weight="fill" className="allm-text-red-500" />
+        ) : (
+          <SpeakerHigh size={16} weight="fill" />
+        )}
+      </button>
+      {audioUrl && (
+        <audio ref={audioRef} src={audioUrl} hidden />
       )}
     </div>
   );
@@ -63,6 +166,12 @@ const HistoricalMessage = forwardRef(
     const responseContent = message
       ?.replace(/<think>[\s\S]*?<\/think>/g, "")
       .trim();
+
+    // Clean text for TTS (remove markdown, HTML, etc.)
+    const plainTextForTTS = responseContent
+      ?.replace(/[#*_`~\[\]()]/g, "") // Remove markdown
+      ?.replace(/<[^>]*>/g, "") // Remove HTML tags
+      ?.trim();
 
     return (
       <div className="allm-py-[5px]">
@@ -127,6 +236,10 @@ const HistoricalMessage = forwardRef(
                       ),
                     }}
                   />
+                  {/* TTS Button for assistant messages */}
+                  {role === "assistant" && !error && plainTextForTTS && (
+                    <TTSButton text={plainTextForTTS} />
+                  )}
                 </>
               )}
             </div>
