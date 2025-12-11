@@ -65,9 +65,12 @@ export default function PromptInput({
 
   const adjustTextArea = (event) => {
     const element = event.target;
+    // Only grow if content exceeds single line (~44px with padding)
     element.style.height = "auto";
-    element.style.height =
-      event.target.value.length !== 0 ? element.scrollHeight + "px" : "auto";
+    const singleLineHeight = 44;
+    if (element.scrollHeight > singleLineHeight) {
+      element.style.height = element.scrollHeight + "px";
+    }
   };
 
   // STT Functions
