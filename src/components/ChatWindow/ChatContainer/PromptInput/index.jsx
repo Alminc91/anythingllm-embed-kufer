@@ -121,12 +121,18 @@ export default function PromptInput({
     setIsTranscribing(true);
     try {
       const lang = navigator?.language?.split("-")[0] || "de";
+      console.log("[STT] Transcribing audio, language:", lang, "blob size:", audioBlob.size);
+
       const result = await ChatService.transcribeAudio(settings, audioBlob, lang);
+      console.log("[STT] Transcription result:", result);
 
       if (result.success && result.text) {
         // Update the message input with transcribed text
         const newValue = message ? `${message} ${result.text}` : result.text;
+        console.log("[STT] Setting message to:", newValue);
         onChange({ target: { value: newValue } });
+      } else {
+        console.warn("[STT] No text returned:", result);
       }
     } catch (e) {
       console.error("[STT] Transcription error:", e);
