@@ -65,11 +65,11 @@ export default function PromptInput({
 
   const adjustTextArea = (event) => {
     const element = event.target;
-    // Reset to minHeight first, then grow if needed
-    // This prevents the "jump" when typing first character
-    element.style.height = "36px";
-    if (element.scrollHeight > 36) {
+    // Only grow when content exceeds one line
+    if (element.scrollHeight > 32) {
       element.style.height = element.scrollHeight + "px";
+    } else {
+      element.style.height = "auto";
     }
   };
 
@@ -179,13 +179,13 @@ export default function PromptInput({
                 }}
                 value={message}
                 rows={1}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-min-h-[36px] allm-text-[14px] allm-leading-[20px] allm-py-2 allm-px-3 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-h-[32px] allm-text-[14px] allm-leading-[32px] allm-px-3 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
 
               {/* Buttons container - fixed height, always centered */}
-              <div className="allm-flex allm-items-center allm-h-[36px] allm-flex-shrink-0 allm-pr-2 allm-gap-1">
+              <div className="allm-flex allm-items-center allm-h-[32px] allm-flex-shrink-0 allm-pr-2 allm-gap-1">
                 {/* Microphone Button (STT) */}
                 {sttAvailable && (
                   <button
