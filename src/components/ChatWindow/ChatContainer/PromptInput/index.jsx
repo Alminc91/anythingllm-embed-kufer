@@ -120,10 +120,11 @@ export default function PromptInput({
   const transcribeAudio = async (audioBlob) => {
     setIsTranscribing(true);
     try {
-      const lang = navigator?.language?.split("-")[0] || "de";
-      console.log("[STT] Transcribing audio, language:", lang, "blob size:", audioBlob.size);
+      // Don't send language parameter - let Whisper auto-detect
+      // This ensures transcription in the original spoken language (not translation)
+      console.log("[STT] Transcribing audio, blob size:", audioBlob.size);
 
-      const result = await ChatService.transcribeAudio(settings, audioBlob, lang);
+      const result = await ChatService.transcribeAudio(settings, audioBlob, null);
       console.log("[STT] Transcription result:", result);
 
       if (result.success && result.text) {
