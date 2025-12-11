@@ -177,10 +177,9 @@ export default function PromptInput({
                 value={message}
                 rows={1}
                 style={{
-                  height: '20px',
-                  minHeight: '20px',
+                  minHeight: '44px',
                   lineHeight: '20px',
-                  padding: '12px 12px',
+                  padding: '12px',
                   margin: '0',
                 }}
                 className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
@@ -194,7 +193,7 @@ export default function PromptInput({
                   type="button"
                   onClick={handleMicrophoneClick}
                   disabled={inputDisabled || isTranscribing}
-                  className="allm-bg-transparent allm-border-none allm-p-1 allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-flex-shrink-0"
+                  className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center allm-w-10 allm-h-10"
                   aria-label={isRecording ? "Stop recording" : "Start recording"}
                   title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
                 >
@@ -212,7 +211,7 @@ export default function PromptInput({
                 ref={formRef}
                 type="submit"
                 disabled={buttonDisabled}
-                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-items-center allm-justify-center allm-cursor-pointer allm-text-black group allm-flex-shrink-0 allm-w-10 allm-h-10 allm-mr-1"
                 id="send-message-button"
                 aria-label="Send message"
               >
@@ -220,8 +219,8 @@ export default function PromptInput({
                   <CircleNotch className="allm-w-4 allm-h-4 allm-animate-spin" />
                 ) : (
                   <PaperPlaneRight
-                    size={24}
-                    className="allm-my-3 allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
+                    size={22}
+                    className="allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
                     weight="fill"
                   />
                 )}
