@@ -2,13 +2,34 @@
 
 Alle wichtigen Änderungen am Embed Widget werden hier dokumentiert.
 
+## [2.7.0] - 2024-12-11
+
+### Hinzugefügt
+- **📍 TTS-Position Attribut**: `data-tts-position="bottom-right|icon-left"`
+  - `bottom-right` (Default): Speaker-Icon in der Message-Bubble
+  - `icon-left`: Speaker-Icon unter dem Avatar (wie AnythingLLM Desktop)
+
+### Geändert
+- **STT Auto-Detect**: Kein `language` Parameter mehr an Whisper
+  - Whisper erkennt automatisch die gesprochene Sprache
+  - Verhindert ungewollte Übersetzung (z.B. Spanisch → Deutsch)
+
+### Behoben
+- **TextArea Stabilität**: Kein Springen mehr beim ersten Buchstaben
+  - `adjustTextArea` wächst nur bei `scrollHeight > 44px`
+- **Button Alignment**: Mikrofon und Send-Button perfekt aligned
+  - Beide Buttons mit identischem Styling (size=24, my-3)
+- **Audio-Caching**: In-Memory Cache funktioniert korrekt
+  - 2. Klick auf Speaker spielt gecachtes Audio sofort ab
+
+---
+
 ## [2.6.0] - 2024-12-10
 
 ### Hinzugefügt
 - **🎤 Speech-to-Text (STT)**: Mikrofon-Button im Chat-Input
   - MediaRecorder API für Audio-Aufnahme
-  - Server-seitige Transkription via `/api/audio/transcribe`
-  - Automatische Spracherkennung basierend auf Browser-Sprache
+  - Server-seitige Transkription via Embed-Endpoint
   - Button erscheint nur wenn Server-STT konfiguriert ist
 
 - **🔊 Text-to-Speech (TTS)**: Speaker-Button bei Assistant-Nachrichten
