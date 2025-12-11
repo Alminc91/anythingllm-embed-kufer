@@ -65,12 +65,9 @@ export default function PromptInput({
 
   const adjustTextArea = (event) => {
     const element = event.target;
-    // Only grow when content exceeds one line
-    if (element.scrollHeight > 32) {
-      element.style.height = element.scrollHeight + "px";
-    } else {
-      element.style.height = "auto";
-    }
+    element.style.height = "auto";
+    element.style.height =
+      event.target.value.length !== 0 ? element.scrollHeight + "px" : "auto";
   };
 
   // STT Functions
@@ -179,53 +176,57 @@ export default function PromptInput({
                 }}
                 value={message}
                 rows={1}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-h-[32px] allm-text-[14px] allm-leading-[32px] allm-px-3 allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                style={{
+                  height: '20px',
+                  minHeight: '20px',
+                  lineHeight: '20px',
+                  padding: '12px 12px',
+                  margin: '0',
+                }}
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
 
-              {/* Buttons container - fixed height, always centered */}
-              <div className="allm-flex allm-items-center allm-h-[32px] allm-flex-shrink-0 allm-pr-2 allm-gap-1">
-                {/* Microphone Button (STT) */}
-                {sttAvailable && (
-                  <button
-                    type="button"
-                    onClick={handleMicrophoneClick}
-                    disabled={inputDisabled || isTranscribing}
-                    className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-p-1"
-                    aria-label={isRecording ? "Stop recording" : "Start recording"}
-                    title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
-                  >
-                    {isTranscribing ? (
-                      <CircleNotch size={20} className="allm-animate-spin" />
-                    ) : isRecording ? (
-                      <Stop size={20} weight="fill" className="allm-text-red-500 allm-animate-pulse" />
-                    ) : (
-                      <Microphone size={20} weight="fill" />
-                    )}
-                  </button>
-                )}
-
+              {/* Microphone Button (STT) - matches send button style */}
+              {sttAvailable && (
                 <button
-                  ref={formRef}
-                  type="submit"
-                  disabled={buttonDisabled}
-                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-items-center allm-cursor-pointer allm-text-black group allm-p-1"
-                  id="send-message-button"
-                  aria-label="Send message"
+                  type="button"
+                  onClick={handleMicrophoneClick}
+                  disabled={inputDisabled || isTranscribing}
+                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
+                  aria-label={isRecording ? "Stop recording" : "Start recording"}
+                  title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
                 >
-                  {buttonDisabled ? (
-                    <CircleNotch className="allm-w-5 allm-h-5 allm-animate-spin" />
+                  {isTranscribing ? (
+                    <CircleNotch size={24} className="allm-my-3 allm-animate-spin allm-text-[#22262899]/60" />
+                  ) : isRecording ? (
+                    <Stop size={24} weight="fill" className="allm-my-3 allm-text-red-500 allm-animate-pulse" />
                   ) : (
-                    <PaperPlaneRight
-                      size={20}
-                      className="allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
-                      weight="fill"
-                    />
+                    <Microphone size={24} weight="fill" className="allm-my-3 allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90" />
                   )}
-                  <span className="allm-sr-only">Send message</span>
                 </button>
-              </div>
+              )}
+
+              <button
+                ref={formRef}
+                type="submit"
+                disabled={buttonDisabled}
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
+                id="send-message-button"
+                aria-label="Send message"
+              >
+                {buttonDisabled ? (
+                  <CircleNotch className="allm-w-4 allm-h-4 allm-animate-spin" />
+                ) : (
+                  <PaperPlaneRight
+                    size={24}
+                    className="allm-my-3 allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
+                    weight="fill"
+                  />
+                )}
+                <span className="allm-sr-only">Send message</span>
+              </button>
             </div>
           </div>
         </div>
