@@ -65,9 +65,12 @@ export default function PromptInput({
 
   const adjustTextArea = (event) => {
     const element = event.target;
-    element.style.height = "auto";
-    element.style.height =
-      event.target.value.length !== 0 ? element.scrollHeight + "px" : "auto";
+    // Reset to minHeight first, then grow if needed
+    // This prevents the "jump" when typing first character
+    element.style.height = "44px";
+    if (element.scrollHeight > 44) {
+      element.style.height = element.scrollHeight + "px";
+    }
   };
 
   // STT Functions
