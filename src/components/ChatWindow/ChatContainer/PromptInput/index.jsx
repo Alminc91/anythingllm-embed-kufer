@@ -177,9 +177,10 @@ export default function PromptInput({
                 value={message}
                 rows={1}
                 style={{
-                  minHeight: '44px',
+                  height: '20px',
+                  minHeight: '20px',
                   lineHeight: '20px',
-                  padding: '12px',
+                  padding: '12px 12px',
                   margin: '0',
                 }}
                 className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
@@ -193,16 +194,16 @@ export default function PromptInput({
                   type="button"
                   onClick={handleMicrophoneClick}
                   disabled={inputDisabled || isTranscribing}
-                  className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center allm-w-10 allm-h-10"
+                  className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[#22262899]/60 hover:allm-text-[#22262899]/90 disabled:allm-opacity-50 allm-flex-shrink-0 allm-self-center allm-mr-1"
                   aria-label={isRecording ? "Stop recording" : "Start recording"}
                   title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
                 >
                   {isTranscribing ? (
-                    <CircleNotch size={20} className="allm-animate-spin" />
+                    <CircleNotch size={18} className="allm-animate-spin" />
                   ) : isRecording ? (
-                    <Stop size={20} weight="fill" className="allm-text-red-500 allm-animate-pulse" />
+                    <Stop size={18} weight="fill" className="allm-text-red-500 allm-animate-pulse" />
                   ) : (
-                    <Microphone size={20} weight="fill" />
+                    <Microphone size={18} weight="fill" />
                   )}
                 </button>
               )}
@@ -211,7 +212,7 @@ export default function PromptInput({
                 ref={formRef}
                 type="submit"
                 disabled={buttonDisabled}
-                className="allm-bg-transparent allm-border-none allm-inline-flex allm-items-center allm-justify-center allm-cursor-pointer allm-text-black group allm-flex-shrink-0 allm-w-10 allm-h-10 allm-mr-1"
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0 allm-self-center allm-mr-2"
                 id="send-message-button"
                 aria-label="Send message"
               >
@@ -219,7 +220,7 @@ export default function PromptInput({
                   <CircleNotch className="allm-w-4 allm-h-4 allm-animate-spin" />
                 ) : (
                   <PaperPlaneRight
-                    size={22}
+                    size={20}
                     className="allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
                     weight="fill"
                   />
