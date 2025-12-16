@@ -201,29 +201,102 @@ const ChatService = {
   },
 
   /**
-   * Convert text to speech using streaming endpoint for reduced latency
-   * Audio starts playing as chunks arrive from the server
+   * Convert text to speech using streaming endpoint with MediaSource API
+   * Audio starts playing as MP3 chunks arrive from the server
    * @param {Object} embedSettings - The embed settings containing baseApiUrl and embedId
    * @param {string} text - The text to convert to speech
-   * @returns {Promise<string|null>} - Audio URL (blob URL) or null on error
+   * @param {HTMLAudioElement} audioElement - Audio element to play the stream
+   * @param {Function} onStart - Callback when audio starts playing
+   * @param {Function} onError - Callback on error
+   * @returns {Promise<boolean>} - True if streaming started successfully
    */
-  textToSpeechStream: async function (embedSettings, text) {
+  textToSpeechStream: async function (embedSettings, text, audioElement, onStart, onError) {
     const { embedId, baseApiUrl } = embedSettings;
+
+    // Check MediaSource support
+    if (!window.MediaSource || !MediaSource.isTypeSupported('audio/mpeg')) {
+      console.warn("MediaSource API not supported, falling back to blob");
+      const url = await this.textToSpeech(embedSettings, text);
+      if (url) {
+        audioElement.src = url;
+        audioElement.play();
+        onStart?.();
+        return true;
+      }
+      onError?.("TTS failed");
+      return false;
+    }
+
     try {
-      const res = await fetch(`${baseApiUrl}/${embedId}/audio/tts-stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+      const mediaSource = new MediaSource();
+      audioElement.src = URL.createObjectURL(mediaSource);
+
+      await new Promise((resolve, reject) => {
+        mediaSource.addEventListener('sourceopen', async () => {
+          try {
+            const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+            let isFirstChunk = true;
+
+            const res = await fetch(`${baseApiUrl}/${embedId}/audio/tts-stream`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+
+            if (!res.ok || res.status === 204) {
+              reject(new Error("TTS request failed"));
+              return;
+            }
+
+            const reader = res.body.getReader();
+
+            const appendChunk = async () => {
+              while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                  // Signal end of stream
+                  if (mediaSource.readyState === 'open') {
+                    mediaSource.endOfStream();
+                  }
+                  resolve();
+                  return;
+                }
+
+                // Wait if buffer is updating
+                if (sourceBuffer.updating) {
+                  await new Promise(r => sourceBuffer.addEventListener('updateend', r, { once: true }));
+                }
+
+                // Append chunk to buffer
+                sourceBuffer.appendBuffer(value);
+
+                // Start playback on first chunk
+                if (isFirstChunk) {
+                  isFirstChunk = false;
+                  audioElement.play().catch(console.error);
+                  onStart?.();
+                }
+
+                // Wait for append to complete
+                await new Promise(r => sourceBuffer.addEventListener('updateend', r, { once: true }));
+              }
+            };
+
+            appendChunk().catch(reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, { once: true });
+
+        mediaSource.addEventListener('error', () => reject(new Error("MediaSource error")), { once: true });
       });
 
-      if (!res.ok || res.status === 204) return null;
-
-      // Stream the response - browser can start playing before full download
-      const blob = await res.blob();
-      return URL.createObjectURL(blob);
+      return true;
     } catch (e) {
       console.error("AnythingLLM Embed: TTS streaming error", e);
-      return null;
+      onError?.(e.message);
+      return false;
     }
   },
 };

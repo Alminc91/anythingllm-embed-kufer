@@ -110,16 +110,32 @@ const TTSButton = ({ text, size = 14 }) => {
       return;
     }
 
-    // Fetch TTS audio using streaming endpoint for faster playback
+    // Use streaming TTS with MediaSource API for progressive playback
     setIsLoading(true);
     setIsReady(false);
     try {
       const settings = embedderSettings.settings;
-      const url = await ChatService.textToSpeechStream(settings, text);
-      if (url) {
-        setAudioUrl(url);
-        // Don't set isLoading to false here - wait for canplay event
-      } else {
+
+      // Try streaming first (MediaSource API with MP3)
+      const success = await ChatService.textToSpeechStream(
+        settings,
+        text,
+        audioRef.current,
+        () => {
+          // onStart callback - audio is playing
+          setIsLoading(false);
+          setIsReady(true);
+          setIsPlaying(true);
+          setAudioUrl("streaming"); // Mark as streaming (not a real URL)
+        },
+        (error) => {
+          // onError callback
+          console.error("[TTS] Streaming error:", error);
+          setIsLoading(false);
+        }
+      );
+
+      if (!success) {
         setIsLoading(false);
       }
     } catch (e) {
@@ -128,8 +144,10 @@ const TTSButton = ({ text, size = 14 }) => {
     }
   };
 
-  // Auto-play when audio can start (canplay fired - allows streaming playback)
+  // Auto-play when audio can start (only for non-streaming mode)
   useEffect(() => {
+    // Skip for streaming mode - it handles its own playback
+    if (audioUrl === "streaming") return;
     if (audioUrl && audioRef.current && isReady && !isPlaying) {
       audioRef.current.play().catch(console.error);
     }
@@ -154,9 +172,13 @@ const TTSButton = ({ text, size = 14 }) => {
           <SpeakerHigh size={size} weight="fill" />
         )}
       </button>
-      {audioUrl && (
-        <audio ref={audioRef} src={audioUrl} preload="auto" hidden />
-      )}
+      {/* Audio element always exists for streaming support */}
+      <audio
+        ref={audioRef}
+        src={audioUrl && audioUrl !== "streaming" ? audioUrl : undefined}
+        preload="auto"
+        hidden
+      />
     </div>
   );
 };
