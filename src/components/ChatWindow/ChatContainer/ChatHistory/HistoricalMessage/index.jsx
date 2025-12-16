@@ -40,7 +40,6 @@ const ThoughtBubble = ({ thought }) => {
 const TTSButton = ({ text, size = 14 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
   const [ttsAvailable, setTtsAvailable] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const audioRef = React.useRef(null);
@@ -72,11 +71,6 @@ const TTSButton = ({ text, size = 14 }) => {
       setIsPlaying(false);
       audio.currentTime = 0;
     };
-    // Use canplay (not canplaythrough) for earlier playback with streaming
-    const handleCanPlay = () => {
-      setIsReady(true);
-      setIsLoading(false);
-    };
     const handleError = (e) => {
       console.error("[TTS] Audio error:", e);
       setIsLoading(false);
@@ -86,17 +80,15 @@ const TTSButton = ({ text, size = 14 }) => {
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
-    audio.addEventListener("canplay", handleCanPlay);
     audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
-      audio.removeEventListener("canplay", handleCanPlay);
       audio.removeEventListener("error", handleError);
     };
-  }, [audioUrl]);
+  }, []);
 
   const handleClick = async () => {
     if (isPlaying && audioRef.current) {
@@ -104,32 +96,30 @@ const TTSButton = ({ text, size = 14 }) => {
       return;
     }
 
-    // If audio is ready and cached, just play it
-    if (audioUrl && audioRef.current && isReady) {
+    // If already played before, replay
+    if (isReady && audioRef.current) {
+      audioRef.current.currentTime = 0;
       audioRef.current.play();
       return;
     }
 
-    // Use streaming TTS with MediaSource API for progressive playback
+    // Start streaming TTS
     setIsLoading(true);
     setIsReady(false);
     try {
       const settings = embedderSettings.settings;
 
-      // Try streaming first (MediaSource API with MP3)
       const success = await ChatService.textToSpeechStream(
         settings,
         text,
         audioRef.current,
         () => {
-          // onStart callback - audio is playing
+          // onStart - audio started playing
           setIsLoading(false);
           setIsReady(true);
           setIsPlaying(true);
-          setAudioUrl("streaming"); // Mark as streaming (not a real URL)
         },
         (error) => {
-          // onError callback
           console.error("[TTS] Streaming error:", error);
           setIsLoading(false);
         }
@@ -144,14 +134,7 @@ const TTSButton = ({ text, size = 14 }) => {
     }
   };
 
-  // Auto-play when audio can start (only for non-streaming mode)
-  useEffect(() => {
-    // Skip for streaming mode - it handles its own playback
-    if (audioUrl === "streaming") return;
-    if (audioUrl && audioRef.current && isReady && !isPlaying) {
-      audioRef.current.play().catch(console.error);
-    }
-  }, [audioUrl, isReady]);
+  // No auto-play needed - streaming handles playback directly
 
   if (!ttsAvailable || !text) return null;
 
@@ -173,12 +156,7 @@ const TTSButton = ({ text, size = 14 }) => {
         )}
       </button>
       {/* Audio element always exists for streaming support */}
-      <audio
-        ref={audioRef}
-        src={audioUrl && audioUrl !== "streaming" ? audioUrl : undefined}
-        preload="auto"
-        hidden
-      />
+      <audio ref={audioRef} preload="auto" hidden />
     </div>
   );
 };
