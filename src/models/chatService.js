@@ -199,6 +199,33 @@ const ChatService = {
       return null;
     }
   },
+
+  /**
+   * Convert text to speech using streaming endpoint for reduced latency
+   * Audio starts playing as chunks arrive from the server
+   * @param {Object} embedSettings - The embed settings containing baseApiUrl and embedId
+   * @param {string} text - The text to convert to speech
+   * @returns {Promise<string|null>} - Audio URL (blob URL) or null on error
+   */
+  textToSpeechStream: async function (embedSettings, text) {
+    const { embedId, baseApiUrl } = embedSettings;
+    try {
+      const res = await fetch(`${baseApiUrl}/${embedId}/audio/tts-stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok || res.status === 204) return null;
+
+      // Stream the response - browser can start playing before full download
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error("AnythingLLM Embed: TTS streaming error", e);
+      return null;
+    }
+  },
 };
 
 export default ChatService;

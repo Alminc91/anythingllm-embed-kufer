@@ -72,7 +72,8 @@ const TTSButton = ({ text, size = 14 }) => {
       setIsPlaying(false);
       audio.currentTime = 0;
     };
-    const handleCanPlayThrough = () => {
+    // Use canplay (not canplaythrough) for earlier playback with streaming
+    const handleCanPlay = () => {
       setIsReady(true);
       setIsLoading(false);
     };
@@ -85,14 +86,14 @@ const TTSButton = ({ text, size = 14 }) => {
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
-    audio.addEventListener("canplaythrough", handleCanPlayThrough);
+    audio.addEventListener("canplay", handleCanPlay);
     audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
-      audio.removeEventListener("canplaythrough", handleCanPlayThrough);
+      audio.removeEventListener("canplay", handleCanPlay);
       audio.removeEventListener("error", handleError);
     };
   }, [audioUrl]);
@@ -109,15 +110,15 @@ const TTSButton = ({ text, size = 14 }) => {
       return;
     }
 
-    // Fetch TTS audio
+    // Fetch TTS audio using streaming endpoint for faster playback
     setIsLoading(true);
     setIsReady(false);
     try {
       const settings = embedderSettings.settings;
-      const url = await ChatService.textToSpeech(settings, text);
+      const url = await ChatService.textToSpeechStream(settings, text);
       if (url) {
         setAudioUrl(url);
-        // Don't set isLoading to false here - wait for canplaythrough event
+        // Don't set isLoading to false here - wait for canplay event
       } else {
         setIsLoading(false);
       }
@@ -127,7 +128,7 @@ const TTSButton = ({ text, size = 14 }) => {
     }
   };
 
-  // Auto-play when audio is fully loaded (canplaythrough fired)
+  // Auto-play when audio can start (canplay fired - allows streaming playback)
   useEffect(() => {
     if (audioUrl && audioRef.current && isReady && !isPlaying) {
       audioRef.current.play().catch(console.error);
