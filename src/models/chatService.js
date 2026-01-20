@@ -211,30 +211,63 @@ const ChatService = {
    * @param {Function} onError - Callback on error
    * @returns {Promise<boolean>} - True if streaming started successfully
    */
-  textToSpeechStream: async function (embedSettings, text, audioElement, onStart, onError) {
+  /**
+   * Detect best audio format for current browser's MediaSource support
+   * @returns {{format: string, mimeType: string, canStream: boolean}}
+   */
+  _detectBestAudioFormat: function () {
+    const hasMediaSource = typeof MediaSource !== 'undefined';
+    if (!hasMediaSource) {
+      return { format: 'mp3', mimeType: 'audio/mpeg', canStream: false };
+    }
+
+    // Firefox: WebM/Opus works best (MP3 MediaSource is buggy)
+    const isFirefox = navigator.userAgent.includes('Firefox');
+    if (isFirefox && MediaSource.isTypeSupported('audio/webm; codecs=opus')) {
+      return { format: 'webm', mimeType: 'audio/webm; codecs=opus', canStream: true };
+    }
+
+    // Chrome/Edge/Brave: MP3 works great
+    if (MediaSource.isTypeSupported('audio/mpeg')) {
+      return { format: 'mp3', mimeType: 'audio/mpeg', canStream: true };
+    }
+
+    // Safari or unknown: fallback to mp3 blob mode
+    return { format: 'mp3', mimeType: 'audio/mpeg', canStream: false };
+  },
+
+  textToSpeechStream: async function (embedSettings, text, audioElement, onStart, onError, onComplete) {
     const { embedId, baseApiUrl } = embedSettings;
 
-    // Try streaming endpoint first (returns MP3)
+    // Detect best format for this browser
+    const { format, mimeType, canStream } = this._detectBestAudioFormat();
+    console.log("[TTS Stream] Browser detection:", { format, mimeType, canStream });
+
+    // Try streaming endpoint with format parameter
     try {
-      const streamRes = await fetch(`${baseApiUrl}/${embedId}/audio/tts-stream`, {
+      const streamRes = await fetch(`${baseApiUrl}/${embedId}/audio/tts-stream?format=${format}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
 
-      // If streaming endpoint exists and returns MP3, use MediaSource API
+      console.log("[TTS Stream] Response:", { status: streamRes.status, ok: streamRes.ok });
+
+      // If streaming endpoint exists and returns audio, use MediaSource API if supported
       if (streamRes.ok && streamRes.status !== 204) {
         const contentType = streamRes.headers.get('content-type');
+        console.log("[TTS Stream] Content-Type:", contentType, "Can stream:", canStream);
 
-        if (contentType?.includes('audio/mpeg') && window.MediaSource && MediaSource.isTypeSupported('audio/mpeg')) {
+        if (canStream && window.MediaSource && MediaSource.isTypeSupported(mimeType)) {
           // Use MediaSource API for progressive playback
+          console.log("[TTS Stream] Using MediaSource with mimeType:", mimeType);
           const mediaSource = new MediaSource();
           audioElement.src = URL.createObjectURL(mediaSource);
 
           await new Promise((resolve, reject) => {
             mediaSource.addEventListener('sourceopen', async () => {
               try {
-                const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+                const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
                 const reader = streamRes.body.getReader();
                 let isFirstChunk = true;
 
@@ -246,6 +279,8 @@ const ChatService = {
                       if (mediaSource.readyState === 'open') {
                         mediaSource.endOfStream();
                       }
+                      console.log("[TTS Stream] Stream download complete");
+                      onComplete?.();
                       resolve();
                       return;
                     }
@@ -258,7 +293,8 @@ const ChatService = {
 
                     if (isFirstChunk) {
                       isFirstChunk = false;
-                      audioElement.play().catch(console.error);
+                      console.log("[TTS Stream] First chunk received, starting playback");
+                      audioElement.play().catch(e => console.error("[TTS Stream] Play error:", e));
                       onStart?.();
                     }
 
@@ -278,10 +314,13 @@ const ChatService = {
           return true;
         } else {
           // Server returned audio but not MP3 - use blob
+          console.log("[TTS Stream] Using blob fallback (no MediaSource or not MP3)");
           const blob = await streamRes.blob();
+          console.log("[TTS Stream] Blob size:", blob.size);
           audioElement.src = URL.createObjectURL(blob);
-          audioElement.play().catch(console.error);
+          audioElement.play().catch(e => console.error("[TTS Stream] Blob play error:", e));
           onStart?.();
+          onComplete?.(); // Blob is fully loaded immediately
           return true;
         }
       }
@@ -296,6 +335,7 @@ const ChatService = {
         audioElement.src = url;
         audioElement.play().catch(console.error);
         onStart?.();
+        onComplete?.(); // Blob is fully loaded immediately
         return true;
       }
     } catch (e) {

@@ -42,7 +42,9 @@ const TTSButton = ({ text, size = 14 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [ttsAvailable, setTtsAvailable] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [streamComplete, setStreamComplete] = useState(false);
   const audioRef = React.useRef(null);
+  const mediaSourceRef = React.useRef(null);
 
   // Check if TTS is available on mount (only if enabled via attribute)
   useEffect(() => {
@@ -66,29 +68,67 @@ const TTSButton = ({ text, size = 14 }) => {
 
     const audio = audioRef.current;
     const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePause = () => {
+      // Only set isPlaying to false if user paused, not if stream ended
+      // Check if we're at the end of the audio
+      const isAtEnd = audio.duration &&
+        (audio.currentTime >= audio.duration - 0.5 || audio.ended);
+      if (isAtEnd) {
+        console.log("[TTS] Audio paused at end");
+        setIsPlaying(false);
+      } else {
+        console.log("[TTS] Audio paused by user");
+        setIsPlaying(false);
+      }
+    };
     const handleEnded = () => {
+      console.log("[TTS] Audio ended event");
       setIsPlaying(false);
-      audio.currentTime = 0;
     };
     const handleError = (e) => {
       console.error("[TTS] Audio error:", e);
       setIsLoading(false);
+      setIsPlaying(false);
       setIsReady(false);
+    };
+    // For MediaSource: detect end via timeupdate when near duration
+    // Also handle when stream is complete and playback catches up
+    const handleTimeUpdate = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      // Check if we're at the end (duration is finite and we're close to it)
+      if (audio.duration && isFinite(audio.duration) &&
+          audio.currentTime >= audio.duration - 0.1) {
+        console.log("[TTS] Audio reached end via timeupdate");
+        setIsPlaying(false);
+      }
+
+      // For MediaSource with Infinity duration: check if stream is complete
+      // and we've played past the buffered range
+      if (streamComplete && audio.buffered.length > 0) {
+        const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+        if (audio.currentTime >= bufferedEnd - 0.1) {
+          console.log("[TTS] Audio reached end of buffer (stream complete)");
+          setIsPlaying(false);
+        }
+      }
     };
 
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
 
     return () => {
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, []);
+  }, [streamComplete]);
 
   const handleClick = async () => {
     if (isPlaying && audioRef.current) {
@@ -96,16 +136,21 @@ const TTSButton = ({ text, size = 14 }) => {
       return;
     }
 
-    // If already played before, replay
+    // If already played before, replay from beginning
     if (isReady && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play();
+      try {
+        await audioRef.current.play();
+      } catch (e) {
+        console.error("[TTS] Replay error:", e);
+      }
       return;
     }
 
     // Start streaming TTS
     setIsLoading(true);
     setIsReady(false);
+    setStreamComplete(false);
     try {
       const settings = embedderSettings.settings;
 
@@ -122,6 +167,11 @@ const TTSButton = ({ text, size = 14 }) => {
         (error) => {
           console.error("[TTS] Streaming error:", error);
           setIsLoading(false);
+        },
+        () => {
+          // onComplete - stream finished downloading
+          console.log("[TTS] Stream complete");
+          setStreamComplete(true);
         }
       );
 
