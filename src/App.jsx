@@ -36,7 +36,10 @@ export default function App() {
   // If embed is disabled, don't render anything (hide completely)
   if (isEnabled === false) return null;
 
-  const position = embedSettings.position || "bottom-right";
+  const validPositions = ["bottom-left", "bottom-right", "top-left", "top-right"];
+  const position = validPositions.includes(embedSettings.position)
+    ? embedSettings.position
+    : "bottom-right";
 
   // Position classes for tablet/desktop (md: and above)
   const positionClasses = {

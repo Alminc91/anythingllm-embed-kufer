@@ -171,7 +171,7 @@ export default function ChatWindowHeader({
           <img
             src={iconUrl ?? AnythingLLMIcon}
             alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
-            style={{ maxWidth: "40px", maxHeight: "40px" }}
+            style={{ maxWidth: "40px", maxHeight: "40px", objectFit: "contain" }}
           />
         </div>
         {settings.brandText && (

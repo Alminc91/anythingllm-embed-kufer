@@ -268,7 +268,7 @@ const HistoricalMessage = forwardRef(
               <img
                 src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
                 alt="Anything LLM Icon"
-                className="allm-w-9 allm-h-9"
+                className="allm-w-9 allm-h-9 allm-object-contain"
                 id="anything-llm-icon"
               />
               {/* TTS Button under avatar (icon-left position) */}
