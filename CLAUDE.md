@@ -57,6 +57,29 @@ This is the AnythingLLM Embedded Chat Widget - a submodule of the main AnythingL
 
 Currently modified: `src/components/OpenButton/index.jsx` - Contains welcome message bubble functionality with German default messages.
 
+## Coding Standards
+
+### Datumsformatierung
+Alle Zeitstempel müssen im deutschen Format angezeigt werden:
+- **Format**: `DD.MM.YYYY, HH:MM:SS Uhr` (z.B. "23.04.2025, 12:30:57 Uhr")
+- **Funktion**: Verwende `formatDate()` aus `src/utils/date.js` für das Embed-Widget
+- **Beispiel**:
+  ```javascript
+  import { formatDate } from "@/utils/date";
+  // Verwendung: formatDate(isoTimestamp)
+  ```
+
+### Icons für Kunden
+- Icons müssen **quadratisch (1:1)** sein
+- Empfohlene Größe: 256x256px
+- Format: PNG mit Transparenz oder SVG
+- Fallback: `object-fit: contain` verhindert Verzerrung bei nicht-quadratischen Icons
+
+### Position-Attribut
+Gültige Werte für `data-position`:
+- `bottom-left`, `bottom-right`, `top-left`, `top-right`
+- Ungültige Werte fallen automatisch auf `bottom-right` zurück
+
 ## Important Notes
 
 - This is a submodule - main development happens in the parent AnythingLLM repository
