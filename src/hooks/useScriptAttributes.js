@@ -65,7 +65,7 @@ export default function useGetScriptAttributes() {
   });
 
   useEffect(() => {
-    function fetchAttribs() {
+    async function fetchAttribs() {
       if (!document) return false;
       if (
         !embedderSettings.settings.baseApiUrl ||
@@ -75,11 +75,43 @@ export default function useGetScriptAttributes() {
           "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!",
         );
 
-      setSettings({
+      const scriptSettings = parseAndValidateEmbedSettings(
+        embedderSettings.settings
+      );
+
+      // Fetch live visual config from server (admin panel settings)
+      let serverConfig = {};
+      try {
+        const res = await fetch(
+          `${scriptSettings.baseApiUrl}/${scriptSettings.embedId}/config`
+        );
+        if (res.ok) serverConfig = await res.json();
+      } catch (e) {
+        console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
+      }
+
+      // Priority: defaults < script data-attributes < server config (live design)
+      // Only merge non-empty server values so script attributes remain as fallback
+      const mergedServerConfig = {};
+      for (const [key, value] of Object.entries(serverConfig)) {
+        if (value !== null && value !== undefined && value !== "")
+          mergedServerConfig[key] = value;
+      }
+
+      const finalSettings = {
         ...DEFAULT_SETTINGS,
-        ...parseAndValidateEmbedSettings(embedderSettings.settings),
+        ...scriptSettings,
+        ...parseAndValidateEmbedSettings(mergedServerConfig),
         loaded: true,
-      });
+      };
+
+      // Update module-level styles so chat bubbles use live colors
+      if (finalSettings.userBgColor)
+        embedderSettings.USER_STYLES.msgBg = finalSettings.userBgColor;
+      if (finalSettings.assistantBgColor)
+        embedderSettings.ASSISTANT_STYLES.msgBg = finalSettings.assistantBgColor;
+
+      setSettings(finalSettings);
     }
     fetchAttribs();
   }, [document]);
