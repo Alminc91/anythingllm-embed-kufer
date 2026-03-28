@@ -105,6 +105,10 @@ export default function useGetScriptAttributes() {
         loaded: true,
       };
 
+      // Update module-level settings so components reading embedderSettings
+      // directly (assistantIcon, brandImageUrl, etc.) get server values
+      Object.assign(embedderSettings.settings, mergedServerConfig);
+
       // Update module-level styles so chat bubbles use live colors
       if (finalSettings.userBgColor)
         embedderSettings.USER_STYLES.msgBg = finalSettings.userBgColor;
