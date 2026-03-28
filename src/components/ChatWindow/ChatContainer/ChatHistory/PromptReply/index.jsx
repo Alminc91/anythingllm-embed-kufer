@@ -91,7 +91,7 @@ const PromptReply = forwardRef(
             <img
               src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
               alt="Anything LLM Icon"
-              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2"
+              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
             />
             <div
               style={{
@@ -121,7 +121,7 @@ const PromptReply = forwardRef(
             <img
               src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
               alt="Anything LLM Icon"
-              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2"
+              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
             />
             <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-amber-100 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
               <div className="allm-flex allm-gap-x-5">
@@ -152,7 +152,7 @@ const PromptReply = forwardRef(
           <img
             src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
             alt="Anything LLM Icon"
-            className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2"
+            className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
           />
           <div
             style={{
