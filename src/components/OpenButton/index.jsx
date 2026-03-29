@@ -79,31 +79,23 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
             ×
           </button>
 
-          {/* First bubble */}
-          <div
-            className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]"
-            style={{
-              animation: `0.4s ease-out 0s 1 normal forwards running ${animationName}`,
-            }}
-          >
-            <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
-              {welcomeMessages[0]}
+          {welcomeMessages.map((msg, i) => (
+            <div
+              key={i}
+              className={`allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] ${i === 0 ? "allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]" : "allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"}`}
+              style={{
+                animation: `0.4s ease-out ${i * 0.1}s 1 normal forwards running ${animationName}`,
+              }}
+            >
+              <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
+                {msg}
+              </div>
+              {/* Speech bubble tail on last bubble */}
+              {i === welcomeMessages.length - 1 && (
+                <div className={tailClasses}></div>
+              )}
             </div>
-          </div>
-
-          {/* Second bubble with tail */}
-          <div
-            className="allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"
-            style={{
-              animation: `0.4s ease-out 0s 1 normal forwards running ${animationName}`,
-            }}
-          >
-            <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
-              {welcomeMessages[1]}
-            </div>
-            {/* Speech bubble tail */}
-            <div className={tailClasses}></div>
-          </div>
+          ))}
         </div>
       )}
 
