@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
   buttonColor: "#607D8B", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#607D8B", // user text bubble color
-  assistantBgColor: "#2563eb", // assistant text bubble color
+  assistantBgColor: "#FFFFFF", // assistant text bubble color
   linkColor: null, // color for links in assistant messages
   headerBgColor: null, // header background color (default: white)
   headerTextColor: null, // header text color for chatbot name (default: gray-800)
