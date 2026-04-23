@@ -273,7 +273,7 @@ function SessionID({ sessionId, settings }) {
 function ContactSupport({ email = null, settings }) {
   if (!email) return null;
 
-  const subject = `Inquiry from ${window.location.origin}`;
+  const subject = `Anfrage zum Chatbot "${settings.brandText}" von ${window.location.hostname}`;
   return (
     <a
       href={`mailto:${email}?Subject=${encodeURIComponent(subject)}`}
