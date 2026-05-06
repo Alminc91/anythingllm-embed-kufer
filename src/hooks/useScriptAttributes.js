@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   buttonColor: "#607D8B", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#607D8B", // user text bubble color
+  userTextColor: "#FFFFFF", // user text bubble text color (only "#FFFFFF" or "#000000" via admin)
   assistantBgColor: "#FFFFFF", // assistant text bubble color
   linkColor: null, // color for links in assistant messages
   headerBgColor: null, // header background color (default: white)
@@ -112,8 +113,35 @@ export default function useGetScriptAttributes() {
       // Update module-level styles so chat bubbles use live colors
       if (finalSettings.userBgColor)
         embedderSettings.USER_STYLES.msgBg = finalSettings.userBgColor;
+      if (finalSettings.userTextColor)
+        embedderSettings.USER_STYLES.msgText = finalSettings.userTextColor;
       if (finalSettings.assistantBgColor)
         embedderSettings.ASSISTANT_STYLES.msgBg = finalSettings.assistantBgColor;
+
+      // Link color comes from server config asynchronously, so re-inject
+      // CSS into the shadow root after fetch (initial CSS at module-boot only
+      // sees data-attributes, not server values).
+      if (finalSettings.linkColor && embedderSettings.shadowRoot) {
+        const id = "allm-dynamic-link-color";
+        const css = `
+          .allm-anything-llm-assistant-message a,
+          .allm-reply a {
+            color: ${finalSettings.linkColor} !important;
+          }
+          .allm-anything-llm-assistant-message a:hover,
+          .allm-reply a:hover {
+            color: ${finalSettings.linkColor} !important;
+            opacity: 0.8;
+          }
+        `;
+        let styleEl = embedderSettings.shadowRoot.getElementById(id);
+        if (!styleEl) {
+          styleEl = document.createElement("style");
+          styleEl.id = id;
+          embedderSettings.shadowRoot.appendChild(styleEl);
+        }
+        styleEl.textContent = css;
+      }
 
       setSettings(finalSettings);
     }
@@ -131,41 +159,21 @@ const validations = {
 
   defaultMessages: function (value = null) {
     if (typeof value !== "string") return this._fallbacks.defaultMessages;
-    try {
-      const list = value.split(",");
-      if (
-        !Array.isArray(list) ||
-        list.length === 0 ||
-        !list.every((v) => typeof v === "string" && v.length > 0)
-      )
-        throw new Error(
-          "Invalid default-messages attribute value. Must be array of strings",
-        );
-      return list.map((v) => v.trim());
-    } catch (e) {
-      console.error("AnythingLLMEmbed", e);
-      return this._fallbacks.defaultMessages;
-    }
+    const list = value
+      .split(",")
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v.length > 0);
+    return list;
   },
 
   chatbotBubblesMessages: function (value = null) {
     if (typeof value !== "string")
       return this._fallbacks.chatbotBubblesMessages;
-    try {
-      const list = value.split(",");
-      if (
-        !Array.isArray(list) ||
-        list.length === 0 ||
-        !list.every((v) => typeof v === "string" && v.length > 0)
-      )
-        throw new Error(
-          "Invalid chatbot-bubbles-messages attribute value. Must be array of strings",
-        );
-      return list.map((v) => v.trim());
-    } catch (e) {
-      console.error("AnythingLLMEmbed", e);
-      return this._fallbacks.chatbotBubblesMessages;
-    }
+    const list = value
+      .split(",")
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v.length > 0);
+    return list;
   },
 };
 
