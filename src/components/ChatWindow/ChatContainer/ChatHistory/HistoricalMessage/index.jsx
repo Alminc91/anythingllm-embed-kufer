@@ -286,6 +286,9 @@ const HistoricalMessage = forwardRef(
                 role === "user"
                   ? embedderSettings.USER_STYLES.msgBg
                   : embedderSettings.ASSISTANT_STYLES.msgBg,
+              ...(role === "user" && embedderSettings.USER_STYLES.msgText
+                ? { color: embedderSettings.USER_STYLES.msgText }
+                : {}),
             }}
             className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col allm-font-sans ${
               error

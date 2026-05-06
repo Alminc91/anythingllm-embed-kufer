@@ -148,6 +148,7 @@ function SuggestedMessages({ settings }) {
             opacity: 0,
             wordBreak: "break-word",
             backgroundColor: embedderSettings.USER_STYLES.msgBg,
+            color: embedderSettings.USER_STYLES.msgText || "#FFFFFF",
             fontSize: settings.textSize,
           }}
           type="button"
@@ -158,7 +159,7 @@ function SuggestedMessages({ settings }) {
               }),
             );
           }}
-          className={`msg-suggestion allm-font-sans allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-text-white allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
+          className={`msg-suggestion allm-font-sans allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
         >
           {content}
         </button>

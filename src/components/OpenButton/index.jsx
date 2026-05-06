@@ -120,7 +120,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
         className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-200 hover:allm-scale-105`}
         aria-label="Toggle Menu"
       >
-        <ChatIcon className="text-white" />
+        <ChatIcon weight="fill" className="text-white" />
       </button>
 
       {/* Custom styles for animations */}
