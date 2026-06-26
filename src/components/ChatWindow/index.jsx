@@ -7,7 +7,12 @@ import { ChatHistoryLoading } from "./ChatContainer/ChatHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
 
-export default function ChatWindow({ closeChat, settings, sessionId }) {
+export default function ChatWindow({
+  closeChat,
+  settings,
+  sessionId,
+  compactHeader = false,
+}) {
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
@@ -22,6 +27,7 @@ export default function ChatWindow({ closeChat, settings, sessionId }) {
           iconUrl={settings.brandImageUrl}
           closeChat={closeChat}
           setChatHistory={setChatHistory}
+          compact={compactHeader}
         />
         <ChatHistoryLoading />
         <div className="allm-pt-2 allm-pb-3 allm-h-fit">
@@ -42,6 +48,7 @@ export default function ChatWindow({ closeChat, settings, sessionId }) {
           iconUrl={settings.brandImageUrl}
           closeChat={closeChat}
           setChatHistory={setChatHistory}
+          compact={compactHeader}
         />
       )}
       <div className="allm-flex-grow allm-overflow-y-auto">

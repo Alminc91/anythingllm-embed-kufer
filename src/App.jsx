@@ -14,6 +14,7 @@ export default function App() {
   const sessionId = useSessionId();
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
   const chatWindowRef = useRef(null);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
@@ -38,17 +39,24 @@ export default function App() {
     const vv = window.visualViewport;
     if (!vv) return;
     const applyViewport = () => {
+      const isMobile = window.innerWidth < 768;
       const el = chatWindowRef.current;
-      if (!el) return;
-      if (isChatOpen && window.innerWidth < 768) {
-        el.style.height = `${vv.height}px`;
-        el.style.top = `${vv.offsetTop}px`;
-        el.style.bottom = "auto";
-      } else {
-        el.style.height = "";
-        el.style.top = "";
-        el.style.bottom = "";
+      if (el) {
+        if (isChatOpen && isMobile) {
+          el.style.height = `${vv.height}px`;
+          el.style.top = `${vv.offsetTop}px`;
+          el.style.bottom = "auto";
+        } else {
+          el.style.height = "";
+          el.style.top = "";
+          el.style.bottom = "";
+        }
       }
+      // Keyboard counts as open when the visible viewport is noticeably shorter
+      // than the layout viewport (holds on iOS and modern Android Chrome).
+      setIsKeyboardOpen(
+        isChatOpen && isMobile && window.innerHeight - vv.height > 120,
+      );
     };
     applyViewport();
     vv.addEventListener("resize", applyViewport);
@@ -106,6 +114,7 @@ export default function App() {
               closeChat={() => toggleOpenChat(false)}
               settings={embedSettings}
               sessionId={sessionId}
+              compactHeader={isKeyboardOpen}
             />
           )}
         </div>
