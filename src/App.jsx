@@ -81,12 +81,23 @@ export default function App() {
     ? embedSettings.position
     : "bottom-right";
 
-  // Position classes for tablet/desktop (md: and above)
+  // Position classes for tablet/desktop (md: and above) — used for the
+  // (on mobile fullscreen) chat window, where no edge margin must apply on mobile.
   const positionClasses = {
     "bottom-left": "md:allm-bottom-0 md:allm-left-0 md:allm-ml-4",
     "bottom-right": "md:allm-bottom-0 md:allm-right-0 md:allm-mr-4",
     "top-left": "md:allm-top-0 md:allm-left-0 md:allm-ml-4 md:allm-mt-4",
     "top-right": "md:allm-top-0 md:allm-right-0 md:allm-mr-4 md:allm-mt-4",
+  };
+
+  // Button-Container (geschlossener Zustand): horizontaler Rand auf ALLEN
+  // Breakpoints. Sonst klebt der kleine Button auf Mobil am Bildschirmrand,
+  // weil positionClasses md:-only sind und mobil nicht greifen.
+  const buttonPositionClasses = {
+    "bottom-left": "allm-left-0 allm-ml-4",
+    "bottom-right": "allm-right-0 allm-mr-4",
+    "top-left": "allm-left-0 allm-ml-4",
+    "top-right": "allm-right-0 allm-mr-4",
   };
 
   // Responsive layout:
@@ -125,7 +136,7 @@ export default function App() {
       {!isChatOpen && (
         <div
           id="anything-llm-embed-chat-button-container"
-          className={`allm-fixed allm-bottom-0 ${positionClasses[position]} allm-mb-4 allm-z-[9999]`}
+          className={`allm-fixed allm-bottom-0 ${buttonPositionClasses[position]} allm-mb-4 allm-z-[9999]`}
         >
           <OpenButton
             settings={embedSettings}
