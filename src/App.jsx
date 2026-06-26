@@ -3,7 +3,7 @@ import useSessionId from "@/hooks/useSessionId";
 import useOpenChat from "@/hooks/useOpen";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
@@ -13,6 +13,8 @@ export default function App() {
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
+  const chatWindowRef = useRef(null);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
@@ -30,6 +32,45 @@ export default function App() {
     }
   }, [embedSettings.loaded, isEnabled]);
 
+  // Mobile keyboard handling: on mobile (<768px) couple the chat window height
+  // to window.visualViewport so the soft keyboard doesn't push the header
+  // (with the close button) out of view. Tablet/desktop are left untouched.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const applyViewport = () => {
+      // Triggert NUR bei tatsaechlich offener Soft-Tastatur: sichtbare Hoehe
+      // deutlich kleiner als die Layout-Hoehe. Das ist der eigentliche
+      // Diskriminator — Desktop-Browser (auch schmal, z.B. Firefox) haben keine
+      // Soft-Tastatur -> Delta ~0 -> feuert dort nie. Robuster als ein Touch-Flag
+      // (ontouchstart/maxTouchPoints), das auf iOS gelegentlich nicht greift und
+      // dann den kompakten Header faelschlich unterdrueckt.
+      const isMobile = window.innerWidth < 768;
+      const keyboardOpen = isMobile && window.innerHeight - vv.height > 120;
+      const active = isChatOpen && keyboardOpen;
+      const el = chatWindowRef.current;
+      if (el) {
+        if (active) {
+          el.style.height = `${vv.height}px`;
+          el.style.top = `${vv.offsetTop}px`;
+          el.style.bottom = "auto";
+        } else {
+          el.style.height = "";
+          el.style.top = "";
+          el.style.bottom = "";
+        }
+      }
+      setIsKeyboardOpen(active);
+    };
+    applyViewport();
+    vv.addEventListener("resize", applyViewport);
+    vv.addEventListener("scroll", applyViewport);
+    return () => {
+      vv.removeEventListener("resize", applyViewport);
+      vv.removeEventListener("scroll", applyViewport);
+    };
+  }, [isChatOpen]);
+
   // Don't render until we know the embed status
   if (!embedSettings.loaded || isEnabled === null) return null;
 
@@ -41,12 +82,23 @@ export default function App() {
     ? embedSettings.position
     : "bottom-right";
 
-  // Position classes for tablet/desktop (md: and above)
+  // Position classes for tablet/desktop (md: and above) — used for the
+  // (on mobile fullscreen) chat window, where no edge margin must apply on mobile.
   const positionClasses = {
     "bottom-left": "md:allm-bottom-0 md:allm-left-0 md:allm-ml-4",
     "bottom-right": "md:allm-bottom-0 md:allm-right-0 md:allm-mr-4",
     "top-left": "md:allm-top-0 md:allm-left-0 md:allm-ml-4 md:allm-mt-4",
     "top-right": "md:allm-top-0 md:allm-right-0 md:allm-mr-4 md:allm-mt-4",
+  };
+
+  // Button-Container (geschlossener Zustand): horizontaler Rand auf ALLEN
+  // Breakpoints. Sonst klebt der kleine Button auf Mobil am Bildschirmrand,
+  // weil positionClasses md:-only sind und mobil nicht greifen.
+  const buttonPositionClasses = {
+    "bottom-left": "allm-left-0 allm-ml-4",
+    "bottom-right": "allm-right-0 allm-mr-4",
+    "top-left": "allm-left-0 allm-ml-4",
+    "top-right": "allm-right-0 allm-mr-4",
   };
 
   // Responsive layout:
@@ -68,6 +120,7 @@ export default function App() {
         className={`allm-fixed allm-z-[9999] ${isChatOpen ? "allm-block" : "allm-hidden"}`}
       >
         <div
+          ref={chatWindowRef}
           className={`allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
           id="anything-llm-chat"
         >
@@ -76,6 +129,7 @@ export default function App() {
               closeChat={() => toggleOpenChat(false)}
               settings={embedSettings}
               sessionId={sessionId}
+              compactHeader={isKeyboardOpen}
             />
           )}
         </div>
@@ -83,7 +137,7 @@ export default function App() {
       {!isChatOpen && (
         <div
           id="anything-llm-embed-chat-button-container"
-          className={`allm-fixed allm-bottom-0 ${positionClasses[position]} allm-mb-4 allm-z-[9999]`}
+          className={`allm-fixed allm-bottom-0 ${buttonPositionClasses[position]} allm-mb-4 allm-z-[9999]`}
         >
           <OpenButton
             settings={embedSettings}

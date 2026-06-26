@@ -17,6 +17,7 @@ export default function ChatWindowHeader({
   iconUrl = null,
   closeChat,
   setChatHistory,
+  compact = false,
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
@@ -163,7 +164,11 @@ export default function ChatWindowHeader({
       className="allm-flex allm-items-center allm-relative allm-rounded-t-2xl"
       id="anything-llm-header"
     >
-      <div className="allm-flex allm-items-center allm-px-4 allm-h-[76px] allm-flex-1">
+      <div
+        className={`allm-flex allm-items-center allm-px-4 allm-flex-1 allm-transition-all allm-duration-200 ${
+          compact ? "allm-h-[56px]" : "allm-h-[76px]"
+        }`}
+      >
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
           style={getIconContainerStyle()}
@@ -171,7 +176,12 @@ export default function ChatWindowHeader({
           <img
             src={iconUrl ?? AnythingLLMIcon}
             alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
-            style={{ maxWidth: "40px", maxHeight: "40px", objectFit: "contain" }}
+            style={{
+              maxWidth: compact ? "28px" : "40px",
+              maxHeight: compact ? "28px" : "40px",
+              objectFit: "contain",
+              transition: "max-width 200ms, max-height 200ms",
+            }}
           />
         </div>
         {settings.brandText && (
