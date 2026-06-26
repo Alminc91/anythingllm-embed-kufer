@@ -39,12 +39,15 @@ export default function App() {
     const vv = window.visualViewport;
     if (!vv) return;
     const applyViewport = () => {
-      // Touch devices only — desktop browsers have no soft keyboard, so this
-      // logic must never fire there (avoids spurious resize/compact on e.g. Firefox).
-      const isTouch =
-        "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      // Triggert NUR bei tatsaechlich offener Soft-Tastatur: sichtbare Hoehe
+      // deutlich kleiner als die Layout-Hoehe. Das ist der eigentliche
+      // Diskriminator — Desktop-Browser (auch schmal, z.B. Firefox) haben keine
+      // Soft-Tastatur -> Delta ~0 -> feuert dort nie. Robuster als ein Touch-Flag
+      // (ontouchstart/maxTouchPoints), das auf iOS gelegentlich nicht greift und
+      // dann den kompakten Header faelschlich unterdrueckt.
       const isMobile = window.innerWidth < 768;
-      const active = isChatOpen && isMobile && isTouch;
+      const keyboardOpen = isMobile && window.innerHeight - vv.height > 120;
+      const active = isChatOpen && keyboardOpen;
       const el = chatWindowRef.current;
       if (el) {
         if (active) {
@@ -57,9 +60,7 @@ export default function App() {
           el.style.bottom = "";
         }
       }
-      // Keyboard counts as open when the visible viewport is noticeably shorter
-      // than the layout viewport (touch only — holds on iOS / Android Chrome).
-      setIsKeyboardOpen(active && window.innerHeight - vv.height > 120);
+      setIsKeyboardOpen(active);
     };
     applyViewport();
     vv.addEventListener("resize", applyViewport);
