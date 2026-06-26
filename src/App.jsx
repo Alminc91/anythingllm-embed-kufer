@@ -39,10 +39,15 @@ export default function App() {
     const vv = window.visualViewport;
     if (!vv) return;
     const applyViewport = () => {
+      // Touch devices only — desktop browsers have no soft keyboard, so this
+      // logic must never fire there (avoids spurious resize/compact on e.g. Firefox).
+      const isTouch =
+        "ontouchstart" in window || navigator.maxTouchPoints > 0;
       const isMobile = window.innerWidth < 768;
+      const active = isChatOpen && isMobile && isTouch;
       const el = chatWindowRef.current;
       if (el) {
-        if (isChatOpen && isMobile) {
+        if (active) {
           el.style.height = `${vv.height}px`;
           el.style.top = `${vv.offsetTop}px`;
           el.style.bottom = "auto";
@@ -53,10 +58,8 @@ export default function App() {
         }
       }
       // Keyboard counts as open when the visible viewport is noticeably shorter
-      // than the layout viewport (holds on iOS and modern Android Chrome).
-      setIsKeyboardOpen(
-        isChatOpen && isMobile && window.innerHeight - vv.height > 120,
-      );
+      // than the layout viewport (touch only — holds on iOS / Android Chrome).
+      setIsKeyboardOpen(active && window.innerHeight - vv.height > 120);
     };
     applyViewport();
     vv.addEventListener("resize", applyViewport);
