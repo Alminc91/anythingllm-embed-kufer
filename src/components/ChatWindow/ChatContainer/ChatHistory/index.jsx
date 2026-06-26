@@ -103,7 +103,10 @@ export default function ChatHistory({ settings = {}, history = [] }) {
         })}
       </div>
       {!isAtBottom && (
-        <div className="allm-fixed allm-bottom-[10rem] allm-right-[50px] allm-z-50 allm-cursor-pointer allm-animate-pulse">
+        <div
+          style={{ left: "50%", transform: "translateX(-50%)" }}
+          className="allm-absolute allm-bottom-[5.5rem] allm-z-50 allm-cursor-pointer allm-animate-pulse"
+        >
           <div className="allm-flex allm-flex-col allm-items-center">
             <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
               <ArrowDown
