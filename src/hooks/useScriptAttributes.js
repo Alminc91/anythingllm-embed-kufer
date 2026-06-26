@@ -106,9 +106,17 @@ export default function useGetScriptAttributes() {
         loaded: true,
       };
 
-      // Update module-level settings so components reading embedderSettings
-      // directly (assistantIcon, brandImageUrl, etc.) get server values
-      Object.assign(embedderSettings.settings, mergedServerConfig);
+      // Update module-level settings so components that read embedderSettings
+      // directly (assistantName, assistantIcon, brandImageUrl, etc.) see the
+      // fully resolved config — defaults < script attributes < server config.
+      // Previously only the server values were merged here, so the
+      // DEFAULT_SETTINGS never reached these components: with nothing
+      // configured in the design center, the message-bubble avatar/name fell
+      // back to the generic AnythingLLM icon + "Anything LLM Chat Assistant"
+      // even though the header (which reads the hook state) showed the correct
+      // brand logo + name.
+      const { loaded: _loaded, ...resolvedSettings } = finalSettings;
+      Object.assign(embedderSettings.settings, resolvedSettings);
 
       // Update module-level styles so chat bubbles use live colors
       if (finalSettings.userBgColor)
