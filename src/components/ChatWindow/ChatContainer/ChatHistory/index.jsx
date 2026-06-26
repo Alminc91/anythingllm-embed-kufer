@@ -41,7 +41,7 @@ export default function ChatHistory({ settings = {}, history = [] }) {
     if (chatHistoryRef.current) {
       chatHistoryRef.current.scrollTo({
         top: chatHistoryRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: "auto",
       });
     }
   };
