@@ -3,7 +3,7 @@ import useSessionId from "@/hooks/useSessionId";
 import useOpenChat from "@/hooks/useOpen";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
@@ -13,6 +13,7 @@ export default function App() {
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
+  const chatWindowRef = useRef(null);
 
   // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
@@ -29,6 +30,34 @@ export default function App() {
       toggleOpenChat(true);
     }
   }, [embedSettings.loaded, isEnabled]);
+
+  // Mobile keyboard handling: on mobile (<768px) couple the chat window height
+  // to window.visualViewport so the soft keyboard doesn't push the header
+  // (with the close button) out of view. Tablet/desktop are left untouched.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const applyViewport = () => {
+      const el = chatWindowRef.current;
+      if (!el) return;
+      if (isChatOpen && window.innerWidth < 768) {
+        el.style.height = `${vv.height}px`;
+        el.style.top = `${vv.offsetTop}px`;
+        el.style.bottom = "auto";
+      } else {
+        el.style.height = "";
+        el.style.top = "";
+        el.style.bottom = "";
+      }
+    };
+    applyViewport();
+    vv.addEventListener("resize", applyViewport);
+    vv.addEventListener("scroll", applyViewport);
+    return () => {
+      vv.removeEventListener("resize", applyViewport);
+      vv.removeEventListener("scroll", applyViewport);
+    };
+  }, [isChatOpen]);
 
   // Don't render until we know the embed status
   if (!embedSettings.loaded || isEnabled === null) return null;
@@ -68,6 +97,7 @@ export default function App() {
         className={`allm-fixed allm-z-[9999] ${isChatOpen ? "allm-block" : "allm-hidden"}`}
       >
         <div
+          ref={chatWindowRef}
           className={`allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
           id="anything-llm-chat"
         >

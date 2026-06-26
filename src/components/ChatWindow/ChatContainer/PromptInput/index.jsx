@@ -186,7 +186,7 @@ export default function PromptInput({
                   padding: '12px 12px',
                   margin: '0',
                 }}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[14px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[16px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
