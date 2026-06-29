@@ -15,6 +15,8 @@ export default function App() {
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
   const chatWindowRef = useRef(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const kbBaselineRef = useRef(0); // groesste je gesehene sichtbare Hoehe (= ohne Tastatur)
+  const lastWidthRef = useRef(0);
 
   // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
@@ -39,14 +41,24 @@ export default function App() {
     const vv = window.visualViewport;
     if (!vv) return;
     const applyViewport = () => {
-      // Triggert NUR bei tatsaechlich offener Soft-Tastatur: sichtbare Hoehe
-      // deutlich kleiner als die Layout-Hoehe. Das ist der eigentliche
-      // Diskriminator — Desktop-Browser (auch schmal, z.B. Firefox) haben keine
-      // Soft-Tastatur -> Delta ~0 -> feuert dort nie. Robuster als ein Touch-Flag
-      // (ontouchstart/maxTouchPoints), das auf iOS gelegentlich nicht greift und
-      // dann den kompakten Header faelschlich unterdrueckt.
+      // Tastatur-Erkennung ueber ZWEI Signale (iOS-Robustheit): die sichtbare
+      // Hoehe liegt deutlich unter (a) der groessten je gesehenen Hoehe (Baseline =
+      // ohne Tastatur) ODER (b) der Layout-Hoehe window.innerHeight. Auf manchen
+      // iOS-Staenden schrumpft innerHeight mit der Tastatur mit (Delta ~0), dann
+      // greift die Baseline. Desktop (auch schmal, Firefox) hat keine Soft-Tastatur
+      // -> beide Deltas ~0 -> feuert nie.
       const isMobile = window.innerWidth < 768;
-      const keyboardOpen = isMobile && window.innerHeight - vv.height > 120;
+      // Bei Orientierungswechsel (Breite aendert sich) Baseline zuruecksetzen.
+      if (window.innerWidth !== lastWidthRef.current) {
+        lastWidthRef.current = window.innerWidth;
+        kbBaselineRef.current = 0;
+      }
+      if (vv.height > kbBaselineRef.current) kbBaselineRef.current = vv.height;
+      const shrink = Math.max(
+        kbBaselineRef.current - vv.height,
+        window.innerHeight - vv.height,
+      );
+      const keyboardOpen = isMobile && shrink > 120;
       const active = isChatOpen && keyboardOpen;
       const el = chatWindowRef.current;
       if (el) {
