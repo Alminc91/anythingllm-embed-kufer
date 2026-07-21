@@ -60,6 +60,7 @@ export default function ChatWindow({
       )}
       <div className="allm-flex-grow allm-overflow-y-auto">
         <ChatContainer
+          key={conversationId}
           sessionId={sessionId}
           conversationId={conversationId}
           settings={settings}

@@ -11,10 +11,13 @@ export default function useChatHistory(
 
   useEffect(() => {
     async function fetchChatHistory() {
-      if (!sessionId || !conversationId || !settings) {
+      // nur wenn Grunddaten fehlen -> nicht laden, loading beenden
+      if (!settings || !sessionId) {
         setLoading(false);
         return;
       }
+      // conversationId wird gleich aus sessionId abgeleitet -> warten, loading bleibt true
+      if (!conversationId) return;
       try {
         const formattedMessages = await ChatService.embedSessionHistory(
           settings,
