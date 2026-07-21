@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS = {
   userBgColor: "#01a5a9", // user text bubble color
   userTextColor: "#FFFFFF", // user text bubble text color (only "#FFFFFF" or "#000000" via admin)
   assistantBgColor: "#FFFFFF", // assistant text bubble color
-  linkColor: null, // color for links in assistant messages
+  linkColor: "#01a5a9", // color for links in assistant messages (Kufer accent)
   headerBgColor: null, // header background color (default: white)
   headerTextColor: null, // header text color for chatbot name (default: gray-800)
   iconStyle: "rounded", // icon background style: "none", "rounded", or "circle"
