@@ -17,10 +17,10 @@ const DEFAULT_SETTINGS = {
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // will be forced into 100x50px container
   brandText: "Ihr Online-Berater", // brand text to display next to brand image
   greeting:
-    "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gest&uuml;tzten Antworten.", // Kufer chat window greeting.
-  buttonColor: "#607D8B", // must be hex color code
+    "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.", // Datenschutz-Standardhinweis (greeting) – wird bei fehlender server-/scriptseitiger Konfiguration angezeigt.
+  buttonColor: "#01a5a9", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
-  userBgColor: "#607D8B", // user text bubble color
+  userBgColor: "#01a5a9", // user text bubble color
   userTextColor: "#FFFFFF", // user text bubble text color (only "#FFFFFF" or "#000000" via admin)
   assistantBgColor: "#FFFFFF", // assistant text bubble color
   linkColor: null, // color for links in assistant messages
