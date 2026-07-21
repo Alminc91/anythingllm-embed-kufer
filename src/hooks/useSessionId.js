@@ -10,7 +10,19 @@ export default function useSessionId() {
       if (!window || !embedderSettings?.settings?.embedId) return;
 
       const STORAGE_IDENTIFIER = `allm_${embedderSettings?.settings?.embedId}_session_id`;
-      const currentId = window.localStorage.getItem(STORAGE_IDENTIFIER);
+      // Lesepfad ebenfalls kapseln: in vollstaendig blockiertem Storage
+      // (Cookies/Storage deaktiviert) wirft bereits der localStorage-Zugriff bzw.
+      // getItem, bevor irgendein setItem erreicht wird. Fallback currentId = null
+      // -> es wird eine frische, nur-im-Speicher-ID vergeben, Session laeuft.
+      let currentId = null;
+      try {
+        currentId = window.localStorage.getItem(STORAGE_IDENTIFIER);
+      } catch (e) {
+        console.warn(
+          "[AnythingLLM Embed] sessionId konnte nicht aus localStorage gelesen werden:",
+          e,
+        );
+      }
       if (!!currentId) {
         console.log(`Resuming session id`, currentId);
         setSessionId(currentId);

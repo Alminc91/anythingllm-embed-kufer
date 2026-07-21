@@ -25,7 +25,19 @@ export default function useConversationId(sessionId = null) {
 
   useEffect(() => {
     if (!window || !storageKey) return;
-    const currentId = window.localStorage.getItem(storageKey);
+    // Lesepfad ebenfalls kapseln: in vollstaendig blockiertem Storage
+    // (Cookies/Storage deaktiviert) wirft bereits der localStorage-Zugriff bzw.
+    // getItem, bevor irgendein setItem erreicht wird. Fallback currentId = null
+    // -> Hook laeuft mit einer nur-im-Speicher-ID sauber weiter.
+    let currentId = null;
+    try {
+      currentId = window.localStorage.getItem(storageKey);
+    } catch (e) {
+      console.warn(
+        "[AnythingLLM Embed] conversationId konnte nicht aus localStorage gelesen werden:",
+        e,
+      );
+    }
     if (!!currentId) {
       justCreatedRef.current = false; // restauriert -> History laden
       setConversationId(currentId);
