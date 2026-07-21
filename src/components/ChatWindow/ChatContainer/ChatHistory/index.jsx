@@ -91,7 +91,7 @@ export default function ChatHistory({ settings = {}, history = [] }) {
               key={index}
               ref={isLastMessage ? replyRef : null}
               message={props.content}
-              sentAt={props.sentAt || Date.now() / 1000}
+              sentAt={props.sentAt}
               role={props.role}
               sources={props.sources}
               chatId={props.chatId}
