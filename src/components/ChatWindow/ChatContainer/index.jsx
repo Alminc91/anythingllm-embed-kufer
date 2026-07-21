@@ -69,6 +69,7 @@ export default function ChatContainer({
           userMessage: command,
           attachments,
           animate: true,
+          sentAt: Math.floor(Date.now() / 1000),
         },
       ];
     } else {
@@ -78,6 +79,7 @@ export default function ChatContainer({
           content: command,
           role: "user",
           attachments,
+          sentAt: Math.floor(Date.now() / 1000),
         },
         {
           content: "",
@@ -85,6 +87,7 @@ export default function ChatContainer({
           pending: true,
           userMessage: command,
           animate: true,
+          sentAt: Math.floor(Date.now() / 1000),
         },
       ];
     }
