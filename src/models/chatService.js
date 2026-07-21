@@ -16,9 +16,16 @@ const ChatService = {
     }
   },
 
-  embedSessionHistory: async function (embedSettings, sessionId) {
+  embedSessionHistory: async function (
+    embedSettings,
+    sessionId,
+    conversationId = null,
+  ) {
     const { embedId, baseApiUrl } = embedSettings;
-    return await fetch(`${baseApiUrl}/${embedId}/${sessionId}`)
+    const url = conversationId
+      ? `${baseApiUrl}/${embedId}/${sessionId}?conversationId=${encodeURIComponent(conversationId)}`
+      : `${baseApiUrl}/${embedId}/${sessionId}`;
+    return await fetch(url)
       .then((res) => {
         if (res.ok) return res.json();
         throw new Error("Invalid response from server");
@@ -45,7 +52,14 @@ const ChatService = {
       .then((res) => res.ok)
       .catch(() => false);
   },
-  streamChat: async function (sessionId, embedSettings, message, handleChat) {
+  streamChat: async function (
+    sessionId,
+    embedSettings,
+    message,
+    handleChat,
+    conversationId = null,
+    signal = null,
+  ) {
     const { baseApiUrl, embedId, username } = embedSettings;
     const overrides = {
       prompt: embedSettings?.prompt ?? null,
@@ -53,16 +67,20 @@ const ChatService = {
       temperature: embedSettings?.temperature ?? null,
     };
 
-    const ctrl = new AbortController();
+    // Uebergibt der Aufrufer (ChatContainer) ein AbortSignal, kontrolliert er den
+    // Abbruch (z.B. Reset-Remount / Unmount). Ohne uebergebenes Signal dient der
+    // lokale Controller nur als Fallback fuer die bestehenden Fehlerpfade.
+    const ctrl = signal ? null : new AbortController();
     await fetchEventSource(`${baseApiUrl}/${embedId}/stream-chat`, {
       method: "POST",
       body: JSON.stringify({
         message,
         sessionId,
+        conversationId,
         username,
         ...overrides,
       }),
-      signal: ctrl.signal,
+      signal: signal ?? ctrl.signal,
       openWhenHidden: true,
       async onopen(response) {
         if (response.ok) {
@@ -83,7 +101,7 @@ const ChatService = {
                 error: `An error occurred while streaming response. Code ${response.status}`,
               });
             });
-          ctrl.abort();
+          ctrl?.abort();
           throw new Error();
         } else {
           handleChat({
@@ -94,7 +112,7 @@ const ChatService = {
             close: true,
             error: `An error occurred while streaming response. Unknown Error.`,
           });
-          ctrl.abort();
+          ctrl?.abort();
           throw new Error("Unknown Error");
         }
       },
@@ -113,7 +131,7 @@ const ChatService = {
           close: true,
           error: `An error occurred while streaming response. ${err.message}`,
         });
-        ctrl.abort();
+        ctrl?.abort();
         throw new Error();
       },
     });
