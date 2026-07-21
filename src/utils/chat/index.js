@@ -13,6 +13,7 @@ export default function handleChat(
     sources = [],
     error,
     close,
+    chatId = null, // KIE-504: DB-id der Antwort für die 👍/👎-Bewertung
     errorMsg = null,
   } = chatResult;
 
@@ -109,6 +110,15 @@ export default function handleChat(
       });
     }
     setChatHistory([..._chatHistory]);
+  } else if (type === "finalizeResponseStream") {
+    // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
+    // 👍/👎 sofort (ohne History-Reload) zugeordnet werden kann. Rein additiv —
+    // closed/animate bleiben unangetastet, daher keine Flicker-Regression.
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    if (chatIdx !== -1) {
+      _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], chatId };
+      setChatHistory([..._chatHistory]);
+    }
   }
 }
 

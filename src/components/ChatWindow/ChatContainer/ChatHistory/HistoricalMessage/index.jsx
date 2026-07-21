@@ -1,5 +1,5 @@
 import React, { memo, forwardRef, useState, useEffect } from "react";
-import { Warning, CaretDown, SpeakerHigh, Stop, CircleNotch } from "@phosphor-icons/react";
+import { Warning, CaretDown, SpeakerHigh, Stop, CircleNotch, ThumbsUp, ThumbsDown } from "@phosphor-icons/react";
 import renderMarkdown from "@/utils/chat/markdown";
 import DOMPurify from "@/utils/chat/purify";
 import { embedderSettings } from "@/main";
@@ -211,6 +211,71 @@ const TTSButton = ({ text, size = 14 }) => {
   );
 };
 
+// KIE-504: Daumen 👍/👎 unter jeder Assistant-Antwort. Dezent in der
+// Zeitstempel-Zeile ("HH:MM Uhr | 👍 👎"), gedämpftes Grau wie der TTS-Button,
+// aktiver Zustand gefüllt + farbig (👍 grün / 👎 rot). Toggle: erneuter Klick auf
+// die aktive Wertung entfernt sie. Tooltip via natives title (wie TTS-Button).
+const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
+  const initial = typeof feedbackScore === "boolean" ? feedbackScore : null;
+  const [score, setScore] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (value) => {
+    if (busy) return;
+    const next = score === value ? null : value; // Toggle
+    const prev = score;
+    setScore(next); // optimistisch
+    setBusy(true);
+    const ok = await ChatService.sendFeedback(
+      embedderSettings.settings,
+      sessionId,
+      chatId,
+      next,
+    );
+    if (!ok) setScore(prev); // bei Fehler zurücksetzen
+    setBusy(false);
+  };
+
+  const btnBase =
+    "allm-bg-transparent allm-border-none allm-cursor-pointer allm-p-1.5 allm-flex allm-items-center allm-transition-colors disabled:allm-opacity-60";
+
+  return (
+    <div className="allm-flex allm-items-center allm-gap-x-1.5">
+      <span className="allm-text-gray-300 allm-select-none" aria-hidden="true">
+        |
+      </span>
+      <button
+        type="button"
+        onClick={() => submit(true)}
+        disabled={busy}
+        aria-label="Antwort war hilfreich"
+        title="Hilfreich"
+        className={`${btnBase} ${
+          score === true
+            ? "allm-text-green-600"
+            : "allm-text-gray-400 hover:allm-text-gray-600"
+        }`}
+      >
+        <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
+      </button>
+      <button
+        type="button"
+        onClick={() => submit(false)}
+        disabled={busy}
+        aria-label="Antwort war nicht hilfreich"
+        title="Nicht hilfreich"
+        className={`${btnBase} ${
+          score === false
+            ? "allm-text-red-600"
+            : "allm-text-gray-400 hover:allm-text-gray-600"
+        }`}
+      >
+        <ThumbsDown size={16} weight={score === false ? "fill" : "regular"} />
+      </button>
+    </div>
+  );
+};
+
 const HistoricalMessage = forwardRef(
   (
     {
@@ -221,6 +286,9 @@ const HistoricalMessage = forwardRef(
       error = false,
       errorMsg = null,
       sentAt,
+      chatId = null,
+      feedbackScore = null,
+      sessionId = null,
     },
     ref,
   ) => {
@@ -338,9 +406,16 @@ const HistoricalMessage = forwardRef(
 
         {sentAt && (
           <div
-            className={`allm-font-sans allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 ${role === "user" ? "allm-text-right" : "allm-text-left"}`}
+            className={`allm-font-sans allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 allm-flex allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
           >
-            {formatDate(sentAt)}
+            <span>{formatDate(sentAt)}</span>
+            {role === "assistant" && !error && chatId && (
+              <FeedbackButtons
+                chatId={chatId}
+                feedbackScore={feedbackScore}
+                sessionId={sessionId}
+              />
+            )}
           </div>
         )}
       </div>
