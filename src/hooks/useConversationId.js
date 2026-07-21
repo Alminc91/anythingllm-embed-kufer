@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { embedderSettings } from "../main";
 import { v4 } from "uuid";
 
@@ -10,11 +10,24 @@ import { v4 } from "uuid";
 export default function useConversationId(sessionId = null) {
   const [conversationId, setConversationId] = useState("");
 
+  // true = aktuelle conversationId wurde soeben per newConversation() frisch
+  // erzeugt (hat serverseitig garantiert keine History); false = aus
+  // localStorage restauriert bzw. initial aus der sessionId migriert (kann
+  // bestehende Nachrichten haben). useChatHistory fetcht NUR bei false. Ref
+  // statt State: kein Render-Flackern und im useChatHistory-Effect synchron
+  // aktuell, weil newConversation den Wert vor setConversationId setzt.
+  const justCreatedRef = useRef(false);
+
+  // localStorage-Key einmal ableiten (embedId liegt ab Boot in
+  // embedderSettings.settings, siehe main.jsx) statt an mehreren Stellen bauen.
+  const embedId = embedderSettings?.settings?.embedId;
+  const storageKey = embedId ? `allm_${embedId}_conversation_id` : null;
+
   useEffect(() => {
-    if (!window || !embedderSettings?.settings?.embedId) return;
-    const STORAGE_IDENTIFIER = `allm_${embedderSettings.settings.embedId}_conversation_id`;
-    const currentId = window.localStorage.getItem(STORAGE_IDENTIFIER);
+    if (!window || !storageKey) return;
+    const currentId = window.localStorage.getItem(storageKey);
     if (!!currentId) {
+      justCreatedRef.current = false; // restauriert -> History laden
       setConversationId(currentId);
       return;
     }
@@ -22,18 +35,35 @@ export default function useConversationId(sessionId = null) {
     // ein bereits laufender Chat nahtlos erhalten bleibt. Erst der naechste Reset
     // erzeugt eine eigene, getrennte conversationId.
     if (!sessionId) return; // warten bis sessionId vorliegt
-    window.localStorage.setItem(STORAGE_IDENTIFIER, sessionId);
+    justCreatedRef.current = false; // initial/migriert -> History laden
+    try {
+      window.localStorage.setItem(storageKey, sessionId);
+    } catch (e) {
+      // QuotaExceeded/SecurityError/Private-Mode duerfen das Widget nicht
+      // crashen: State trotzdem setzen, Session laeuft (nur nicht persistent).
+      console.warn(
+        "[AnythingLLM Embed] conversationId konnte nicht in localStorage gespeichert werden:",
+        e,
+      );
+    }
     setConversationId(sessionId);
-  }, [sessionId]);
+  }, [sessionId, storageKey]);
 
   const newConversation = () => {
-    if (!embedderSettings?.settings?.embedId) return null;
-    const STORAGE_IDENTIFIER = `allm_${embedderSettings.settings.embedId}_conversation_id`;
+    if (!storageKey) return null;
     const fresh = v4();
-    window.localStorage.setItem(STORAGE_IDENTIFIER, fresh);
+    justCreatedRef.current = true; // frisch -> kein History-Fetch (Race-Fix)
+    try {
+      window.localStorage.setItem(storageKey, fresh);
+    } catch (e) {
+      console.warn(
+        "[AnythingLLM Embed] conversationId konnte nicht in localStorage gespeichert werden:",
+        e,
+      );
+    }
     setConversationId(fresh);
     return fresh;
   };
 
-  return { conversationId, newConversation };
+  return { conversationId, newConversation, justCreatedRef };
 }

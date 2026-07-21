@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS = {
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
   resetBurgerText: "Chat zurücksetzen", // override text for reset option in burger menu
   emailBurgerText: "E-Mail Support", // override text for email support option in burger menu
-  sessionBurgerText: "Sitzungs-ID", // override text for session ID option in burger menu
+  sessionBurgerText: "Chat-ID", // override text for chat ID option in burger menu (copies conversationId)
 
   // behaviors
   openOnLoad: "off", // or "on"

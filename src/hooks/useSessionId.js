@@ -19,7 +19,16 @@ export default function useSessionId() {
 
       const newId = v4();
       console.log(`Registering new session id`, newId);
-      window.localStorage.setItem(STORAGE_IDENTIFIER, newId);
+      try {
+        window.localStorage.setItem(STORAGE_IDENTIFIER, newId);
+      } catch (e) {
+        // QuotaExceeded/SecurityError/Private-Mode duerfen das Widget nicht
+        // crashen: State trotzdem setzen, Session laeuft (nur nicht persistent).
+        console.warn(
+          "[AnythingLLM Embed] sessionId konnte nicht in localStorage gespeichert werden:",
+          e,
+        );
+      }
       setSessionId(newId);
     }
     getOrAssignSessionId();

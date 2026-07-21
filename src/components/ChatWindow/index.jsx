@@ -13,12 +13,14 @@ export default function ChatWindow({
   sessionId,
   conversationId = null,
   newConversation = () => {},
+  justCreatedRef = null,
   compactHeader = false,
 }) {
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
     conversationId,
+    justCreatedRef,
   );
 
   if (loading) {

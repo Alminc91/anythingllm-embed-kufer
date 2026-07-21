@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
@@ -14,6 +14,12 @@ export default function ChatContainer({
   const [message, setMessage] = useState("");
   const [loadingResponse, setLoadingResponse] = useState(false);
   const [chatHistory, setChatHistory] = useState(knownHistory);
+  // Haelt den AbortController des gerade laufenden Streams, damit er beim
+  // Unmount (Reset remountet ChatContainer via key={conversationId}) abgebrochen
+  // werden kann. Ref statt Effect-Cleanup, weil der fetchReply-Effect bei JEDEM
+  // gestreamten Chunk (chatHistory-Dependency) neu laeuft -- ein Abort im
+  // Effect-Cleanup wuerde den laufenden Stream sonst nach dem ersten Chunk toeten.
+  const streamControllerRef = useRef(null);
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -99,6 +105,12 @@ export default function ChatContainer({
         return false;
       }
 
+      // Neuen Controller erst hier (nach dem Guard) erzeugen, damit die
+      // chunk-getriebenen Re-Runs des Effects den aktiven Controller nicht
+      // ueberschreiben. Der Cleanup-Effect unten bricht ihn beim Unmount ab.
+      const controller = new AbortController();
+      streamControllerRef.current = controller;
+
       await ChatService.streamChat(
         sessionId,
         settings,
@@ -112,12 +124,21 @@ export default function ChatContainer({
             _chatHistory,
           ),
         conversationId,
+        controller.signal,
       );
       return;
     }
 
     loadingResponse === true && fetchReply();
   }, [loadingResponse, chatHistory]);
+
+  // Laufenden Stream beim Unmount abbrechen: der Reset erzeugt via
+  // newConversation() eine neue conversationId, wodurch ChatWindow den
+  // ChatContainer (key={conversationId}) neu mountet. Ohne Abbruch wuerde die
+  // alte, noch streamende Antwort weiterlaufen und ins Leere gehen.
+  useEffect(() => {
+    return () => streamControllerRef.current?.abort();
+  }, []);
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;

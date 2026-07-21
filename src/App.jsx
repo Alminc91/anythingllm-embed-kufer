@@ -13,7 +13,8 @@ export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
-  const { conversationId, newConversation } = useConversationId(sessionId);
+  const { conversationId, newConversation, justCreatedRef } =
+    useConversationId(sessionId);
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
   const chatWindowRef = useRef(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
@@ -145,6 +146,7 @@ export default function App() {
               sessionId={sessionId}
               conversationId={conversationId}
               newConversation={newConversation}
+              justCreatedRef={justCreatedRef}
               compactHeader={isKeyboardOpen}
             />
           )}
