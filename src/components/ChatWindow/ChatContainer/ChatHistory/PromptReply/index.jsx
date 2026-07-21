@@ -89,7 +89,11 @@ const PromptReply = forwardRef(
           </div>
           <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
             <img
-              src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
+              src={
+                embedderSettings.settings.assistantIcon ||
+                embedderSettings.settings.brandImageUrl ||
+                AnythingLLMIcon
+              }
               alt="Anything LLM Icon"
               className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
             />
@@ -119,7 +123,11 @@ const PromptReply = forwardRef(
           </div>
           <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
             <img
-              src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
+              src={
+                embedderSettings.settings.assistantIcon ||
+                embedderSettings.settings.brandImageUrl ||
+                AnythingLLMIcon
+              }
               alt="Anything LLM Icon"
               className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
             />
@@ -150,7 +158,11 @@ const PromptReply = forwardRef(
           className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start"
         >
           <img
-            src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
+            src={
+              embedderSettings.settings.assistantIcon ||
+              embedderSettings.settings.brandImageUrl ||
+              AnythingLLMIcon
+            }
             alt="Anything LLM Icon"
             className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
           />

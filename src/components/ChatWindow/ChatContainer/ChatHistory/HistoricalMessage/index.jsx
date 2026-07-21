@@ -266,7 +266,11 @@ const HistoricalMessage = forwardRef(
           {role === "assistant" && (
             <div className="allm-flex allm-flex-col allm-items-center allm-ml-2 allm-flex-shrink-0">
               <img
-                src={embedderSettings.settings.assistantIcon || AnythingLLMIcon}
+                src={
+                  embedderSettings.settings.assistantIcon ||
+                  embedderSettings.settings.brandImageUrl ||
+                  AnythingLLMIcon
+                }
                 alt="Anything LLM Icon"
                 className="allm-w-9 allm-h-9 allm-object-contain"
                 id="anything-llm-icon"
