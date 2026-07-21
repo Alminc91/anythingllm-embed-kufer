@@ -2,6 +2,13 @@ import { CircleNotch, PaperPlaneRight, Microphone, Stop } from "@phosphor-icons/
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ChatService from "@/models/chatService";
+import { isIOS } from "@/utils/platform";
+
+// iOS-only: sticky-Eingabezeile auf eigene Compositing-Ebene zwingen (WebKit-Fix).
+// Auf Desktop weggelassen, da es dort ein Paint-Flackern beim Streaming verursacht.
+const COMPOSITING_HACK_STYLE = isIOS()
+  ? { transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform" }
+  : undefined;
 
 export default function PromptInput({
   settings,
@@ -155,11 +162,7 @@ export default function PromptInput({
 
   return (
     <div
-      style={{
-        transform: "translateZ(0)",
-        WebkitTransform: "translateZ(0)",
-        willChange: "transform",
-      }}
+      style={COMPOSITING_HACK_STYLE}
       className="allm-w-full allm-sticky allm-bottom-0 allm-z-10 allm-flex allm-justify-center allm-items-center allm-bg-white"
     >
       <form
