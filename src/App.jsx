@@ -1,5 +1,6 @@
 import useGetScriptAttributes from "@/hooks/useScriptAttributes";
 import useSessionId from "@/hooks/useSessionId";
+import useConversationId from "@/hooks/useConversationId";
 import useOpenChat from "@/hooks/useOpen";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
@@ -12,6 +13,7 @@ export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
+  const { conversationId, newConversation } = useConversationId(sessionId);
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
   const chatWindowRef = useRef(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
@@ -141,6 +143,8 @@ export default function App() {
               closeChat={() => toggleOpenChat(false)}
               settings={embedSettings}
               sessionId={sessionId}
+              conversationId={conversationId}
+              newConversation={newConversation}
               compactHeader={isKeyboardOpen}
             />
           )}

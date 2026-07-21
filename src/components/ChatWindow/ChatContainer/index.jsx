@@ -7,6 +7,7 @@ export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 
 export default function ChatContainer({
   sessionId,
+  conversationId = null,
   settings,
   knownHistory = [],
 }) {
@@ -110,6 +111,7 @@ export default function ChatContainer({
             remHistory,
             _chatHistory,
           ),
+        conversationId,
       );
       return;
     }

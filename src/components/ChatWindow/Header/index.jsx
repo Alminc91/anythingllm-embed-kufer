@@ -1,5 +1,4 @@
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
-import ChatService from "@/models/chatService";
 import {
   ArrowCounterClockwise,
   Check,
@@ -13,6 +12,8 @@ import { embedderSettings } from "@/main";
 
 export default function ChatWindowHeader({
   sessionId,
+  conversationId = null,
+  newConversation = () => {},
   settings = {},
   iconUrl = null,
   closeChat,
@@ -23,8 +24,10 @@ export default function ChatWindowHeader({
   const menuRef = useRef();
   const buttonRef = useRef();
 
-  const handleChatReset = async () => {
-    await ChatService.resetEmbedChatSession(settings, sessionId);
+  const handleChatReset = () => {
+    // Neue Konversation starten: alte bleibt serverseitig erhalten & im Backend
+    // auffindbar. Der Server laedt den Kontext nach conversation_id -> frischer Chat.
+    newConversation();
     setChatHistory([]);
     setShowOptions(false);
   };
@@ -219,13 +222,21 @@ export default function ChatWindowHeader({
         showing={showingOptions}
         resetChat={handleChatReset}
         sessionId={sessionId}
+        conversationId={conversationId}
         menuRef={menuRef}
       />
     </div>
   );
 }
 
-function OptionsMenu({ settings, showing, resetChat, sessionId, menuRef }) {
+function OptionsMenu({
+  settings,
+  showing,
+  resetChat,
+  sessionId,
+  conversationId,
+  menuRef,
+}) {
   if (!showing) return null;
   return (
     <div
@@ -241,19 +252,29 @@ function OptionsMenu({ settings, showing, resetChat, sessionId, menuRef }) {
           {settings.resetBurgerText || "Reset Chat"}
         </p>
       </button>
-      <ContactSupport email={settings.supportEmail} settings={settings} />
-      <SessionID sessionId={sessionId} settings={settings} />
+      <ContactSupport
+        email={settings.supportEmail}
+        settings={settings}
+        sessionId={sessionId}
+        conversationId={conversationId}
+      />
+      <SessionID
+        sessionId={sessionId}
+        conversationId={conversationId}
+        settings={settings}
+      />
     </div>
   );
 }
 
-function SessionID({ sessionId, settings }) {
-  if (!sessionId) return null;
+function SessionID({ sessionId, conversationId, settings }) {
+  if (!sessionId && !conversationId) return null;
 
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
 
   const copySessionId = () => {
-    navigator.clipboard.writeText(sessionId);
+    const idToCopy = conversationId || sessionId;
+    navigator.clipboard.writeText(idToCopy);
     setSessionIdCopied(true);
     setTimeout(() => setSessionIdCopied(false), 1000);
   };
@@ -274,19 +295,20 @@ function SessionID({ sessionId, settings }) {
     >
       <Copy size={24} />
       <p className="allm-text-[14px] allm-font-sans">
-        {settings.sessionBurgerText || "Session ID"}
+        {settings.sessionBurgerText || "Chat-ID"}
       </p>
     </button>
   );
 }
 
-function ContactSupport({ email = null, settings }) {
+function ContactSupport({ email = null, settings, sessionId, conversationId }) {
   if (!email) return null;
 
   const subject = `Anfrage zum Chatbot "${settings.brandText}" von ${window.location.hostname}`;
+  const body = `\n\n---\nChat-ID: ${conversationId || sessionId || "-"}`;
   return (
     <a
-      href={`mailto:${email}?Subject=${encodeURIComponent(subject)}`}
+      href={`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
       className="allm-no-underline hover:allm-underline hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
     >
       <Envelope size={24} />

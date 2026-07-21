@@ -11,11 +11,14 @@ export default function ChatWindow({
   closeChat,
   settings,
   sessionId,
+  conversationId = null,
+  newConversation = () => {},
   compactHeader = false,
 }) {
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
+    conversationId,
   );
 
   if (loading) {
@@ -23,6 +26,8 @@ export default function ChatWindow({
       <div className="allm-flex allm-flex-col allm-h-full">
         <ChatWindowHeader
           sessionId={sessionId}
+          conversationId={conversationId}
+          newConversation={newConversation}
           settings={settings}
           iconUrl={settings.brandImageUrl}
           closeChat={closeChat}
@@ -44,6 +49,8 @@ export default function ChatWindow({
       {!settings.noHeader && (
         <ChatWindowHeader
           sessionId={sessionId}
+          conversationId={conversationId}
+          newConversation={newConversation}
           settings={settings}
           iconUrl={settings.brandImageUrl}
           closeChat={closeChat}
@@ -54,6 +61,7 @@ export default function ChatWindow({
       <div className="allm-flex-grow allm-overflow-y-auto">
         <ChatContainer
           sessionId={sessionId}
+          conversationId={conversationId}
           settings={settings}
           knownHistory={chatHistory}
         />

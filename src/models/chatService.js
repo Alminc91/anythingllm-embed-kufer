@@ -16,9 +16,16 @@ const ChatService = {
     }
   },
 
-  embedSessionHistory: async function (embedSettings, sessionId) {
+  embedSessionHistory: async function (
+    embedSettings,
+    sessionId,
+    conversationId = null,
+  ) {
     const { embedId, baseApiUrl } = embedSettings;
-    return await fetch(`${baseApiUrl}/${embedId}/${sessionId}`)
+    const url = conversationId
+      ? `${baseApiUrl}/${embedId}/${sessionId}?conversationId=${encodeURIComponent(conversationId)}`
+      : `${baseApiUrl}/${embedId}/${sessionId}`;
+    return await fetch(url)
       .then((res) => {
         if (res.ok) return res.json();
         throw new Error("Invalid response from server");
@@ -45,7 +52,13 @@ const ChatService = {
       .then((res) => res.ok)
       .catch(() => false);
   },
-  streamChat: async function (sessionId, embedSettings, message, handleChat) {
+  streamChat: async function (
+    sessionId,
+    embedSettings,
+    message,
+    handleChat,
+    conversationId = null,
+  ) {
     const { baseApiUrl, embedId, username } = embedSettings;
     const overrides = {
       prompt: embedSettings?.prompt ?? null,
@@ -59,6 +72,7 @@ const ChatService = {
       body: JSON.stringify({
         message,
         sessionId,
+        conversationId: conversationId ?? null,
         username,
         ...overrides,
       }),
