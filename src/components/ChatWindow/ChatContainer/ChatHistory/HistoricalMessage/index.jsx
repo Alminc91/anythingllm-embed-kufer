@@ -1,4 +1,4 @@
-import React, { memo, forwardRef, useState, useEffect } from "react";
+import React, { memo, forwardRef, useState, useEffect, useRef } from "react";
 import { Warning, CaretDown, SpeakerHigh, Stop, CircleNotch, ThumbsUp, ThumbsDown } from "@phosphor-icons/react";
 import renderMarkdown from "@/utils/chat/markdown";
 import DOMPurify from "@/utils/chat/purify";
@@ -215,16 +215,67 @@ const TTSButton = ({ text, size = 14 }) => {
 // Zeitstempel-Zeile ("HH:MM Uhr | 👍 👎"), gedämpftes Grau wie der TTS-Button,
 // aktiver Zustand gefüllt + farbig (👍 grün / 👎 rot). Toggle: erneuter Klick auf
 // die aktive Wertung entfernt sie. Tooltip via natives title (wie TTS-Button).
+const FEEDBACK_REASONS = ["Zu ungenau", "Falsch", "Unvollständig", "Anderes"];
+
 const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
   const initial = typeof feedbackScore === "boolean" ? feedbackScore : null;
   const [score, setScore] = useState(initial);
   const [busy, setBusy] = useState(false);
+  // KIE-507: optionales Kommentarfeld bei 👎 (Grund-Chips + Freitext).
+  const [showComment, setShowComment] = useState(false);
+  const [reason, setReason] = useState(null);
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const boxRef = useRef(null);
+
+  // Beim Aufklappen die GANZE Box in den sichtbaren Bereich scrollen — sonst
+  // verschwindet sie bei der letzten Antwort hinter dem Eingabefeld. Sauber
+  // gerechnet: um wie viel ragt die Box-Unterkante unter den sichtbaren Rand des
+  // Chat-Containers (#chat-history) hinaus → genau um diesen Betrag + Luft scrollen.
+  // Der Timeout lässt Layout (Chips-Umbruch, Textarea-Höhe) erst fertig rechnen.
+  useEffect(() => {
+    if (!showComment) return;
+    const t = setTimeout(() => {
+      const el = boxRef.current;
+      const scroller = el?.closest("#chat-history");
+      if (!el || !scroller) {
+        el?.scrollIntoView({ behavior: "smooth", block: "end" });
+        return;
+      }
+      const GAP = 16; // Luft unter der Box
+      // Sichtbare Untergrenze = Oberkante des Eingabefelds, falls es den Chat
+      // überlappt; sonst die Unterkante des Scrollers. So sitzt die Box immer
+      // vollständig ÜBER dem Eingabefeld.
+      const inputWrap = scroller.parentElement?.nextElementSibling;
+      const boundaryBottom = inputWrap
+        ? inputWrap.getBoundingClientRect().top
+        : scroller.getBoundingClientRect().bottom;
+      const overflowBelow = el.getBoundingClientRect().bottom - boundaryBottom;
+      if (overflowBelow > -GAP) {
+        scroller.scrollTo({
+          top: scroller.scrollTop + overflowBelow + GAP,
+          behavior: "smooth",
+        });
+      }
+    }, 100);
+    return () => clearTimeout(t);
+  }, [showComment]);
 
   const submit = async (value) => {
     if (busy) return;
     const next = score === value ? null : value; // Toggle
     const prev = score;
     setScore(next); // optimistisch
+    if (next === false) {
+      // Frische 👎-Box: alte Eingaben zurücksetzen (kein Vorbefüllen).
+      setReason(null);
+      setComment("");
+      setSent(false);
+      setShowComment(true); // bei 👎 Kommentarfeld zeigen
+    } else {
+      setShowComment(false); // 👍 oder Entfernen: Box schließen
+    }
     setBusy(true);
     const ok = await ChatService.sendFeedback(
       embedderSettings.settings,
@@ -236,43 +287,139 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     setBusy(false);
   };
 
+  // KIE-507: Freitext + Grund speichern (feedback bleibt 👎). Danach kurze
+  // Danke-Bestätigung und Einklappen.
+  const sendComment = async () => {
+    if (sending) return;
+    setSending(true);
+    const ok = await ChatService.sendFeedback(
+      embedderSettings.settings,
+      sessionId,
+      chatId,
+      false,
+      comment.trim() || null,
+      reason || null,
+    );
+    setSending(false);
+    if (ok) {
+      setSent(true);
+      setTimeout(() => setShowComment(false), 1500);
+    }
+  };
+
+  const dismissComment = () => {
+    setShowComment(false);
+    setReason(null);
+    setComment("");
+  };
+
   const btnBase =
     "allm-bg-transparent allm-border-none allm-cursor-pointer allm-p-1.5 allm-flex allm-items-center allm-transition-colors disabled:allm-opacity-60";
+  const accent = embedderSettings.settings.buttonColor || "#01a5a9";
 
   return (
-    <div className="allm-flex allm-items-center allm-gap-x-1.5">
-      <span className="allm-text-gray-300 allm-select-none" aria-hidden="true">
-        |
-      </span>
-      <button
-        type="button"
-        onClick={() => submit(true)}
-        disabled={busy}
-        aria-label="Antwort war hilfreich"
-        title="Hilfreich"
-        className={`${btnBase} ${
-          score === true
-            ? "allm-text-green-600"
-            : "allm-text-gray-400 hover:allm-text-gray-600"
-        }`}
-      >
-        <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
-      </button>
-      <button
-        type="button"
-        onClick={() => submit(false)}
-        disabled={busy}
-        aria-label="Antwort war nicht hilfreich"
-        title="Nicht hilfreich"
-        className={`${btnBase} ${
-          score === false
-            ? "allm-text-red-600"
-            : "allm-text-gray-400 hover:allm-text-gray-600"
-        }`}
-      >
-        <ThumbsDown size={16} weight={score === false ? "fill" : "regular"} />
-      </button>
-    </div>
+    <>
+      <div className="allm-flex allm-items-center allm-gap-x-1.5">
+        <span
+          className="allm-text-gray-300 allm-select-none"
+          aria-hidden="true"
+        >
+          |
+        </span>
+        <button
+          type="button"
+          onClick={() => submit(true)}
+          disabled={busy}
+          aria-label="Antwort war hilfreich"
+          title="Hilfreich"
+          className={`${btnBase} ${
+            score === true
+              ? "allm-text-green-600"
+              : "allm-text-gray-400 hover:allm-text-gray-600"
+          }`}
+        >
+          <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
+        </button>
+        <button
+          type="button"
+          onClick={() => submit(false)}
+          disabled={busy}
+          aria-label="Antwort war nicht hilfreich"
+          title="Nicht hilfreich"
+          className={`${btnBase} ${
+            score === false
+              ? "allm-text-red-600"
+              : "allm-text-gray-400 hover:allm-text-gray-600"
+          }`}
+        >
+          <ThumbsDown size={16} weight={score === false ? "fill" : "regular"} />
+        </button>
+      </div>
+
+      {/* KIE-507: inline aufklappendes Kommentarfeld bei 👎 (Grund-Chips + Freitext) */}
+      {showComment && (
+        <div
+          ref={boxRef}
+          className="allm-box-border allm-basis-full allm-w-full allm-mt-2 allm-rounded-lg allm-border allm-border-red-200 allm-bg-red-50 allm-p-2.5 allm-normal-case"
+        >
+          {sent ? (
+            <div className="allm-flex allm-items-center allm-gap-x-1.5 allm-text-[12px] allm-font-medium allm-text-red-700 allm-py-1">
+              <span aria-hidden="true">✓</span> Danke für Ihr Feedback!
+            </div>
+          ) : (
+            <>
+              <div className="allm-text-[11px] allm-font-medium allm-text-red-700 allm-mb-2">
+                Was war das Problem?{" "}
+                <span className="allm-font-normal allm-text-gray-400">
+                  (optional)
+                </span>
+              </div>
+              <div className="allm-flex allm-flex-wrap allm-gap-1.5 allm-mb-2">
+                {FEEDBACK_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setReason(reason === r ? null : r)}
+                    className={`allm-text-[11px] allm-px-2 allm-py-[3px] allm-rounded-full allm-border allm-cursor-pointer allm-transition-colors ${
+                      reason === r
+                        ? "allm-border-red-400 allm-bg-red-100 allm-text-red-700"
+                        : "allm-border-gray-200 allm-bg-white allm-text-gray-500 hover:allm-border-gray-300"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                rows={3}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Optional: kurz beschreiben – z. B. die richtige Antwort…"
+                className="allm-box-border allm-w-full allm-resize-none allm-text-[13px] allm-px-2 allm-py-1.5 allm-rounded-md allm-border allm-border-gray-200 allm-bg-white allm-text-gray-700 allm-outline-none focus:allm-border-gray-300"
+              />
+              <div className="allm-flex allm-justify-end allm-items-center allm-gap-x-3 allm-mt-2">
+                <button
+                  type="button"
+                  onClick={dismissComment}
+                  className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[11px] allm-text-gray-400 hover:allm-text-gray-600"
+                >
+                  Überspringen
+                </button>
+                <button
+                  type="button"
+                  onClick={sendComment}
+                  disabled={sending}
+                  style={{ backgroundColor: accent }}
+                  className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-text-white allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
+                >
+                  {sending ? "Senden…" : "Senden"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
   );
 };
 
@@ -406,7 +553,7 @@ const HistoricalMessage = forwardRef(
 
         {sentAt && (
           <div
-            className={`allm-font-sans allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 allm-flex allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
+            className={`allm-font-sans allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 allm-flex allm-flex-wrap allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
           >
             <span>{formatDate(sentAt)}</span>
             {role === "assistant" && !error && chatId && (
