@@ -55,15 +55,26 @@ const ChatService = {
   // KIE-504: Bewertung (👍/👎) einer Antwort senden. feedback: true = 👍,
   // false = 👎, null = Bewertung entfernen (Toggle). Die sessionId bindet die
   // chatId serverseitig an die besitzende Session (BOLA-Härtung).
-  sendFeedback: async function (embedSettings, sessionId, chatId, feedback) {
+  // KIE-507: optionaler comment (Freitext) + reason (1-Klick-Grund) bei 👎.
+  sendFeedback: async function (
+    embedSettings,
+    sessionId,
+    chatId,
+    feedback,
+    comment,
+    reason,
+  ) {
     const { baseApiUrl, embedId } = embedSettings;
     if (!chatId) return false;
+    const payload = { chatId, feedback };
+    if (comment !== undefined) payload.comment = comment;
+    if (reason !== undefined) payload.reason = reason;
     return await fetch(
       `${baseApiUrl}/${embedId}/${encodeURIComponent(sessionId)}/feedback`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, feedback }),
+        body: JSON.stringify(payload),
       },
     )
       .then((res) => (res.ok ? res.json() : { success: false }))
