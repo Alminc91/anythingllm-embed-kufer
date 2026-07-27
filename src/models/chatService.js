@@ -44,6 +44,24 @@ const ChatService = {
         return [];
       });
   },
+  // KIE-503: Frühere Konversationen dieser Session auflisten (für das
+  // "Frühere Chats"-Panel). Server bindet die Liste an die session_id (BOLA).
+  listConversations: async function (embedSettings, sessionId) {
+    const { baseApiUrl, embedId } = embedSettings;
+    if (!sessionId) return [];
+    return await fetch(
+      `${baseApiUrl}/${embedId}/${encodeURIComponent(sessionId)}/conversations`,
+    )
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error("Invalid response from server");
+      })
+      .then((res) => res?.conversations || [])
+      .catch((e) => {
+        console.error(e);
+        return [];
+      });
+  },
   resetEmbedChatSession: async function (embedSettings, sessionId) {
     const { baseApiUrl, embedId } = embedSettings;
     return await fetch(`${baseApiUrl}/${embedId}/${sessionId}`, {

@@ -2,6 +2,7 @@ import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import {
   ArrowCounterClockwise,
   Check,
+  ClockCounterClockwise,
   Copy,
   DotsThreeOutlineVertical,
   Envelope,
@@ -19,6 +20,7 @@ export default function ChatWindowHeader({
   closeChat,
   setChatHistory,
   compact = false,
+  openHistory = null, // KIE-503: öffnet die "Frühere Chats"-Ansicht
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
@@ -224,6 +226,14 @@ export default function ChatWindowHeader({
         sessionId={sessionId}
         conversationId={conversationId}
         menuRef={menuRef}
+        openHistory={
+          openHistory
+            ? () => {
+                setShowOptions(false);
+                openHistory();
+              }
+            : null
+        }
       />
     </div>
   );
@@ -236,6 +246,7 @@ function OptionsMenu({
   sessionId,
   conversationId,
   menuRef,
+  openHistory = null,
 }) {
   if (!showing) return null;
   return (
@@ -243,6 +254,8 @@ function OptionsMenu({
       ref={menuRef}
       className="allm-bg-white allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
     >
+      {/* Reset bleibt oben (häufigste Aktion, gewohnte Position), "Frühere
+          Chats" (KIE-503) direkt darunter. */}
       <button
         onClick={resetChat}
         className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
@@ -252,6 +265,17 @@ function OptionsMenu({
           {settings.resetBurgerText || "Reset Chat"}
         </p>
       </button>
+      {openHistory && (
+        <button
+          onClick={openHistory}
+          className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
+        >
+          <ClockCounterClockwise size={24} />
+          <p className="allm-text-[14px] allm-font-sans">
+            {settings.historyBurgerText || "Frühere Chats"}
+          </p>
+        </button>
+      )}
       <ContactSupport
         email={settings.supportEmail}
         settings={settings}

@@ -77,5 +77,25 @@ export default function useConversationId(sessionId = null) {
     return fresh;
   };
 
-  return { conversationId, newConversation, justCreatedRef };
+  // KIE-503: Zu einer BESTEHENDEN Konversation wechseln ("Frühere Chats").
+  // Anders als newConversation MUSS die History geladen werden -> justCreatedRef
+  // explizit false. Der Remount (key={conversationId}) bricht einen laufenden
+  // Stream über den bestehenden Unmount-Cleanup ab (gleiches Gleis wie Reset).
+  const switchConversation = (id) => {
+    if (!id || id === conversationId) return;
+    justCreatedRef.current = false; // bestehend -> History laden
+    if (storageKey) {
+      try {
+        window.localStorage.setItem(storageKey, id);
+      } catch (e) {
+        console.warn(
+          "[AnythingLLM Embed] conversationId konnte nicht in localStorage gespeichert werden:",
+          e,
+        );
+      }
+    }
+    setConversationId(id);
+  };
+
+  return { conversationId, newConversation, switchConversation, justCreatedRef };
 }

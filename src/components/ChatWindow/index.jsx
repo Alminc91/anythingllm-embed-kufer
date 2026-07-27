@@ -4,8 +4,10 @@ import useChatHistory from "@/hooks/chat/useChatHistory";
 import ChatContainer from "./ChatContainer";
 import Sponsor from "../Sponsor";
 import { ChatHistoryLoading } from "./ChatContainer/ChatHistory";
+import ConversationHistory from "./ConversationHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
+import { useState } from "react";
 
 export default function ChatWindow({
   closeChat,
@@ -13,9 +15,18 @@ export default function ChatWindow({
   sessionId,
   conversationId = null,
   newConversation = () => {},
+  switchConversation = () => {},
   justCreatedRef = null,
   compactHeader = false,
 }) {
+  // KIE-503: Vollbild-Ansicht "Frühere Chats" statt des Chats anzeigen.
+  const [showHistory, setShowHistory] = useState(false);
+  // Abschaltbar pro Widget (visual_config im Admin) oder per Script-Attribut;
+  // data-Attribute liefern Strings, daher auch "false" behandeln.
+  const historyEnabled =
+    settings?.historyEnabled !== false &&
+    String(settings?.historyEnabled) !== "false";
+  const openHistory = historyEnabled ? () => setShowHistory(true) : null;
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
@@ -23,9 +34,38 @@ export default function ChatWindow({
     justCreatedRef,
   );
 
+  // KIE-503 (Review-Fund W1): Die "Frühere Chats"-Ansicht wird als OVERLAY über
+  // dem gemounteten Chat gerendert (nicht per early return an seiner Stelle).
+  // So bleibt der ChatContainer beim bloßen Öffnen/Ansehen gemountet: ein
+  // laufender Stream wird NICHT abgebrochen und lokal angezeigte Nachrichten
+  // bleiben beim "Zurück" erhalten. Erst eine echte Auswahl einer ANDEREN
+  // Konversation wechselt via switchConversation -> loading + Remount.
+  const historyOverlay = showHistory ? (
+    // z-[60]: muss ÜBER dem Scroll-nach-unten-Pfeil (z-50, fixed) in ChatHistory
+    // liegen, sonst schwebt der Pfeil über der Liste und scrollt den verdeckten Chat.
+    <div className="allm-absolute allm-inset-0 allm-z-[60] allm-bg-white allm-rounded-2xl allm-overflow-hidden">
+      <ConversationHistory
+        settings={settings}
+        sessionId={sessionId}
+        conversationId={conversationId}
+        onSelect={(id) => {
+          // Wechsel: conversationId setzen -> useChatHistory schaltet auf
+          // loading und lädt die Ziel-History; ChatContainer remountet (key).
+          switchConversation(id);
+          setShowHistory(false);
+        }}
+        onBack={() => setShowHistory(false)}
+        closeChat={closeChat}
+      />
+    </div>
+  ) : null;
+
   if (loading) {
     return (
-      <div className="allm-flex allm-flex-col allm-h-full">
+      // allm-relative + historyOverlay auch hier: sonst verpufft ein Klick auf
+      // "Frühere Chats" während des Ladens (showHistory=true, aber unsichtbar).
+      <div className="allm-flex allm-flex-col allm-h-full allm-relative">
+        {historyOverlay}
         <ChatWindowHeader
           sessionId={sessionId}
           conversationId={conversationId}
@@ -35,6 +75,7 @@ export default function ChatWindow({
           closeChat={closeChat}
           setChatHistory={setChatHistory}
           compact={compactHeader}
+          openHistory={openHistory}
         />
         <ChatHistoryLoading />
         <div className="allm-pt-2 allm-pb-3 allm-h-fit">
@@ -47,7 +88,8 @@ export default function ChatWindow({
   setEventDelegatorForCodeSnippets();
 
   return (
-    <div className="allm-flex allm-flex-col allm-h-full">
+    <div className="allm-flex allm-flex-col allm-h-full allm-relative">
+      {historyOverlay}
       {!settings.noHeader && (
         <ChatWindowHeader
           sessionId={sessionId}
@@ -58,6 +100,7 @@ export default function ChatWindow({
           closeChat={closeChat}
           setChatHistory={setChatHistory}
           compact={compactHeader}
+          openHistory={openHistory}
         />
       )}
       <div className="allm-flex-grow allm-overflow-y-auto">

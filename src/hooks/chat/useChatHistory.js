@@ -47,6 +47,17 @@ export default function useChatHistory(
         return;
       }
 
+      // KIE-503 (Review-Fund K1): Vor einem echten Fetch (Restore ODER Wechsel
+      // via switchConversation) in den Ladezustand schalten und die alte Liste
+      // leeren. Ohne das behielte der State beim Konversationswechsel die
+      // Nachrichten der VORHERIGEN Konversation (loading blieb false) — der
+      // remountete ChatContainer zeigte sie unter der neuen ID, und bei
+      // gleicher Nachrichtenzahl hätte sein Längen-Resync die richtige History
+      // nie nachgezogen. Mit loading=true rendert ChatWindow stattdessen den
+      // Loading-Zweig, bis die Ziel-History wirklich da ist.
+      setLoading(true);
+      setMessages([]);
+
       try {
         const formattedMessages = await ChatService.embedSessionHistory(
           settings,
