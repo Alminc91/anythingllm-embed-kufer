@@ -57,6 +57,10 @@ const DEFAULT_SETTINGS = {
   enableStt: true, // true/false - show STT microphone if server supports it
   enableTts: true, // true/false - show TTS speaker if server supports it
   ttsPosition: "bottom-right", // "bottom-right" or "icon-left" (under avatar)
+
+  // KIE-503: "Frühere Chats" im Burger-Menü. Abschaltbar per Admin
+  // (visual_config.historyEnabled=false) oder data-history-enabled="false".
+  historyEnabled: true,
 };
 
 export default function useGetScriptAttributes() {
