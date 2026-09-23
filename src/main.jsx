@@ -124,6 +124,21 @@ const customCss = `
   span.allm-whitespace-pre-line>p {
     margin: 0px;
   }
+
+  /* Inline-Modus: Scroll-Verkettung verhindern — am Ende des Chat-Verlaufs darf
+     das Scrollen nicht auf die Webseite durchschlagen. Nur Inline (Blase unverändert). */
+  #anything-llm-embed-inline #chat-history,
+  #anything-llm-embed-inline #chat-container,
+  #anything-llm-embed-inline .allm-no-scroll {
+    overscroll-behavior: contain;
+  }
+
+  /* Inline-Modus "Schrift der Webseite übernehmen": font-family vererbt sich in
+     den Shadow DOM — dafür die widget-eigene Schrift (allm-font-sans) neutralisieren. */
+  .allm-inherit-font,
+  .allm-inherit-font .allm-font-sans {
+    font-family: inherit !important;
+  }
 `;
 
 // Script-Settings vor Shadow DOM Erstellung lesen
@@ -151,7 +166,10 @@ const getLinkColorCss = (linkColor) => {
   `;
 };
 
-// Shadow DOM Host erstellen
+// Shadow DOM Host erstellen. Zunächst immer an <body> (Chat-Blase). Im
+// Inline-Modus hängt App.jsx den Host nach dem Config-Load in den Platzhalter
+// (<div id="kufer-assistent">) um — ein Shadow-Host lässt sich per appendChild
+// verschieben, React-State und Shadow-Inhalt bleiben dabei erhalten.
 const hostElement = document.createElement("div");
 hostElement.id = "anythingllm-embed-widget";
 document.body.appendChild(hostElement);
@@ -171,6 +189,41 @@ linkElement.rel = "stylesheet";
 linkElement.href = stylesSrc;
 shadow.appendChild(linkElement);
 
+// Inline-Modus: Tailwind-CSS einmal als Text laden und das <link> durch ein
+// <style> gleichen Inhalts an derselben Stelle ersetzen (Kaskaden-Reihenfolge
+// bleibt). Grund: beim Umhängen des Hosts (Platzhalter <-> body) wird ein <link>
+// neu verbunden -> Stylesheet ist kurz weg und wird (max-age=0) neu angefragt ->
+// ungestylter Frame. Ein <style> wird beim Einhängen synchron geparst.
+// Blase: nie aufgerufen, <link> bleibt wie bisher. Fehler/Timeout -> <link> bleibt.
+let tailwindInlined = null;
+export function inlineTailwindStyles(timeoutMs = 4000) {
+  if (tailwindInlined) return tailwindInlined;
+  tailwindInlined = (async () => {
+    if (!stylesSrc || typeof fetch !== "function") return false;
+    const ctrl =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(() => ctrl?.abort(), timeoutMs);
+    try {
+      const res = await fetch(stylesSrc, {
+        credentials: "omit",
+        signal: ctrl?.signal,
+      });
+      if (!res.ok) return false;
+      const css = await res.text();
+      if (!css || !linkElement.isConnected) return false;
+      const styleEl = document.createElement("style");
+      styleEl.textContent = css;
+      linkElement.replaceWith(styleEl);
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+  return tailwindInlined;
+}
+
 // React Container in Shadow DOM erstellen
 const appElement = document.createElement("div");
 appElement.id = "anythingllm-embed-root";
@@ -181,6 +234,7 @@ export const embedderSettings = {
   settings: scriptSettings,
   stylesSrc: stylesSrc,
   shadowRoot: shadow, // Export Shadow Root for event listeners
+  hostElement, // Shadow-Host (Inline-Modus: wird in den Platzhalter umgehängt)
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
     msgText: scriptSettings?.userTextColor ?? "#FFFFFF",

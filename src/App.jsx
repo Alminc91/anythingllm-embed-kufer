@@ -2,12 +2,21 @@ import useGetScriptAttributes from "@/hooks/useScriptAttributes";
 import useSessionId from "@/hooks/useSessionId";
 import useConversationId from "@/hooks/useConversationId";
 import useOpenChat from "@/hooks/useOpen";
+import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
+import InlineChat from "@/components/InlineChat";
 import { useEffect, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
+import { embedderSettings, inlineTailwindStyles } from "@/main";
+import {
+  bubbleButtonStyle,
+  bubbleWindowCss,
+  findMountTarget,
+  whenDomReady,
+} from "@/utils/layout";
 
 export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
@@ -16,10 +25,17 @@ export default function App() {
   const { conversationId, newConversation, switchConversation, justCreatedRef } =
     useConversationId(sessionId);
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
+  // Inline-Modus: Platzhalter-Element (null = Chat-Blase, undefined = noch offen)
+  const [mountTarget, setMountTarget] = useState(undefined);
   const chatWindowRef = useRef(null);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const kbBaselineRef = useRef(0); // groesste je gesehene sichtbare Hoehe (= ohne Tastatur)
-  const lastWidthRef = useRef(0);
+  const isInline = !!mountTarget;
+  // Mobile Tastatur-Logik (visualViewport) — nur im Blasen-Modus; das Inline-
+  // Vollbild-Overlay nutzt denselben Hook in InlineChat.
+  const isKeyboardOpen = useMobileKeyboard(
+    chatWindowRef,
+    isChatOpen,
+    !isInline,
+  );
 
   // Check embed status on load - if disabled, don't render anything
   useEffect(() => {
@@ -31,66 +47,72 @@ export default function App() {
     checkStatus();
   }, [embedSettings.loaded]);
 
+  // Darstellung entscheiden, sobald die (Server-)Config da ist: Inline nur wenn
+  // displayMode "inline" UND geeigneter Platzhalter gefunden — sonst wie bisher
+  // Blase. Steht der Platzhalter im HTML nach dem Script, bis DOMContentLoaded
+  // warten. Vor dem ersten Umhängen das Tailwind-CSS als <style> einbetten
+  // (siehe main.jsx), damit Umhängen keinen ungestylten Frame erzeugt.
   useEffect(() => {
-    if (embedSettings.openOnLoad === "on" && isEnabled) {
+    if (!embedSettings.loaded) return;
+    if (embedSettings.displayMode !== "inline") {
+      setMountTarget(null);
+      return;
+    }
+    let cancelled = false;
+    whenDomReady().then(async () => {
+      if (cancelled) return;
+      const target = findMountTarget(
+        embedSettings.mount,
+        embedderSettings.hostElement,
+      );
+      if (!target) {
+        setMountTarget(null); // Grund loggt findMountTarget
+        return;
+      }
+      await inlineTailwindStyles();
+      if (!cancelled) setMountTarget(target);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [embedSettings.loaded]);
+
+  useEffect(() => {
+    // Inline: kein Auto-Öffnen der Blase (und kein sessionStorage-Offen-Flag,
+    // das sonst auf einer Blase-Seite derselben Domain nachwirken würde).
+    if (
+      embedSettings.openOnLoad === "on" &&
+      isEnabled &&
+      mountTarget === null
+    ) {
       toggleOpenChat(true);
     }
-  }, [embedSettings.loaded, isEnabled]);
+  }, [embedSettings.loaded, isEnabled, mountTarget]);
 
-  // Mobile keyboard handling: on mobile (<768px) couple the chat window height
-  // to window.visualViewport so the soft keyboard doesn't push the header
-  // (with the close button) out of view. Tablet/desktop are left untouched.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const applyViewport = () => {
-      // Tastatur-Erkennung ueber ZWEI Signale (iOS-Robustheit): die sichtbare
-      // Hoehe liegt deutlich unter (a) der groessten je gesehenen Hoehe (Baseline =
-      // ohne Tastatur) ODER (b) der Layout-Hoehe window.innerHeight. Auf manchen
-      // iOS-Staenden schrumpft innerHeight mit der Tastatur mit (Delta ~0), dann
-      // greift die Baseline. Desktop (auch schmal, Firefox) hat keine Soft-Tastatur
-      // -> beide Deltas ~0 -> feuert nie.
-      const isMobile = window.innerWidth < 768;
-      // Bei Orientierungswechsel (Breite aendert sich) Baseline zuruecksetzen.
-      if (window.innerWidth !== lastWidthRef.current) {
-        lastWidthRef.current = window.innerWidth;
-        kbBaselineRef.current = 0;
-      }
-      if (vv.height > kbBaselineRef.current) kbBaselineRef.current = vv.height;
-      const shrink = Math.max(
-        kbBaselineRef.current - vv.height,
-        window.innerHeight - vv.height,
-      );
-      const keyboardOpen = isMobile && shrink > 120;
-      const active = isChatOpen && keyboardOpen;
-      const el = chatWindowRef.current;
-      if (el) {
-        if (active) {
-          el.style.height = `${vv.height}px`;
-          el.style.top = `${vv.offsetTop}px`;
-          el.style.bottom = "auto";
-        } else {
-          el.style.height = "";
-          el.style.top = "";
-          el.style.bottom = "";
-        }
-      }
-      setIsKeyboardOpen(active);
-    };
-    applyViewport();
-    vv.addEventListener("resize", applyViewport);
-    vv.addEventListener("scroll", applyViewport);
-    return () => {
-      vv.removeEventListener("resize", applyViewport);
-      vv.removeEventListener("scroll", applyViewport);
-    };
-  }, [isChatOpen]);
-
-  // Don't render until we know the embed status
-  if (!embedSettings.loaded || isEnabled === null) return null;
+  // Don't render until we know the embed status (and the display mode)
+  if (!embedSettings.loaded || isEnabled === null || mountTarget === undefined)
+    return null;
 
   // If embed is disabled, don't render anything (hide completely)
   if (isEnabled === false) return null;
+
+  // Inline-Modus: keine Blase, kein Open-Button, keine Willkommensblasen.
+  if (isInline) {
+    return (
+      <I18nextProvider i18n={i18next}>
+        <InlineChat
+          settings={embedSettings}
+          mountTarget={mountTarget}
+          onMountError={() => setMountTarget(null)}
+          sessionId={sessionId}
+          conversationId={conversationId}
+          newConversation={newConversation}
+          switchConversation={switchConversation}
+          justCreatedRef={justCreatedRef}
+        />
+      </I18nextProvider>
+    );
+  }
 
   const validPositions = ["bottom-left", "bottom-right", "top-left", "top-right"];
   const position = validPositions.includes(embedSettings.position)
@@ -128,15 +150,20 @@ export default function App() {
     xl:allm-max-w-[25%]
   `;
 
+  // Optionale Fenstergröße/Randabstand (Design Center). Leer -> "" -> exakt
+  // bisherige Klassen-Größen. Werte sind whitelist-validiert (utils/layout).
+  const windowCss = bubbleWindowCss(embedSettings, position);
+
   return (
     <I18nextProvider i18n={i18next}>
+      {windowCss && <style>{windowCss}</style>}
       <div
         id="anything-llm-embed-chat-container"
         className={`allm-fixed allm-z-[9999] ${isChatOpen ? "allm-block" : "allm-hidden"}`}
       >
         <div
           ref={chatWindowRef}
-          className={`allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
+          className={`allm-bubble-window allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
           id="anything-llm-chat"
         >
           {isChatOpen && (
@@ -157,6 +184,7 @@ export default function App() {
         <div
           id="anything-llm-embed-chat-button-container"
           className={`allm-fixed allm-bottom-0 ${buttonPositionClasses[position]} allm-mb-4 allm-z-[9999]`}
+          style={bubbleButtonStyle(embedSettings, position)}
         >
           <OpenButton
             settings={embedSettings}
