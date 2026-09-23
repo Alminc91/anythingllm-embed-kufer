@@ -124,6 +124,21 @@ const customCss = `
   span.allm-whitespace-pre-line>p {
     margin: 0px;
   }
+
+  /* Scroll-Verkettung verhindern: am Ende des Chat-Verlaufs darf das Scrollen
+     nicht auf die Webseite durchschlagen (v. a. Inline-Modus mitten in der Seite). */
+  #chat-history,
+  #chat-container,
+  .allm-no-scroll {
+    overscroll-behavior: contain;
+  }
+
+  /* Inline-Modus "Schrift der Webseite übernehmen": font-family vererbt sich in
+     den Shadow DOM — dafür die widget-eigene Schrift (allm-font-sans) neutralisieren. */
+  .allm-inherit-font,
+  .allm-inherit-font .allm-font-sans {
+    font-family: inherit !important;
+  }
 `;
 
 // Script-Settings vor Shadow DOM Erstellung lesen
@@ -151,7 +166,10 @@ const getLinkColorCss = (linkColor) => {
   `;
 };
 
-// Shadow DOM Host erstellen
+// Shadow DOM Host erstellen. Zunächst immer an <body> (Chat-Blase). Im
+// Inline-Modus hängt App.jsx den Host nach dem Config-Load in den Platzhalter
+// (<div id="kufer-assistent">) um — ein Shadow-Host lässt sich per appendChild
+// verschieben, React-State und Shadow-Inhalt bleiben dabei erhalten.
 const hostElement = document.createElement("div");
 hostElement.id = "anythingllm-embed-widget";
 document.body.appendChild(hostElement);
@@ -181,6 +199,7 @@ export const embedderSettings = {
   settings: scriptSettings,
   stylesSrc: stylesSrc,
   shadowRoot: shadow, // Export Shadow Root for event listeners
+  hostElement, // Shadow-Host (Inline-Modus: wird in den Platzhalter umgehängt)
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
     msgText: scriptSettings?.userTextColor ?? "#FFFFFF",

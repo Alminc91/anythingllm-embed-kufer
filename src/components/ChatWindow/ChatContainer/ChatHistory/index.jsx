@@ -5,6 +5,7 @@ import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import debounce from "lodash.debounce";
 import { SEND_TEXT_EVENT } from "..";
+import useEmbedMode from "@/hooks/useEmbedMode";
 
 export default function ChatHistory({
   settings = {},
@@ -14,6 +15,10 @@ export default function ChatHistory({
   const replyRef = useRef(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const chatHistoryRef = useRef(null);
+  // Inline-Box in der Seite: Scroll-Pfeil relativ zum Chat statt zum Viewport
+  // (fixed säße sonst unten rechts auf der Webseite).
+  const { inline, overlay } = useEmbedMode();
+  const arrowPosition = inline && !overlay ? "allm-absolute" : "allm-fixed";
 
   useEffect(() => {
     scrollToBottom();
@@ -108,7 +113,9 @@ export default function ChatHistory({
         })}
       </div>
       {!isAtBottom && (
-        <div className="allm-fixed allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse">
+        <div
+          className={`${arrowPosition} allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse`}
+        >
           <div className="allm-flex allm-flex-col allm-items-center">
             <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
               <ArrowDown

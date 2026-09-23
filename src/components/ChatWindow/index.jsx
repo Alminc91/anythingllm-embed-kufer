@@ -18,6 +18,7 @@ export default function ChatWindow({
   switchConversation = () => {},
   justCreatedRef = null,
   compactHeader = false,
+  closeVariant = "close", // Inline-Box: "collapse" (Chevron statt X)
 }) {
   // KIE-503: Vollbild-Ansicht "Frühere Chats" statt des Chats anzeigen.
   const [showHistory, setShowHistory] = useState(false);
@@ -56,6 +57,7 @@ export default function ChatWindow({
         }}
         onBack={() => setShowHistory(false)}
         closeChat={closeChat}
+        closeVariant={closeVariant}
       />
     </div>
   ) : null;
@@ -76,6 +78,7 @@ export default function ChatWindow({
           setChatHistory={setChatHistory}
           compact={compactHeader}
           openHistory={openHistory}
+          closeVariant={closeVariant}
         />
         <ChatHistoryLoading />
         <div className="allm-pt-2 allm-pb-3 allm-h-fit">
@@ -101,6 +104,7 @@ export default function ChatWindow({
           setChatHistory={setChatHistory}
           compact={compactHeader}
           openHistory={openHistory}
+          closeVariant={closeVariant}
         />
       )}
       <div className="allm-flex-grow allm-overflow-y-auto">

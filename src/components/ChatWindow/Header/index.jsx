@@ -1,6 +1,7 @@
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import {
   ArrowCounterClockwise,
+  CaretUp,
   Check,
   ClockCounterClockwise,
   Copy,
@@ -21,6 +22,7 @@ export default function ChatWindowHeader({
   setChatHistory,
   compact = false,
   openHistory = null, // KIE-503: öffnet die "Frühere Chats"-Ansicht
+  closeVariant = "close", // "close" (X) | "collapse" (Inline-Box einklappen)
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
@@ -210,14 +212,12 @@ export default function ChatWindowHeader({
             <DotsThreeOutlineVertical size={20} weight="fill" color={iconColor} />
           </button>
         )}
-        <button
-          type="button"
+        <CloseButton
+          variant={closeVariant}
           onClick={closeChat}
           className={iconButtonClass}
-          aria-label="Close"
-        >
-          <X size={20} weight="bold" color={iconColor} />
-        </button>
+          color={iconColor}
+        />
       </div>
       <OptionsMenu
         settings={settings}
@@ -236,6 +236,33 @@ export default function ChatWindowHeader({
         }
       />
     </div>
+  );
+}
+
+// Schließen (X) bzw. im Inline-Modus "Einklappen" (Chevron nach oben).
+export function CloseButton({ variant = "close", onClick, className, color }) {
+  if (variant === "collapse") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={className}
+        aria-label="Einklappen"
+        title="Einklappen"
+      >
+        <CaretUp size={20} weight="bold" color={color} />
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={className}
+      aria-label="Close"
+    >
+      <X size={20} weight="bold" color={color} />
+    </button>
   );
 }
 

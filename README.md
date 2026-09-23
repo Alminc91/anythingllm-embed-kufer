@@ -93,9 +93,27 @@ REQUIRED data attributes:
 
 - `data-assistant-icon` - Set the icon of the chat assistant.
 
-- `data-window-height` - Set the chat window height. **must include CSS suffix:** `px`,`%`,`rem`
+- `data-window-height` - Höhe des Chat-Fensters (Blase, nur Tablet/Desktop ≥768px; mobil bleibt Vollbild). Erlaubt: Zahl + `px`, `%`, `vw`, `vh` (nackte Zahl = px). Geklemmt auf min. 400px und den Viewport. Ohne Angabe: bisherige Standardhöhe (77 %).
 
-- `data-window-width` - Set the chat window width. **must include CSS suffix:** `px`,`%`,`rem`
+- `data-window-width` - Breite des Chat-Fensters (Blase, nur Tablet/Desktop ≥768px). Erlaubt: Zahl + `px`, `%`, `vw`, `vh`. Geklemmt auf min. 320px und den Viewport. Ohne Angabe: bisherige Standardbreite (40 % bzw. 25 % ab 1280px).
+
+- `data-offset-x` / `data-offset-y` - Randabstand von Button und Fenster in px (Ganzzahl 0–200). Ohne Angabe: 16px.
+
+- `data-display-mode` - `bubble` (Standard) oder `inline`. Inline zeigt den Chat mitten in der Seite im Platzhalter `<div id="kufer-assistent"></div>` (eingeklappt als breite Leiste, aufgeklappt als Chat-Box). Fehlt der Platzhalter, erscheint weiterhin die Chat-Blase.
+
+- `data-mount` - CSS-Selektor des Platzhalters für den Inline-Modus. Standard `#kufer-assistent`. Ungültige Selektoren werden ignoriert (Fallback Blase).
+
+- `data-inline-collapsed-text` - Text der eingeklappten Leiste (max. 120 Zeichen, reiner Text). Standard „Jetzt mit unserem KI-Assistenten schreiben“.
+
+- `data-inline-height` - Höhe der aufgeklappten Inline-Box (`px` oder `vh`, geklemmt 400–1200px). Standard `600px`.
+
+- `data-inline-max-width` - Maximalbreite der Inline-Darstellung in px (zentriert). Standard: volle Container-Breite.
+
+- `data-inline-start-state` - `collapsed` (Standard) oder `expanded`.
+
+- `data-inline-theme` - Stil der eingeklappten Leiste: `light` (Standard) oder `dark`.
+
+- `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.
 
 - `data-text-size` - Set the text size of the chats in pixels.
 

@@ -2,7 +2,8 @@ import { CircleNotch, PaperPlaneRight, Microphone, Stop } from "@phosphor-icons/
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ChatService from "@/models/chatService";
-import { isIOS } from "@/utils/platform";
+import { isIOS, isTouchDevice } from "@/utils/platform";
+import useEmbedMode from "@/hooks/useEmbedMode";
 
 // iOS-only: sticky-Eingabezeile auf eigene Compositing-Ebene zwingen (WebKit-Fix).
 // Auf Desktop weggelassen, da es dort ein Paint-Flackern beim Streaming verursacht.
@@ -19,7 +20,11 @@ export default function PromptInput({
   buttonDisabled,
 }) {
   const { t } = useTranslation();
+  const embedMode = useEmbedMode();
   const formRef = useRef(null);
+  // Inline-Modus: nach einer Antwort nur re-fokussieren, wenn der Nutzer vorher
+  // im Eingabefeld war (Enter bzw. Klick auf Senden aus dem Feld heraus).
+  const refocusRef = useRef(false);
   const textareaRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -44,12 +49,32 @@ export default function PromptInput({
     checkAudioStatus();
   }, [settings?.baseApiUrl, settings?.embedId, settings?.enableStt]);
 
+  // Fokus nach jeder Antwort (inputDisabled-Wechsel) bzw. beim Mount.
+  // preventScroll: ein Fokus darf nie die Webseite zum Eingabefeld scrollen.
+  // Blase: wie bisher immer. Inline (mitten in der Seite): nur wenn der Nutzer
+  // gerade tippt (Fokus lag im Feld) oder die Leiste per Klick geöffnet hat —
+  // auf Touch/Mobil nie automatisch (öffnet sonst Tastatur + scrollt die Seite).
   useEffect(() => {
     if (!inputDisabled && textareaRef.current) {
-      textareaRef.current.focus();
+      if (!embedMode.inline) {
+        textareaRef.current.focus({ preventScroll: true });
+      } else {
+        const wanted =
+          refocusRef.current || embedMode.consumeFocusRequest?.() === true;
+        if (wanted && !isTouchDevice())
+          textareaRef.current.focus({ preventScroll: true });
+      }
+      refocusRef.current = false;
     }
     resetTextAreaHeight();
   }, [inputDisabled]);
+
+  const textareaHasFocus = () => {
+    const el = textareaRef.current;
+    if (!el) return false;
+    const root = el.getRootNode?.();
+    return (root?.activeElement ?? document.activeElement) === el;
+  };
 
   const handleSubmit = (e) => {
     setFocused(false);
@@ -65,6 +90,7 @@ export default function PromptInput({
   const captureEnter = (event) => {
     if (event.keyCode == 13) {
       if (!event.shiftKey) {
+        refocusRef.current = true; // Nutzer tippt gerade -> nach Antwort weiter
         submit(event);
       }
     }
@@ -165,7 +191,21 @@ export default function PromptInput({
       style={COMPOSITING_HACK_STYLE}
       className="allm-w-full allm-sticky allm-bottom-0 allm-z-10 allm-flex allm-justify-center allm-items-center allm-bg-white"
     >
+      {/* Inline mobil (aufgeklappte Box in der Seite): Tippen aufs Eingabefeld
+          öffnet das Vollbild-Overlay statt das Feld in der Seite zu fokussieren. */}
+      {embedMode.requestFullscreen && (
+        <button
+          type="button"
+          onClick={embedMode.requestFullscreen}
+          aria-label={settings.sendMessageText || t("chat.send-message")}
+          className="allm-absolute allm-inset-0 allm-z-20 allm-w-full allm-h-full allm-bg-transparent allm-border-none allm-cursor-text allm-p-0 allm-m-0"
+        />
+      )}
       <form
+        onPointerDownCapture={() => {
+          // Klick auf Senden/Mikro, während im Feld getippt wird -> Fokus merken
+          refocusRef.current = textareaHasFocus();
+        }}
         onSubmit={handleSubmit}
         className="allm-flex allm-flex-col allm-gap-y-1 allm-rounded-t-lg allm-w-full allm-items-center allm-justify-center"
       >

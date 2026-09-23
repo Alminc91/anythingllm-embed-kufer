@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import useBubbleDismissal from "@/hooks/useBubbleDismissal";
 
-const CHAT_ICONS = {
+export const CHAT_ICONS = {
   plus: Plus,
   chatBubble: ChatCircleDots,
   support: Headset,
