@@ -35,16 +35,17 @@ function cssLength(value, units) {
   return `${m[1]}${unit}`;
 }
 
+// Groß-/Kleinschreibung egal ("Inline" == "inline"), Rückgabe kleingeschrieben.
 function oneOf(value, allowed) {
-  return typeof value === "string" && allowed.includes(value.trim())
-    ? value.trim()
-    : undefined;
+  if (typeof value !== "string") return undefined;
+  const v = value.trim().toLowerCase();
+  return allowed.includes(v) ? v : undefined;
 }
 
 function intRange(value, min, max) {
   let n = value;
   if (typeof n === "string") {
-    const m = /^\s*(\d{1,3})(px)?\s*$/.exec(n);
+    const m = /^\s*(\d{1,3})\s*(px)?\s*$/i.exec(n);
     if (!m) return undefined;
     n = Number(m[1]);
   }
@@ -136,15 +137,14 @@ export function bubbleButtonStyle(settings = {}, position = "bottom-right") {
 }
 
 // Inline: Höhe der aufgeklappten Box (fest, wächst NICHT mit dem Inhalt).
-export function inlineBoxStyle(settings = {}, isMobileViewport = false) {
+// Nur Tablet/Desktop (>=768px) — mobil gibt es keine Box, nur das Vollbild.
+export function inlineBoxStyle(settings = {}) {
   const h =
     layoutValidations.inlineHeight(settings.inlineHeight) ||
     DEFAULT_INLINE_HEIGHT;
   return {
     height: `clamp(${INLINE_MIN_HEIGHT_PX}px, ${h}, ${INLINE_MAX_HEIGHT_PX}px)`,
-    // Nie höher als der sichtbare Bereich; mobil etwas Luft, damit man die
-    // Seite neben/über der Box noch greifen und weiterscrollen kann.
-    maxHeight: isMobileViewport ? "80vh" : "calc(100vh - 32px)",
+    maxHeight: "calc(100vh - 32px)", // nie höher als der sichtbare Bereich
   };
 }
 
@@ -155,17 +155,57 @@ export function inlineMaxWidth(settings = {}) {
   return `${Math.max(INLINE_MIN_WIDTH_PX, parseFloat(w))}px`;
 }
 
-// Platzhalter suchen. Ungültiger Selektor -> null (Fallback Blase), kein Crash.
-export function findMountTarget(selector) {
+// Elemente, in die der Chat nicht eingehängt werden kann/darf (void-,
+// Ersetz- und Formular-Elemente, Metadaten).
+const UNSUITABLE_MOUNT_TAGS = new Set(
+  (
+    "html head body script style link meta title template noscript input " +
+    "textarea select option button img picture source track br hr wbr area " +
+    "iframe frame object embed video audio canvas svg math"
+  ).split(" "),
+);
+
+function isSuitableMountTarget(el, host) {
+  if (!el || el.nodeType !== 1) return false;
+  // Host selbst bzw. ein Vorfahre des Hosts (z. B. data-mount="body") -> nein
+  if (host && (el === host || el.contains(host))) return false;
+  // nur HTML-Elemente (SVG/MathML-Kinder haben einen anderen Namespace)
+  if (el.namespaceURI && el.namespaceURI !== "http://www.w3.org/1999/xhtml")
+    return false;
+  return !UNSUITABLE_MOUNT_TAGS.has(el.tagName.toLowerCase());
+}
+
+// Platzhalter suchen. Ungültiger Selektor oder ungeeignetes Ziel -> null
+// (Fallback Blase), kein Crash. Mehrere Treffer -> erster, mit Warnung.
+export function findMountTarget(selector, host = null) {
   const sel = layoutValidations.mount(selector) || DEFAULT_MOUNT_SELECTOR;
+  let matches;
   try {
-    return document.querySelector(sel);
+    matches = document.querySelectorAll(sel);
   } catch (e) {
     console.warn(
       `[AnythingLLM Embed] Ungültiger data-mount-Selektor "${sel}" — Chat-Blase wird verwendet.`,
     );
     return null;
   }
+  if (matches.length === 0) {
+    console.warn(
+      `[AnythingLLM Embed] Inline-Modus: Platzhalter "${sel}" nicht gefunden — Chat-Blase wird verwendet.`,
+    );
+    return null;
+  }
+  if (matches.length > 1)
+    console.warn(
+      `[AnythingLLM Embed] Platzhalter "${sel}" ${matches.length}x gefunden — der erste wird verwendet.`,
+    );
+  const target = matches[0];
+  if (!isSuitableMountTarget(target, host)) {
+    console.warn(
+      `[AnythingLLM Embed] Platzhalter "${sel}" ist als Einhängeort ungeeignet (<${target.tagName.toLowerCase()}>) — Chat-Blase wird verwendet.`,
+    );
+    return null;
+  }
+  return target;
 }
 
 // Wartet (falls nötig) bis DOMContentLoaded, damit ein Platzhalter, der im HTML

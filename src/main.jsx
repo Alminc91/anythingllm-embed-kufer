@@ -125,11 +125,11 @@ const customCss = `
     margin: 0px;
   }
 
-  /* Scroll-Verkettung verhindern: am Ende des Chat-Verlaufs darf das Scrollen
-     nicht auf die Webseite durchschlagen (v. a. Inline-Modus mitten in der Seite). */
-  #chat-history,
-  #chat-container,
-  .allm-no-scroll {
+  /* Inline-Modus: Scroll-Verkettung verhindern — am Ende des Chat-Verlaufs darf
+     das Scrollen nicht auf die Webseite durchschlagen. Nur Inline (Blase unverändert). */
+  #anything-llm-embed-inline #chat-history,
+  #anything-llm-embed-inline #chat-container,
+  #anything-llm-embed-inline .allm-no-scroll {
     overscroll-behavior: contain;
   }
 
@@ -188,6 +188,41 @@ const linkElement = document.createElement("link");
 linkElement.rel = "stylesheet";
 linkElement.href = stylesSrc;
 shadow.appendChild(linkElement);
+
+// Inline-Modus: Tailwind-CSS einmal als Text laden und das <link> durch ein
+// <style> gleichen Inhalts an derselben Stelle ersetzen (Kaskaden-Reihenfolge
+// bleibt). Grund: beim Umhängen des Hosts (Platzhalter <-> body) wird ein <link>
+// neu verbunden -> Stylesheet ist kurz weg und wird (max-age=0) neu angefragt ->
+// ungestylter Frame. Ein <style> wird beim Einhängen synchron geparst.
+// Blase: nie aufgerufen, <link> bleibt wie bisher. Fehler/Timeout -> <link> bleibt.
+let tailwindInlined = null;
+export function inlineTailwindStyles(timeoutMs = 4000) {
+  if (tailwindInlined) return tailwindInlined;
+  tailwindInlined = (async () => {
+    if (!stylesSrc || typeof fetch !== "function") return false;
+    const ctrl =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(() => ctrl?.abort(), timeoutMs);
+    try {
+      const res = await fetch(stylesSrc, {
+        credentials: "omit",
+        signal: ctrl?.signal,
+      });
+      if (!res.ok) return false;
+      const css = await res.text();
+      if (!css || !linkElement.isConnected) return false;
+      const styleEl = document.createElement("style");
+      styleEl.textContent = css;
+      linkElement.replaceWith(styleEl);
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+  return tailwindInlined;
+}
 
 // React Container in Shadow DOM erstellen
 const appElement = document.createElement("div");

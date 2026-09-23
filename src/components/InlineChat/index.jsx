@@ -1,11 +1,19 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { CaretDown, ChatCircleDots } from "@phosphor-icons/react";
 import ChatWindow from "@/components/ChatWindow";
-import { CHAT_ICONS } from "@/components/OpenButton";
+import { resolveChatIcon } from "@/components/OpenButton";
 import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
+import { isTouchDevice } from "@/utils/platform";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   inlineBoxStyle,
@@ -14,17 +22,22 @@ import {
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
 // <div id="kufer-assistent">) statt als Blase.
-//   eingeklappt  -> breite Leiste im Seitenfluss ("Jetzt mit unserem KI-Assistenten schreiben")
-//   aufgeklappt  -> Box mit FESTER Höhe (inlineHeight), darin das normale ChatWindow
-//   mobil (<768) -> Tippen auf Leiste/Eingabefeld öffnet das Vollbild-Overlay der
-//                   Blase-Mobilansicht; dafür wird der Shadow-Host kurz an <body>
-//                   gehängt (robust gegen transform/z-index/overflow der Webseite)
-//                   und im Platzhalter ein Abstandhalter gleicher Höhe gelassen,
-//                   damit die Seite darunter nicht springt.
-// Es wird bewusst NICHT an Viewport-Breakpoints (md:/xl:) ausgerichtet, sondern an
-// der Container-Breite (ResizeObserver).
+//   eingeklappt      -> breite Leiste im Seitenfluss ("Jetzt mit unserem KI-Assistenten schreiben")
+//   Tablet/Desktop   -> Klick klappt an Ort und Stelle eine Box mit FESTER Höhe
+//   (>=768px)           (inlineHeight) auf, darin das normale ChatWindow
+//   mobil (<768px)   -> KEINE Box in der Seite: die Leiste bleibt, Tippen öffnet
+//                       immer das Vollbild-Overlay (Fokus aufs Eingabefeld in
+//                       derselben Geste -> iOS öffnet die Tastatur). Dafür wird
+//                       der Shadow-Host an <body> gehängt (robust gegen
+//                       transform/z-index/overflow der Webseite) und im
+//                       Platzhalter ein gleich hoher Abstandhalter gelassen.
+// Einmal geöffnet bleibt das ChatWindow gemountet (eingeklappt nur ausgeblendet):
+// eine laufende Antwort bricht nicht ab, beim Wiederöffnen wird nichts neu geladen.
+// Viewport <768px bei offener Box -> eingeklappt (Leiste); zurück >=768px zeigt
+// die Box wieder. inlineStartState="expanded" gilt entsprechend nur ab 768px.
 
-const NARROW_CONTAINER_PX = 480;
+const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
+const DESKTOP_QUERY = "(min-width: 768px)"; // = Tailwind md
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
 // mitten im Inhalt (text-align:center, line-height:2, Großbuchstaben o. ä. würden
@@ -63,18 +76,58 @@ const BAR_THEMES = {
   },
 };
 
+// Unsichtbares Hilfsfeld fürs erste Öffnen des Overlays: existiert das echte
+// Eingabefeld noch nicht (Chat lädt), bekommt dieses Feld den Fokus in der
+// Nutzer-Geste (iOS öffnet die Tastatur); PromptInput übernimmt den Fokus beim
+// Mount. 16px verhindert den iOS-Zoom.
+const FOCUS_PROXY_STYLE = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  width: "1px",
+  height: "1px",
+  opacity: 0,
+  border: 0,
+  padding: 0,
+  fontSize: "16px",
+  pointerEvents: "none",
+};
+
+const chatClasses = {
+  box: "allm-relative allm-w-full allm-h-full allm-bg-white allm-border allm-border-solid allm-border-gray-300 allm-rounded-2xl allm-overflow-hidden allm-flex allm-flex-col allm-box-border allm-shadow-[0_4px_14px_rgba(0,0,0,0.12)]",
+  overlay:
+    "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-bg-white allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]",
+};
+
 function scrollChatToBottom() {
-  // Nach dem Umhängen des Hosts: Chat-Verlauf wieder ans Ende (nur der
-  // Container, nie die Seite).
+  // Nach Umhängen/Einblenden: Chat-Verlauf wieder ans Ende (nur der Container,
+  // nie die Seite).
   requestAnimationFrame(() => {
     const el = embedderSettings.shadowRoot?.getElementById("chat-history");
     if (el) el.scrollTop = el.scrollHeight;
   });
 }
 
+function useIsDesktopViewport() {
+  const [matches, setMatches] = useState(
+    () =>
+      window.matchMedia?.(DESKTOP_QUERY).matches ?? window.innerWidth >= 768,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia?.(DESKTOP_QUERY);
+    if (!mql) return;
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, []);
+  return matches;
+}
+
 export default function InlineChat({
   settings,
   mountTarget,
+  onMountError,
   sessionId,
   conversationId,
   newConversation,
@@ -82,22 +135,25 @@ export default function InlineChat({
   justCreatedRef,
 }) {
   const host = embedderSettings.hostElement;
+  const isDesktop = useIsDesktopViewport();
+  // expanded = Box an Ort und Stelle (nur >=768px wirksam)
   const [expanded, setExpanded] = useState(
     settings.inlineStartState === "expanded",
   );
   const [overlay, setOverlay] = useState(false); // mobiles Vollbild
-  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
-  const [containerWidth, setContainerWidth] = useState(null);
+  const [narrow, setNarrow] = useState(false);
   const rootRef = useRef(null);
   const boxRef = useRef(null);
+  const barRef = useRef(null);
   const chatWindowRef = useRef(null);
+  const proxyRef = useRef(null);
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
+  const chatMountedRef = useRef(false);
 
-  const isMobileViewport = viewportWidth < 768;
-  const narrow =
-    containerWidth !== null && containerWidth < NARROW_CONTAINER_PX;
+  const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
+  if (view !== "bar") chatMountedRef.current = true;
   const isKeyboardOpen = useMobileKeyboard(chatWindowRef, overlay);
 
   // Host im Platzhalter halten; für das mobile Overlay an <body> hängen.
@@ -105,7 +161,18 @@ export default function InlineChat({
   useLayoutEffect(() => {
     if (!host || !mountTarget) return;
     if (!overlay) {
-      if (host.parentNode !== mountTarget) mountTarget.appendChild(host);
+      if (host.parentNode === mountTarget) return;
+      try {
+        mountTarget.appendChild(host);
+      } catch (e) {
+        // z. B. Platzhalter inzwischen ungeeignet/entfernt -> Blase
+        console.warn(
+          "[AnythingLLM Embed] Inline-Modus: Einhängen fehlgeschlagen — Chat-Blase wird verwendet.",
+          e,
+        );
+        if (host.parentNode !== document.body) document.body.appendChild(host);
+        onMountError?.();
+      }
       return;
     }
     const spacer = document.createElement("div");
@@ -123,38 +190,35 @@ export default function InlineChat({
     };
   }, [overlay, mountTarget]);
 
-  useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
   // Drehen/Vergrößern auf >=768px bei offenem Overlay -> zurück in die Seite,
   // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter).
   useEffect(() => {
-    if (overlay && !isMobileViewport) {
+    if (overlay && isDesktop) {
       setExpanded(true);
       setOverlay(false);
     }
-  }, [overlay, isMobileViewport]);
+  }, [overlay, isDesktop]);
 
-  // Container-Breite statt Viewport-Breite (schmale Spalten, Sidebars).
+  // Container-Breite statt Viewport-Breite (schmale Spalten, Sidebars);
+  // State ändert sich nur beim Überschreiten der Schwelle.
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect?.width;
-      if (w) setContainerWidth(w);
+      if (w) setNarrow(w < NARROW_CONTAINER_PX);
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Beim Aufklappen per Klick genau EINMAL scrollen — und nur, wenn die Box
-  // nicht vollständig sichtbar ist (block: "nearest"). Startzustand "expanded"
-  // scrollt nie (scrollOnExpandRef nur beim Klick gesetzt).
+  // Box eingeblendet: Verlauf ans Ende; nach Klick genau EINMAL scrollen — und
+  // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
+  // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
   useEffect(() => {
-    if (!expanded || !scrollOnExpandRef.current) return;
+    if (view !== "box") return;
+    scrollChatToBottom();
+    if (!scrollOnExpandRef.current) return;
     scrollOnExpandRef.current = false;
     const el = boxRef.current;
     if (!el) return;
@@ -162,45 +226,70 @@ export default function InlineChat({
     const vh = window.innerHeight || document.documentElement.clientHeight;
     if (rect.top < 0 || rect.bottom > vh)
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [expanded]);
+  }, [view]);
 
-  const openOverlay = (focusInput = false) => {
-    spacerHeightRef.current = host?.getBoundingClientRect?.().height || 0;
-    // flushSync: Overlay + Host-Umhängen synchron, damit der Fokus unten noch
-    // in derselben Nutzer-Geste liegt (iOS öffnet die Tastatur nur dann).
-    flushSync(() => setOverlay(true));
-    if (focusInput) {
-      embedderSettings.shadowRoot
-        ?.getElementById("message-input")
-        ?.focus({ preventScroll: true });
+  // Fokus direkt in der Klick-Geste setzen; existiert das Eingabefeld noch
+  // nicht (Chat lädt), übernimmt PromptInput beim Mount (consumeFocusRequest).
+  const focusInput = (inOverlay) => {
+    const input = embedderSettings.shadowRoot?.getElementById("message-input");
+    if (input && !input.disabled) {
+      input.focus({ preventScroll: true });
+      return;
     }
+    focusRequestRef.current = true;
+    if (inOverlay) proxyRef.current?.focus({ preventScroll: true });
   };
 
-  const onBarClick = () => {
-    if (isMobileViewport) return openOverlay(false);
+  const openChat = () => {
+    if (!isDesktop) {
+      spacerHeightRef.current = host?.getBoundingClientRect?.().height || 0;
+      // flushSync: Overlay + Host-Umhängen synchron, damit der Fokus unten noch
+      // in derselben Nutzer-Geste liegt (iOS öffnet die Tastatur nur dann).
+      flushSync(() => setOverlay(true));
+      focusInput(true);
+      return;
+    }
     scrollOnExpandRef.current = true;
-    focusRequestRef.current = true; // Desktop: Eingabefeld nach Klick fokussieren
-    setExpanded(true);
+    flushSync(() => setExpanded(true));
+    // Touch-Tablets: kein Auto-Fokus (Tastatur würde die Seite verschieben)
+    if (!isTouchDevice()) focusInput(false);
   };
 
-  const inBox = !overlay;
+  // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
+  const closeChat = () => {
+    flushSync(() => {
+      setOverlay(false);
+      setExpanded(false);
+    });
+    barRef.current?.focus({ preventScroll: true });
+  };
+
+  // Escape schließt das Overlay bzw. klappt die Box ein — nur wenn der Fokus
+  // im Widget liegt (Listener am Shadow Root sieht nur Events aus dem Widget).
+  useEffect(() => {
+    const root = embedderSettings.shadowRoot;
+    if (!root || view === "bar") return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      closeChat();
+    };
+    root.addEventListener("keydown", onKeyDown);
+    return () => root.removeEventListener("keydown", onKeyDown);
+  }, [view]);
+
   const embedMode = useMemo(
     () => ({
       inline: true,
       overlay,
-      requestFullscreen:
-        expanded && inBox && isMobileViewport ? () => openOverlay(true) : null,
       consumeFocusRequest: () => {
         const wanted = focusRequestRef.current;
         focusRequestRef.current = false;
         return wanted;
       },
     }),
-    [overlay, expanded, isMobileViewport],
+    [overlay],
   );
 
-  const showBar = !expanded && !overlay;
-  const showChat = expanded || overlay;
   const inheritFont = settings.inheritFont === true;
 
   return (
@@ -211,31 +300,43 @@ export default function InlineChat({
         className={`allm-relative allm-w-full allm-font-sans ${inheritFont ? "allm-inherit-font" : ""}`}
         style={{ ...TEXT_RESET, maxWidth: inlineMaxWidth(settings) }}
       >
-        {showBar && (
-          <InlineBar settings={settings} narrow={narrow} onOpen={onBarClick} />
+        {view === "bar" && (
+          <InlineBar
+            ref={barRef}
+            settings={settings}
+            narrow={narrow}
+            onOpen={openChat}
+          />
         )}
-        {showChat && (
+        {chatMountedRef.current && (
           <div
             ref={boxRef}
-            className={inBox ? "allm-relative allm-w-full" : ""}
-            style={
-              inBox ? inlineBoxStyle(settings, isMobileViewport) : undefined
+            className={
+              view === "box"
+                ? "allm-relative allm-w-full"
+                : view === "bar"
+                  ? "allm-hidden"
+                  : ""
             }
+            style={view === "box" ? inlineBoxStyle(settings) : undefined}
           >
             <div
               ref={chatWindowRef}
               id="anything-llm-chat"
               className={
-                inBox
-                  ? "allm-relative allm-w-full allm-h-full allm-bg-white allm-border allm-border-solid allm-border-gray-300 allm-rounded-2xl allm-overflow-hidden allm-flex allm-flex-col allm-box-border allm-shadow-[0_4px_14px_rgba(0,0,0,0.12)]"
-                  : "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-bg-white allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]"
+                view === "overlay" ? chatClasses.overlay : chatClasses.box
               }
             >
+              {view === "overlay" && (
+                <input
+                  ref={proxyRef}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={FOCUS_PROXY_STYLE}
+                />
+              )}
               <ChatWindow
-                closeChat={
-                  inBox ? () => setExpanded(false) : () => setOverlay(false)
-                }
-                closeVariant={inBox ? "collapse" : "close"}
+                closeChat={closeChat}
                 settings={settings}
                 sessionId={sessionId}
                 conversationId={conversationId}
@@ -252,12 +353,13 @@ export default function InlineChat({
   );
 }
 
-function InlineBar({ settings, narrow, onOpen }) {
+const InlineBar = forwardRef(function InlineBar(
+  { settings, narrow, onOpen },
+  ref,
+) {
   const theme = BAR_THEMES[settings.inlineTheme] || BAR_THEMES.light;
   const accent = settings.buttonColor || "#01a5a9";
-  const Icon = CHAT_ICONS.hasOwnProperty(settings?.chatIcon)
-    ? CHAT_ICONS[settings.chatIcon]
-    : ChatCircleDots;
+  const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
   // Immer als Text rendern (React escaped), nie als HTML.
   const text =
     typeof settings.inlineCollapsedText === "string" &&
@@ -268,6 +370,7 @@ function InlineBar({ settings, narrow, onOpen }) {
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onOpen}
       aria-expanded={false}
@@ -314,4 +417,4 @@ function InlineBar({ settings, narrow, onOpen }) {
       />
     </button>
   );
-}
+});

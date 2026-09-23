@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
+import { embedderSettings, inlineTailwindStyles } from "@/main";
 import {
   bubbleButtonStyle,
   bubbleWindowCss,
@@ -28,11 +29,12 @@ export default function App() {
   const [mountTarget, setMountTarget] = useState(undefined);
   const chatWindowRef = useRef(null);
   const isInline = !!mountTarget;
-  // Mobile Tastatur-Logik (visualViewport) — für die Blase; das Inline-
+  // Mobile Tastatur-Logik (visualViewport) — nur im Blasen-Modus; das Inline-
   // Vollbild-Overlay nutzt denselben Hook in InlineChat.
   const isKeyboardOpen = useMobileKeyboard(
     chatWindowRef,
-    !isInline && isChatOpen,
+    isChatOpen,
+    !isInline,
   );
 
   // Check embed status on load - if disabled, don't render anything
@@ -46,8 +48,10 @@ export default function App() {
   }, [embedSettings.loaded]);
 
   // Darstellung entscheiden, sobald die (Server-)Config da ist: Inline nur wenn
-  // displayMode "inline" UND Platzhalter gefunden — sonst wie bisher Blase.
-  // Steht der Platzhalter im HTML nach dem Script, bis DOMContentLoaded warten.
+  // displayMode "inline" UND geeigneter Platzhalter gefunden — sonst wie bisher
+  // Blase. Steht der Platzhalter im HTML nach dem Script, bis DOMContentLoaded
+  // warten. Vor dem ersten Umhängen das Tailwind-CSS als <style> einbetten
+  // (siehe main.jsx), damit Umhängen keinen ungestylten Frame erzeugt.
   useEffect(() => {
     if (!embedSettings.loaded) return;
     if (embedSettings.displayMode !== "inline") {
@@ -55,14 +59,18 @@ export default function App() {
       return;
     }
     let cancelled = false;
-    whenDomReady().then(() => {
+    whenDomReady().then(async () => {
       if (cancelled) return;
-      const target = findMountTarget(embedSettings.mount);
-      if (!target)
-        console.warn(
-          "[AnythingLLM Embed] Inline-Modus: Platzhalter nicht gefunden — Chat-Blase wird verwendet.",
-        );
-      setMountTarget(target || null);
+      const target = findMountTarget(
+        embedSettings.mount,
+        embedderSettings.hostElement,
+      );
+      if (!target) {
+        setMountTarget(null); // Grund loggt findMountTarget
+        return;
+      }
+      await inlineTailwindStyles();
+      if (!cancelled) setMountTarget(target);
     });
     return () => {
       cancelled = true;
@@ -95,6 +103,7 @@ export default function App() {
         <InlineChat
           settings={embedSettings}
           mountTarget={mountTarget}
+          onMountError={() => setMountTarget(null)}
           sessionId={sessionId}
           conversationId={conversationId}
           newConversation={newConversation}

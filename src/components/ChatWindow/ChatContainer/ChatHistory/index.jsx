@@ -1,11 +1,18 @@
 import HistoricalMessage from "./HistoricalMessage";
 import PromptReply from "./PromptReply";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import debounce from "lodash.debounce";
 import { SEND_TEXT_EVENT } from "..";
-import useEmbedMode from "@/hooks/useEmbedMode";
+
+// DOM-Knoten, in den der Scroll-nach-unten-Pfeil gerendert wird (von ChatWindow
+// bereitgestellt): ein Kind der relativen Fenster-Wurzel AUSSERHALB der Scroll-
+// Container. So sitzt der Pfeil per absolute am Chatfenster (Blase und Inline
+// gleich) statt per fixed am Viewport — und WebKit/iOS clippt ihn nicht (das
+// Clipping betraf absolute Elemente INNERHALB eines overflow-Scroll-Containers).
+export const ScrollArrowSlotContext = createContext(null);
 
 export default function ChatHistory({
   settings = {},
@@ -15,10 +22,7 @@ export default function ChatHistory({
   const replyRef = useRef(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const chatHistoryRef = useRef(null);
-  // Inline-Box in der Seite: Scroll-Pfeil relativ zum Chat statt zum Viewport
-  // (fixed säße sonst unten rechts auf der Webseite).
-  const { inline, overlay } = useEmbedMode();
-  const arrowPosition = inline && !overlay ? "allm-absolute" : "allm-fixed";
+  const arrowSlot = useContext(ScrollArrowSlotContext);
 
   useEffect(() => {
     scrollToBottom();
@@ -54,6 +58,22 @@ export default function ChatHistory({
       });
     }
   };
+
+  const scrollArrow = (
+    <div className="allm-absolute allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse">
+      <div className="allm-flex allm-flex-col allm-items-center">
+        <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
+          <ArrowDown
+            weight="bold"
+            className="allm-text-white/50 allm-w-4 allm-h-4"
+            onClick={scrollToBottom}
+            id="scroll-to-bottom-button"
+            aria-label="Scroll to bottom"
+          />
+        </div>
+      </div>
+    </div>
+  );
 
   if (history.length === 0) {
     return (
@@ -112,23 +132,8 @@ export default function ChatHistory({
           );
         })}
       </div>
-      {!isAtBottom && (
-        <div
-          className={`${arrowPosition} allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse`}
-        >
-          <div className="allm-flex allm-flex-col allm-items-center">
-            <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
-              <ArrowDown
-                weight="bold"
-                className="allm-text-white/50 allm-w-4 allm-h-4"
-                onClick={scrollToBottom}
-                id="scroll-to-bottom-button"
-                aria-label="Scroll to bottom"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {!isAtBottom &&
+        (arrowSlot ? createPortal(scrollArrow, arrowSlot) : scrollArrow)}
     </div>
   );
 }

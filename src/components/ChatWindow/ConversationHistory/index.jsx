@@ -43,7 +43,6 @@ export default function ConversationHistory({
   onSelect,
   onBack,
   closeChat,
-  closeVariant = "close", // Inline-Box: "collapse"
 }) {
   const [conversations, setConversations] = useState(null); // null = lädt
   // aus dem settings-Prop lesen (eine Quelle), nicht aus dem Modul-Singleton.
@@ -91,7 +90,6 @@ export default function ConversationHistory({
         </div>
         <div className="allm-flex allm-items-center allm-px-[22px]">
           <CloseButton
-            variant={closeVariant}
             onClick={closeChat}
             className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm"
             color={headerIconColor}

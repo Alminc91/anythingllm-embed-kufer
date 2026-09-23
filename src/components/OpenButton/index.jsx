@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import useBubbleDismissal from "@/hooks/useBubbleDismissal";
 
-export const CHAT_ICONS = {
+const CHAT_ICONS = {
   plus: Plus,
   chatBubble: ChatCircleDots,
   support: Headset,
@@ -16,6 +16,11 @@ export const CHAT_ICONS = {
   search: MagnifyingGlass,
   magic: MagicWand,
 };
+
+// Icon zum chatIcon-Setting (auch für die Inline-Leiste). Unbekannt -> fallback.
+export function resolveChatIcon(name, fallback = Plus) {
+  return CHAT_ICONS.hasOwnProperty(name) ? CHAT_ICONS[name] : fallback;
+}
 
 export default function OpenButton({ settings, isOpen, toggleOpen }) {
   // Default welcome messages - can be customized via settings
@@ -51,9 +56,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
 
   if (isOpen) return null;
 
-  const ChatIcon = CHAT_ICONS.hasOwnProperty(settings?.chatIcon)
-    ? CHAT_ICONS[settings.chatIcon]
-    : CHAT_ICONS.plus;
+  const ChatIcon = resolveChatIcon(settings?.chatIcon);
 
   return (
     <div className="allm-relative">

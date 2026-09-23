@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { embedderSettings } from "@/main";
+import useEmbedMode from "@/hooks/useEmbedMode";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -22,7 +23,6 @@ export default function ChatWindowHeader({
   setChatHistory,
   compact = false,
   openHistory = null, // KIE-503: öffnet die "Frühere Chats"-Ansicht
-  closeVariant = "close", // "close" (X) | "collapse" (Inline-Box einklappen)
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
@@ -213,7 +213,6 @@ export default function ChatWindowHeader({
           </button>
         )}
         <CloseButton
-          variant={closeVariant}
           onClick={closeChat}
           className={iconButtonClass}
           color={iconColor}
@@ -239,29 +238,21 @@ export default function ChatWindowHeader({
   );
 }
 
-// Schließen (X) bzw. im Inline-Modus "Einklappen" (Chevron nach oben).
-export function CloseButton({ variant = "close", onClick, className, color }) {
-  if (variant === "collapse") {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={className}
-        aria-label="Einklappen"
-        title="Einklappen"
-      >
-        <CaretUp size={20} weight="bold" color={color} />
-      </button>
-    );
-  }
+// Schließen (X) bzw. in der Inline-Box "Einklappen" (Chevron nach oben).
+// Variante kommt aus dem Darstellungs-Kontext (Blase/Overlay: X).
+export function CloseButton({ onClick, className, color }) {
+  const { inline, overlay } = useEmbedMode();
+  const collapse = inline && !overlay;
+  const Icon = collapse ? CaretUp : X;
   return (
     <button
       type="button"
       onClick={onClick}
       className={className}
-      aria-label="Close"
+      aria-label={collapse ? "Einklappen" : "Close"}
+      title={collapse ? "Einklappen" : undefined}
     >
-      <X size={20} weight="bold" color={color} />
+      <Icon size={20} weight="bold" color={color} />
     </button>
   );
 }

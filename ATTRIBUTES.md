@@ -43,8 +43,8 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-assistant-icon` | Kufer Logo | Avatar-Icon des Assistenten |
 | `data-chat-icon` | `chatBubble` | Icon für den Chat-Button |
 | `data-position` | `bottom-left` | Position: `bottom-left`, `bottom-right`, `top-left`, `top-right` |
-| `data-window-height` | `80%` | Höhe des Chat-Fensters (CSS-Wert) |
-| `data-window-width` | `25%` | Breite des Chat-Fensters (CSS-Wert) |
+| `data-window-height` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterhöhe). |
+| `data-window-width` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterbreite). |
 | `data-text-size` | `14` | Textgröße in px (nur Zahl) |
 | `data-no-header` | `null` | Header ausblenden wenn gesetzt |
 
@@ -151,8 +151,6 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
   data-header-text-color="#FFFFFF"
   data-icon-style="rounded"
   data-position="bottom-right"
-  data-window-height="77%"
-  data-window-width="25%"
   data-brand-text="Mein Assistent"
   data-assistant-name="Mein Assistent"
 

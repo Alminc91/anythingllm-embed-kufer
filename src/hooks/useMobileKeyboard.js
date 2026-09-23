@@ -8,15 +8,20 @@ import { useEffect, useRef, useState } from "react";
 // Vollbild-Overlay dieselbe Logik nutzen.) `active` = das Vollbild-Fenster ist
 // gerade offen; chatWindowRef = das position:fixed-Fenster-Element (darf KEINE
 // von React gesetzte Inline-Höhe tragen, da hier style.height/top/bottom
-// überschrieben bzw. zurückgesetzt werden).
-export default function useMobileKeyboard(chatWindowRef, active) {
+// überschrieben bzw. zurückgesetzt werden). enabled=false: Hook komplett aus
+// (keine Listener), z. B. App.jsx im Inline-Modus.
+export default function useMobileKeyboard(
+  chatWindowRef,
+  active,
+  enabled = true,
+) {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const kbBaselineRef = useRef(0); // groesste je gesehene sichtbare Hoehe (= ohne Tastatur)
   const lastWidthRef = useRef(0);
 
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv || !enabled) return;
     const applyViewport = () => {
       // Tastatur-Erkennung ueber ZWEI Signale (iOS-Robustheit): die sichtbare
       // Hoehe liegt deutlich unter (a) der groessten je gesehenen Hoehe (Baseline =
@@ -58,7 +63,7 @@ export default function useMobileKeyboard(chatWindowRef, active) {
       vv.removeEventListener("resize", applyViewport);
       vv.removeEventListener("scroll", applyViewport);
     };
-  }, [active]);
+  }, [active, enabled]);
 
   return isKeyboardOpen;
 }

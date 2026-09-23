@@ -3,11 +3,15 @@ import SessionId from "../SessionId";
 import useChatHistory from "@/hooks/chat/useChatHistory";
 import ChatContainer from "./ChatContainer";
 import Sponsor from "../Sponsor";
-import { ChatHistoryLoading } from "./ChatContainer/ChatHistory";
+import {
+  ChatHistoryLoading,
+  ScrollArrowSlotContext,
+} from "./ChatContainer/ChatHistory";
 import ConversationHistory from "./ConversationHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
-import { useState } from "react";
+import useEmbedMode from "@/hooks/useEmbedMode";
+import { useEffect, useState } from "react";
 
 export default function ChatWindow({
   closeChat,
@@ -18,8 +22,10 @@ export default function ChatWindow({
   switchConversation = () => {},
   justCreatedRef = null,
   compactHeader = false,
-  closeVariant = "close", // Inline-Box: "collapse" (Chevron statt X)
 }) {
+  const { inline } = useEmbedMode();
+  // Anker für den Scroll-nach-unten-Pfeil (siehe ChatHistory)
+  const [arrowSlot, setArrowSlot] = useState(null);
   // KIE-503: Vollbild-Ansicht "Frühere Chats" statt des Chats anzeigen.
   const [showHistory, setShowHistory] = useState(false);
   // Abschaltbar pro Widget (visual_config im Admin) oder per Script-Attribut;
@@ -42,7 +48,7 @@ export default function ChatWindow({
   // bleiben beim "Zurück" erhalten. Erst eine echte Auswahl einer ANDEREN
   // Konversation wechselt via switchConversation -> loading + Remount.
   const historyOverlay = showHistory ? (
-    // z-[60]: muss ÜBER dem Scroll-nach-unten-Pfeil (z-50, fixed) in ChatHistory
+    // z-[60]: muss ÜBER dem Scroll-nach-unten-Pfeil (z-50) aus ChatHistory
     // liegen, sonst schwebt der Pfeil über der Liste und scrollt den verdeckten Chat.
     <div className="allm-absolute allm-inset-0 allm-z-[60] allm-bg-white allm-rounded-2xl allm-overflow-hidden">
       <ConversationHistory
@@ -57,10 +63,18 @@ export default function ChatWindow({
         }}
         onBack={() => setShowHistory(false)}
         closeChat={closeChat}
-        closeVariant={closeVariant}
       />
     </div>
   ) : null;
+
+  // "Code kopieren": EIN delegierter Click-Listener am Shadow Root für die
+  // Lebensdauer des Fensters (früher bei jedem Render neu angehängt -> Leck).
+  useEffect(() => {
+    const eventTarget = embedderSettings.shadowRoot || document;
+    eventTarget.addEventListener("click", handleCodeSnippetClick);
+    return () =>
+      eventTarget.removeEventListener("click", handleCodeSnippetClick);
+  }, []);
 
   if (loading) {
     return (
@@ -78,7 +92,6 @@ export default function ChatWindow({
           setChatHistory={setChatHistory}
           compact={compactHeader}
           openHistory={openHistory}
-          closeVariant={closeVariant}
         />
         <ChatHistoryLoading />
         <div className="allm-pt-2 allm-pb-3 allm-h-fit">
@@ -88,38 +101,41 @@ export default function ChatWindow({
     );
   }
 
-  setEventDelegatorForCodeSnippets();
-
   return (
-    <div className="allm-flex allm-flex-col allm-h-full allm-relative">
-      {historyOverlay}
-      {!settings.noHeader && (
-        <ChatWindowHeader
-          sessionId={sessionId}
-          conversationId={conversationId}
-          newConversation={newConversation}
-          settings={settings}
-          iconUrl={settings.brandImageUrl}
-          closeChat={closeChat}
-          setChatHistory={setChatHistory}
-          compact={compactHeader}
-          openHistory={openHistory}
-          closeVariant={closeVariant}
-        />
-      )}
-      <div className="allm-flex-grow allm-overflow-y-auto">
-        <ChatContainer
-          key={conversationId}
-          sessionId={sessionId}
-          conversationId={conversationId}
-          settings={settings}
-          knownHistory={chatHistory}
-        />
+    <ScrollArrowSlotContext.Provider value={arrowSlot}>
+      <div className="allm-flex allm-flex-col allm-h-full allm-relative">
+        {historyOverlay}
+        {/* Inline: Header immer (einziger Weg zum Einklappen/Schließen) */}
+        {(!settings.noHeader || inline) && (
+          <ChatWindowHeader
+            sessionId={sessionId}
+            conversationId={conversationId}
+            newConversation={newConversation}
+            settings={settings}
+            iconUrl={settings.brandImageUrl}
+            closeChat={closeChat}
+            setChatHistory={setChatHistory}
+            compact={compactHeader}
+            openHistory={openHistory}
+          />
+        )}
+        <div className="allm-flex-grow allm-overflow-y-auto">
+          <ChatContainer
+            key={conversationId}
+            sessionId={sessionId}
+            conversationId={conversationId}
+            settings={settings}
+            knownHistory={chatHistory}
+          />
+        </div>
+        <div className="allm-pt-2 allm-pb-3 allm-h-fit allm-z-10">
+          <Sponsor settings={settings} />
+        </div>
+        {/* Scroll-Pfeil-Anker: direktes Kind der (relativen) Fenster-Wurzel,
+            AUSSERHALB der Scroll-Container -> wird auf iOS nicht geclippt. */}
+        <div ref={setArrowSlot} />
       </div>
-      <div className="allm-pt-2 allm-pb-3 allm-h-fit allm-z-10">
-        <Sponsor settings={settings} />
-      </div>
-    </div>
+    </ScrollArrowSlotContext.Provider>
   );
 }
 
@@ -153,13 +169,9 @@ function copyCodeSnippet(uuid) {
 }
 
 // Listens and hunts for all data-code-snippet clicks.
-function setEventDelegatorForCodeSnippets() {
-  // Use Shadow Root for event listeners (works with closed Shadow DOM)
-  const eventTarget = embedderSettings.shadowRoot || document;
-  eventTarget.addEventListener("click", function (e) {
-    const target = e.target.closest("[data-code-snippet]");
-    const uuidCode = target?.dataset?.code;
-    if (!uuidCode) return false;
-    copyCodeSnippet(uuidCode);
-  });
+function handleCodeSnippetClick(e) {
+  const target = e.target.closest("[data-code-snippet]");
+  const uuidCode = target?.dataset?.code;
+  if (!uuidCode) return false;
+  copyCodeSnippet(uuidCode);
 }

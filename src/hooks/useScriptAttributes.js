@@ -7,6 +7,11 @@ import {
   layoutValidations,
 } from "@/utils/layout";
 
+// Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
+// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
+// / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
+const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
+
 const DEFAULT_SETTINGS = {
   embedId: null, //required
   baseApiUrl: null, // required
@@ -40,10 +45,12 @@ const DEFAULT_SETTINGS = {
   assistantName: "Ihr Online-Berater", // default assistant name
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
-  // Fenstergröße der Blase (Tablet/Desktop). null = bisherige Standardgröße
-  // (40 % / 25 % Breite, 77 % Höhe per Klassen). Früher standen hier "80%"/"25%",
-  // die aber nie ausgewertet wurden — NICHT wieder vorbelegen, sonst ändert sich
-  // das Aussehen aller Bestandskunden.
+  // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
+  // (Server-Config). null = bisherige Standardgröße (40 % / 25 % Breite, 77 %
+  // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
+  // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
+  // Bestandskunden. data-window-width/-height am Script werden verworfen
+  // (SERVER_ONLY_SETTINGS).
   windowHeight: null, // z. B. "600px" | "80%" | "70vh"
   windowWidth: null, // z. B. "420px" | "25%" | "30vw"
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
@@ -106,6 +113,7 @@ export default function useGetScriptAttributes() {
       const scriptSettings = parseAndValidateEmbedSettings(
         embedderSettings.settings
       );
+      for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
 
       // Fetch live visual config from server (admin panel settings)
       let serverConfig = {};
