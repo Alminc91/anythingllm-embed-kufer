@@ -20,9 +20,16 @@ vi.mock("../src/main.jsx", () => ({
   },
   inlineTailwindStyles: () => Promise.resolve(false),
 }));
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k) => k }),
-}));
+// Texte aus der deutschen Locale (Hinweis-Chip, Link, Tooltip)
+vi.mock("react-i18next", async () => {
+  const de = (await import("../src/locales/de/common.js")).default;
+  const t = (k, vars = {}) =>
+    String(k.split(".").reduce((o, p) => o?.[p], de) ?? k).replace(
+      /\{\{(\w+)\}\}/g,
+      (_, v) => vars[v] ?? "",
+    );
+  return { useTranslation: () => ({ t }) };
+});
 vi.mock("@/components/ChatWindow/ChatContainer/ChatHistory", () => ({
   default: ({ history }) => (
     <ol id="history">
@@ -41,8 +48,11 @@ import { embedderSettings } from "../src/main.jsx";
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import useConversationId from "../src/hooks/useConversationId.js";
 import ChatService from "../src/models/chatService.js";
+import { summarizeHistory } from "../src/utils/chat/index.js";
+import { formatDate } from "../src/utils/date.js";
 import {
   DEFAULT_INLINE_RESUME_PLACEHOLDER,
+  INLINE_CHIPS_MAX_WITH_HINT,
   resumeHintEnabled,
 } from "../src/utils/layout.js";
 import InlineChat from "../src/components/InlineChat/index.jsx";
@@ -54,7 +64,7 @@ const BASE = {
 const CONV_KEY = `allm_${BASE.embedId}_conversation_id`;
 const SENT_AT = 1759651200; // 05.10.2025 10:00 Uhr (Europe/Berlin)
 // Verlauf mit Quellen samt Text (dürfte der Server nach Hotfix #32 nicht
-// liefern) — der Hinweis darf davon nichts verwenden
+// liefern) — der Hinweis darf davon nichts verwenden. 4 Nachrichten = 2 Fragen.
 const HISTORY_4 = [
   { role: "user", content: "Gibt es Yoga?", sentAt: SENT_AT },
   {
@@ -82,7 +92,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   history = HISTORY_4;
-  embedderSettings.settings = { embedId: BASE.embedId };
+  embedderSettings.settings = { embedId: BASE.embedId, language: "de" };
   localStorage.clear();
   localStorage.setItem(CONV_KEY, "c-1");
   fetchMock = vi.fn(async (url) => {
@@ -191,6 +201,33 @@ describe("Settings inlineResumeHint / inlineResumePlaceholder", () => {
     expect(s.inlineResumePlaceholder).toBe("Weiter …");
   });
 
+  it("Texte inlineResumeText (≤ 120) / inlineRestartText (≤ 40): Script-Attribut, visual_config", async () => {
+    const cfg = (c) => vi.fn(async () => ({ ok: true, json: async () => c }));
+    let s = await loadEmbedSettings({ ...BASE }, cfg({}));
+    expect(s.inlineResumeText).toBeNull();
+    expect(s.inlineRestartText).toBeNull();
+    s = await loadEmbedSettings(
+      {
+        ...BASE,
+        inlineResumeText: " Weiter im Gespräch ",
+        inlineRestartText: "Von vorn",
+      },
+      cfg({ inlineRestartText: "Neu beginnen" }),
+    );
+    expect(s.inlineResumeText).toBe("Weiter im Gespräch");
+    expect(s.inlineRestartText).toBe("Neu beginnen");
+    s = await loadEmbedSettings(
+      {
+        ...BASE,
+        inlineResumeText: "x".repeat(121),
+        inlineRestartText: "y".repeat(41),
+      },
+      cfg({}),
+    );
+    expect(s.inlineResumeText).toBeNull();
+    expect(s.inlineRestartText).toBeNull();
+  });
+
   it("AK-10: visual_config mit allen drei Varianten, ohne Script-Attribute", async () => {
     const cfg = vi.fn(async () => ({
       ok: true,
@@ -237,7 +274,8 @@ describe("Settings inlineResumeHint / inlineResumePlaceholder", () => {
 describe("NAK-4: Verlaufsabfrage liefert nur Anzahl und Zeitstempel", () => {
   it("Mock mit Quellen-Text -> nur { count, lastAt }", async () => {
     const summary = await ChatService.embedHistorySummary(BASE, "s-1", "c-1");
-    expect(summary).toEqual({ count: 4, lastAt: SENT_AT + 65 });
+    // Anzahl der Fragen (user-Einträge), nicht der Nachrichten
+    expect(summary).toEqual({ count: 2, lastAt: SENT_AT + 65 });
     expect(Object.keys(summary)).toEqual(["count", "lastAt"]);
     expect(JSON.stringify(summary)).not.toContain("GEHEIM");
     expect(String(fetchMock.mock.calls[0][0])).toBe(
@@ -265,10 +303,43 @@ describe("NAK-4: Verlaufsabfrage liefert nur Anzahl und Zeitstempel", () => {
   });
 });
 
+describe("Zählweise: nur gespeicherte Fragen", () => {
+  it("Platzhalter (pending) und Fehler-Blasen zählen nicht, auch nicht deren Frage", () => {
+    expect(summarizeHistory(HISTORY_4)).toEqual({
+      count: 2,
+      lastAt: SENT_AT + 65,
+    });
+    const local = [
+      ...HISTORY_4,
+      { role: "user", content: "Kaputt?", sentAt: SENT_AT + 100 },
+      { role: "assistant", error: true, sentAt: SENT_AT + 101 },
+      { role: "user", content: "Läuft?", sentAt: SENT_AT + 200 },
+      { role: "assistant", pending: true, sentAt: SENT_AT + 201 },
+    ];
+    expect(summarizeHistory(local)).toEqual({
+      count: 2,
+      lastAt: SENT_AT + 65,
+    });
+    expect(summarizeHistory([])).toEqual({ count: 0, lastAt: null });
+    expect(
+      summarizeHistory([{ role: "assistant", content: "Willkommen" }]),
+    ).toEqual({ count: 0, lastAt: null });
+  });
+
+  it("formatDate({ withDate: true }): deutsch DD.MM.YYYY, HH:MM:SS Uhr", () => {
+    expect(formatDate(SENT_AT + 65, { withDate: true })).toMatch(
+      /^0[45]\.10\.2025, \d{2}:01:05 Uhr$/,
+    );
+    expect(formatDate(null, { withDate: true })).toBe("");
+    expect(formatDate(SENT_AT)).toMatch(/^\d{2}:00 Uhr$/); // unverändert
+  });
+});
+
 describe("AK-8: Hinweis auf Unterhaltung", () => {
-  it("Chip „Unterhaltung fortsetzen (4)“ vor den Wunschfragen, Link „Neu starten“, Platzhalter „Weiter fragen …“", async () => {
+  it("Chip „Unterhaltung fortsetzen (2)“ vor den Wunschfragen, Link „Neu starten“, Platzhalter „Weiter fragen …“", async () => {
     const ui = await setup();
-    expect(ui.chip().textContent).toBe("Unterhaltung fortsetzen (4)");
+    // 4 Nachrichten = 2 Fragen
+    expect(ui.chip().textContent).toBe("Unterhaltung fortsetzen (2)");
     expect(ui.chipRow().firstElementChild).toBe(ui.chip());
     expect(ui.chip().nextElementSibling).toBe(ui.restart());
     expect(ui.restart().textContent).toBe("Neu starten");
@@ -304,7 +375,43 @@ describe("AK-8: Hinweis auf Unterhaltung", () => {
     ]);
     ui.collapse();
     expect(ui.open()).toBe(false);
-    expect(ui.chip().textContent).toBe("Unterhaltung fortsetzen (4)");
+    expect(ui.chip().textContent).toBe("Unterhaltung fortsetzen (2)");
+  });
+
+  it("Link „Neu starten“ in Link-Farbe mit Unterstreichung (index.css), Chip mit gemeinsamem Chip-Stil", async () => {
+    const ui = await setup();
+    expect(ui.restart().className).toContain("allm-inline-restart");
+    expect(ui.restart().style.fontSize).toBe("13px");
+    const chipStyle = ui.chip().style;
+    const wish = ui.chipRow().querySelector(".allm-inline-chip").style;
+    for (const prop of ["padding", "borderRadius", "backgroundColor", "color"])
+      expect(chipStyle[prop]).toBe(wish[prop]);
+    expect(wish.border).toContain("var(--allmi-bar-border");
+  });
+
+  it("eigene Texte inlineResumeText / inlineRestartText, Anzahl angehängt", async () => {
+    const ui = await setup({
+      inlineResumeText: "Weiter im Gespräch",
+      inlineRestartText: "Von vorn",
+    });
+    expect(ui.chip().textContent).toBe("Weiter im Gespräch (2)");
+    expect(ui.restart().textContent).toBe("Von vorn");
+  });
+
+  it("mit Hinweis höchstens 3 Wunschfragen-Chips, ohne Hinweis bis 6", async () => {
+    const six = ["A", "B", "C", "D", "E", "F", "G"];
+    const ui = await setup({ defaultMessages: six });
+    const wishes = () =>
+      [...ui.chipRow().querySelectorAll(".allm-inline-chip")].map(
+        (b) => b.textContent,
+      );
+    expect(INLINE_CHIPS_MAX_WITH_HINT).toBe(3);
+    expect(ui.chip()).not.toBeNull();
+    expect(wishes()).toEqual(["A", "B", "C"]);
+    click(ui.restart());
+    await flush();
+    expect(ui.chip()).toBeNull();
+    expect(wishes()).toEqual(["A", "B", "C", "D", "E", "F"]);
   });
 
   it("eigener Platzhalter inlineResumePlaceholder", async () => {

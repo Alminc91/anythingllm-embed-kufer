@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 
 // Inline-Box, Variante B (inlineCloseOn "leave"): schwebende Box klappt ein,
 // wenn der Zeiger Box + Leiste verlässt, nach --allm-leave-delay; Sperren bei
-// laufender Antwort, Fokus im Eingabefeld, offenem Menü/„Frühere Chats“; nur
+// laufender Antwort, Tastatur-Fokus bzw. Entwurf im fokussierten Feld, offenem
+// Menü/„Frühere Chats“ (ohne Timer-Nachprüfung, Neustart bei Sperr-Ende); nur
 // overlay, feiner Zeiger, ab 768px. Echtes ChatWindow/ChatContainer (meldet
 // den Antwort-Zustand), Backend ersetzt, Fake-Timer.
 // Browser-Prüfung: tests/visual/inline_input.py (ii-leave-close).
@@ -62,6 +63,13 @@ const BASE = {
   baseApiUrl: "https://praesentation.ki.kufer.de/api/embed",
 };
 
+// jsdom kennt keinen Zeiger: :hover (Zeiger über der Inline-Fläche) und
+// optional :focus-visible werden gesteuert. Standard: Zeiger steht auf der
+// Leiste (geöffnet per Klick).
+const nativeMatches = Element.prototype.matches;
+let pointerOnBox;
+let focusVisible;
+
 let container;
 let root;
 let warn;
@@ -76,6 +84,14 @@ beforeEach(() => {
   chatService.streamChat.mockImplementation(() => new Promise(() => {}));
   chatService.embedSessionHistory.mockImplementation(async () => []);
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  pointerOnBox = true;
+  focusVisible = null; // null = jsdom (trifft wie :focus)
+  vi.spyOn(Element.prototype, "matches").mockImplementation(function (sel) {
+    if (sel === ":hover")
+      return pointerOnBox && this.id === "anything-llm-embed-inline";
+    if (sel === ":focus-visible" && focusVisible !== null) return focusVisible;
+    return nativeMatches.call(this, sel);
+  });
   matchMediaBefore = window.matchMedia;
   innerWidthBefore = window.innerWidth;
 });
@@ -275,21 +291,60 @@ describe('AK-5: inlineCloseOn "leave" mit Karenz', () => {
     expect(document.activeElement).not.toBe(ui.input());
   });
 
-  it("Fokus lag auf einem (per Maus geklickten) Knopf im Panel -> zurück auf die Leiste", async () => {
+  it("Fokus lag auf einem (per Maus geklickten) Knopf im Panel -> gelöst, nicht auf die Leiste", async () => {
     setDelay();
     const ui = setup();
     await openUnfocused(ui);
     // jsdom wertet :focus-visible wie :focus; im Browser trifft es nach einem
     // Mausklick auf einen Knopf nicht zu
-    const matches = Element.prototype.matches;
-    vi.spyOn(Element.prototype, "matches").mockImplementation(function (sel) {
-      return sel === ":focus-visible" ? false : matches.call(this, sel);
-    });
+    focusVisible = false;
     act(() => container.querySelector('button[aria-label="Options"]').focus());
     ui.leave();
     await advance(200);
     expect(ui.collapsed()).toBe(true);
-    expect(document.activeElement).toBe(ui.input());
+    expect(document.activeElement).not.toBe(ui.input());
+    expect(container.contains(document.activeElement)).toBe(false);
+  });
+
+  it("Enter-Öffnen bei Zeiger außerhalb (kein pointerleave): Karenz läuft sofort", async () => {
+    setDelay();
+    pointerOnBox = false;
+    const ui = setup();
+    ui.submit(); // Enter in der Leiste, leer
+    await flush();
+    expect(document.activeElement).toBe(ui.message()); // automatisch, leer
+    await advance(199);
+    expect(ui.open()).toBe(true);
+    await advance(1);
+    expect(ui.collapsed()).toBe(true);
+  });
+
+  it("Zeiger über der Box beim Öffnen: bleibt offen bis zum Verlassen", async () => {
+    setDelay();
+    const ui = setup();
+    ui.submit();
+    await flush();
+    await advance(3000);
+    expect(ui.open()).toBe(true);
+  });
+
+  it(":hover trägt nicht -> letzte Zeigerposition (elementFromPoint) entscheidet", async () => {
+    setDelay();
+    pointerOnBox = false;
+    const ui = setup();
+    // Zeiger bewegt sich über die Leiste (vor dem Öffnen)
+    act(() =>
+      document.dispatchEvent(
+        new MouseEvent("pointermove", { clientX: 40, clientY: 20 }),
+      ),
+    );
+    document.elementFromPoint = vi.fn(() => ui.input());
+    ui.submit();
+    await flush();
+    await advance(3000);
+    expect(document.elementFromPoint).toHaveBeenCalledWith(40, 20);
+    expect(ui.open()).toBe(true);
+    delete document.elementFromPoint;
   });
 
   it("Karenz aus --allm-leave-delay (200 ms); Rückkehr innerhalb der Karenz -> bleibt offen", async () => {
@@ -319,16 +374,67 @@ describe('AK-5: inlineCloseOn "leave" mit Karenz', () => {
 });
 
 describe("AK-6: Sperren", () => {
-  it("(a) Panel-Eingabe fokussiert -> bleibt offen; nach Blur + erneutem Verlassen schließt es", async () => {
+  it("(a) leeres, automatisch fokussiertes Feld sperrt nicht; Entwurf sperrt", async () => {
     setDelay();
     const ui = setup();
     ui.submit();
     await flush();
     expect(document.activeElement).toBe(ui.message()); // Fokus nach dem Öffnen
     ui.leave();
+    await advance(200);
+    expect(ui.collapsed()).toBe(true); // leer -> keine Sperre
+    ui.submit(); // wieder öffnen (jsdom ohne Shadow-Root: Fokus von Hand)
+    await flush();
+    act(() => ui.message().focus());
+    typeInto(ui.message(), "Und am Morgen?");
+    ui.enter();
+    ui.leave();
+    await advance(3000);
+    expect(ui.open()).toBe(true); // Entwurf im fokussierten Feld
+    // keine Nachprüfung per Timer während der Sperre
+    expect(vi.getTimerCount()).toBe(0);
+    // Entwurf geleert (input) -> volle Karenz ab jetzt, ohne erneutes Verlassen
+    typeInto(ui.message(), "");
+    await advance(199);
+    expect(ui.open()).toBe(true);
+    await advance(1);
+    expect(ui.collapsed()).toBe(true);
+  });
+
+  it("(a) Entwurf: Fokus verlässt das Feld (focusout) -> volle Karenz, Entwurf bleibt", async () => {
+    setDelay();
+    const ui = setup();
+    ui.submit();
+    await flush();
+    typeInto(ui.message(), "Und am Morgen?");
+    ui.leave();
     await advance(3000);
     expect(ui.open()).toBe(true);
     ui.blur();
+    await advance(199);
+    expect(ui.open()).toBe(true);
+    await advance(1);
+    expect(ui.collapsed()).toBe(true);
+    ui.submit();
+    await flush();
+    expect(ui.message().value).toBe("Und am Morgen?");
+  });
+
+  it("(a) per Tab erreichtes (leeres) Feld sperrt; Zeiger-Klick hebt das auf", async () => {
+    setDelay();
+    const ui = setup();
+    await openUnfocused(ui);
+    act(() =>
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+      ),
+    );
+    act(() => ui.message().focus());
+    ui.leave();
+    await advance(3000);
+    expect(ui.open()).toBe(true);
+    // Klick (Zeiger) ins Feld: kein Tastatur-Fokus mehr
+    pointer(ui.message(), "pointerdown", "mouse", { bubbles: true, button: 0 });
     ui.enter();
     ui.leave();
     await advance(200);
@@ -353,7 +459,6 @@ describe("AK-6: Sperren", () => {
     ui.submit("Gibt es Yogakurse?");
     await flush();
     expect(chatService.streamChat).toHaveBeenCalledTimes(1);
-    ui.blur();
     ui.leave();
     await advance(1000);
     expect(ui.open()).toBe(true); // wartet auf erstes Wort
@@ -362,7 +467,6 @@ describe("AK-6: Sperren", () => {
       textResponse: "Ja, ",
       close: false,
     });
-    ui.blur(); // Fokus kommt nach dem ersten Wort zurück ins Feld
     await advance(1000);
     expect(ui.open()).toBe(true); // Tokens laufen
     stream.chunk({
@@ -371,13 +475,10 @@ describe("AK-6: Sperren", () => {
       close: true,
     });
     stream.chunk({ type: "finalizeResponseStream", close: true, chatId: 9 });
-    ui.blur();
-    // 1100 ms: die Sperr-Prüfung (alle 200 ms) liegt jetzt 100 ms nach dem
-    // Stream-Ende -> nur der Neustart der Karenz hält das Panel offen
     await advance(1100);
     expect(ui.open()).toBe(true); // Verbindung noch offen
     await act(async () => stream.end()); // Stream zu Ende
-    ui.blur();
+    // Fokus liegt jetzt automatisch im leeren Chat-Feld: sperrt nicht
     await advance(199);
     expect(ui.open()).toBe(true); // mindestens die Karenz nach Ende
     await advance(1);
@@ -420,6 +521,26 @@ describe("AK-6: Sperren", () => {
     ui.leave();
     await advance(3000);
     expect(ui.open()).toBe(true);
+  });
+});
+
+describe("Sperr-Ende ohne erneutes Verlassen (Zeiger bleibt draußen)", () => {
+  it("Menü schließt -> volle Karenz, dann zu; kein Timer während der Sperre", async () => {
+    setDelay();
+    const ui = setup();
+    await openUnfocused(ui);
+    ui.options();
+    ui.blur();
+    ui.leave();
+    await advance(3000);
+    expect(ui.open()).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    ui.options(); // Menü zu (MutationObserver)
+    await flush();
+    await advance(199);
+    expect(ui.open()).toBe(true);
+    await advance(1);
+    expect(ui.collapsed()).toBe(true);
   });
 });
 

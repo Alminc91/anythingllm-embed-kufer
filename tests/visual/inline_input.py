@@ -975,6 +975,7 @@ def act_focus_open(page):
 
 
 def act_leave_close(page):
+    page.mouse.move(*center_of(page, "#anything-llm-inline-input", 20))  # Zeiger auf der Leiste
     page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
     page.keyboard.press("Enter")  # leer: nur aufklappen
     tv.wait_shadow(page, "#message-input")
@@ -1055,10 +1056,12 @@ def check_focus_open(browser, base_url):
         ctx.close()
 
 
-def open_leave_page(browser, base_url, m, attrs=LEAVE, viewport=None, context_options=None):
+def open_leave_page(browser, base_url, m, attrs=LEAVE, viewport=None, context_options=None, pointer=True):
+    """Box per Enter öffnen; pointer=True: Zeiger steht dabei auf der Leiste (sonst bei OUTSIDE)."""
     ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": LEAVE_CSS}, m,
                              viewport=viewport, context_options=context_options)
     tv.wait_shadow(page, "#anything-llm-inline-input")
+    page.mouse.move(*(center_of(page, "#anything-llm-inline-input", 20) if pointer else OUTSIDE))
     page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
     page.keyboard.press("Enter")
     tv.wait_shadow(page, "#message-input")
@@ -1067,16 +1070,15 @@ def open_leave_page(browser, base_url, m, attrs=LEAVE, viewport=None, context_op
 
 
 def check_leave(browser, base_url):
-    """AK-5 Karenz (200 ms per --allm-leave-delay), Rückkehr, AK-6a Fokus,
+    """AK-5 Karenz (200 ms per --allm-leave-delay), Rückkehr, AK-6a Sperre nur bei
+    Tastatur-Fokus oder Entwurf (leeres, automatisch fokussiertes Feld sperrt nicht),
+    Sperr-Ende ohne erneutes Verlassen, Enter-Öffnen bei Zeiger außerhalb,
     NAK-1 Antwort läuft, AK-7 Verlauf/Entwurf, NAK-2 Touch/mobil."""
     m = mock(history=tv.HISTORY_ANSWER)
     ctx, page = open_leave_page(browser, base_url, m)
     try:
         delay = page.evaluate("() => window.__hostVar('--allmi-leave-delay')")
-        page.mouse.move(*OUTSIDE)
-        page.wait_for_timeout(500)
-        locked_focus = is_open(page) and active_id(page) == "message-input"
-        blur_in_panel(page)
+        focus_before = active_id(page)  # automatisch im leeren Chat-Feld
         page.mouse.move(*OUTSIDE)
         page.wait_for_timeout(120)
         mid = is_open(page)
@@ -1087,11 +1089,15 @@ def check_leave(browser, base_url):
         page.mouse.move(*OUTSIDE)
         page.wait_for_timeout(450)
         closed = not is_open(page)
-        record("LV AK-6a Fokus in der Panel-Eingabe sperrt", locked_focus, f"offen={locked_focus}")
+        focus_after = active_id(page)
+        record("LV AK-6a leeres, automatisch fokussiertes Feld sperrt nicht", focus_before == "message-input" and closed
+               and focus_after != "anything-llm-inline-input",
+               f"Fokus vorher={focus_before}, zu={closed}, Fokus danach={focus_after}")
         record("LV AK-5 Schließen nach --allm-leave-delay, Rückkehr bricht ab", mid and back and closed
                and expanded_attr(page) is None and delay == "200ms",
                f"Karenz={delay}, nach 120 ms offen={mid}, nach Rückkehr offen={back}, nach Verlassen zu={closed}")
         # AK-7: wieder öffnen -> Verlauf da
+        page.mouse.move(*center_of(page, "#anything-llm-inline-input", 20))
         page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
         page.keyboard.press("Enter")
         page.wait_for_timeout(600)
@@ -1099,24 +1105,58 @@ def check_leave(browser, base_url):
         record("LV AK-7 Verlauf nach leave erhalten", is_open(page) and msgs == 2, f"Nachrichten={msgs}")
     finally:
         ctx.close()
-    # NAK-1: Antwort läuft -> bleibt offen
+    # AK-6a Entwurf sperrt; Entwurf gelöscht -> volle Karenz, zu (ohne erneutes Verlassen)
+    ctx, page = open_leave_page(browser, base_url, mock())
+    try:
+        page.keyboard.type("Yoga")
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(800)
+        locked = is_open(page)
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(120)
+        mid = is_open(page)
+        page.wait_for_timeout(330)
+        record("LV AK-6a Entwurf sperrt; geleert -> Karenz, zu", locked and mid and not is_open(page),
+               f"mit Entwurf offen={locked}, 120 ms nach Löschen offen={mid}, danach zu={not is_open(page)}")
+    finally:
+        ctx.close()
+    # AK-6a Tastatur: Tab zur Leiste, Enter (Zeiger außerhalb) -> Fokus im Feld sperrt
+    ctx, page = tv.open_page(browser, base_url, {"attrs": LEAVE, "inline": True, "css": LEAVE_CSS}, mock())
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.mouse.move(*OUTSIDE)
+        page.keyboard.press("Tab")
+        page.keyboard.press("Enter")
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(800)
+        record("LV AK-6a Tastatur (Tab, Enter): Fokus im Feld sperrt", is_open(page)
+               and active_id(page) == "message-input", f"offen={is_open(page)}, Fokus={active_id(page)}")
+    finally:
+        ctx.close()
+    # Enter-Öffnen bei Zeiger außerhalb (kein pointerleave): schließt nach der Karenz
+    ctx, page = open_leave_page(browser, base_url, mock(), pointer=False)
+    try:
+        page.wait_for_timeout(200)
+        record("LV Enter-Öffnen bei Zeiger außerhalb: zu nach Karenz", not is_open(page),
+               f"zu={not is_open(page)}")
+    finally:
+        ctx.close()
+    # NAK-1: Antwort läuft -> bleibt offen; nach dem Ende zu, ohne erneutes Verlassen
     m = mock(stream="hang")
     ctx, page = open_leave_page(browser, base_url, m)
     try:
         page.keyboard.type(QUESTION)
         page.keyboard.press("Enter")
         page.wait_for_timeout(300)
-        blur_in_panel(page)
         page.mouse.move(*OUTSIDE)
         page.wait_for_timeout(1500)
         during = is_open(page)
         m.release()  # Antwort endet (Abbruch)
         page.wait_for_timeout(1000)
-        blur_in_panel(page)
-        page.mouse.move(*OUTSIDE)
-        page.wait_for_timeout(450)
-        record("LV NAK-1 kein Schließen während der Antwort", during and not is_open(page) and len(m.stream_requests) == 1,
-               f"offen während Antwort={during}, nach Ende + Verlassen zu={not is_open(page)}")
+        record("LV NAK-1 kein Schließen während der Antwort; danach zu ohne erneutes Verlassen",
+               during and not is_open(page) and len(m.stream_requests) == 1,
+               f"offen während Antwort={during}, nach Ende zu={not is_open(page)}")
     finally:
         ctx.close()
     # NAK-2: Touch (pointer: coarse) und 390 px
@@ -1171,11 +1211,21 @@ def check_resume(browser, base_url, main_dist=None):
               first: window.__q('#anything-llm-inline-chips').firstElementChild.id,
               link: window.__q('#anything-llm-inline-restart').textContent,
               linkColor: getComputedStyle(window.__q('#anything-llm-inline-restart')).color,
+              linkDeco: getComputedStyle(window.__q('#anything-llm-inline-restart')).textDecorationLine,
+              linkVar: window.__hostVar('--allmi-link'),
+              weight: getComputedStyle(window.__q('#anything-llm-inline-resume')).fontWeight,
+              wishes: window.__allmShadow.querySelectorAll('.allm-inline-chip').length,
+              rows: new Set([...window.__q('#anything-llm-inline-chips').children]
+                .map((c) => { const r = c.getBoundingClientRect(); return Math.round(r.top + r.height / 2); })).size,
               border: getComputedStyle(window.__q('#anything-llm-inline-resume')).borderTopColor,
               placeholder: window.__q('#anything-llm-inline-input').placeholder })""")
-        ok = (st["chip"] == "Unterhaltung fortsetzen (4)" and st["first"] == "anything-llm-inline-resume"
+        # 4 Nachrichten = 2 Fragen; mit Hinweis höchstens 3 der 4 Wunschfragen;
+        # Link in --allm-link (praesentation #FFA102), unterstrichen
+        ok = (st["chip"] == "Unterhaltung fortsetzen (2)" and st["first"] == "anything-llm-inline-resume"
               and st["link"] == "Neu starten" and st["placeholder"] == "Weiter fragen …"
-              and st["border"] == "rgb(255, 161, 2)")
+              and st["border"] == "rgb(255, 161, 2)" and st["linkColor"] == "rgb(255, 161, 2)"
+              and st["linkDeco"] == "underline" and st["weight"] == "600" and st["wishes"] == 3
+              and st["rows"] == 1)
         record("LV AK-8 Hinweis-Chip, Link, Platzhalter", ok, json.dumps(st, ensure_ascii=False))
         page.mouse.click(*center_of(page, "#anything-llm-inline-resume"))
         page.wait_for_function(
@@ -1184,6 +1234,9 @@ def check_resume(browser, base_url, main_dist=None):
         record("LV AK-8 Klick öffnet Panel mit 4 Nachrichten", is_open(page), f"offen={is_open(page)}")
         click_collapse(page)
         page.wait_for_timeout(300)
+        chip_after = page.evaluate("() => window.__q('#anything-llm-inline-resume')?.textContent")
+        record("LV AK-8 nach dem Einklappen: Chip zählt Fragen (Chat meldet)", chip_after == "Unterhaltung fortsetzen (2)",
+               f"Chip={chip_after!r}")
         before = page.evaluate("() => Object.entries(localStorage).filter(([k]) => k.endsWith('_conversation_id'))")
         page.mouse.click(*center_of(page, "#anything-llm-inline-restart"))
         page.wait_for_timeout(500)
@@ -1191,10 +1244,12 @@ def check_resume(browser, base_url, main_dist=None):
         st = page.evaluate(
             """() => ({ chip: !!window.__q('#anything-llm-inline-resume'), link: !!window.__q('#anything-llm-inline-restart'),
               placeholder: window.__q('#anything-llm-inline-input').placeholder })""")
+        wishes = page.evaluate("() => window.__allmShadow.querySelectorAll('.allm-inline-chip').length")
         ok = (before and after and before[0][1] != after[0][1] and not st["chip"] and not st["link"]
-              and st["placeholder"] == "Stellen Sie hier Ihre Frage …" and not is_open(page))
+              and st["placeholder"] == "Stellen Sie hier Ihre Frage …" and not is_open(page) and wishes == 4)
         record("LV AK-9 Neu starten (neue conversationId, Chip weg, Panel zu)", ok,
-               f"conversationId {before[0][1] if before else None} -> {after[0][1] if after else None}, {json.dumps(st, ensure_ascii=False)}")
+               f"conversationId {before[0][1] if before else None} -> {after[0][1] if after else None}, "
+               f"{json.dumps(st, ensure_ascii=False)}, Wunschfragen={wishes}")
     finally:
         ctx.close()
     # NAK-3: Anfragen beim Laden ohne Option = main; mit Option genau eine Verlaufsabfrage mehr
@@ -1230,10 +1285,11 @@ def check_resume(browser, base_url, main_dist=None):
         page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
         page.wait_for_timeout(800)
         opened = is_open(page)
-        blur_in_panel(page)
+        focus = active_id(page)  # Klick öffnet -> Fokus automatisch im leeren Feld, sperrt nicht
         page.mouse.move(*OUTSIDE)
         page.wait_for_timeout(500)
-        record("LV AK-10 visual_config (focus, leave, Hinweis)", hint == "Unterhaltung fortsetzen (4)" and opened
+        record("LV AK-10 visual_config (focus, leave, Hinweis)", hint == "Unterhaltung fortsetzen (2)" and opened
+               and focus == "message-input"
                and not is_open(page), f"Hinweis={hint!r}, Klick öffnet={opened}, leave schließt={not is_open(page)}")
     finally:
         ctx.close()
