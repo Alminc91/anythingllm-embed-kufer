@@ -178,14 +178,28 @@ def auto_verdict(r, sel):
 COURSE_PAGE_RX = re.compile(r"/(kurs|kurssuche/kurs|kursdetails/kurs|veranstaltungssuche/kurs)/[^/]+/[^/?#]*\d")
 
 
+COURSE_CARDS_MAX = 5  # wie src/utils/courseCards.js
+
+
 def ak8_verdict(sel):
-    """Jede verlinkte Kursseite hat eine Karte (Kompaktliste zählt mit)."""
+    """Jede verlinkte Kursseite hat eine Karte (Kompaktliste zählt mit).
+
+    Über dem Kartenlimit (5 Karten, `above` kappt ohne Kompaktliste) gelten
+    Links als abgedeckt, wenn „weitere Kurse im Programm“ erscheint
+    (`more` > 0) — höchstens so viele, wie `more` zählt.
+    """
     course_links = [k for k in sel["allLinkKeys"] if COURSE_PAGE_RX.search("/" + k.split("/", 1)[-1])]
     if not course_links:
         return None, "keine Kurslinks"
     cards = set(sel["cardKeys"])
     missing = [k for k in course_links if k not in cards]
+    more = sel.get("more") or 0
+    covered = []
+    if missing and more > 0 and len(cards) >= COURSE_CARDS_MAX:
+        covered, missing = missing[:more], missing[more:]
     note = f"Kurslinks {len(course_links)}, Karten {len(cards)}"
+    if covered:
+        note += f"; {len(covered)} über dem Kartenlimit (weitere Kurse)"
     if missing:
         note += "; ohne Karte: " + ", ".join(m.rsplit("/", 2)[-2] for m in missing)
     return not missing, note

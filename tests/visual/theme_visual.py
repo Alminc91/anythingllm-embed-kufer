@@ -62,7 +62,8 @@ EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
 VIEWPORT = {"width": 1000, "height": 700}
 MOBILE = {"width": 390, "height": 700}
 MAX_DIFF_RATIO = 0.001  # 0,1 %
-BASE_JS_SIZE = 726_755  # Image 7.8 / main vor diesem Issue
+# Basis = main nach Kurskarten v1/Overlay (Build von origin/main, 2026-10-05)
+BASE_JS_SIZE = 758_606
 BASE_CSS_SIZE = 19_529
 
 # Stand der visual_config von praesentation (05.10.2026), damit der Test nicht
