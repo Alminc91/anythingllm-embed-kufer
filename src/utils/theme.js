@@ -46,6 +46,9 @@ export const BAR_THEMES = {
   },
 };
 
+// Schrift/Icon auf Akzent-Flächen der Leiste (Icon-Kreis, Absende-Knopf).
+export const ON_ACCENT_TEXT = "#FFFFFF";
+
 // Dunkler Satz (Kontrast geprüft, siehe README/Test AK-4): Text auf Fenster
 // 15,0:1, Antworttext auf Blase 12,8:1, Link auf Blase 7,2:1, gedämpft auf
 // Fenster 7,1:1 / auf Eingabefeld 6,3:1, Rahmen auf Fenster 4,0:1 / auf

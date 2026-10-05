@@ -10,6 +10,8 @@ export default function ChatContainer({
   conversationId = null,
   settings,
   knownHistory = [],
+  pendingFirstMessage = null,
+  consumePendingFirstMessage = null,
 }) {
   const [message, setMessage] = useState("");
   const [loadingResponse, setLoadingResponse] = useState(false);
@@ -142,6 +144,23 @@ export default function ChatContainer({
   useEffect(() => {
     return () => streamControllerRef.current?.abort();
   }, []);
+
+  // Inline-Leiste (inlineInput): Frage bzw. Entwurf aus der eingeklappten
+  // Leiste übernehmen. Dieser Container wird erst nach dem Laden des Verlaufs
+  // gemountet (ChatWindow zeigt vorher die Ladeanzeige) -> hier ist der Chat
+  // bereit. consumePendingFirstMessage() liefert den Wert genau EINMAL (auch
+  // bei doppelt laufendem Effect/StrictMode) -> keine Doppelsendung.
+  // send: über denselben Pfad wie ein Vorschlag/Senden (sendCommand ->
+  // fetchReply -> ChatService.streamChat, inkl. conversationId); läuft gerade
+  // noch eine Antwort, wird gewartet. Entwurf (send false): nur ins Eingabefeld.
+  useEffect(() => {
+    if (!pendingFirstMessage || !consumePendingFirstMessage) return;
+    if (pendingFirstMessage.send && loadingResponse) return;
+    const pending = consumePendingFirstMessage();
+    if (!pending?.text) return;
+    if (pending.send) sendCommand(pending.text, [], []);
+    else setMessage(pending.text);
+  }, [pendingFirstMessage, loadingResponse]);
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;
