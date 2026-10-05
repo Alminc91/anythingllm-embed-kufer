@@ -16,13 +16,13 @@ import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
 import CourseCards from "../CourseCards";
-import { stripCardsMarker } from "@/utils/courseCards";
+import AssistantName from "../AssistantName";
+import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
-  MESSAGE_NAME_CLASS,
 } from "@/utils/theme";
 
 const ThoughtBubble = ({ thought }) => {
@@ -452,10 +452,9 @@ const HistoricalMessage = forwardRef(
       sources = [],
       courseSources = null,
       courseCards = "off",
-      // Kurskarten v2: "above" -> Karten rendert der umgebende Block
-      // (ChatHistory) über der Antwort; hier nur noch der Abschlusslink.
-      courseCardsPosition = "below",
-      courseCardsAnnounced,
+      // Kurskarten v2 ("above"): Auswahl des umgebenden Blocks (ChatHistory,
+      // Karten über der Antwort) -> hier nur noch der Abschlusslink
+      courseCardsSelection = null,
       // Name steht schon im umgebenden Block (Kurskarten "above")
       nameInWrapper = false,
       error = false,
@@ -470,21 +469,14 @@ const HistoricalMessage = forwardRef(
     if (error) console.error(`ANYTHING_LLM_CHAT_WIDGET_ERROR: ${error}`);
 
     // Extract content between think tags if they exist
-    const thinkMatches = message?.match(/<think>([\s\S]*?)<\/think>/g) || [];
+    const thinkMatches = message?.match(THINK_BLOCK_RX) || [];
     const thoughts = thinkMatches.map((match) =>
       match.replace(/<think>|<\/think>/g, "").trim(),
     );
 
-    // Get the response content without the think tags (und ohne Karten-
-    // Marker, falls ein älterer Server ihn durchreicht)
-    const withoutThink = message
-      ?.replace(/<think>[\s\S]*?<\/think>/g, "")
-      .trim();
-    const responseContent = stripCardsMarker(withoutThink);
-    // Nur-Marker-Antwort: leer statt Rohtext (sonst wie bisher: Fallback
-    // auf die Original-Nachricht)
-    const markdownSource =
-      responseContent || (responseContent !== withoutThink ? "" : message);
+    // Get the response content without the think tags (Karten-Marker ist
+    // schon bei der Aufnahme entfernt, utils/chat)
+    const responseContent = stripThink(message).trim();
 
     // Clean text for TTS (remove markdown, HTML, etc.)
     const plainTextForTTS = responseContent
@@ -496,12 +488,7 @@ const HistoricalMessage = forwardRef(
 
     return (
       <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
-        {role === "assistant" && !nameInWrapper && (
-          <div className={MESSAGE_NAME_CLASS}>
-            {embedderSettings.settings.assistantName ||
-              "Anything LLM Chat Assistant"}
-          </div>
-        )}
+        {role === "assistant" && !nameInWrapper && <AssistantName />}
         <div
           key={uuid}
           ref={ref}
@@ -583,7 +570,7 @@ const HistoricalMessage = forwardRef(
                     style={{ fontSize: MESSAGE_FONT_SIZE }}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(
-                        renderMarkdown(markdownSource),
+                        renderMarkdown(responseContent || message),
                       ),
                     }}
                   />
@@ -603,27 +590,20 @@ const HistoricalMessage = forwardRef(
         {/* Kurskarten (opt-in): nur unter Assistenten-Antworten mit
             courseSources vom Server; ob die Option an ist, prüft allein
             selectCourseCards (ohne Option rendert CourseCards nichts).
-            responseContent ist bereits ohne <think>-Blöcke. */}
+            responseContent ist bereits ohne <think>-Blöcke. Mit Auswahl von
+            oben (Position "above") nur der Abschlusslink. */}
         {role === "assistant" &&
           !error &&
-          Array.isArray(courseSources) &&
-          courseSources.length > 0 &&
-          (courseCardsPosition === "above" ? (
+          (courseCardsSelection ||
+            (Array.isArray(courseSources) && courseSources.length > 0)) && (
             <CourseCards
               reply={responseContent}
               courseSources={courseSources}
               courseCards={courseCards}
-              position="above"
-              part="footer"
-              announced={courseCardsAnnounced}
+              selection={courseCardsSelection}
+              part={courseCardsSelection ? "footer" : "all"}
             />
-          ) : (
-            <CourseCards
-              reply={responseContent}
-              courseSources={courseSources}
-              courseCards={courseCards}
-            />
-          ))}
+          )}
 
         {sentAt && (
           <div

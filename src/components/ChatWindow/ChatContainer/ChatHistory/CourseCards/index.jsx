@@ -1,9 +1,5 @@
 import { memo, useId, useMemo } from "react";
-import {
-  MORE_COURSES_TEXT,
-  selectAnnouncedCourseCards,
-  selectCourseCards,
-} from "@/utils/courseCards";
+import { MORE_COURSES_TEXT, selectCourseCards } from "@/utils/courseCards";
 
 // Kurskarten zu einer Assistenten-Antwort (Setting courseCards "auto").
 // Optik ausschließlich über die internen Theme-Variablen (--allmi-*, gesetzt
@@ -149,7 +145,7 @@ function Card({ card }) {
 function CompactRow({ card, first }) {
   const lead = joinParts([card.weekdays, card.time]);
   return (
-    <li style={{ ...itemStyle, display: "block" }}>
+    <li style={{ minWidth: 0 }}>
       <a
         href={card.url}
         target="_blank"
@@ -207,32 +203,26 @@ function CategoryLink({ categoryLink }) {
 
 // courseCards als String-Prop (kein Objekt pro Render) -> memo greift;
 // die Aktivierung prüft allein selectCourseCards.
-//   position "below" (Standard): Karten + Abschlusslink unter der Antwort
-//   position "above", part "cards": Karten über der Antwort (vorab
-//     angekündigte Kurse zuerst, verlinkte angehängt; announced = Anzahl)
-//   position "above", part "footer": nur der Abschlusslink, unter der Antwort
+//   Standard (position "below", part "all"): Auswahl aus reply +
+//     courseSources, Karten + Abschlusslink unter der Antwort
+//   selection: fertige Auswahl (Position "above", einmal berechnet im
+//     umgebenden Block, selectAnnouncedCourseCards) — part "cards": Karten
+//     über der Antwort, part "footer": nur der Abschlusslink darunter
 function CourseCards({
   reply,
   courseSources,
   courseCards,
+  selection: given = null,
   position = "below",
   part = "all",
-  announced,
 }) {
   const above = position === "above";
-  const selection = useMemo(
+  const computed = useMemo(
     () =>
-      above
-        ? selectAnnouncedCourseCards(
-            reply,
-            courseSources,
-            { courseCards },
-            { announced },
-          )
-        : selectCourseCards(reply, courseSources, { courseCards }),
-    [above, reply, courseSources, courseCards, announced],
+      given ? null : selectCourseCards(reply, courseSources, { courseCards }),
+    [given, reply, courseSources, courseCards],
   );
-  const { cards, compact, categoryLink, more } = selection;
+  const { cards, compact, categoryLink, more } = given || computed;
   if (!cards || cards.length === 0) return null;
 
   if (part === "footer") {

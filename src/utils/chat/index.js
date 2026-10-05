@@ -1,4 +1,8 @@
+import { appendReplyText, stripCardsMarker } from "@/utils/courseCards";
+
 // For handling of synchronous chats that are not utilizing streaming or chat requests.
+// Karten-Marker ("[[KARTEN: …]]", ältere Server) wird hier bei der Aufnahme
+// entfernt — Anzeige, Vorlesen, Kopieren und Feedback sehen nur sauberen Text.
 export default function handleChat(
   chatResult,
   setLoadingResponse,
@@ -64,12 +68,13 @@ export default function handleChat(
       sentAt,
     });
   } else if (type === "textResponse") {
+    const content = stripCardsMarker(textResponse);
     setLoadingResponse(false);
     setChatHistory([
       ...remHistory,
       {
         uuid,
-        content: textResponse,
+        content,
         role: "assistant",
         sources,
         closed: close,
@@ -83,7 +88,7 @@ export default function handleChat(
     ]);
     _chatHistory.push({
       uuid,
-      content: textResponse,
+      content,
       role: "assistant",
       sources,
       closed: close,
@@ -96,36 +101,28 @@ export default function handleChat(
     });
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
-    if (chatIdx !== -1) {
-      const existingHistory = { ..._chatHistory[chatIdx] };
-      const updatedHistory = {
-        ...existingHistory,
-        content: existingHistory.content + textResponse,
-        sources,
-        error,
-        errorMsg,
-        closed: close,
-        animate: !close,
-        pending: false,
-        sentAt,
-        ...courseExtra,
-      };
-      _chatHistory[chatIdx] = updatedHistory;
-    } else {
-      _chatHistory.push({
-        uuid,
-        sources,
-        error,
-        errorMsg,
-        content: textResponse,
-        role: "assistant",
-        closed: close,
-        animate: !close,
-        pending: false,
-        sentAt,
-        ...courseExtra,
-      });
-    }
+    const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
+    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend
+    const { content, markerBuffer } = appendReplyText(
+      existing,
+      textResponse,
+      close,
+    );
+    const entry = {
+      ...(existing || { uuid, role: "assistant" }),
+      content,
+      markerBuffer,
+      sources,
+      error,
+      errorMsg,
+      closed: close,
+      animate: !close,
+      pending: markerBuffer !== undefined,
+      sentAt,
+      ...courseExtra,
+    };
+    if (existing) _chatHistory[chatIdx] = entry;
+    else _chatHistory.push(entry);
     setChatHistory([..._chatHistory]);
   } else if (type === "courseSources") {
     // Kurskarten v2: vom Server vorab angekündigte Kurse (Karten-Marker),

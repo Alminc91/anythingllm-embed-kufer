@@ -109,10 +109,12 @@ export function courseCardsAbove(settings = {}) {
 
 /**
  * Karten-Marker vom Antwortanfang entfernen (Abwehr in der Tiefe: der Server
- * ab Fork 7.10 entfernt ihn schon; ältere Server reichen ihn durch).
+ * ab Fork 7.10 entfernt ihn schon; ältere Server reichen ihn durch). Läuft
+ * einmal bei der Aufnahme (appendReplyText, handleChat, Verlauf laden) — die
+ * Anzeige bekommt nur noch sauberen Text.
  * Gültige oder kaputte Markerzeile -> entfernt (inkl. Leerraum dahinter).
  * partial (Antwort streamt noch): ein begonnener, noch offener Marker
- * (höchstens 120 Zeichen) ergibt "" statt Rohtext.
+ * (höchstens 120 Zeichen, wie der Server-Filter) ergibt "" statt Rohtext.
  * @param {string} text
  * @param {{partial?: boolean}} [options]
  * @returns {string}
@@ -129,6 +131,28 @@ export function stripCardsMarker(text, { partial = false } = {}) {
     return body.slice(close + 2).trimStart();
   if (newline !== -1) return body.slice(newline + 1).trimStart();
   return partial && body.length <= CARDS_MARKER_BUFFER_MAX ? "" : text;
+}
+
+/**
+ * Text-Chunk an eine streamende Antwort anhängen, Karten-Marker am
+ * Antwortanfang dabei entfernen. Solange noch nichts Sichtbares da ist und nur
+ * ein (offener oder gerade geschlossener) Marker angekommen ist, bleibt der
+ * Rohtext im Puffer (markerBuffer, Antwort gilt als wartend); sobald Text
+ * folgt, die Grenze überschritten ist oder der Stream endet, wird er Inhalt.
+ * @param {{content?: string, markerBuffer?: string}|null} prev - bisheriger Eintrag
+ * @param {string} chunk - neuer Text
+ * @param {boolean} done - Stream beendet (close)
+ * @returns {{content: string, markerBuffer?: string}}
+ */
+export function appendReplyText(prev, chunk, done = false) {
+  const add = chunk ?? "";
+  const visible = prev?.content || "";
+  if (visible.trim()) return { content: visible + add };
+  const raw = (prev?.markerBuffer ?? visible) + add;
+  const content = stripCardsMarker(raw, { partial: !done });
+  return !done && raw && !content
+    ? { content, markerBuffer: raw }
+    : { content };
 }
 
 /**

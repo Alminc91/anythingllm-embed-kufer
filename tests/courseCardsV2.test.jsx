@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement as h, act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -25,6 +25,7 @@ vi.mock("@/components/ChatWindow", () => ({ SEND_TEXT_EVENT: "send-text" }));
 
 import fixtures from "./fixtures/praesentationCourseSources.json";
 import {
+  appendReplyText,
   selectAnnouncedCourseCards,
   selectCourseCards,
   stripCardsMarker,
@@ -562,45 +563,300 @@ describe("Karten oben ohne Sprung (AK-4b, React-Ebene)", () => {
   });
 });
 
-describe("Marker nie sichtbar (Widget-Abwehr)", () => {
-  it("PromptReply: offener Marker = Tipp-Indikator, fertiger Marker entfernt", () => {
-    const el = mount(
-      h(PromptReply, {
+describe("Marker nie sichtbar (Widget-Abwehr, einmal bei der Aufnahme)", () => {
+  // Stream über handleChat (wie ChatContainer) und Anzeige über ChatHistory
+  function streamInto(settings = {}) {
+    const user = { role: "user", content: "Yoga?", sentAt: 1759651200 };
+    const hist = [];
+    mount(h(ChatHistory, { settings, history: [user] }));
+    const chunk = (c) => {
+      handleChat(c, vi.fn(), vi.fn(), [user], hist);
+      act(() =>
+        root.render(
+          h(ChatHistory, { settings, history: [user, ...clone(hist)] }),
+        ),
+      );
+    };
+    const text = (t, close = false) =>
+      chunk({
         uuid: "u",
-        reply: "[[KARTEN: 1,",
-        pending: false,
+        type: "textResponseChunk",
+        textResponse: t,
+        close,
         sources: [],
+      });
+    return { hist, text };
+  }
+
+  it("Stream: offener Marker = Tipp-Indikator, fertiger Marker entfernt (PromptReply + Verlauf)", () => {
+    for (const settings of [
+      {},
+      { courseCards: "auto", courseCardsPosition: "above" },
+    ]) {
+      const { hist, text } = streamInto(settings);
+      text("[[KAR");
+      text("TEN: 1,");
+      expect(container.textContent).not.toContain("KARTEN");
+      expect(container.querySelector(".allm-dot-falling")).not.toBeNull();
+      expect(hist[0]).toMatchObject({ content: "", pending: true });
+      text(" 2]]\n\nJa, ");
+      text("gern.");
+      expect(container.textContent).toContain("Ja, gern.");
+      expect(container.textContent).not.toContain("KARTEN");
+      text("", true);
+      // gespeicherter Inhalt ist sauber (Vorlesen, Kopieren, Feedback)
+      expect(hist[0]).toMatchObject({
+        content: "Ja, gern.",
+        pending: false,
+        closed: true,
+      });
+      expect(hist[0].markerBuffer).toBeUndefined();
+      expect(assistantText(container).textContent).toContain("Ja, gern.");
+      expect(container.textContent).not.toContain("KARTEN");
+      act(() => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("Nur-Marker-Antwort bleibt leer; offener Marker über 120 Zeichen wird Text (wie Server-Filter)", () => {
+    const a = streamInto();
+    a.text("[[KARTEN: -]]");
+    expect(a.hist[0].pending).toBe(true);
+    a.text("", true);
+    expect(a.hist[0]).toMatchObject({ content: "", pending: false });
+    expect(container.textContent).not.toContain("KARTEN");
+    act(() => root.unmount());
+    container.remove();
+
+    const b = streamInto();
+    const long = `[[KARTEN: ${"1, ".repeat(40)}`;
+    b.text(long);
+    expect(long.length).toBeGreaterThan(120);
+    expect(b.hist[0]).toMatchObject({ content: long, pending: false });
+  });
+
+  it("Text vor/ohne Marker unverändert; Marker mitten im Text bleibt", () => {
+    expect(appendReplyText(null, "Ja [[KARTEN: 1]]", false)).toEqual({
+      content: "Ja [[KARTEN: 1]]",
+    });
+    expect(appendReplyText({ content: "Ja" }, " [[KARTEN: 1]]", false)).toEqual(
+      { content: "Ja [[KARTEN: 1]]" },
+    );
+    expect(appendReplyText(null, "[[KAR", false)).toEqual({
+      content: "",
+      markerBuffer: "[[KAR",
+    });
+    expect(
+      appendReplyText({ content: "", markerBuffer: "[[KAR" }, "", true),
+    ).toEqual({ content: "[[KAR" });
+  });
+
+  it("Verlauf laden: Marker entfernt, Nur-Marker-Antwort leer, Nutzer-Text unverändert", async () => {
+    const { default: RealChatService } = await vi.importActual(
+      "@/models/chatService",
+    );
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        history: [
+          { role: "user", content: "[[KARTEN: 1]] Was ist das?", sentAt: 1 },
+          { role: "assistant", content: "[[KARTEN: 0]]\nHallo", sentAt: 2 },
+          { role: "user", content: "Und?", sentAt: 3 },
+          { role: "assistant", content: "[[KARTEN: -]]", sentAt: 4 },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const history = await RealChatService.embedSessionHistory(
+        { embedId: "e", baseApiUrl: "https://x/api/embed" },
+        "s",
+      );
+      expect(history.map((m) => m.content)).toEqual([
+        "[[KARTEN: 1]] Was ist das?",
+        "Hallo",
+        "Und?",
+        "",
+      ]);
+      const el = mount(h(ChatHistory, { settings: {}, history }));
+      const answers = el.querySelectorAll(
+        ".allm-anything-llm-assistant-message",
+      );
+      expect(answers[0].textContent).toContain("Hallo");
+      for (const n of answers) expect(n.textContent).not.toContain("KARTEN");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("Nutzer-Nachricht mit Marker-Text wird unverändert angezeigt (Review-Fund 3)", () => {
+    const el = mount(
+      h(HistoricalMessage, {
+        role: "user",
+        message: "[[KARTEN: 1]] Was ist das?",
       }),
     );
-    expect(el.textContent).not.toContain("KARTEN");
-    expect(el.querySelector(".allm-dot-falling")).not.toBeNull();
+    expect(
+      el.querySelector(".allm-anything-llm-user-message").textContent,
+    ).toContain("[[KARTEN: 1]] Was ist das?");
+  });
+});
+
+describe("Kurskarten oben: Anker-Scroll einmal je Turn (Review-Fund 1)", () => {
+  const settings = { courseCards: "auto", courseCardsPosition: "above" };
+  const user = { role: "user", content: "Yoga am Abend?", sentAt: 1759651200 };
+  const placeholder = {
+    role: "assistant",
+    content: "",
+    pending: true,
+    animate: true,
+    userMessage: "Yoga am Abend?",
+  };
+  // Layout-Ersatz (jsdom rechnet nicht): Frage = Anker bei anchorTop px im
+  // Inhalt, Inhaltshöhe scrollHeight, sichtbare Höhe clientHeight
+  let layout;
+  let scrollTo;
+  const scrollTops = new WeakMap();
+  beforeEach(() => {
+    layout = { scrollHeight: 500, clientHeight: 400, anchorTop: 300 };
+    Object.defineProperty(HTMLElement.prototype, "scrollTop", {
+      configurable: true,
+      get() {
+        return scrollTops.get(this) || 0;
+      },
+      set(v) {
+        scrollTops.set(this, v);
+      },
+    });
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(
+      () => layout.scrollHeight,
+    );
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(
+      () => layout.clientHeight,
+    );
+    scrollTo = vi
+      .spyOn(Element.prototype, "scrollTo")
+      .mockImplementation(function ({ top }) {
+        const max = layout.scrollHeight - layout.clientHeight;
+        this.scrollTop = Math.max(0, Math.min(top, max));
+      });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function () {
+        if (this.id === "chat-history") return { top: 0 };
+        const sc = this.closest("#chat-history");
+        return { top: layout.anchorTop - (sc ? sc.scrollTop : 0) };
+      },
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete HTMLElement.prototype.scrollTop;
+  });
+
+  const scroller = () => container.querySelector("#chat-history");
+  function startTurn() {
+    mount(h(ChatHistory, { settings, history: [user, placeholder] }));
+    const hist = [];
+    const chunk = (c) => {
+      handleChat(c, vi.fn(), vi.fn(), [user], hist);
+      act(() =>
+        root.render(
+          h(ChatHistory, { settings, history: [user, ...clone(hist)] }),
+        ),
+      );
+    };
+    const text = (t, close = false) =>
+      chunk({
+        uuid: "u",
+        type: "textResponseChunk",
+        textResponse: t,
+        close,
+        sources: [],
+      });
+    return { hist, chunk, text };
+  }
+
+  it("folgt dem wachsenden Turn, bis die Frage oben steht — danach kein Scroll mehr, auch nicht am Stream-Ende", () => {
+    const { chunk, text } = startTurn();
+    // Inhalt noch kurz: so weit wie möglich (100), Anker noch nicht oben
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 292, behavior: "auto" });
+    expect(scroller().scrollTop).toBe(100);
+    chunk({
+      uuid: "u",
+      type: "courseSources",
+      courseSources: clone([BY[6], BY[0]]),
+      close: false,
+    });
+    layout.scrollHeight = 900; // Karten + erster Text
+    text("Ja, ");
+    expect(scroller().scrollTop).toBe(292); // Frage steht oben
+    const calls = scrollTo.mock.calls.length;
+    layout.scrollHeight = 1600;
+    text(`am Abend ${link(BY[0])} `);
+    text("und mehr.", true);
+    chunk({
+      uuid: "u",
+      type: "finalizeResponseStream",
+      close: true,
+      chatId: 5,
+      courseSources: clone([BY[6], BY[0]]),
+      courseCardsAnnounced: 2,
+    });
+    expect(scrollTo.mock.calls.length).toBe(calls);
+    expect(scroller().scrollTop).toBe(292);
+  });
+
+  it("Nutzer scrollt unter den Anker (oder per Rad): kein Zurückspringen", () => {
+    const { text } = startTurn();
+    expect(scroller().scrollTop).toBe(100);
+    layout.scrollHeight = 1400;
+    // Nutzer scrollt selbst weiter nach unten, bevor der Anker erreicht ist
+    act(() => {
+      scroller().scrollTop = 700;
+      scroller().dispatchEvent(new Event("scroll"));
+    });
+    const calls = scrollTo.mock.calls.length;
+    text("Ja, ");
+    text("gern.");
+    expect(scrollTo.mock.calls.length).toBe(calls);
+    expect(scroller().scrollTop).toBe(700);
+    act(() => root.unmount());
+    container.remove();
+
+    // Mausrad beendet das Nachführen sofort
+    layout.scrollHeight = 500;
+    const second = startTurn();
+    act(() => {
+      scroller().dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    });
+    const before = scrollTo.mock.calls.length;
+    layout.scrollHeight = 1400;
+    second.text("Ja.");
+    expect(scrollTo.mock.calls.length).toBe(before);
+  });
+
+  it("neuer Turn (neue Frage) führt wieder nach", () => {
+    const { hist, text } = startTurn();
+    layout.scrollHeight = 900;
+    text("Ja.", true);
+    expect(scroller().scrollTop).toBe(292);
+    const calls = scrollTo.mock.calls.length;
+    layout.scrollHeight = 1300;
+    layout.anchorTop = 950;
     act(() =>
       root.render(
-        h(PromptReply, {
-          uuid: "u",
-          reply: "[[KARTEN: 1, 2]]\n\nJa, gern.",
-          sources: [],
+        h(ChatHistory, {
+          settings,
+          history: [
+            user,
+            ...clone(hist),
+            { role: "user", content: "Und am Morgen?", sentAt: 1759651300 },
+            placeholder,
+          ],
         }),
       ),
     );
-    expect(el.textContent).toContain("Ja, gern.");
-    expect(el.textContent).not.toContain("KARTEN");
-  });
-
-  it("HistoricalMessage: Marker entfernt, Nur-Marker-Antwort leer", () => {
-    const el = mount(
-      h(HistoricalMessage, {
-        role: "assistant",
-        message: "[[KARTEN: 0]]\nHallo",
-      }),
-    );
-    expect(assistantText(el).textContent).toContain("Hallo");
-    expect(el.textContent).not.toContain("KARTEN");
-    act(() =>
-      root.render(
-        h(HistoricalMessage, { role: "assistant", message: "[[KARTEN: -]]" }),
-      ),
-    );
-    expect(el.textContent).not.toContain("KARTEN");
+    expect(scrollTo.mock.calls.length).toBe(calls + 1);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 942, behavior: "auto" });
   });
 });

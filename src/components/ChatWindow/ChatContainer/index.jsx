@@ -108,7 +108,10 @@ export default function ChatContainer({
       var _chatHistory = [...remHistory];
 
       if (!promptMessage || !promptMessage?.userMessage) {
-        setLoadingResponse(false);
+        // Antwort streamt noch (früher courseSources-Chunk, Text ohne close):
+        // Eingabe gesperrt lassen — sonst startet z. B. eine Übergabe aus der
+        // Inline-Leiste (pendingFirstMessage) parallel eine zweite Anfrage.
+        if (!isStreaming(promptMessage)) setLoadingResponse(false);
         return false;
       }
 
@@ -118,21 +121,28 @@ export default function ChatContainer({
       const controller = new AbortController();
       streamControllerRef.current = controller;
 
-      await ChatService.streamChat(
-        sessionId,
-        settings,
-        promptMessage.userMessage,
-        (chatResult) =>
-          handleChat(
-            chatResult,
-            setLoadingResponse,
-            setChatHistory,
-            remHistory,
-            _chatHistory,
-          ),
-        conversationId,
-        controller.signal,
-      );
+      try {
+        await ChatService.streamChat(
+          sessionId,
+          settings,
+          promptMessage.userMessage,
+          (chatResult) =>
+            handleChat(
+              chatResult,
+              setLoadingResponse,
+              setChatHistory,
+              remHistory,
+              _chatHistory,
+            ),
+          conversationId,
+          controller.signal,
+        );
+      } finally {
+        // Rückfallebene: Stream zu Ende ohne Abschluss-Chunk (close) ->
+        // trotzdem freigeben. Mit Abschluss gibt der Effekt oben frei.
+        if (isStreaming(_chatHistory[_chatHistory.length - 1]))
+          setLoadingResponse(false);
+      }
       return;
     }
 
@@ -201,6 +211,13 @@ export default function ChatContainer({
         />
       </div>
     </div>
+  );
+}
+
+// Assistenten-Antwort, deren Stream noch läuft (wartend oder ohne close)
+function isStreaming(message) {
+  return (
+    message?.role === "assistant" && message.animate === true && !message.closed
   );
 }
 

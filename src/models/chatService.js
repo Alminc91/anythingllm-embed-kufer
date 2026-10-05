@@ -1,5 +1,6 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
+import { stripCardsMarker } from "@/utils/courseCards";
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -31,13 +32,21 @@ const ChatService = {
         throw new Error("Invalid response from server");
       })
       .then((res) => {
-        return res.history.map((msg) => ({
-          ...msg,
-          id: v4(),
-          sender: msg.role === "user" ? "user" : "system",
-          textResponse: msg.content,
-          close: false,
-        }));
+        return res.history.map((msg) => {
+          // Karten-Marker (ältere Server) schon beim Laden entfernen
+          const content =
+            msg.role === "assistant"
+              ? stripCardsMarker(msg.content)
+              : msg.content;
+          return {
+            ...msg,
+            content,
+            id: v4(),
+            sender: msg.role === "user" ? "user" : "system",
+            textResponse: content,
+            close: false,
+          };
+        });
       })
       .catch((e) => {
         console.error(e);
