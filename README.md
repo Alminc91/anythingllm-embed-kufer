@@ -172,6 +172,25 @@ REQUIRED data attributes:
 
 - `data-inline-close-on` - Wann die schwebende Box (`data-inline-layout="overlay"`, ab 768px) einklappt: `outside` (Standard, wie bisher: Klick außerhalb oder Escape) oder `leave` (**Schließt bei Verlassen**: zusätzlich, wenn der Mauszeiger Box **und** Leiste verlässt, nach der Karenz `--allm-leave-delay`, Standard `600ms`; kehrt der Zeiger innerhalb der Karenz zurück, bleibt sie offen). Sperren — die Box schließt beim Verlassen **nie**, solange eine Antwort läuft (bis die Verbindung nach dem letzten Chunk endet; danach beginnt die Karenz neu), ein Eingabefeld im Chat fokussiert ist (auch ein per Tastatur fokussiertes Element), das Menü (⋮) oder „Frühere Chats“ offen ist; bei Touch-Bedienung (`pointer: coarse`), mobil (<768px, Vollbild) und im Seitenfluss (`flow` bzw. Fallback bei abschneidendem Vorfahren) gibt es kein Schließen beim Verlassen. Endet eine Sperre, während der Zeiger draußen ist, klappt die Box spätestens nach einer weiteren Karenz ein. Verlauf und Entwurf im Eingabefeld bleiben erhalten; Klick außerhalb und Escape wirken unverändert sofort. Lag der Fokus nicht im Widget, bleibt er beim Einklappen, wo er ist. Empfehlung: nur zusammen mit `data-inline-open-on="focus"` (sonst öffnet erst Enter wieder). Ungültiger Wert → `outside` mit einer `console.warn`-Zeile. Design Center: `visual_config.inlineCloseOn`.
 
+- `data-inline-resume-hint` - `true`: Hat die aktuelle Unterhaltung schon Nachrichten, zeigt die eingeklappte Eingabe-Leiste vor den Wunschfragen den Chip **„Unterhaltung fortsetzen (n)“** (n = Anzahl der Nachrichten, Rand in `--allm-accent`; Tooltip: Zeitpunkt der letzten Nachricht) und daneben den Textlink **„Neu starten“** (`--allm-text-muted`); der Platzhalter wechselt zu `data-inline-resume-placeholder`. Klick auf den Chip öffnet den Chat mit dem Verlauf (getippter Text wandert unversendet mit). „Neu starten“ wirkt wie „Chat zurücksetzen“ im Menü: neue Unterhaltung (neue `conversationId`, die alte bleibt unter „Frühere Chats“), Chip und Link verschwinden, Platzhalter wieder normal, der Chat bleibt zu. Dafür fragt das Widget **einmal nach dem Laden** den Verlauf der Unterhaltung ab (derselbe Endpunkt wie beim Öffnen) und wertet nur Anzahl und Zeitstempel der letzten Nachricht aus — nur mit dieser Einstellung, nur mit `data-inline-input`, nicht bei abgeschalteten „Frühere Chats“ (`historyEnabled: false`) und nie für eine gerade neu gestartete Unterhaltung. Ohne die Einstellung (Standard `false`) keine zusätzliche Anfrage. Nach dem ersten Öffnen zählt der Chat selbst mit (keine weitere Abfrage). Design Center: `visual_config.inlineResumeHint` (Boolean).
+
+- `data-inline-resume-placeholder` - Platzhalter der Leiste, solange der Hinweis sichtbar ist (max. 120 Zeichen, reiner Text). Standard „Weiter fragen …“. Design Center: `visual_config.inlineResumePlaceholder`.
+
+  ```html
+  <div id="kufer-assistent"></div>
+  <script
+    data-embed-id="…"
+    data-base-api-url="https://<kunde>.ki.kufer.de/api/embed"
+    data-display-mode="inline"
+    data-inline-input="true"
+    data-inline-layout="overlay"
+    data-inline-open-on="focus"
+    data-inline-close-on="leave"
+    data-inline-resume-hint="true"
+    src="https://<kunde>.ki.kufer.de/embed/anythingllm-chat-widget.min.js"
+  ></script>
+  ```
+
 - `data-inline-theme` - Stil der eingeklappten Leiste: `light` oder `dark`. Ohne Angabe folgt die Leiste dem Theme (`data-theme`, Standard hell); ein explizit gesetzter Wert gewinnt.
 
 - `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.

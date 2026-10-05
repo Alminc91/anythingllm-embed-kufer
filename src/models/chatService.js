@@ -53,6 +53,36 @@ const ChatService = {
         return [];
       });
   },
+  // Inline-Leiste (inlineResumeHint): nur Anzahl der Nachrichten und
+  // Zeitstempel (sentAt, Sekunden) der letzten Nachricht der Konversation —
+  // derselbe Endpunkt wie embedSessionHistory, aber ohne die Nachrichten
+  // aufzubereiten oder zu behalten (Inhalte/Quellen werden nicht gelesen).
+  // Fehler -> { count: 0, lastAt: null } (kein Hinweis).
+  embedHistorySummary: async function (
+    embedSettings,
+    sessionId,
+    conversationId = null,
+  ) {
+    const { embedId, baseApiUrl } = embedSettings;
+    const empty = { count: 0, lastAt: null };
+    if (!sessionId) return empty;
+    const url = conversationId
+      ? `${baseApiUrl}/${embedId}/${sessionId}?conversationId=${encodeURIComponent(conversationId)}`
+      : `${baseApiUrl}/${embedId}/${sessionId}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return empty;
+      const history = (await res.json())?.history;
+      if (!Array.isArray(history) || history.length === 0) return empty;
+      const lastAt = Number(history[history.length - 1]?.sentAt);
+      return {
+        count: history.length,
+        lastAt: Number.isFinite(lastAt) && lastAt > 0 ? lastAt : null,
+      };
+    } catch (e) {
+      return empty;
+    }
+  },
   // KIE-503: Frühere Konversationen dieser Session auflisten (für das
   // "Frühere Chats"-Panel). Server bindet die Liste an die session_id (BOLA).
   listConversations: async function (embedSettings, sessionId) {

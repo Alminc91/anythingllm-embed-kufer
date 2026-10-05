@@ -14,11 +14,14 @@ import { resolveChatIcon } from "@/components/OpenButton";
 import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
+import ChatService from "@/models/chatService";
+import { formatDateTime } from "@/utils/date";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
 import { BAR_THEMES, ON_ACCENT_TEXT } from "@/utils/theme";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
+  DEFAULT_INLINE_RESUME_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
   closesOnLeave,
   cssTimeMs,
@@ -30,6 +33,7 @@ import {
   inlineMaxWidth,
   isInlineOverlay,
   opensOnPointer,
+  resumeHintEnabled,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -75,7 +79,7 @@ import {
 // Nutzer. Solange die Box aufgeklappt ist, trägt der Platzhalter
 // data-allm-expanded="true" (Signal für Seiten-CSS).
 //
-// Schaltbare Varianten der Eingabe-Leiste (Standard = Verhalten oben):
+// Drei schaltbare Varianten der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
 //                          (Entwurf wandert per Übergabe send: false mit). Nur
 //                          nach pointerdown mit mouse/touch/pen — Tab-Fokus
@@ -86,6 +90,10 @@ import {
 //                          läuft, ein Eingabefeld (oder per Tastatur ein
 //                          Element) im Widget fokussiert ist oder ein Menü /
 //                          „Frühere Chats“ offen ist ([data-allm-layer]).
+//   inlineResumeHint       eingeklappt: Chip „Unterhaltung fortsetzen (n)“ +
+//                          „Neu starten“, wenn die Konversation Nachrichten hat
+//                          (Anzahl einmal nach dem Mount abgefragt, danach vom
+//                          ChatContainer gemeldet).
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -100,6 +108,9 @@ const TAP_SLOP_PX = 10;
 const TOUCH_CLICK_WAIT_MS = 350;
 // Offenes Menü/„Frühere Chats“ im Chat-Fenster (sperrt Schließen beim Verlassen)
 const LAYER_SELECTOR = "[data-allm-layer]";
+const RESUME_TEXT = "Unterhaltung fortsetzen";
+const RESTART_TEXT = "Neu starten";
+const NO_CHAT = { count: 0, lastAt: null };
 
 // Sperre „Fokus“ für das Schließen beim Verlassen: ein Eingabefeld im Widget
 // ist fokussiert — oder irgendein Element per Tastatur (:focus-visible), damit
@@ -291,10 +302,13 @@ export default function InlineChat({
   // Varianten der Eingabe-Leiste (siehe Kopfkommentar)
   const openOnPointer = opensOnPointer(settings);
   const leaveEnabled = closesOnLeave(settings);
+  const hintEnabled = resumeHintEnabled(settings);
   // Antwort läuft (vom ChatContainer gemeldet); Ref, kein Re-Render
   const replyRunningRef = useRef(false);
   // Schließen beim Verlassen: nach Antwort-Ende neu starten (Karenz ab Ende)
   const leaveRestartRef = useRef(null);
+  // Hinweis: Anzahl/Zeitstempel der Nachrichten der aktuellen Konversation
+  const [chatInfo, setChatInfo] = useState(NO_CHAT);
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -648,13 +662,22 @@ export default function InlineChat({
     };
   }, [floating, view]);
 
-  // Vom ChatContainer: { streaming, … }. Nur ein Ref (kein State, kein
-  // Re-Render -> Bestand unverändert).
-  const reportChat = useCallback(({ streaming }) => {
-    const was = replyRunningRef.current;
-    replyRunningRef.current = streaming === true;
-    if (was && !replyRunningRef.current) leaveRestartRef.current?.();
-  }, []);
+  // Vom ChatContainer: { streaming, count?, lastAt? }. Ohne aktive Variante
+  // nichts (kein State, kein Re-Render -> Bestand unverändert).
+  const reportChat = useCallback(
+    ({ streaming, count, lastAt }) => {
+      const was = replyRunningRef.current;
+      replyRunningRef.current = streaming === true;
+      if (was && !replyRunningRef.current) leaveRestartRef.current?.();
+      if (hintEnabled && Number.isInteger(count))
+        setChatInfo((prev) =>
+          prev.count === count && prev.lastAt === (lastAt ?? null)
+            ? prev
+            : { count, lastAt: lastAt ?? null },
+        );
+    },
+    [hintEnabled],
+  );
 
   const embedMode = useMemo(
     () => ({
@@ -726,6 +749,38 @@ export default function InlineChat({
     };
   }, [leaveEnabled, view, floating]);
 
+  // inlineResumeHint: einmal nach dem Mount (bzw. je Konversation) nur die
+  // Anzahl der Nachrichten abfragen — nie ohne die Einstellung, nie bei
+  // abgeschalteten „Frühere Chats“ (historyEnabled false), nie für eine
+  // soeben neu angelegte Konversation (hat sicher keinen Verlauf). Ist der
+  // Chat schon gemountet, meldet der ChatContainer selbst.
+  useEffect(() => {
+    if (!hintEnabled || !sessionId || !conversationId) return;
+    if (justCreatedRef?.current || chatMountedRef.current) return;
+    let cancelled = false;
+    ChatService.embedHistorySummary(settings, sessionId, conversationId).then(
+      (summary) => {
+        if (!cancelled && !chatMountedRef.current && summary)
+          setChatInfo({ count: summary.count, lastAt: summary.lastAt });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [hintEnabled, sessionId, conversationId]);
+
+  // „Neu starten“: wie „Chat zurücksetzen“ im Menü — neue Konversation (die
+  // alte bleibt unter „Frühere Chats“), Hinweis weg, Panel bleibt zu.
+  const restartConversation = () => {
+    newConversation?.();
+    setChatInfo(NO_CHAT);
+    focusBar();
+  };
+  const resume =
+    hintEnabled && chatInfo.count > 0 && settings.inlineInput === true
+      ? chatInfo
+      : null;
+
   const inheritFont = settings.inheritFont === true;
   const boxFloating = view === "box" && floating;
   const effectClass =
@@ -741,6 +796,8 @@ export default function InlineChat({
         expanded={view !== "bar"}
         onOpen={openChat}
         openOnPointer={openOnPointer}
+        resume={resume}
+        onRestart={restartConversation}
       />
     ) : (
       <InlineBar
@@ -895,6 +952,32 @@ const InlineBar = forwardRef(function InlineBar(
   );
 });
 
+// Hinweis-Chip „Unterhaltung fortsetzen“: Form der Wunschfragen-Chips
+// (Fläche/Text/Rundung der Leiste über --allmi-bar-*), Rand in Akzentfarbe
+const RESUME_CHIP_STYLE = {
+  maxWidth: "100%",
+  margin: 0,
+  padding: "6px 14px",
+  borderRadius: "var(--allmi-bar-radius, 16px)",
+  backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
+  color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
+  lineHeight: 1.3,
+  fontWeight: 600,
+  textAlign: "center",
+  overflowWrap: "anywhere",
+};
+// Textlink „Neu starten“ neben dem Hinweis-Chip
+const RESTART_LINK_STYLE = {
+  margin: 0,
+  padding: "6px 4px",
+  border: "none",
+  background: "transparent",
+  color: "var(--allmi-text-muted, #7A7D7E)",
+  lineHeight: 1.3,
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+};
+
 // Leiste als Eingabefeld (inlineInput): Feld + Absende-Knopf (bewusst ohne
 // Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
 // die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
@@ -908,13 +991,19 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     expanded,
     onOpen,
     openOnPointer = false,
+    resume = null,
+    onRestart,
   },
   ref,
 ) {
   const accent = barAccent(settings);
   // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
-  const placeholder =
+  const label =
     settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
+  // Hinweis „Unterhaltung fortsetzen“ sichtbar: eigener Platzhalter
+  const placeholder = resume
+    ? settings.inlineResumePlaceholder || DEFAULT_INLINE_RESUME_PLACEHOLDER
+    : label;
   const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
   const chips = inlineChips(settings);
   // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
@@ -969,7 +1058,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
       <form
         id="anything-llm-inline-bar"
         role="search"
-        aria-label={placeholder}
+        aria-label={label}
         onSubmit={submit}
         onClick={openWithDraft}
         className="allm-w-full allm-flex allm-items-center allm-box-border allm-m-0 allm-font-sans allm-cursor-pointer"
@@ -1032,12 +1121,48 @@ const InlineInputBar = forwardRef(function InlineInputBar(
           {sendText}
         </button>
       </form>
-      {chips.length > 0 && (
+      {(chips.length > 0 || resume) && (
         <div
           id="anything-llm-inline-chips"
           className="allm-flex allm-items-center allm-justify-center"
           style={{ flexWrap: "wrap", gap: "8px", marginTop: "12px" }}
         >
+          {resume && (
+            <>
+              <button
+                type="button"
+                id="anything-llm-inline-resume"
+                className="allm-inline-resume allm-font-sans allm-cursor-pointer"
+                onClick={openDraft}
+                aria-controls={CHAT_WINDOW_ID}
+                aria-expanded={false}
+                title={
+                  resume.lastAt
+                    ? `Letzte Nachricht: ${formatDateTime(resume.lastAt)}`
+                    : undefined
+                }
+                style={{
+                  ...RESUME_CHIP_STYLE,
+                  border: `1px solid ${accent}`,
+                  fontSize: narrow ? "13px" : "14px",
+                }}
+              >
+                {`${RESUME_TEXT} (${resume.count})`}
+              </button>
+              <button
+                type="button"
+                id="anything-llm-inline-restart"
+                className="allm-inline-restart allm-font-sans allm-cursor-pointer"
+                onClick={onRestart}
+                style={{
+                  ...RESTART_LINK_STYLE,
+                  fontSize: narrow ? "12px" : "13px",
+                }}
+              >
+                {RESTART_TEXT}
+              </button>
+            </>
+          )}
           {chips.map((chip, i) => (
             <button
               key={i}

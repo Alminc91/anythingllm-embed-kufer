@@ -37,3 +37,17 @@ export function formatDate(sentAt, hour24 = null) {
     return "";
   }
 }
+
+// Datum + Uhrzeit im deutschen Format "DD.MM.YYYY, HH:MM:SS Uhr" (sentAt in
+// Sekunden), z. B. für den Hinweis „Unterhaltung fortsetzen“ der Inline-Leiste.
+export function formatDateTime(sentAt) {
+  if (!sentAt) return "";
+  try {
+    const d = new Date(sentAt * 1000);
+    if (Number.isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} Uhr`;
+  } catch (e) {
+    return "";
+  }
+}

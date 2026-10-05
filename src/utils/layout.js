@@ -43,11 +43,13 @@ export const DEFAULT_OVERLAY_EFFECT = "expand";
 // Eingabe-Leiste (inlineInput): Öffnen schon beim Zeiger-Klick ins Feld
 // ("focus") statt erst beim Absenden ("submit", Standard); Overlay-Box schließt
 // zusätzlich beim Verlassen mit dem Zeiger ("leave") statt nur bei Außenklick/
-// Escape ("outside", Standard).
+// Escape ("outside", Standard). Hinweis „Unterhaltung fortsetzen (n)“ in der
+// eingeklappten Leiste (inlineResumeHint, Standard aus).
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
 export const INLINE_CLOSE_ON_VALUES = ["outside", "leave"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
 export const DEFAULT_INLINE_CLOSE_ON = "outside";
+export const DEFAULT_INLINE_RESUME_PLACEHOLDER = "Weiter fragen …";
 // Karenz bis zum Schließen beim Verlassen (--allm-leave-delay, utils/theme.js)
 export const DEFAULT_LEAVE_DELAY_MS = 600;
 const LEAVE_DELAY_MAX_MS = 10000;
@@ -140,6 +142,9 @@ export const layoutValidations = {
   // Warnung wie oben (warnInvalidInlineEnums)
   inlineOpenOn: (v) => oneOf(v, INLINE_OPEN_ON_VALUES),
   inlineCloseOn: (v) => oneOf(v, INLINE_CLOSE_ON_VALUES),
+  // Hinweis auf eine vorhandene Unterhaltung in der eingeklappten Leiste
+  inlineResumeHint: bool,
+  inlineResumePlaceholder: (v) => shortText(v),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -312,6 +317,18 @@ export function opensOnPointer(settings = {}) {
 // Nur bei inlineLayout "overlay"; Fallback im Seitenfluss/mobil prüft InlineChat.
 export function closesOnLeave(settings = {}) {
   return isInlineOverlay(settings) && settings.inlineCloseOn === "leave";
+}
+
+// Hinweis „Unterhaltung fortsetzen“: nur mit Eingabe-Leiste und nur, wenn
+// „Frühere Chats“/Verlauf nicht abgeschaltet ist (KIE-503; Script-Attribut
+// liefert ggf. den String "false").
+export function resumeHintEnabled(settings = {}) {
+  return (
+    settings.inlineInput === true &&
+    settings.inlineResumeHint === true &&
+    settings.historyEnabled !== false &&
+    String(settings.historyEnabled) !== "false"
+  );
 }
 
 // CSS-Zeitwert ("600ms", "0.6s", " 200ms ") -> Millisekunden, geklemmt
