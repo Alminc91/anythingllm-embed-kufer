@@ -29,11 +29,14 @@ export const THEME_VALUES = ["light", "dark", "auto"];
 // Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
 export const COURSE_CARDS_VALUES = ["off", "auto"];
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
-// nachfolgenden Inhalt (overlay); Aufklapp-Effekt (expand = Standard)
+// nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
+// Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
+// wie bisher, schwebend gilt expand (resolveInlineEffect).
 export const INLINE_LAYOUT_VALUES = ["flow", "overlay"];
 export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
 export const DEFAULT_INLINE_LAYOUT = "flow";
-export const DEFAULT_INLINE_EFFECT = "expand";
+export const DEFAULT_INLINE_EFFECT = null;
+export const DEFAULT_OVERLAY_EFFECT = "expand";
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -85,17 +88,6 @@ function shortText(value, maxLen = INLINE_TEXT_MAX_LEN) {
   return v;
 }
 
-// Enum mit Warnung: ungültig -> eine console.warn-Zeile, Feld fällt weg ->
-// nächstniedrigerer Wert (Script-Attribut bzw. Standard).
-function oneOfOrWarn(name, value, allowed, fallback) {
-  const v = oneOf(value, allowed);
-  if (v === undefined)
-    console.warn(
-      `[AnythingLLM Embed] Ungültiger ${name}-Wert ${JSON.stringify(value)} — erlaubt: ${allowed.join(", ")}. Es gilt der Standard "${fallback}".`,
-    );
-  return v;
-}
-
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
 // genutzt). Rückgabe undefined = verwerfen.
 export const layoutValidations = {
@@ -123,11 +115,11 @@ export const layoutValidations = {
   // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
   // ungültig -> verworfen -> Standard "off"
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
-  // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> Warnung
-  inlineLayout: (v) =>
-    oneOfOrWarn("inlineLayout", v, INLINE_LAYOUT_VALUES, DEFAULT_INLINE_LAYOUT),
-  inlineEffect: (v) =>
-    oneOfOrWarn("inlineEffect", v, INLINE_EFFECT_VALUES, DEFAULT_INLINE_EFFECT),
+  // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> verworfen,
+  // die Warnung (mit dem tatsächlich geltenden Wert) schreibt
+  // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
+  inlineLayout: (v) => oneOf(v, INLINE_LAYOUT_VALUES),
+  inlineEffect: (v) => oneOf(v, INLINE_EFFECT_VALUES),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -139,6 +131,47 @@ export const layoutValidations = {
     return t;
   },
 };
+
+// Ungültige inlineLayout-/inlineEffect-Werte: je Quelle eine console.warn-Zeile,
+// die den tatsächlich geltenden Wert nennt (gültiger Wert der anderen Quelle
+// bzw. Standard). script/server = Rohwerte (Script-Attribute bzw. nicht leere
+// visual_config-Werte), settings = fertig zusammengeführte Settings.
+const ENUM_SOURCES = [
+  ["script", "Script-Attribut"],
+  ["server", "Design Center"],
+];
+export function warnInvalidInlineEnums(
+  script = {},
+  server = {},
+  settings = {},
+) {
+  const raw = { script, server };
+  for (const [key, allowed] of [
+    ["inlineLayout", INLINE_LAYOUT_VALUES],
+    ["inlineEffect", INLINE_EFFECT_VALUES],
+  ]) {
+    const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
+    for (const [src, label] of ENUM_SOURCES) {
+      const value = raw[src][key];
+      if (value === undefined || value === null || value === "" || valid(src))
+        continue;
+      const origin = valid("server")
+        ? "Design Center"
+        : valid("script")
+          ? "Script-Attribut"
+          : "Standard";
+      const effective =
+        key === "inlineLayout"
+          ? `"${settings.inlineLayout}"`
+          : resolveInlineEffect(settings)
+            ? `"${resolveInlineEffect(settings)}"`
+            : "keine Animation";
+      console.warn(
+        `[AnythingLLM Embed] Ungültiger ${key}-Wert ${JSON.stringify(value)} (${label}) — erlaubt: ${allowed.join(", ")}. Wert wird verworfen, es gilt ${effective} (${origin}).`,
+      );
+    }
+  }
+}
 
 // inlineInput gilt nur im Inline-Modus. Wird das Widget als Blase gezeigt
 // (displayMode "bubble" oder Platzhalter fehlt), bleibt die Blase unverändert;
@@ -242,13 +275,20 @@ export function isInlineOverlay(settings = {}) {
   return settings.inlineLayout === "overlay";
 }
 
-// Inline: Klassen des Aufklapp-Effekts (Animation in main.jsx, customCss).
-// Unbekannt/fehlend -> expand.
+// Inline: wirksamer Aufklapp-Effekt. Ausdrücklich gesetzt -> dieser; ohne
+// (gültige) Angabe: schwebend (overlay) "expand", im Seitenfluss null = keine
+// Animation (verhaltensgleich zu vorher).
+export function resolveInlineEffect(settings = {}) {
+  if (INLINE_EFFECT_VALUES.includes(settings.inlineEffect))
+    return settings.inlineEffect;
+  return isInlineOverlay(settings) ? DEFAULT_OVERLAY_EFFECT : null;
+}
+
+// Inline: Klassen des Aufklapp-Effekts (Animation in main.jsx, customCss);
+// "" = keine Animation.
 export function inlineEffectClass(settings = {}) {
-  const effect = INLINE_EFFECT_VALUES.includes(settings.inlineEffect)
-    ? settings.inlineEffect
-    : DEFAULT_INLINE_EFFECT;
-  return `allm-effect allm-effect-${effect}`;
+  const effect = resolveInlineEffect(settings);
+  return effect ? `allm-effect allm-effect-${effect}` : "";
 }
 
 // Overlay-Fallback: schneidet ein Vorfahre des Platzhalters (overflow

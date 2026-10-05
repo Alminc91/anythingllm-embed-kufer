@@ -548,6 +548,8 @@ export default function InlineChat({
 
   const inheritFont = settings.inheritFont === true;
   const boxFloating = view === "box" && floating;
+  const effectClass =
+    view === "box" && animateRef.current ? inlineEffectClass(settings) : "";
   const bar =
     settings.inlineInput === true ? (
       <InlineInputBar
@@ -618,8 +620,8 @@ export default function InlineChat({
               className={
                 view === "overlay"
                   ? chatClasses.overlay
-                  : view === "box" && animateRef.current
-                    ? `${chatClasses.box} ${inlineEffectClass(settings)}`
+                  : effectClass
+                    ? `${chatClasses.box} ${effectClass}`
                     : chatClasses.box
               }
               style={view === "overlay" ? chatStyles.overlay : chatStyles.box}
