@@ -214,14 +214,40 @@ def check_default_shift(browser, base_url):
         shift = after["below"]["dy"] - before["below"]["dy"]
         grow = after["root"]["h"] - before["root"]["h"]
         ok = (after["boxPos"] == "relative" and abs(shift - grow) <= 1 and shift > 300
-              and "allm-effect-expand" in after["cls"])
+              and "allm-effect" not in after["cls"])
         record("AK-1 default-unchanged Inhalt verschoben", ok,
                f"Box {after['boxPos']}, #below +{shift:.0f} px (Inline-Fläche +{grow:.0f} px), Effekt-Klasse: "
-               f"{'expand' if 'allm-effect-expand' in after['cls'] else after['cls']}")
+               f"{'keine' if 'allm-effect' not in after['cls'] else after['cls']}")
         # Außenklick klappt im Seitenfluss NICHT ein (wie bisher)
         page.mouse.click(900, 650)
         page.wait_for_timeout(200)
         record("AK-1 default-unchanged Außenklick ohne Wirkung", geom(page)["open"], "Box bleibt offen")
+    finally:
+        ctx.close()
+
+
+def check_default_no_animation(browser, base_url):
+    """Entscheidung A: ohne ausdrückliche Wahl (flow) keine Animation — die Box
+    steht im ersten Frame vollständig da (verhaltensgleich zu main)."""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INLINE, "inline": True}, tv.Mock())
+    try:
+        ready(page)
+        click_bar(page)
+        s = page.evaluate(
+            "() => { const w = window.__q('#anything-llm-chat'); const c = getComputedStyle(w); return { n: w.getAnimations().length, name: c.animationName, tf: c.transform, op: c.opacity, cls: w.className }; }")
+        ok = s["n"] == 0 and s["name"] == "none" and s["tf"] == "none" and s["op"] == "1" and "allm-effect" not in s["cls"]
+        record("AK-1 default-unchanged ohne Animation (sofort aufgeklappt)", ok,
+               f"laufende Animationen {s['n']}, animation-name {s['name']}, transform {s['tf']}, opacity {s['op']}")
+    finally:
+        ctx.close()
+    # overlay ohne Effekt-Angabe -> expand
+    ctx, page = tv.open_page(browser, base_url, {"attrs": OVERLAY, "inline": True}, tv.Mock())
+    try:
+        ready(page)
+        click_bar(page)
+        s = page.evaluate("() => { const w = window.__q('#anything-llm-chat'); return [getComputedStyle(w).animationName, w.getAnimations().length]; }")
+        record("overlay ohne data-inline-effect -> expand", s[0] == "allm-fx-expand" and s[1] == 1,
+               f"animation-name {s[0]}, laufende Animationen {s[1]}")
     finally:
         ctx.close()
 
@@ -499,7 +525,8 @@ def check_ak6(browser, base_url):
             ok = s["n"] == 0 and s["dur"] == "0s" and s["tf"] == "none" and s["op"] == "1"
             record(f"AK-6 reduzierte Bewegung ({eff})", ok,
                    f"animation-name {s['name']}, Dauer {s['dur']}, laufende Animationen {s['n']}, "
-                   f"--allmi-effect-duration {s['v']} (Seiten-CSS 450ms), sofort transform {s['tf']}, opacity {s['op']}")
+                   f"--allmi-effect-duration {s['v']} (Seiten-CSS 450ms, bleibt; abgeschaltet per animation: none), "
+                   f"sofort transform {s['tf']}, opacity {s['op']}")
         finally:
             ctx.close()
 
@@ -600,6 +627,220 @@ def check_nak2(browser, base_url):
                "(Link stoppt pointerdown per stopPropagation)")
     finally:
         ctx.close()
+    # Seite verbreitert den Platzhalter bei offenem Panel um 160 px
+    # (README-Beispiel data-allm-expanded); der Link steht rechts daneben und
+    # rückt beim Einklappen um 160 px nach links. Einklappen schon beim
+    # pointerdown würde den click verschlucken (mouseup an anderer Stelle).
+    css = ("#row { display: flex; align-items: flex-start; gap: 12px; } "
+           "#kufer-assistent { width: 500px; flex: none; margin: 0; } "
+           "#kufer-assistent[data-allm-expanded] { width: 660px; } main { max-width: none; }")
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FLOAT, "inline": True, "css": css}, tv.Mock())
+    try:
+        ready(page)
+        page.evaluate(
+            "() => { const m = document.getElementById('kufer-assistent'); const row = document.createElement('div'); row.id = 'row'; m.parentNode.insertBefore(row, m); row.appendChild(m); const a = document.createElement('a'); a.id = 'link-side'; a.href = '#ziel-side'; a.textContent = 'Link daneben'; a.style.cssText = 'display:inline-block;padding:10px;white-space:nowrap'; row.appendChild(a); window.__sideClicks = 0; a.addEventListener('click', () => { window.__sideClicks += 1; }); }")
+        tv.settle(page, 200)
+        x0 = page.evaluate("() => document.getElementById('link-side').getBoundingClientRect().x")
+        open_settled(page)
+        x, y = page.evaluate("() => { const r = document.getElementById('link-side').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        mw = page.evaluate("() => document.getElementById('kufer-assistent').getBoundingClientRect().width")
+        page.mouse.click(x, y)
+        page.wait_for_timeout(200)
+        st = page.evaluate("() => [location.hash, window.__sideClicks]")
+        x1 = page.evaluate("() => document.getElementById('link-side').getBoundingClientRect().x")
+        g = geom(page)
+        ok = not g["open"] and st == ["#ziel-side", 1] and x1 < x - 100
+        record("NAK-2 Link neben dem verbreiterten Platzhalter: Handler 1x UND Panel zu", ok,
+               f"Platzhalter offen {mw:.0f} px, Link-Mitte offen x {x:.0f}, Link links zu {x0:.0f} -> nach dem Einklappen {x1:.0f}; "
+               f"offen={g['open']}, location.hash={st[0]}, Klick-Handler {st[1]}x")
+    finally:
+        ctx.close()
+    # Rechts- und Mittelklick außerhalb schließen nicht
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FLOAT, "inline": True}, tv.Mock())
+    try:
+        ready(page)
+        open_settled(page)
+        page.mouse.click(930, 120, button="right")
+        page.wait_for_timeout(150)
+        right = geom(page)["open"]
+        page.mouse.click(930, 120, button="middle")
+        page.wait_for_timeout(150)
+        middle = geom(page)["open"]
+        page.mouse.click(930, 120)
+        page.wait_for_timeout(150)
+        left = geom(page)["open"]
+        record("Nur linke Maustaste: Rechts-/Mittelklick außerhalb schließen nicht", right and middle and not left,
+               f"nach Rechtsklick offen={right}, nach Mittelklick offen={middle}, nach Linksklick offen={left}")
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Touch (iPad): Tippen außerhalb schließt, Wischen nicht
+# ---------------------------------------------------------------------------
+def touch_swipe(page, x, y, dy):
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
+    for i in range(1, 9):
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x, "y": y + dy * i / 8}]})
+        page.wait_for_timeout(16)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    cdp.detach()
+
+
+def check_touch_outside(browser, base_url):
+    opts = {"has_touch": True}
+    for label, no_click in (("Chromium", False), ("ohne click am document wie Safari", True)):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": FLOAT, "inline": True}, tv.Mock(),
+                                 viewport={"width": 1024, "height": 768}, context_options=opts)
+        try:
+            ready(page)
+            x, y = page.evaluate("() => { const r = window.__q('#anything-llm-inline-bar').getBoundingClientRect(); return [r.x + 30, r.y + r.height / 2]; }")
+            page.touchscreen.tap(x, y)
+            wait_open(page)
+            tv.settle(page, 400)
+            if no_click:
+                # Safari: kein click für Taps auf nicht-interaktive Stellen
+                page.evaluate("() => window.addEventListener('click', (e) => e.stopImmediatePropagation(), true)")
+            # Wischen über leeren Seitentext (Überschrift)
+            hx, hy = page.evaluate("() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.x + r.width - 20, r.y + r.height / 2]; }")
+            touch_swipe(page, hx, hy, 60)
+            page.wait_for_timeout(500)
+            after_swipe = geom(page)["open"]
+            page.evaluate("() => window.scrollTo(0, 0)")
+            page.wait_for_timeout(100)
+            hx, hy = page.evaluate("() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.x + r.width - 20, r.y + r.height / 2]; }")
+            page.touchscreen.tap(hx, hy)
+            page.wait_for_timeout(500)
+            after_tap = geom(page)["open"]
+            record(f"Touch außerhalb ({label}): Wischen schließt nicht, Tippen auf Seitentext schließt",
+                   after_swipe and not after_tap, f"nach Wischen offen={after_swipe}, nach Tippen offen={after_tap}")
+        finally:
+            ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Escape mit Fokus in einem Seitenfeld: schließt, Fokus bleibt im Feld
+# ---------------------------------------------------------------------------
+def check_escape_page_field(browser, base_url):
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FLOAT, "inline": True}, tv.Mock())
+    try:
+        ready(page)
+        page.evaluate("() => { const i = document.createElement('input'); i.id = 'page-search'; i.style.cssText = 'position:fixed;left:820px;top:40px;width:150px'; document.body.appendChild(i); }")
+        open_settled(page)
+        page.evaluate("() => document.getElementById('page-search').focus()")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(150)
+        pid = page.evaluate("() => document.activeElement && document.activeElement.id")
+        g = geom(page)
+        record("Escape im Seitenfeld: schließt, Fokus bleibt im Feld", not g["open"] and pid == "page-search",
+               f"offen={g['open']}, document.activeElement=#{pid}")
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Wiedereintritt ohne openChat: Fenster 1200 -> 700 -> 800, Drehen aus dem
+# Vollbild in einen overflow:hidden-Vorfahren, kein Effekt beim Resize
+# ---------------------------------------------------------------------------
+def check_reentry(browser, base_url):
+    chips = ("Welche Sprachkurse gibt es am Abend in der Innenstadt?,"
+             "Voraussetzungen für einen Integrationskurs mit Zertifikat?,"
+             "Yoga für Anfänger am Wochenende")
+    attrs = {**FLOAT, **INPUT, "default-messages": chips}
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": "main { max-width: none; }"},
+                             tv.Mock(config=CFG_NO_MSGS), viewport={"width": 1200, "height": 800})
+    try:
+        ready(page, "#anything-llm-inline-input")
+        h1200 = geom(page)["root"]["h"]
+        open_settled(page, "#anything-llm-inline-bar")
+        page.set_viewport_size({"width": 700, "height": 800})
+        page.wait_for_timeout(300)
+        page.set_viewport_size({"width": 800, "height": 800})
+        page.wait_for_timeout(300)
+        anims = page.evaluate("() => window.__q('#anything-llm-chat').getAnimations().length")
+        spacer = page.evaluate(
+            "() => { const w = window.__q('#anything-llm-inline-input-bar'); const s = w.parentElement; return [s.getBoundingClientRect().height, s.style.height]; }")
+        before = geom(page)
+        # Escape mit Fokus im Widget (Chat-Eingabefeld)
+        page.evaluate("() => window.__q('#message-input').focus()")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        after = geom(page)
+        natural = after["root"]["h"]
+        jump = after["below"]["dy"] - before["below"]["dy"]
+        ok = (before["open"] and before["boxPos"] == "absolute" and abs(spacer[0] - natural) <= 1
+              and abs(jump) <= 1 and natural != h1200)
+        record("Wiedereintritt 1200 -> 700 -> 800: Platzhalter = natürliche Höhe, kein Sprung beim Einklappen", ok,
+               f"Leiste 1200 px: {h1200:.0f} px; nach 800 px: unsichtbare Leiste {spacer[0]:.0f} px (style {spacer[1] or '-'}), "
+               f"natürliche Höhe eingeklappt {natural:.0f} px, #below Δ beim Einklappen {jump:+.1f} px, eingeklappt={not after['open']}")
+        record("Kein Effekt beim Wiedereintritt (Resize über 768 px)", anims == 0, f"getAnimations() = {anims}")
+    finally:
+        ctx.close()
+    # Drehen: mobil geöffnet (Vollbild), dann quer (>=768px) in einen
+    # overflow:hidden-Vorfahren -> Flow-Fallback
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FLOAT, "inline": True}, tv.Mock(),
+                             viewport=tv.MOBILE)
+    try:
+        ready(page)
+        page.evaluate(
+            "() => { const m = document.getElementById('kufer-assistent'); const w = document.createElement('div'); w.id = 'clip'; w.style.cssText = 'overflow:hidden;height:220px;border:1px dashed #999'; m.parentNode.insertBefore(w, m); w.appendChild(m); }")
+        click_bar(page)
+        wait_open(page)
+        tv.settle(page, 300)
+        full = geom(page)["chatPos"]
+        page.set_viewport_size({"width": 1000, "height": 700})
+        page.wait_for_timeout(400)
+        g = geom(page)
+        anims = page.evaluate("() => window.__q('#anything-llm-chat').getAnimations().length")
+        warns = [t for (k, t) in page.console_log if k == "warning" and "inlineLayout" in t]
+        ok = full == "fixed" and g["open"] and g["boxPos"] == "relative" and g["hostParent"] == "kufer-assistent" and len(warns) == 1 and anims == 0
+        record("Drehen aus dem Vollbild in overflow:hidden-Vorfahren -> Flow-Fallback", ok,
+               f"mobil {full}; quer: Box {g['boxPos']}, Host in {g['hostParent']}, Warnungen {len(warns)}, Animationen {anims}")
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Fund B: Absenden aus der Leiste scrollt die Box vollständig ins Bild (wie Klick)
+# ---------------------------------------------------------------------------
+def check_scroll_after_send(browser, base_url):
+    vp = {"width": 1280, "height": 900}
+    spacer = ("() => { const s = document.createElement('div'); s.style.height = '560px'; s.textContent = 'Abstand';"
+              " document.getElementById('slot').before(s); }")
+    for layout_label, extra in (("flow", {}), ("overlay", {"inline-layout": "overlay"})):
+        attrs = {**INLINE, **INPUT, **extra, "inline-height": "520px"}
+        res = {}
+        for how in ("click", "enter", "chip"):
+            m = tv.Mock(config=CFG_NO_MSGS, stream="hang")
+            ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True}, m, viewport=vp)
+            try:
+                ready(page, "#anything-llm-inline-input")
+                page.evaluate(spacer)
+                tv.settle(page, 200)
+                if how == "click":
+                    click_bar(page)  # neben das Feld: nur aufklappen
+                elif how == "enter":
+                    page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+                    page.keyboard.type("Hallo")
+                    page.keyboard.press("Enter")
+                else:
+                    x, y = page.evaluate("() => { const r = window.__q('.allm-inline-chip').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+                    page.mouse.click(x, y)
+                wait_open(page)
+                page.wait_for_timeout(1200)
+                res[how] = page.evaluate(
+                    "() => { const b = window.__q('#anything-llm-chat').getBoundingClientRect(); return { sy: scrollY, bottom: b.bottom, top: b.top, vh: innerHeight }; }")
+            finally:
+                m.release()
+                ctx.close()
+        c = res["click"]
+        for how in ("enter", "chip"):
+            r = res[how]
+            ok = r["sy"] >= c["sy"] - 2 and r["bottom"] <= r["vh"] and r["top"] >= 0
+            record(f"B Scrollen nach Absenden aus der Leiste ({how}, {layout_label})", ok,
+                   f"scrollY {r['sy']:.0f} (Klick-Öffnen {c['sy']:.0f}), Box {r['top']:.0f}–{r['bottom']:.0f} px, "
+                   f"Viewport {r['vh']} px")
 
 
 # ---------------------------------------------------------------------------
@@ -698,18 +939,22 @@ def check_signal(browser, base_url):
 
 
 def check_warn(browser, base_url):
-    ctx, page = tv.open_page(browser, base_url, {"attrs": {**INLINE, "inline-effect": "wobble"}, "inline": True},
-                             tv.Mock())
-    try:
-        ready(page)
-        click_bar(page)
-        wait_open(page)
-        cls = geom(page)["cls"]
-        warns = [t for (k, t) in page.console_log if k == "warning" and "inlineEffect" in t]
-        record('NAK-3 data-inline-effect="wobble" (Browser)', "allm-effect-expand" in cls and len(warns) == 1,
-               f"Klasse {'expand' if 'allm-effect-expand' in cls else cls}, Warnungen {len(warns)}")
-    finally:
-        ctx.close()
+    # ungültig = ohne Angabe: flow -> keine Animation, overlay -> expand
+    for label, attrs, want in (("flow", INLINE, None), ("overlay", OVERLAY, "allm-effect-expand")):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": {**attrs, "inline-effect": "wobble"}, "inline": True},
+                                 tv.Mock())
+        try:
+            ready(page)
+            click_bar(page)
+            wait_open(page)
+            cls = geom(page)["cls"]
+            warns = [t for (k, t) in page.console_log if k == "warning" and "inlineEffect" in t]
+            ok_cls = ("allm-effect" not in cls) if want is None else (want in cls)
+            record(f'NAK-3 data-inline-effect="wobble" (Browser, {label})', ok_cls and len(warns) == 1,
+                   f"Klasse {'keine' if 'allm-effect' not in cls else cls.split()[-1]}, Warnungen {len(warns)}: "
+                   f"{warns[0][warns[0].find('—'):][:80] if warns else '-'}")
+        finally:
+            ctx.close()
 
 
 def main():
@@ -737,6 +982,11 @@ def main():
                 check_ak8(browser, base_url)
                 check_nak1(browser, base_url)
                 check_nak2(browser, base_url)
+                check_touch_outside(browser, base_url)
+                check_escape_page_field(browser, base_url)
+                check_reentry(browser, base_url)
+                check_scroll_after_send(browser, base_url)
+                check_default_no_animation(browser, base_url)
                 check_warn(browser, base_url)
                 check_nak4(browser, base_url)
                 check_fallback(browser, base_url)
