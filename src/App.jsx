@@ -15,6 +15,7 @@ import {
   bubbleButtonStyle,
   bubbleWindowCss,
   findMountTarget,
+  warnIfInlineInputIgnored,
   whenDomReady,
 } from "@/utils/layout";
 
@@ -91,6 +92,12 @@ export default function App() {
       cancelled = true;
     };
   }, [embedSettings.loaded]);
+
+  // Blase (auch Inline ohne Platzhalter): inlineInput hat keine Wirkung ->
+  // eine Warnzeile, sobald die Darstellung feststeht.
+  useEffect(() => {
+    if (mountTarget === null) warnIfInlineInputIgnored(embedSettings, false);
+  }, [mountTarget]);
 
   useEffect(() => {
     // Inline: kein Auto-Öffnen der Blase (und kein sessionStorage-Offen-Flag,

@@ -34,3 +34,17 @@ export function isTouchDevice() {
   } catch {}
   return window.innerWidth < 768;
 }
+
+/**
+ * Grober Zeiger (Finger): Phone/Tablet. Anders als isTouchDevice() zählt ein
+ * schmales Desktop-Fenster NICHT dazu — dort hat der Nutzer eine Hardware-
+ * Tastatur, ein Fokus öffnet keine Bildschirmtastatur.
+ */
+export function isCoarsePointer() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.matchMedia?.("(pointer: coarse)").matches === true;
+  } catch {
+    return false;
+  }
+}

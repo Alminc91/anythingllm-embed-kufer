@@ -216,7 +216,7 @@ class Mock:
 
 
 def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light",
-              reduced_motion="no-preference", before_goto=None, viewport=None):
+              reduced_motion="no-preference", before_goto=None, viewport=None, context_options=None):
     ctx = browser.new_context(
         viewport=viewport or VIEWPORT,
         device_scale_factor=1,
@@ -224,6 +224,7 @@ def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light
         timezone_id="Europe/Berlin",
         color_scheme=color_scheme,
         reduced_motion=reduced_motion,
+        **(context_options or {}),
     )
     ctx.add_init_script(INIT_JS)
     brand = (FIXTURES / "brand.png").read_bytes()

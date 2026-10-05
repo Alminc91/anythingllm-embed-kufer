@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -13,11 +14,14 @@ import { resolveChatIcon } from "@/components/OpenButton";
 import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
-import { isTouchDevice } from "@/utils/platform";
-import { BAR_THEMES } from "@/utils/theme";
+import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
+import { BAR_THEMES, ON_ACCENT_TEXT } from "@/utils/theme";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
+  DEFAULT_INLINE_INPUT_PLACEHOLDER,
+  DEFAULT_INLINE_SEND_TEXT,
   inlineBoxStyle,
+  inlineChips,
   inlineMaxWidth,
 } from "@/utils/layout";
 
@@ -36,8 +40,22 @@ import {
 // eine laufende Antwort bricht nicht ab, beim Wiederöffnen wird nichts neu geladen.
 // Viewport <768px bei offener Box -> eingeklappt (Leiste); zurück >=768px zeigt
 // die Box wieder. inlineStartState="expanded" gilt entsprechend nur ab 768px.
+//
+// inlineInput (data-inline-input="true" bzw. visual_config): die eingeklappte
+// Leiste ist ein Eingabefeld mit Absende-Knopf, darunter die defaultMessages
+// als Chips. Enter/Knopf/Chip klappt auf UND sendet die Frage: sie wird als
+// Übergabe pendingFirstMessage = { ticket, text, send, suppressAutoFocus } an
+// das ChatWindow gegeben; der ChatContainer sendet jedes Ticket genau einmal,
+// sobald er bereit ist. Ein neues Absenden aus der Leiste ersetzt eine noch
+// nicht verbrauchte Übergabe (die ältere verfällt) und klappt immer auf;
+// Zuklappen verwirft sie und legt ihren Text zurück ins Leisten-Feld (nichts
+// wird unsichtbar gesendet). Klick in die Leiste neben das Feld: aufklappen,
+// getippter Text landet unversendet im Chat-Eingabefeld (send: false). Es gibt
+// nur EIN Eingabefeld je Zustand.
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
+// Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
+const CHAT_WINDOW_ID = "anything-llm-chat";
 const DESKTOP_QUERY = "(min-width: 768px)"; // = Tailwind md
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
@@ -73,6 +91,12 @@ const BAR_STYLE = {
   backdropFilter: "var(--allmi-bar-backdrop)",
   WebkitBackdropFilter: "var(--allmi-bar-backdrop)",
 };
+
+// Akzent der Leiste (Icon-Kreis, Absende-Knopf): --allm-accent, Fallback
+// buttonColor bzw. der Kufer-Standard.
+function barAccent(settings) {
+  return `var(--allmi-accent, ${settings.buttonColor || "#01a5a9"})`;
+}
 
 // Unsichtbares Hilfsfeld fürs erste Öffnen des Overlays: existiert das echte
 // Eingabefeld noch nicht (Chat lädt), bekommt dieses Feld den Fokus in der
@@ -159,6 +183,14 @@ export default function InlineChat({
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
   const chatMountedRef = useRef(false);
+  // Übergabe Frage/Entwurf aus der Leiste (inlineInput), einzige Quelle der
+  // Wahrheit: { ticket, text, send, suppressAutoFocus } | null. ticket ist eine
+  // fortlaufende Nummer; der ChatContainer sendet jedes Ticket genau einmal.
+  const [pendingFirstMessage, setPendingFirstMessage] = useState(null);
+  const lastTicketRef = useRef(0);
+  // Text der Eingabe-Leiste. Liegt hier, weil die Leiste beim Aufklappen
+  // abgebaut wird: beim Zuklappen kommt eine verworfene Frage zurück ins Feld.
+  const [barText, setBarText] = useState("");
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -248,29 +280,86 @@ export default function InlineChat({
     if (inOverlay) proxyRef.current?.focus({ preventScroll: true });
   };
 
-  const openChat = () => {
+  // first (nur inlineInput): { text, send } aus der Leiste, sonst null.
+  // Klappt immer auf: die Leiste ist nie "tot".
+  const openChat = (first = null) => {
+    const hasFirst = typeof first?.text === "string" && first.text !== "";
+    const sending = hasFirst && first.send === true;
+    const ticket = hasFirst ? ++lastTicketRef.current : 0;
+    const queue = () => {
+      if (!hasFirst) return;
+      setBarText("");
+      // Eine noch nicht verbrauchte Übergabe wird ersetzt (die ältere
+      // verfällt). Gleicher Text + gleiche Art = dieselbe Übergabe (zweites
+      // Enter, Knopf nach Enter, Doppelklick) -> kein zweites Ticket (NAK-1).
+      setPendingFirstMessage((prev) =>
+        prev && prev.text === first.text && prev.send === sending
+          ? prev
+          : {
+              ticket,
+              text: first.text,
+              send: sending,
+              // Touch: keine Tastatur über der laufenden Antwort (PromptInput
+              // überspringt den Auto-Fokus, solange die Übergabe wartet —
+              // also beim ersten Mount des Chats)
+              suppressAutoFocus: sending && isCoarsePointer(),
+            },
+      );
+    };
     if (!isDesktop) {
       spacerHeightRef.current = host?.getBoundingClientRect?.().height || 0;
       // flushSync: Overlay + Host-Umhängen synchron, damit der Fokus unten noch
       // in derselben Nutzer-Geste liegt (iOS öffnet die Tastatur nur dann).
-      flushSync(() => setOverlay(true));
-      focusInput(true);
+      flushSync(() => {
+        queue();
+        setOverlay(true);
+      });
+      // Frage abgeschickt: keine Tastatur über der laufenden Antwort
+      if (!sending) focusInput(true);
       return;
     }
     scrollOnExpandRef.current = true;
-    flushSync(() => setExpanded(true));
+    flushSync(() => {
+      queue();
+      setExpanded(true);
+    });
     // Touch-Tablets: kein Auto-Fokus (Tastatur würde die Seite verschieben)
     if (!isTouchDevice()) focusInput(false);
   };
 
+  // Vom ChatContainer aufgerufen, sobald er ein Ticket verbraucht hat.
+  const onPendingFirstMessageConsumed = useCallback((pending) => {
+    setPendingFirstMessage((prev) =>
+      prev?.ticket === pending?.ticket ? null : prev,
+    );
+    // Nach der Antwort zurück ins Chat-Eingabefeld wie nach dem Absenden aus
+    // dem Feld (PromptInput: Inline-Box nicht auf Touch-Geräten).
+    if (pending?.send) focusRequestRef.current = true;
+  }, []);
+
   // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
+  // Eine noch nicht verbrauchte Übergabe wird verworfen (nie unsichtbar
+  // senden), ihr Text kommt zurück ins Leisten-Feld.
   const closeChat = () => {
+    const unsent = pendingFirstMessage?.text;
     flushSync(() => {
+      setPendingFirstMessage(null);
+      if (unsent) setBarText(unsent);
       setOverlay(false);
       setExpanded(false);
     });
+    // Eingabe-Leiste bei Finger-Bedienung nicht fokussieren: ein Textfeld
+    // würde sofort die Bildschirmtastatur öffnen. Schmale Desktop-Fenster
+    // (Maus/Tastatur) bekommen den Fokus wie breite.
+    if (settings.inlineInput === true && isCoarsePointer()) return;
     barRef.current?.focus({ preventScroll: true });
   };
+  // Escape-Listener ruft immer das aktuelle closeChat (sieht die aktuelle
+  // Übergabe), ohne bei jedem Render neu angehängt zu werden.
+  const closeChatRef = useRef(closeChat);
+  useLayoutEffect(() => {
+    closeChatRef.current = closeChat;
+  });
 
   // Escape schließt das Overlay bzw. klappt die Box ein — nur wenn der Fokus
   // im Widget liegt (Listener am Shadow Root sieht nur Events aus dem Widget).
@@ -279,7 +368,7 @@ export default function InlineChat({
     if (!root || view === "bar") return;
     const onKeyDown = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      closeChat();
+      closeChatRef.current();
     };
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
@@ -308,14 +397,25 @@ export default function InlineChat({
         className={`allm-relative allm-w-full allm-font-sans ${inheritFont ? "allm-inherit-font" : ""}`}
         style={{ ...TEXT_RESET, maxWidth: inlineMaxWidth(settings) }}
       >
-        {view === "bar" && (
-          <InlineBar
-            ref={barRef}
-            settings={settings}
-            narrow={narrow}
-            onOpen={openChat}
-          />
-        )}
+        {view === "bar" &&
+          (settings.inlineInput === true ? (
+            <InlineInputBar
+              ref={barRef}
+              settings={settings}
+              narrow={narrow}
+              value={barText}
+              onChange={setBarText}
+              expanded={view !== "bar"}
+              onOpen={openChat}
+            />
+          ) : (
+            <InlineBar
+              ref={barRef}
+              settings={settings}
+              narrow={narrow}
+              onOpen={() => openChat()}
+            />
+          ))}
         {chatMountedRef.current && (
           <div
             ref={boxRef}
@@ -330,7 +430,7 @@ export default function InlineChat({
           >
             <div
               ref={chatWindowRef}
-              id="anything-llm-chat"
+              id={CHAT_WINDOW_ID}
               className={
                 view === "overlay" ? chatClasses.overlay : chatClasses.box
               }
@@ -353,6 +453,8 @@ export default function InlineChat({
                 switchConversation={switchConversation}
                 justCreatedRef={justCreatedRef}
                 compactHeader={isKeyboardOpen}
+                pendingFirstMessage={pendingFirstMessage}
+                onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
               />
             </div>
           </div>
@@ -366,14 +468,11 @@ const InlineBar = forwardRef(function InlineBar(
   { settings, narrow, onOpen },
   ref,
 ) {
-  const accent = settings.buttonColor || "#01a5a9";
+  const accent = barAccent(settings);
   const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
-  // Immer als Text rendern (React escaped), nie als HTML.
-  const text =
-    typeof settings.inlineCollapsedText === "string" &&
-    settings.inlineCollapsedText.trim()
-      ? settings.inlineCollapsedText.trim()
-      : DEFAULT_INLINE_COLLAPSED_TEXT;
+  // Immer als Text rendern (React escaped), nie als HTML. Wert kommt
+  // validiert (getrimmt, max. 120 Zeichen) aus loadEmbedSettings.
+  const text = settings.inlineCollapsedText || DEFAULT_INLINE_COLLAPSED_TEXT;
   const iconSize = narrow ? 36 : 42;
 
   return (
@@ -396,8 +495,8 @@ const InlineBar = forwardRef(function InlineBar(
         style={{
           width: `${iconSize}px`,
           height: `${iconSize}px`,
-          backgroundColor: `var(--allmi-accent, ${accent})`,
-          color: "#FFFFFF",
+          backgroundColor: accent,
+          color: ON_ACCENT_TEXT,
           // dunkle Leiste: heller Ring, damit auch dunkle Akzentfarben sichtbar
           // bleiben (--allmi-bar-ring nur bei dunkler Leiste gesetzt)
           boxShadow: "var(--allmi-bar-ring)",
@@ -422,5 +521,162 @@ const InlineBar = forwardRef(function InlineBar(
         style={{ opacity: 0.6 }}
       />
     </button>
+  );
+});
+
+// Leiste als Eingabefeld (inlineInput): Icon, Feld, Absende-Knopf; darunter
+// die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
+// Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
+const InlineInputBar = forwardRef(function InlineInputBar(
+  { settings, narrow, value, onChange, expanded, onOpen },
+  ref,
+) {
+  const accent = barAccent(settings);
+  const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
+  // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
+  const placeholder =
+    settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
+  const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
+  const chips = inlineChips(settings);
+
+  // Enter oder Knopf: mit Text aufklappen + senden, leer nur aufklappen.
+  const submit = (e) => {
+    e.preventDefault();
+    const text = value.trim();
+    onOpen(text ? { text, send: true } : null);
+  };
+  // Klick in die Leiste neben Feld/Knopf: aufklappen, Text unversendet mitnehmen.
+  const openWithDraft = (e) => {
+    if (e.target?.closest?.("input, button")) return;
+    const text = value.trim();
+    onOpen(text ? { text, send: false } : null);
+  };
+  // Chip: leeres Feld -> wie Enter mit dem Chip-Text. Steht schon etwas im
+  // Feld, wird der Chip-Text angehängt (nichts ersetzt, nichts gesendet).
+  const pickChip = (e, chip) => {
+    if (!value.trim()) {
+      onOpen({ text: chip, send: true });
+      return;
+    }
+    onChange(`${value.replace(/\s+$/, "")} ${chip}`);
+    e.currentTarget
+      .closest("#anything-llm-inline-input-bar")
+      ?.querySelector("#anything-llm-inline-input")
+      ?.focus({ preventScroll: true });
+  };
+
+  return (
+    <div id="anything-llm-inline-input-bar">
+      <form
+        id="anything-llm-inline-bar"
+        role="search"
+        aria-label={placeholder}
+        onSubmit={submit}
+        onClick={openWithDraft}
+        className="allm-w-full allm-flex allm-items-center allm-box-border allm-m-0 allm-font-sans allm-cursor-pointer"
+        style={{
+          ...BAR_STYLE,
+          padding: narrow ? "6px 6px 6px 14px" : "8px 8px 8px 12px",
+          gap: narrow ? "8px" : "12px",
+          minHeight: narrow ? "56px" : "66px",
+        }}
+      >
+        {/* schmale Spalte (<480px): ohne Icon, damit Feld + Platzhalter Platz haben */}
+        {!narrow && (
+          <span
+            className="allm-flex-shrink-0 allm-rounded-full allm-flex allm-items-center allm-justify-center"
+            style={{
+              width: "42px",
+              height: "42px",
+              backgroundColor: accent,
+              color: ON_ACCENT_TEXT,
+              boxShadow: "var(--allmi-bar-ring)",
+            }}
+          >
+            <Icon size={22} weight="fill" />
+          </span>
+        )}
+        <input
+          ref={ref}
+          id="anything-llm-inline-input"
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          autoComplete="off"
+          enterKeyHint="send"
+          className="allm-font-sans"
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            margin: 0,
+            padding: "8px 2px",
+            border: "none",
+            background: "transparent",
+            color: "inherit",
+            // 16px: kein iOS-Zoom beim Fokus
+            fontSize: "16px",
+            lineHeight: 1.35,
+            cursor: "text",
+          }}
+        />
+        <button
+          type="submit"
+          id="anything-llm-inline-send"
+          aria-expanded={expanded === true}
+          aria-controls={CHAT_WINDOW_ID}
+          className="allm-flex-shrink-0 allm-font-sans allm-font-semibold allm-cursor-pointer allm-transition-opacity allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))]"
+          style={{
+            height: narrow ? "42px" : "48px",
+            maxWidth: "45%",
+            padding: narrow ? "0 14px" : "0 20px",
+            margin: 0,
+            border: "none",
+            borderRadius: "max(0px, calc(var(--allmi-bar-radius, 16px) - 6px))",
+            backgroundColor: accent,
+            color: ON_ACCENT_TEXT,
+            fontSize: narrow ? "15px" : "16px",
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {sendText}
+        </button>
+      </form>
+      {chips.length > 0 && (
+        <div
+          id="anything-llm-inline-chips"
+          className="allm-flex allm-items-center allm-justify-center"
+          style={{ flexWrap: "wrap", gap: "8px", marginTop: "12px" }}
+        >
+          {chips.map((chip, i) => (
+            <button
+              key={i}
+              type="button"
+              className="allm-inline-chip allm-font-sans allm-cursor-pointer"
+              onClick={(e) => pickChip(e, chip)}
+              style={{
+                maxWidth: "100%",
+                margin: 0,
+                padding: "6px 14px",
+                border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
+                borderRadius: "var(--allmi-bar-radius, 16px)",
+                backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
+                color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
+                fontSize: narrow ? "13px" : "14px",
+                lineHeight: 1.3,
+                textAlign: "center",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 });

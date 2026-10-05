@@ -160,6 +160,35 @@ const customCss = `
   #anythingllm-embed-root a:focus-visible {
     outline: var(--allmi-focus-ring, revert);
   }
+
+  /* Inline-Leiste als Eingabefeld (inlineInput): Fokusring um die ganze Pille
+     (--allm-focus-ring, sonst 2px Akzent), Platzhalter in Leisten-Textfarbe,
+     Hover von Knopf und Chips. Nur Variablen, keine festen Farben. */
+  #anything-llm-inline-input {
+    outline: none;
+  }
+  #anything-llm-inline-input::placeholder {
+    color: currentColor;
+    opacity: 0.7;
+  }
+  #anything-llm-inline-bar:has(#anything-llm-inline-input:focus-visible) {
+    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent));
+    outline-offset: 2px;
+  }
+  @supports not selector(:has(*)) {
+    #anything-llm-inline-input:focus-visible {
+      outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent));
+    }
+  }
+  #anything-llm-inline-send:hover {
+    opacity: 0.9;
+  }
+  .allm-inline-chip {
+    transition: border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
+  }
+  .allm-inline-chip:hover {
+    border-color: var(--allmi-accent);
+  }
 `;
 
 // Script-Settings vor Shadow DOM Erstellung lesen

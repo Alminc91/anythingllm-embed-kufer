@@ -36,6 +36,10 @@ export default function PromptInput({
   onChange,
   inputDisabled,
   buttonDisabled,
+  // Inline-Leiste: Frage auf einem Touch-Gerät aus der Leiste abgeschickt und
+  // noch nicht verbraucht -> kein Auto-Fokus (keine Bildschirmtastatur über
+  // der laufenden Antwort). Gilt nur, solange die Übergabe wartet.
+  suppressAutoFocus = false,
 }) {
   const { t } = useTranslation();
   const embedMode = useEmbedMode();
@@ -78,9 +82,10 @@ export default function PromptInput({
     if (!inputDisabled && textareaRef.current) {
       const requested = embedMode.consumeFocusRequest?.() === true;
       const wanted =
-        !embedMode.inline ||
-        embedMode.overlay ||
-        ((refocusRef.current || requested) && !isTouchDevice());
+        !suppressAutoFocus &&
+        (!embedMode.inline ||
+          embedMode.overlay ||
+          ((refocusRef.current || requested) && !isTouchDevice()));
       if (wanted && !focusIsElsewhereOnPage()) {
         // preventScroll: ein Fokus darf nie die Webseite zum Eingabefeld scrollen
         if (embedMode.inline)

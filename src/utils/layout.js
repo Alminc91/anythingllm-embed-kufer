@@ -10,6 +10,11 @@ export const DEFAULT_MOUNT_SELECTOR = "#kufer-assistent";
 export const DEFAULT_INLINE_COLLAPSED_TEXT =
   "Jetzt mit unserem KI-Assistenten schreiben";
 export const DEFAULT_INLINE_HEIGHT = "600px";
+// Inline-Leiste als Eingabefeld (inlineInput): Platzhalter + Text des Knopfs
+export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …";
+export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
+// Wunschfragen-Chips unter der Leiste (aus defaultMessages): höchstens so viele
+export const INLINE_CHIPS_MAX = 6;
 
 // Grenzen (Widget-seitig geklemmt, unabhängig davon was gespeichert ist)
 export const INLINE_MIN_HEIGHT_PX = 400;
@@ -19,6 +24,7 @@ export const WINDOW_MIN_WIDTH_PX = 320;
 export const WINDOW_MIN_HEIGHT_PX = 400;
 export const OFFSET_MAX_PX = 200;
 export const INLINE_TEXT_MAX_LEN = 120;
+export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
@@ -64,10 +70,10 @@ function bool(value) {
   return undefined;
 }
 
-function shortText(value) {
+function shortText(value, maxLen = INLINE_TEXT_MAX_LEN) {
   if (typeof value !== "string") return undefined;
   const v = value.trim();
-  if (v.length === 0 || v.length > INLINE_TEXT_MAX_LEN) return undefined;
+  if (v.length === 0 || v.length > maxLen) return undefined;
   return v;
 }
 
@@ -83,7 +89,11 @@ export const layoutValidations = {
   windowHeight: (v) => cssLength(v, ["px", "%", "vw", "vh"]),
   offsetX: (v) => intRange(v, 0, OFFSET_MAX_PX),
   offsetY: (v) => intRange(v, 0, OFFSET_MAX_PX),
-  inlineCollapsedText: shortText,
+  inlineCollapsedText: (v) => shortText(v),
+  // Leiste als Eingabefeld mit Absende-Knopf + Wunschfragen-Chips (nur Inline)
+  inlineInput: bool,
+  inlineInputPlaceholder: (v) => shortText(v),
+  inlineSendText: (v) => shortText(v, INLINE_SEND_TEXT_MAX_LEN),
   inlineHeight: (v) => cssLength(v, ["px", "vh"]),
   inlineMaxWidth: (v) => cssLength(v, ["px"]),
   inlineStartState: (v) => oneOf(v, ["collapsed", "expanded"]),
@@ -102,6 +112,29 @@ export const layoutValidations = {
     return t;
   },
 };
+
+// inlineInput gilt nur im Inline-Modus. Wird das Widget als Blase gezeigt
+// (displayMode "bubble" oder Platzhalter fehlt), bleibt die Blase unverändert;
+// eine Warnzeile weist auf das ignorierte Attribut hin. Rückgabe: gewarnt?
+export function warnIfInlineInputIgnored(settings = {}, isInline = false) {
+  if (isInline || settings.inlineInput !== true) return false;
+  console.warn(
+    "[AnythingLLM Embed] inlineInput (data-inline-input) wirkt nur im Inline-Modus — wird in der Chat-Blase ignoriert.",
+  );
+  return true;
+}
+
+// Wunschfragen-Chips: defaultMessages (Liste von Strings), leere/Nicht-Strings
+// verworfen, höchstens INLINE_CHIPS_MAX.
+export function inlineChips(settings = {}) {
+  const list = Array.isArray(settings.defaultMessages)
+    ? settings.defaultMessages
+    : [];
+  return list
+    .filter((m) => typeof m === "string" && m.trim().length > 0)
+    .map((m) => m.trim())
+    .slice(0, INLINE_CHIPS_MAX);
+}
 
 // ---------------------------------------------------------------------------
 // Blase: CSS für Fenstergröße/Randabstand (nur Tablet/Desktop >=768px; mobil

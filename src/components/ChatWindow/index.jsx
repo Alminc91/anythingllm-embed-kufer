@@ -22,6 +22,12 @@ export default function ChatWindow({
   switchConversation = () => {},
   justCreatedRef = null,
   compactHeader = false,
+  // Inline-Leiste (inlineInput): Frage/Entwurf aus der eingeklappten Leiste,
+  // { ticket, text, send, suppressAutoFocus }. ChatContainer verbraucht jedes
+  // Ticket genau einmal, sobald er bereit ist (Verlauf geladen), und meldet es
+  // über onPendingFirstMessageConsumed zurück.
+  pendingFirstMessage = null,
+  onPendingFirstMessageConsumed = null,
 }) {
   const { inline } = useEmbedMode();
   // Anker für den Scroll-nach-unten-Pfeil (siehe ChatHistory)
@@ -126,6 +132,8 @@ export default function ChatWindow({
             conversationId={conversationId}
             settings={settings}
             knownHistory={chatHistory}
+            pendingFirstMessage={pendingFirstMessage}
+            onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
           />
         </div>
         <div className="allm-pt-2 allm-pb-3 allm-h-fit allm-z-10">

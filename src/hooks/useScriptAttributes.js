@@ -3,6 +3,8 @@ import { embedderSettings } from "../main";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_HEIGHT,
+  DEFAULT_INLINE_INPUT_PLACEHOLDER,
+  DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
 } from "@/utils/layout";
@@ -65,6 +67,12 @@ export const DEFAULT_SETTINGS = {
   inlineHeight: DEFAULT_INLINE_HEIGHT, // px oder vh, geklemmt 400–1200px
   inlineMaxWidth: null, // px, null = volle Container-Breite
   inlineStartState: "collapsed", // "collapsed" | "expanded"
+  // Eingeklappte Leiste als Eingabefeld mit Absende-Knopf; darunter die
+  // defaultMessages als Chips (max. 6). false = Klickfläche wie bisher.
+  // Nur Inline-Modus (Blase: ignoriert, eine Warnung).
+  inlineInput: false,
+  inlineInputPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER, // max. 120 Zeichen
+  inlineSendText: DEFAULT_INLINE_SEND_TEXT, // Knopf, max. 40 Zeichen
   // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
   // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
   inlineTheme: null,

@@ -10,6 +10,8 @@ export default function ChatContainer({
   conversationId = null,
   settings,
   knownHistory = [],
+  pendingFirstMessage = null,
+  onPendingFirstMessageConsumed = null,
 }) {
   const [message, setMessage] = useState("");
   const [loadingResponse, setLoadingResponse] = useState(false);
@@ -20,6 +22,8 @@ export default function ChatContainer({
   // gestreamten Chunk (chatHistory-Dependency) neu laeuft -- ein Abort im
   // Effect-Cleanup wuerde den laufenden Stream sonst nach dem ersten Chunk toeten.
   const streamControllerRef = useRef(null);
+  // Zuletzt verbrauchtes Ticket der Inline-Leiste: jedes Ticket genau einmal.
+  const lastConsumedTicketRef = useRef(null);
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -143,6 +147,27 @@ export default function ChatContainer({
     return () => streamControllerRef.current?.abort();
   }, []);
 
+  // Inline-Leiste (inlineInput): Frage bzw. Entwurf aus der eingeklappten
+  // Leiste übernehmen. Dieser Container wird erst nach dem Laden des Verlaufs
+  // gemountet (ChatWindow zeigt vorher die Ladeanzeige) -> hier ist der Chat
+  // bereit. Jedes Ticket wird genau EINMAL verbraucht (Vergleich mit
+  // lastConsumedTicketRef, auch bei doppelt laufendem Effect/StrictMode) ->
+  // keine Doppelsendung; danach gibt die Leiste die Übergabe frei.
+  // send: über denselben Pfad wie ein Vorschlag/Senden (sendCommand ->
+  // fetchReply -> ChatService.streamChat, inkl. conversationId); läuft gerade
+  // noch eine Antwort, wird gewartet. Entwurf (send false): ins Eingabefeld —
+  // ein dort schon getippter Text bleibt stehen, der Entwurf wird angehängt.
+  useEffect(() => {
+    const pending = pendingFirstMessage;
+    if (!pending?.text || !onPendingFirstMessageConsumed) return;
+    if (pending.ticket === lastConsumedTicketRef.current) return;
+    if (pending.send && loadingResponse) return;
+    lastConsumedTicketRef.current = pending.ticket;
+    onPendingFirstMessageConsumed(pending);
+    if (pending.send) sendCommand(pending.text, [], []);
+    else setMessage((current) => appendDraft(current, pending.text));
+  }, [pendingFirstMessage, loadingResponse]);
+
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;
     sendCommand(event.detail.command, [], []);
@@ -172,8 +197,16 @@ export default function ChatContainer({
           onChange={handleMessageChange}
           inputDisabled={loadingResponse}
           buttonDisabled={loadingResponse}
+          suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
       </div>
     </div>
   );
+}
+
+// Entwurf aus der Leiste ins Chat-Eingabefeld: leeres Feld -> Entwurf, sonst
+// mit einem Leerzeichen angehängt (Getipptes wird nie überschrieben).
+export function appendDraft(current, draft) {
+  if (!current || current.trim() === "") return draft;
+  return `${current.replace(/\s+$/, "")} ${draft}`;
 }
