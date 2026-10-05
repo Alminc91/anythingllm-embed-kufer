@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
 import { embedderSettings } from "../main";
+import {
+  DEFAULT_INLINE_COLLAPSED_TEXT,
+  DEFAULT_INLINE_HEIGHT,
+  DEFAULT_MOUNT_SELECTOR,
+  layoutValidations,
+} from "@/utils/layout";
+
+// Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
+// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
+// / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
+const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
 
 const DEFAULT_SETTINGS = {
   embedId: null, //required
@@ -34,8 +45,27 @@ const DEFAULT_SETTINGS = {
   assistantName: "Ihr Online-Berater", // default assistant name
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
-  windowHeight: "80%", // height of chat window in number:css-prefix
-  windowWidth: "25%", // width of chat window in number:css-prefix
+  // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
+  // (Server-Config). null = bisherige Standardgröße (40 % / 25 % Breite, 77 %
+  // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
+  // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
+  // Bestandskunden. data-window-width/-height am Script werden verworfen
+  // (SERVER_ONLY_SETTINGS).
+  windowHeight: null, // z. B. "600px" | "80%" | "70vh"
+  windowWidth: null, // z. B. "420px" | "25%" | "30vw"
+  offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
+  offsetY: null, // Randabstand Button/Fenster in px (0–200), null = 16px
+
+  // Darstellung: "bubble" (Chat-Blase) | "inline" (in der Seite, im Platzhalter
+  // <div id="kufer-assistent">). Ohne Platzhalter fällt inline auf die Blase zurück.
+  displayMode: "bubble",
+  mount: DEFAULT_MOUNT_SELECTOR, // nur per data-mount (CSS-Selektor)
+  inlineCollapsedText: DEFAULT_INLINE_COLLAPSED_TEXT,
+  inlineHeight: DEFAULT_INLINE_HEIGHT, // px oder vh, geklemmt 400–1200px
+  inlineMaxWidth: null, // px, null = volle Container-Breite
+  inlineStartState: "collapsed", // "collapsed" | "expanded"
+  inlineTheme: "light", // Stil der eingeklappten Leiste: "light" | "dark"
+  inheritFont: false, // Inline: Schrift der Webseite übernehmen
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
@@ -83,6 +113,7 @@ export default function useGetScriptAttributes() {
       const scriptSettings = parseAndValidateEmbedSettings(
         embedderSettings.settings
       );
+      for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
 
       // Fetch live visual config from server (admin panel settings)
       let serverConfig = {};
@@ -164,6 +195,10 @@ export default function useGetScriptAttributes() {
 }
 
 const validations = {
+  // Kufer Darstellung/Fenstergröße: strikte Whitelists (Wert landet in CSS).
+  // undefined = ungültig -> Feld wird verworfen (siehe unten).
+  ...layoutValidations,
+
   _fallbacks: {
     defaultMessages: [],
     chatbotBubblesMessages: [],
@@ -198,6 +233,9 @@ function parseAndValidateEmbedSettings(settings = {}) {
     }
 
     const validatedValue = validations[key](value);
+    // undefined = ungültiger Wert -> weglassen, damit der nächstniedrigere
+    // Wert (Script-Attribut bzw. Default) greift.
+    if (validatedValue === undefined) continue;
     validated[key] = validatedValue;
   }
 

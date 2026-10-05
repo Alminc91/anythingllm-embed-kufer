@@ -239,10 +239,9 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     const t = setTimeout(() => {
       const el = boxRef.current;
       const scroller = el?.closest("#chat-history");
-      if (!el || !scroller) {
-        el?.scrollIntoView({ behavior: "smooth", block: "end" });
-        return;
-      }
+      // Kein scrollIntoView-Fallback: das würde (v. a. im Inline-Modus mitten
+      // in der Webseite) die ganze Seite scrollen. Ohne Scroller -> nichts tun.
+      if (!el || !scroller) return;
       const GAP = 16; // Luft unter der Box
       // Sichtbare Untergrenze = Oberkante des Eingabefelds, falls es den Chat
       // überlappt; sonst die Unterkante des Scrollers. So sitzt die Box immer

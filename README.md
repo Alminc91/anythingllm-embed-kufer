@@ -93,9 +93,25 @@ REQUIRED data attributes:
 
 - `data-assistant-icon` - Set the icon of the chat assistant.
 
-- `data-window-height` - Set the chat window height. **must include CSS suffix:** `px`,`%`,`rem`
+- `data-window-height` / `data-window-width` - **Ohne Wirkung** (werden ignoriert, auch wenn sie in bestehenden Snippets stehen). Die Fenstergröße der Blase (nur Tablet/Desktop ≥768px; mobil bleibt Vollbild) wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen). Ohne Einstellung: bisherige Standardgröße (40 % bzw. 25 % ab 1280px Breite, 77 % Höhe).
 
-- `data-window-width` - Set the chat window width. **must include CSS suffix:** `px`,`%`,`rem`
+- `data-offset-x` / `data-offset-y` - Randabstand von Button und Fenster in px (Ganzzahl 0–200, optional mit `px`). Ohne Angabe: 16px.
+
+- `data-display-mode` - `bubble` (Standard) oder `inline`. Inline zeigt den Chat mitten in der Seite im Platzhalter `<div id="kufer-assistent"></div>` als breite Leiste; ab 768px klappt sie an Ort und Stelle zur Chat-Box auf, mobil (<768px) öffnet Tippen immer direkt den Vollbild-Chat. Fehlt der Platzhalter (oder ist er ungeeignet), erscheint weiterhin die Chat-Blase. Eine Einstellung im Design Center hat Vorrang (auch „Chat-Blase“).
+
+- `data-mount` - CSS-Selektor des Platzhalters für den Inline-Modus. Standard `#kufer-assistent`. Ungültige Selektoren oder ungeeignete Elemente (z. B. `input`, `img`, `button`, `iframe`, `svg`, `body`) werden ignoriert (Fallback Blase); bei mehreren Treffern gilt der erste.
+
+- `data-inline-collapsed-text` - Text der eingeklappten Leiste (max. 120 Zeichen, reiner Text). Standard „Jetzt mit unserem KI-Assistenten schreiben“.
+
+- `data-inline-height` - Höhe der aufgeklappten Inline-Box ab 768px (`px` oder `vh`, geklemmt 400–1200px). Standard `600px`.
+
+- `data-inline-max-width` - Maximalbreite der Inline-Darstellung in px (zentriert). Standard: volle Container-Breite.
+
+- `data-inline-start-state` - `collapsed` (Standard) oder `expanded` (nur ab 768px; mobil wird immer die Leiste gezeigt).
+
+- `data-inline-theme` - Stil der eingeklappten Leiste: `light` (Standard) oder `dark`.
+
+- `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.
 
 - `data-text-size` - Set the text size of the chats in pixels.
 

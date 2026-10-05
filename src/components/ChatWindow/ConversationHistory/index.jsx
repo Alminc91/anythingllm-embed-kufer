@@ -4,9 +4,9 @@ import {
   CaretRight,
   ChatCircleDots,
   CircleNotch,
-  X,
 } from "@phosphor-icons/react";
 import ChatService from "@/models/chatService";
+import { CloseButton } from "../Header";
 
 // KIE-503: Vollbild-Ansicht "Frühere Chats" (Mockup: Burger + Vollbild-Liste).
 // Zeigt die Konversationen der aktuellen Session (serverseitig session-gebunden,
@@ -89,14 +89,11 @@ export default function ConversationHistory({
           </span>
         </div>
         <div className="allm-flex allm-items-center allm-px-[22px]">
-          <button
-            type="button"
+          <CloseButton
             onClick={closeChat}
-            aria-label="Close"
             className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm"
-          >
-            <X size={20} weight="bold" color={headerIconColor} />
-          </button>
+            color={headerIconColor}
+          />
         </div>
       </div>
 

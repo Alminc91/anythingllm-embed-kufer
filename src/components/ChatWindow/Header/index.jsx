@@ -1,6 +1,7 @@
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import {
   ArrowCounterClockwise,
+  CaretUp,
   Check,
   ClockCounterClockwise,
   Copy,
@@ -10,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { embedderSettings } from "@/main";
+import useEmbedMode from "@/hooks/useEmbedMode";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -210,14 +212,11 @@ export default function ChatWindowHeader({
             <DotsThreeOutlineVertical size={20} weight="fill" color={iconColor} />
           </button>
         )}
-        <button
-          type="button"
+        <CloseButton
           onClick={closeChat}
           className={iconButtonClass}
-          aria-label="Close"
-        >
-          <X size={20} weight="bold" color={iconColor} />
-        </button>
+          color={iconColor}
+        />
       </div>
       <OptionsMenu
         settings={settings}
@@ -236,6 +235,25 @@ export default function ChatWindowHeader({
         }
       />
     </div>
+  );
+}
+
+// Schließen (X) bzw. in der Inline-Box "Einklappen" (Chevron nach oben).
+// Variante kommt aus dem Darstellungs-Kontext (Blase/Overlay: X).
+export function CloseButton({ onClick, className, color }) {
+  const { inline, overlay } = useEmbedMode();
+  const collapse = inline && !overlay;
+  const Icon = collapse ? CaretUp : X;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={className}
+      aria-label={collapse ? "Einklappen" : "Close"}
+      title={collapse ? "Einklappen" : undefined}
+    >
+      <Icon size={20} weight="bold" color={color} />
+    </button>
   );
 }
 

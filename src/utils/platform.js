@@ -20,3 +20,17 @@ export function isIOS() {
     navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
   return iOSDevice || iPadOS;
 }
+
+/**
+ * Touch-/Mobil-Erkennung für den Inline-Modus: dort wird das Eingabefeld nie
+ * automatisch fokussiert (würde die Soft-Tastatur öffnen und die Seite scrollen).
+ * Grob-Zeiger ohne Hover (Phone/Tablet) ODER schmaler Viewport (<768px).
+ */
+export function isTouchDevice() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.matchMedia?.("(hover: none) and (pointer: coarse)").matches)
+      return true;
+  } catch {}
+  return window.innerWidth < 768;
+}
