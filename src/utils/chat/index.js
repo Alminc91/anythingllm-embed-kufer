@@ -1,4 +1,8 @@
+import { appendReplyText, stripCardsMarker } from "@/utils/courseCards";
+
 // For handling of synchronous chats that are not utilizing streaming or chat requests.
+// Karten-Marker ("[[KARTEN: …]]", ältere Server) wird hier bei der Aufnahme
+// entfernt — Anzeige, Vorlesen, Kopieren und Feedback sehen nur sauberen Text.
 export default function handleChat(
   chatResult,
   setLoadingResponse,
@@ -18,8 +22,17 @@ export default function handleChat(
     // Kurskarten: Kurs-Metadaten (nie Kontexttext), kommen mit dem
     // Abschluss-Chunk; ohne Feld bleibt die Nachricht unverändert.
     courseSources = null,
+    // Kurskarten v2: Anzahl vorab angekündigter Kurse am Listenanfang
+    courseCardsAnnounced = null,
   } = chatResult;
-  const courseExtra = Array.isArray(courseSources) ? { courseSources } : {};
+  const courseExtra = Array.isArray(courseSources)
+    ? {
+        courseSources,
+        ...(Number.isInteger(courseCardsAnnounced) && courseCardsAnnounced > 0
+          ? { courseCardsAnnounced }
+          : {}),
+      }
+    : {};
 
   // Preserve the sentAt from the last message in the chat history
   const lastMessage = _chatHistory[_chatHistory.length - 1];
@@ -55,12 +68,13 @@ export default function handleChat(
       sentAt,
     });
   } else if (type === "textResponse") {
+    const content = stripCardsMarker(textResponse);
     setLoadingResponse(false);
     setChatHistory([
       ...remHistory,
       {
         uuid,
-        content: textResponse,
+        content,
         role: "assistant",
         sources,
         closed: close,
@@ -74,7 +88,7 @@ export default function handleChat(
     ]);
     _chatHistory.push({
       uuid,
-      content: textResponse,
+      content,
       role: "assistant",
       sources,
       closed: close,
@@ -87,34 +101,51 @@ export default function handleChat(
     });
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
+    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend
+    const { content, markerBuffer } = appendReplyText(
+      existing,
+      textResponse,
+      close,
+    );
+    const entry = {
+      ...(existing || { uuid, role: "assistant" }),
+      content,
+      markerBuffer,
+      sources,
+      error,
+      errorMsg,
+      closed: close,
+      animate: !close,
+      pending: markerBuffer !== undefined,
+      sentAt,
+      ...courseExtra,
+    };
+    if (existing) _chatHistory[chatIdx] = entry;
+    else _chatHistory.push(entry);
+    setChatHistory([..._chatHistory]);
+  } else if (type === "courseSources") {
+    // Kurskarten v2: vom Server vorab angekündigte Kurse (Karten-Marker),
+    // kommen VOR dem ersten Text-Token. Existiert die Nachricht noch nicht,
+    // wird sie als wartende Antwort (Tipp-Indikator) angelegt; der Text
+    // hängt sich danach wie gewohnt an. Stream/Kontingent/Abbruch unberührt.
+    if (!Array.isArray(courseSources) || courseSources.length === 0) return;
+    const announced = {
+      courseSources,
+      courseCardsAnnounced: courseSources.length,
+    };
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     if (chatIdx !== -1) {
-      const existingHistory = { ..._chatHistory[chatIdx] };
-      const updatedHistory = {
-        ...existingHistory,
-        content: existingHistory.content + textResponse,
-        sources,
-        error,
-        errorMsg,
-        closed: close,
-        animate: !close,
-        pending: false,
-        sentAt,
-        ...courseExtra,
-      };
-      _chatHistory[chatIdx] = updatedHistory;
+      _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], ...announced };
     } else {
       _chatHistory.push({
         uuid,
-        sources,
-        error,
-        errorMsg,
-        content: textResponse,
+        content: "",
         role: "assistant",
-        closed: close,
-        animate: !close,
-        pending: false,
+        animate: true,
+        pending: true,
         sentAt,
-        ...courseExtra,
+        ...announced,
       });
     }
     setChatHistory([..._chatHistory]);

@@ -4,12 +4,13 @@ import renderMarkdown from "@/utils/chat/markdown";
 import { embedderSettings } from "@/main";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
+import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
+import AssistantName from "../AssistantName";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
-  MESSAGE_NAME_CLASS,
 } from "@/utils/theme";
 
 // Antwortblase über CSS-Variablen (Fallback = bisherige Werte)
@@ -63,13 +64,43 @@ const ThoughtBubble = ({ thought }) => {
   );
 };
 
+// Rahmen einer Live-Antwort: [Name] [Symbol + Inhalt] [danach].
+// nameInWrapper: Name steht schon im umgebenden Block (Kurskarten "above",
+// ChatHistory) -> hier ohne Namen und ohne obere Polsterung; sonst wie bisher.
+const ReplyFrame = ({ nameInWrapper, rowRef, children, after }) => (
+  <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
+    {!nameInWrapper && <AssistantName />}
+    <div
+      ref={rowRef}
+      className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start"
+    >
+      <img
+        src={
+          embedderSettings.settings.assistantIcon ||
+          embedderSettings.settings.brandImageUrl ||
+          AnythingLLMIcon
+        }
+        alt="Anything LLM Icon"
+        className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
+      />
+      {children}
+    </div>
+    {after}
+  </div>
+);
+
+// Der Karten-Marker ist schon bei der Aufnahme entfernt (utils/chat,
+// appendReplyText); ein noch offener Marker kommt hier als pending an.
 const PromptReply = forwardRef(
-  ({ uuid, reply, pending, error, sources = [], sentAt }, ref) => {
+  (
+    { reply, pending, error, sources = [], sentAt, nameInWrapper = false },
+    ref,
+  ) => {
     if (!reply && sources.length === 0 && !pending && !error) return null;
     if (error) console.error(`ANYTHING_LLM_CHAT_WIDGET_ERROR: ${error}`);
 
     // Extract content between think tags if they exist
-    const thinkMatches = reply?.match(/<think>([\s\S]*?)<\/think>/g) || [];
+    const thinkMatches = reply?.match(THINK_BLOCK_RX) || [];
     const thoughts = thinkMatches.map((match) =>
       match.replace(/<\/?think>/g, "").trim(),
     );
@@ -86,125 +117,79 @@ const PromptReply = forwardRef(
           .trim()
       : null;
 
-    const lastThought = streamingThought || thoughts[thoughts.length - 1];
     const isThinking = hasIncompleteThinkTag || pending;
 
     // Get the response content without the think tags - clean more aggressively
-    const responseContent = reply
-      ?.replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete think blocks
+    const responseContent = stripThink(reply)
       .replace(/<think>.*$/g, "") // Remove any incomplete think blocks at the end
       .replace(/<\/?think>/g, "") // Remove any stray think tags
       .trim();
 
     if (isThinking) {
       return (
-        <div className="allm-py-[5px]">
-          <div className={MESSAGE_NAME_CLASS}>
-            {embedderSettings.settings.assistantName ||
-              "Anything LLM Chat Assistant"}
+        <ReplyFrame nameInWrapper={nameInWrapper}>
+          <div
+            style={replyBubbleStyle()}
+            className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
+          >
+            {hasIncompleteThinkTag && streamingThought && (
+              <ThoughtBubble thought={streamingThought} />
+            )}
+            <ThinkingIndicator hasThought={hasIncompleteThinkTag} />
           </div>
-          <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
-            <img
-              src={
-                embedderSettings.settings.assistantIcon ||
-                embedderSettings.settings.brandImageUrl ||
-                AnythingLLMIcon
-              }
-              alt="Anything LLM Icon"
-              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
-            />
-            <div
-              style={replyBubbleStyle()}
-              className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
-            >
-              {hasIncompleteThinkTag && streamingThought && (
-                <ThoughtBubble thought={streamingThought} />
-              )}
-              <ThinkingIndicator hasThought={hasIncompleteThinkTag} />
-            </div>
-          </div>
-        </div>
+        </ReplyFrame>
       );
     }
 
     if (error) {
       return (
-        <div className="allm-py-[5px]">
-          <div className={MESSAGE_NAME_CLASS}>
-            {embedderSettings.settings.assistantName ||
-              "Anything LLM Chat Assistant"}
-          </div>
-          <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
-            <img
-              src={
-                embedderSettings.settings.assistantIcon ||
-                embedderSettings.settings.brandImageUrl ||
-                AnythingLLMIcon
-              }
-              alt="Anything LLM Icon"
-              className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
-            />
-            <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-amber-100 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
-              <div className="allm-flex allm-gap-x-5">
-                <span className="allm-inline-block allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
-                  <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
-                  Unser Chatbot ist vorübergehend nicht verfügbar.
-                  <br />
-                  <span className="allm-text-xs">
-                    Bitte versuchen Sie es später erneut.
-                  </span>
+        <ReplyFrame nameInWrapper={nameInWrapper}>
+          <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-amber-100 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
+            <div className="allm-flex allm-gap-x-5">
+              <span className="allm-inline-block allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
+                <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
+                Unser Chatbot ist vorübergehend nicht verfügbar.
+                <br />
+                <span className="allm-text-xs">
+                  Bitte versuchen Sie es später erneut.
                 </span>
-              </div>
+              </span>
             </div>
           </div>
-        </div>
+        </ReplyFrame>
       );
     }
 
     return (
-      <div className="allm-py-[5px]">
-        <div className={MESSAGE_NAME_CLASS}>
-          {embedderSettings.settings.assistantName ||
-            "Anything LLM Chat Assistant"}
-        </div>
-        <div
-          key={uuid}
-          ref={ref}
-          className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start"
-        >
-          <img
-            src={
-              embedderSettings.settings.assistantIcon ||
-              embedderSettings.settings.brandImageUrl ||
-              AnythingLLMIcon
-            }
-            alt="Anything LLM Icon"
-            className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
-          />
-          <div
-            style={replyBubbleStyle()}
-            className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
-          >
-            {thoughts.length > 0 && (
-              <ThoughtBubble thought={thoughts.join("\n\n")} />
-            )}
-            <div className="allm-flex allm-gap-x-5">
-              <span
-                className="allm-font-sans allm-reply allm-whitespace-pre-line allm-font-normal allm-text-sm allm-md:text-sm allm-flex allm-flex-col allm-gap-y-1"
-                style={{ fontSize: MESSAGE_FONT_SIZE }}
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(responseContent || ""),
-                }}
-              />
+      <ReplyFrame
+        nameInWrapper={nameInWrapper}
+        rowRef={ref}
+        after={
+          sentAt && (
+            <div className={`${MESSAGE_META_CLASS} allm-mt-2 allm-text-left`}>
+              {formatDate(sentAt)}
             </div>
+          )
+        }
+      >
+        <div
+          style={replyBubbleStyle()}
+          className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
+        >
+          {thoughts.length > 0 && (
+            <ThoughtBubble thought={thoughts.join("\n\n")} />
+          )}
+          <div className="allm-flex allm-gap-x-5">
+            <span
+              className="allm-font-sans allm-reply allm-whitespace-pre-line allm-font-normal allm-text-sm allm-md:text-sm allm-flex allm-flex-col allm-gap-y-1"
+              style={{ fontSize: MESSAGE_FONT_SIZE }}
+              dangerouslySetInnerHTML={{
+                __html: renderMarkdown(responseContent || ""),
+              }}
+            />
           </div>
         </div>
-        {sentAt && (
-          <div className={`${MESSAGE_META_CLASS} allm-mt-2 allm-text-left`}>
-            {formatDate(sentAt)}
-          </div>
-        )}
-      </div>
+      </ReplyFrame>
     );
   },
 );

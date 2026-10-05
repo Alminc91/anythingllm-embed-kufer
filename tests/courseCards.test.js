@@ -725,7 +725,10 @@ describe("HistoricalMessage mit Kurskarten", () => {
     expect(el.querySelectorAll(".allm-course-card")).toHaveLength(0);
     const rows = el.querySelectorAll(".allm-course-row");
     expect(rows).toHaveLength(8);
-    expect(rows[0].querySelector("a").getAttribute("href")).toMatch(
+    // Kurskarten v2: die ganze Zeile ist der Link (genau ein <a>)
+    expect(rows[0].tagName).toBe("A");
+    expect(rows[0].querySelectorAll("a")).toHaveLength(0);
+    expect(rows[0].getAttribute("href")).toMatch(
       /^https:\/\/www\.vhs-bergisch-land\.de\//,
     );
     expect(rows[0].textContent).toMatch(

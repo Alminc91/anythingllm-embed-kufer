@@ -23,6 +23,14 @@ der Stream mit echten Pausen zwischen den Chunks ausgeliefert (fetch-Ersatz
 nur in der Testseite) und das Einfügen der Karten per MutationObserver
 protokolliert.
 
+Kurskarten v2 (courseCardsPosition "above", Karten-Marker): Zustände
+cc-above-* (Karten über der Antwort; Server kündigt Kurse vorab per Chunk
+type "courseSources" an), AK-4b (Karten vor dem ersten Text-Token, genau eine
+Einfügung, keine Verschiebung), AK-4c (ganze Karte klickbar, Tab/Enter) und
+die Widget-Abwehr gegen einen durchgereichten Marker "[[KARTEN: …]]".
+Schlanke Fallback-Karte: Zustand cc-fallback (Kurslink ohne courseSources-
+Eintrag -> Karte nur mit Titel) + DOM-Prüfung below/above.
+
 Ergebnisse: tests/visual/results/course-cards-*.png, summary-course-cards.json.
 """
 
@@ -61,6 +69,16 @@ ANSWER_3 = (
 )
 ANSWER_8 = "Wir haben mehrere passende Yogakurse:\n\n" + "\n".join(f"- {md(c)}" for c in BY[:8])
 ANSWER_Q = "Meinen Sie Yoga für Anfänger oder eher Kurse für Fortgeschrittene?"
+# Fallback-Karte: zweiter Kurslink hat keinen courseSources-Eintrag (Server hat
+# den Kurs nicht gefunden) -> Karte nur mit Titel
+FALLBACK_URL = "https://www.vhs-bergisch-land.de/kurssuche/kurs/yin-yoga-am-abend/26266299"
+FALLBACK_TITLE = "Yin Yoga am Abend"
+ANSWER_FB = (
+    "Ja, am Abend gibt es zum Beispiel:\n\n"
+    f"- {md(BY[0])} donnerstags um 18:30 Uhr in Leichlingen\n"
+    f"- [**{FALLBACK_TITLE}**]({FALLBACK_URL}) dienstags in Burscheid\n"
+    f"- {md(BY[6])} mittwochs um 19:15 Uhr in Burscheid"
+)
 
 
 def stream_events(answer, course_sources=BY, uuid="u-1", parts=3):
@@ -94,6 +112,45 @@ def history(answer, course_sources=BY):
 
 OPEN = {**tv.BASE_ATTRS, "open-on-load": "on"}
 CARDS = {**OPEN, "course-cards": "auto"}
+ABOVE = {**CARDS, "course-cards-position": "above"}
+BELOW = {**CARDS, "course-cards-position": "below"}
+# Kurz-Antwortstil (Course Cards Mode) mit Marker-Ankündigung: Server schickt
+# zuerst die angekündigten Kurse, dann den Text; der Abschluss-Chunk ergänzt
+# einen verlinkten Kurs ohne Treffer-Dokument (BY[9]).
+ANNOUNCED = [BY[6], BY[0]]
+ANSWER_SHORT = (
+    "Ja, abends gibt es passende Yogakurse:\n\n"
+    f"1. {md(BY[6], '**' + BY[6]['title'] + '**')}\n"
+    f"2. {md(BY[0], '**' + BY[0]['title'] + '**')}\n"
+    f"3. {md(BY[9], '**' + BY[9]['title'] + '**')}\n\n"
+    "Suchen Sie eher einen Kurs am Wochenende?"
+)
+
+
+def announced_events(answer=ANSWER_SHORT, uuid="u-1", parts=4, marker=None):
+    """Chunk courseSources (vorab) + Text-Chunks + Abschluss mit Ergänzung."""
+    text = (marker + answer) if marker else answer
+    size = max(1, len(text) // parts + 1)
+    chunks = [text[i : i + size] for i in range(0, len(text), size)]
+    ev = []
+    if not marker:
+        ev.append({"uuid": uuid, "type": "courseSources", "courseSources": ANNOUNCED, "close": False, "error": False})
+    ev += [
+        {"uuid": uuid, "type": "textResponseChunk", "close": False, "sources": [], "textResponse": c}
+        for c in chunks
+    ]
+    ev[-1]["close"] = True
+    final = {"uuid": uuid, "type": "finalizeResponseStream", "close": True, "error": False, "chatId": 4712,
+             "courseSources": ANNOUNCED + [BY[9]]}
+    if not marker:
+        final["courseCardsAnnounced"] = len(ANNOUNCED)
+    return ev + [final]
+
+
+def announced_history():
+    h = history(ANSWER_SHORT, course_sources=ANNOUNCED + [BY[9]])
+    h[1]["courseCardsAnnounced"] = len(ANNOUNCED)
+    return h
 SMALL = {"width": 360, "height": 740}
 CARD_SEL = "[data-course-cards]"
 
@@ -177,11 +234,26 @@ def pixel_cases():
          "new"),
         ("cc-question-light", {"attrs": CARDS}, tv.Mock(config={}, history=history(ANSWER_Q)), assistant.replace(" a", ""),
          None, None, "new"),
+        # Kurskarten v2: Karten über der Antwort (neue Zustände)
+        ("cc-above-light", {"attrs": ABOVE}, tv.Mock(config={}, stream=announced_events()), "#message-input",
+         "send", None, "new"),
+        ("cc-above-history", {"attrs": ABOVE}, tv.Mock(config={}, history=announced_history()), CARD_SEL, None, None,
+         "new"),
+        ("cc-above-mobile", {"attrs": ABOVE}, tv.Mock(config={}, stream=announced_events()), "#message-input",
+         "send", SMALL, "new"),
+        # AK-4: "above" ohne Karten (Rückfrage) und explizit "below" = bestehende Referenz
+        ("cc-above-question", {"attrs": ABOVE}, tv.Mock(config={}, history=history(ANSWER_Q)),
+         assistant.replace(" a", ""), None, None, "same", "cc-question-light"),
+        ("cc-below-explicit", {"attrs": BELOW}, tv.Mock(config={}, stream=stream_events(ANSWER_3)), "#message-input",
+         "send", None, "same", "cc-cards-light"),
+        # Schlanke Fallback-Karte (Kurslink ohne Serverdaten)
+        ("cc-fallback", {"attrs": CARDS}, tv.Mock(config={}, stream=stream_events(ANSWER_FB)), "#message-input",
+         "send", None, "new"),
     ]
 
 
 def shoot(browser, base_url, case, out_path):
-    name, cfg, m, sel, action, viewport, _ = case
+    name, cfg, m, sel, action, viewport = case[:6]
     ctx, page = tv.open_page(browser, base_url, cfg, m, viewport=viewport, before_goto=freeze)
     try:
         tv.wait_shadow(page, sel)
@@ -208,10 +280,12 @@ def run_pixel(browser, base_url, baseline, new_states, only=None):
     target.mkdir(parents=True, exist_ok=True)
     for case in pixel_cases():
         name, origin = case[0], case[6]
+        # "same": Vergleich mit einer bestehenden Referenz (case[7]), nie eigene
+        ref_name = case[7] if len(case) > 7 else name
         if only and name not in only:
             continue
         if baseline:
-            if (origin == "new") != new_states:
+            if origin == "same" or (origin == "new") != new_states:
                 continue
             out = BASELINE_DIR / f"{name}.png"
             if out.exists():
@@ -222,12 +296,12 @@ def run_pixel(browser, base_url, baseline, new_states, only=None):
             continue
         out = RESULTS_DIR / f"course-cards-{name}.png"
         errs, n = shoot(browser, base_url, case, out)
-        ref = BASELINE_DIR / f"{name}.png"
+        ref = BASELINE_DIR / f"{ref_name}.png"
         if not ref.exists():
             record(f"PIX {name}", False, "Referenz fehlt (--baseline)")
             continue
         ratio, maxd = tv.diff_ratio(ref, out, RESULTS_DIR / f"course-cards-{name}-diff.png")
-        key = "AK-1" if origin == "main" else "REG"
+        key = {"main": "AK-1", "same": f"AK-4 (= {ref_name})"}.get(origin, "REG")
         record(f"{key} {name}", ratio <= tv.MAX_DIFF_RATIO and not errs,
                f"Pixel-Diff {ratio * 100:.4f} % (max. Kanal-Abw. {maxd}), Karten im DOM {n}"
                + (f", Konsole: {errs}" if errs else ""))
@@ -245,20 +319,24 @@ CARD_INFO_JS = r"""
   if (!sec) return null;
   const cs = (el, p) => getComputedStyle(el).getPropertyValue(p).trim();
   const cards = [...sec.querySelectorAll(".allm-course-card")].map((c) => {
-    const a = c.querySelector("a");
+    // Kurskarten v2: die Karte selbst ist der Link (<a class="allm-course-card">)
+    const a = c.matches("a") ? c : c.querySelector("a");
+    const t = c.querySelector(".allm-course-title") || a;
     const r = c.getBoundingClientRect();
-    const tr = (a || c).getBoundingClientRect();
+    const tr = (t || c).getBoundingClientRect();
     return {
       text: c.innerText,
-      title: a ? a.textContent : null,
+      title: t ? t.textContent : null,
       href: a ? a.getAttribute("href") : null,
       target: a ? a.getAttribute("target") : null,
       rel: a ? a.getAttribute("rel") : null,
+      links: c.querySelectorAll("a").length + (c.matches("a") ? 1 : 0),
+      name: a ? a.getAttribute("aria-label") : null,
       x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width),
-      titleH: tr.height, titleLH: parseFloat(cs(a || c, "line-height")),
+      titleH: tr.height, titleLH: parseFloat(cs(t || c, "line-height")),
       bg: cs(c, "background-color"), color: cs(c, "color"),
       border: cs(c, "border-top-color"), borderLeft: cs(c, "border-left-color"),
-      titleColor: a ? cs(a, "color") : null,
+      titleColor: t ? cs(t, "color") : null,
       schedule: c.querySelector(".allm-course-schedule") ? cs(c.querySelector(".allm-course-schedule"), "color") : null,
       details: c.querySelector(".allm-course-details") ? cs(c.querySelector(".allm-course-details"), "color") : null,
       status: c.querySelector(".allm-course-status") ? cs(c.querySelector(".allm-course-status"), "color") : null,
@@ -312,6 +390,69 @@ def check_ak2(browser, base_url):
                and f["href"] == CATEGORY_URL, f"{f}")
         no_undef = not any(("undefined" in c["text"] or "NaN" in c["text"]) for c in info["cards"])
         record("AK-7 kein undefined/NaN", no_undef, "ok" if no_undef else "gefunden")
+    finally:
+        m.release()
+        ctx.close()
+
+
+FALLBACK_INFO_JS = r"""
+() => {
+  const s = window.__allmShadow;
+  const reply = [...s.querySelectorAll(".allm-anything-llm-assistant-message")].pop();
+  const card = (c) => {
+    const r = c.getBoundingClientRect();
+    return {
+      title: c.querySelector(".allm-course-title")?.textContent ?? null,
+      text: c.innerText, href: c.getAttribute("href"), tag: c.tagName,
+      fallback: c.hasAttribute("data-course-fallback"), h: Math.round(r.height),
+      meta: c.querySelectorAll(".allm-course-schedule, .allm-course-details, .allm-course-status").length,
+      below: reply ? r.top >= reply.getBoundingClientRect().bottom : null,
+    };
+  };
+  const top = s.querySelector("[data-course-cards]");
+  const footer = s.querySelector("[data-course-cards-footer]");
+  return {
+    top: top ? [...top.querySelectorAll(".allm-course-card")].map(card) : [],
+    footer: footer ? [...footer.querySelectorAll(".allm-course-card")].map(card) : [],
+  };
+}
+"""
+
+
+def check_fallback(browser, base_url):
+    """Schlanke Fallback-Karte: Kurslink ohne courseSources-Eintrag."""
+    # below: Reihenfolge wie die übrigen Karten (datierte zuerst), nur Titel
+    m = tv.Mock(config={}, stream=stream_events(ANSWER_FB))
+    ctx, page = open_and_send(browser, base_url, CARDS, m)
+    try:
+        page.wait_for_function(f"() => !!window.__q('{CARD_SEL}')", timeout=10000)
+        page.wait_for_timeout(300)
+        info = page.evaluate(FALLBACK_INFO_JS)
+        cards = info["top"]
+        fb = [c for c in cards if c["fallback"]]
+        full = [c for c in cards if not c["fallback"]]
+        ok = (len(cards) == 3 and len(fb) == 1 and fb[0]["title"] == FALLBACK_TITLE
+              and fb[0]["text"].strip() == FALLBACK_TITLE and fb[0]["href"] == FALLBACK_URL
+              and fb[0]["tag"] == "A" and fb[0]["meta"] == 0 and cards[-1]["fallback"]
+              and all(c["meta"] >= 2 for c in full) and all(c["h"] > fb[0]["h"] for c in full))
+        record("Fallback-Karte (below): nur Titel + Link, ganze Karte klickbar, nach den datierten", ok,
+               " | ".join(f"{c['title']} (fallback {c['fallback']}, Zeilen {c['meta']}, {c['h']} px)" for c in cards))
+    finally:
+        m.release()
+        ctx.close()
+    # above mit Ankündigung: Fallback-Karte unter der Antwort, oben unverändert
+    events = announced_events(answer=ANSWER_FB)
+    m = tv.Mock(config={}, stream=events)
+    ctx, page = open_and_send(browser, base_url, ABOVE, m)
+    try:
+        page.wait_for_function("() => !!window.__q('[data-course-cards-footer]')", timeout=10000)
+        page.wait_for_timeout(300)
+        info = page.evaluate(FALLBACK_INFO_JS)
+        ok = (len(info["footer"]) == 1 and info["footer"][0]["fallback"] and info["footer"][0]["below"]
+              and info["footer"][0]["title"] == FALLBACK_TITLE and not any(c["fallback"] for c in info["top"])
+              and [c["title"] for c in info["top"]] == [BY[6]["title"], BY[0]["title"]])
+        record("Fallback-Karte (above): unter der Antwort, Karten oben unverändert", ok,
+               f"oben {[c['title'] for c in info['top']]}, unten {[c['title'] for c in info['footer']]}")
     finally:
         m.release()
         ctx.close()
@@ -512,6 +653,179 @@ def check_nak4(browser, base_url):
            f"aus={calls['aus']}, auto={calls['auto']}")
 
 
+
+# ---------------------------------------------------------------------------
+# Kurskarten v2
+# ---------------------------------------------------------------------------
+# Protokoll im Testfenster: erste Karten-Einfügung, erstes sichtbares Text-
+# Zeichen der Antwort, Lage der Kartenfläche im Verlauf (relativ zum Inhalt,
+# unabhängig vom Auto-Scroll), Marker-Sichtungen.
+ABOVE_PROBE_JS = r"""
+(() => {
+  window.__probe = { cardsAt: null, textAt: null, tops: [], marker: 0, adds: 0, removes: 0 };
+  const isCards = (n) => n.nodeType === 1 && (n.matches("[data-course-cards]") || n.querySelector("[data-course-cards]"));
+  const watch = () => {
+    const s = window.__allmShadow;
+    if (!s) return requestAnimationFrame(watch);
+    new MutationObserver((records) => {
+      const p = window.__probe;
+      for (const r of records) {
+        for (const n of r.addedNodes) if (isCards(n)) p.adds++;
+        for (const n of r.removedNodes) if (isCards(n)) p.removes++;
+      }
+      const sec = s.querySelector("[data-course-cards]");
+      const hist = s.querySelector("#chat-history");
+      const text = [...s.querySelectorAll(".allm-reply, .allm-anything-llm-assistant-message")]
+        .map((e) => e.textContent).join("").trim();
+      if (sec && p.cardsAt === null) { p.cardsAt = performance.now(); sec.__first = true; }
+      if (text && p.textAt === null) p.textAt = performance.now();
+      if (sec && hist) {
+        const top = sec.getBoundingClientRect().top - hist.getBoundingClientRect().top + hist.scrollTop;
+        p.tops.push(Math.round(top * 10) / 10);
+      }
+      if (/KARTEN/.test(s.textContent)) p.marker++;
+    }).observe(s, { childList: true, subtree: true, characterData: true });
+  };
+  watch();
+})();
+"""
+
+
+def slow_page(browser, base_url, attrs, events, delay=250):
+    plan = {"events": events, "delay": delay}
+
+    def before(ctx, page):
+        freeze(ctx, page)
+        ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan)};")
+        ctx.add_init_script(SLOW_STREAM_JS)
+        ctx.add_init_script(ABOVE_PROBE_JS)
+
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs}, tv.Mock(config={}), before_goto=before)
+    tv.wait_shadow(page, "#message-input")
+    send(page)
+    page.wait_for_function("() => window.__streamLog.length >= %d" % len(events), timeout=20000)
+    page.wait_for_timeout(800)
+    return ctx, page
+
+
+def check_ak4b(browser, base_url):
+    """above + streamende Antwort: Karten stehen vor dem ersten Text-Token, genau
+    eine Einfügung, die Kartenfläche verschiebt sich nicht; die Ergänzung am
+    Ende wird angehängt (gleicher Knoten, erste Karte bleibt)."""
+    events = announced_events(parts=6)
+    ctx, page = slow_page(browser, base_url, ABOVE, events)
+    try:
+        res = page.evaluate("""() => {
+          const s = window.__allmShadow, sec = s.querySelector('[data-course-cards]');
+          const reply = s.querySelector('.allm-anything-llm-assistant-message');
+          return { probe: window.__probe, n: s.querySelectorAll('[data-course-cards]').length,
+                   first: !!(sec && sec.__first), titles: [...s.querySelectorAll('.allm-course-title')].map(e => e.textContent),
+                   before: !!(sec && reply && (sec.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING)) };
+        }""")
+        p = res["probe"]
+        lead = (p["textAt"] - p["cardsAt"]) if p["cardsAt"] is not None and p["textAt"] is not None else None
+        record("AK-4b Karten vor dem ersten Text-Token", lead is not None and lead > 0,
+               f"Karten {lead:+.0f} ms vor dem ersten Text" if lead is not None else f"{p}")
+        record("AK-4b genau eine Einfügung, kein Entfernen, gleicher Knoten", p["adds"] == 1 and p["removes"] == 0
+               and res["n"] == 1 and res["first"], f"eingefügt {p['adds']}x, entfernt {p['removes']}x, Knoten erhalten {res['first']}")
+        tops = p["tops"]
+        record("AK-4b Kartenfläche verschiebt sich nicht", bool(tops) and max(tops) - min(tops) <= 0.5,
+               f"{len(tops)} Messungen, Lage {min(tops) if tops else None}–{max(tops) if tops else None} px")
+        want = [BY[6]["title"], BY[0]["title"], BY[9]["title"]]
+        record("AK-4b Ergänzung am Ende angehängt, Reihenfolge stabil", res["titles"] == want and res["before"],
+               f"{res['titles']}, Karten vor der Antwort {res['before']}")
+        record("Marker nie sichtbar (above)", p["marker"] == 0, f"{p['marker']} Sichtungen")
+    finally:
+        ctx.close()
+
+
+def check_marker_passthrough(browser, base_url):
+    """Server < 7.10 reicht den Marker durch: das Widget zeigt ihn nie."""
+    for label, attrs in (("above", ABOVE), ("below", CARDS)):
+        events = announced_events(parts=8, marker="[[KARTEN: 0, 1]]\n\n")
+        ctx, page = slow_page(browser, base_url, attrs, events, delay=150)
+        try:
+            p = page.evaluate("() => window.__probe")
+            txt = page.evaluate("() => window.__allmShadow.querySelector('.allm-anything-llm-assistant-message').textContent")
+            record(f"Marker vom Server durchgereicht ({label}): nie sichtbar", p["marker"] == 0 and "KARTEN" not in txt
+                   and txt.strip().startswith("Ja, abends"), f"{p['marker']} Sichtungen, Text „{txt.strip()[:30]}…“")
+        finally:
+            ctx.close()
+
+
+def check_ak4c(browser, base_url):
+    """Ganze Karte klickbar: Klick auf Zeit, Ort/Preis, Badge, Rand öffnet die
+    Kurs-URL im neuen Tab; Tab-Fokus landet auf der Karte als EIN Element,
+    Enter öffnet; Hover/Fokus über --allm-hover-bg/--allm-focus-ring."""
+    for label, attrs, m in (("below", CARDS, tv.Mock(config={}, history=history(ANSWER_3))),
+                            ("above", ABOVE, tv.Mock(config={}, history=announced_history()))):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": attrs}, m)
+        ctx.route("https://www.vhs-bergisch-land.de/**",
+                  lambda route: route.fulfill(status=200, body="<title>Kurs</title>", content_type="text/html"))
+        try:
+            tv.wait_shadow(page, ".allm-course-card")
+            tv.settle(page, 400)
+            card = page.evaluate("""() => {
+              const c = window.__allmShadow.querySelector('.allm-course-card');
+              c.scrollIntoView({block: 'center'});
+              const box = (sel) => { const e = sel ? c.querySelector(sel) : c; const r = e.getBoundingClientRect();
+                                     return { x: r.x + r.width / 2, y: r.y + r.height / 2, l: r.x, t: r.y, w: r.width, h: r.height }; };
+              return { href: c.getAttribute('href'), tag: c.tagName, links: c.querySelectorAll('a').length,
+                       name: c.getAttribute('aria-label'), title: c.querySelector('.allm-course-title').textContent,
+                       schedule: box('.allm-course-schedule'), details: box('.allm-course-details'),
+                       status: box('.allm-course-status'), card: box(null) };
+            }""")
+            points = {
+                "Zeit": (card["schedule"]["x"], card["schedule"]["y"]),
+                "Ort/Preis": (card["details"]["x"], card["details"]["y"]),
+                "Badge": (card["status"]["x"], card["status"]["y"]),
+                "Rand rechts unten": (card["card"]["l"] + card["card"]["w"] - 4, card["card"]["t"] + card["card"]["h"] - 4),
+                "Rand links": (card["card"]["l"] + 1.5, card["card"]["y"]),
+            }
+            opened = {}
+            for where, (x, y) in points.items():
+                with ctx.expect_page(timeout=5000) as info:
+                    page.mouse.click(x, y)
+                popup = info.value
+                popup.wait_for_load_state()
+                opened[where] = popup.url == card["href"]
+                popup.close()
+            record(f"AK-4c ({label}) Klick irgendwo auf die Karte öffnet die Kurs-URL", all(opened.values()),
+                   ", ".join(f"{k}: {'ok' if v else 'NEIN'}" for k, v in opened.items()))
+            record(f"AK-4c ({label}) ein Link je Karte, Name = Titel",
+                   card["tag"] == "A" and card["links"] == 0 and card["name"] == card["title"],
+                   f"<{card['tag'].lower()}> mit {card['links']} inneren Links, Name „{card['name']}“")
+            # Hover
+            page.mouse.move(*points["Ort/Preis"])
+            page.wait_for_timeout(150)
+            hover = page.evaluate("() => getComputedStyle(window.__allmShadow.querySelector('.allm-course-card')).backgroundColor")
+            record(f"AK-4c ({label}) Hover-Fläche --allm-hover-bg", hover == "rgb(243, 244, 246)", hover)
+            page.mouse.move(0, 0)
+            # Tastatur: Fokus auf das Element davor, dann Tab -> Karte, Enter
+            page.evaluate("""() => {
+              const s = window.__allmShadow, c = s.querySelector('.allm-course-card');
+              const all = [...s.querySelectorAll('a[href], button, input, textarea, [tabindex]')]
+                .filter((e) => !e.disabled && e.tabIndex >= 0 && e.offsetParent !== null);
+              const i = all.indexOf(c);
+              all[i - 1].focus();
+            }""")
+            page.keyboard.press("Tab")
+            focus = page.evaluate("""() => { const a = window.__allmShadow.activeElement;
+              return { card: !!a && a.classList.contains('allm-course-card'), outline: a ? getComputedStyle(a).outlineStyle : null,
+                       width: a ? getComputedStyle(a).outlineWidth : null }; }""")
+            with ctx.expect_page(timeout=5000) as info:
+                page.keyboard.press("Enter")
+            popup = info.value
+            popup.wait_for_load_state()
+            entered = popup.url == card["href"]
+            popup.close()
+            record(f"AK-4c ({label}) Tab landet auf der Karte, Fokusring sichtbar, Enter öffnet",
+                   focus["card"] and focus["outline"] not in (None, "none") and entered,
+                   f"Fokus auf Karte {focus['card']}, outline {focus['outline']} {focus['width']}, Enter {entered}")
+        finally:
+            ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true")
@@ -533,6 +847,10 @@ def main():
                 check_ak10(browser, base_url)
                 check_history_and_compact(browser, base_url)
                 check_nak4(browser, base_url)
+                check_ak4b(browser, base_url)
+                check_marker_passthrough(browser, base_url)
+                check_ak4c(browser, base_url)
+                check_fallback(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()
