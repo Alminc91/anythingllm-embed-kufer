@@ -168,6 +168,8 @@ REQUIRED data attributes:
   ></script>
   ```
 
+- `data-inline-open-on` - Wann die Eingabe-Leiste (`data-inline-input`) aufklappt: `submit` (Standard, wie bisher: erst mit Enter, „Chatten“, Chip oder Klick neben das Feld) oder `focus` (**Öffnen bei Klick**: schon ein Klick bzw. Tippen mit Maus, Finger oder Stift in das Leisten-Feld klappt den Chat auf, Fokus im Chat-Eingabefeld; bereits getippter Text steht dort unversendet, Chips senden wie bisher). **Barrierefreiheit:** Fokus per Tastatur (Tab-Navigation über die Seite) öffnet **nie** — Tastatur- und Screenreader-Nutzer fallen nicht unvermittelt in ein Overlay; Enter öffnet wie gewohnt. Ungültiger Wert → `submit` mit einer `console.warn`-Zeile. Design Center: `visual_config.inlineOpenOn`.
+
 - `data-inline-theme` - Stil der eingeklappten Leiste: `light` oder `dark`. Ohne Angabe folgt die Leiste dem Theme (`data-theme`, Standard hell); ein explizit gesetzter Wert gewinnt.
 
 - `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.

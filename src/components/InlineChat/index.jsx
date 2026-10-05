@@ -27,6 +27,7 @@ import {
   inlineEffectClass,
   inlineMaxWidth,
   isInlineOverlay,
+  opensOnPointer,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -71,6 +72,12 @@ import {
 // Seitenfluss keine), Animation in main.jsx, nur beim Aufklappen durch den
 // Nutzer. Solange die Box aufgeklappt ist, trägt der Platzhalter
 // data-allm-expanded="true" (Signal für Seiten-CSS).
+//
+// Schaltbare Varianten der Eingabe-Leiste (Standard = Verhalten oben):
+//   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
+//                          (Entwurf wandert per Übergabe send: false mit). Nur
+//                          nach pointerdown mit mouse/touch/pen — Tab-Fokus
+//                          öffnet nie (Tastatur/Screenreader), Enter wie bisher.
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -251,6 +258,8 @@ export default function InlineChat({
   // Startzustand "expanded" und Drehen aus dem Vollbild.
   const clipCheckRef = useRef(settings.inlineStartState === "expanded");
   const floating = wantOverlay && !overlayClipped;
+  // Varianten der Eingabe-Leiste (siehe Kopfkommentar)
+  const openOnPointer = opensOnPointer(settings);
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -629,6 +638,7 @@ export default function InlineChat({
         onChange={setBarText}
         expanded={view !== "bar"}
         onOpen={openChat}
+        openOnPointer={openOnPointer}
       />
     ) : (
       <InlineBar
@@ -788,7 +798,15 @@ const InlineBar = forwardRef(function InlineBar(
 // die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
 // Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
 const InlineInputBar = forwardRef(function InlineInputBar(
-  { settings, narrow, value, onChange, expanded, onOpen },
+  {
+    settings,
+    narrow,
+    value,
+    onChange,
+    expanded,
+    onOpen,
+    openOnPointer = false,
+  },
   ref,
 ) {
   const accent = barAccent(settings);
@@ -797,6 +815,16 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
   const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
   const chips = inlineChips(settings);
+  // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
+  // mouse/touch/pen, Maus nur linke Taste) öffnet; der click danach klappt
+  // auf. Fokus per Tab (kein pointerdown) öffnet nie.
+  const pointerOpenRef = useRef(false);
+  const notePointer = (e) => {
+    pointerOpenRef.current =
+      openOnPointer &&
+      ["mouse", "touch", "pen"].includes(e.pointerType) &&
+      (e.pointerType !== "mouse" || e.button === 0);
+  };
 
   // Enter oder Knopf: mit Text aufklappen + senden, leer nur aufklappen.
   const submit = (e) => {
@@ -804,11 +832,21 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     const text = value.trim();
     onOpen(text ? { text, send: true } : null);
   };
+  // Aufklappen, getippter Text unversendet mit (Übergabe send: false).
+  const openDraft = () => {
+    const text = value.trim();
+    onOpen(text ? { text, send: false } : null);
+  };
   // Klick in die Leiste neben Feld/Knopf: aufklappen, Text unversendet mitnehmen.
   const openWithDraft = (e) => {
     if (e.target?.closest?.("input, button")) return;
-    const text = value.trim();
-    onOpen(text ? { text, send: false } : null);
+    openDraft();
+  };
+  // Klick ins Feld (nur inlineOpenOn "focus", nur nach Zeiger-pointerdown)
+  const openFromInput = () => {
+    if (!pointerOpenRef.current) return;
+    pointerOpenRef.current = false;
+    openDraft();
   };
   // Chip: leeres Feld -> wie Enter mit dem Chip-Text. Steht schon etwas im
   // Feld, wird der Chip-Text angehängt (nichts ersetzt, nichts gesendet).
@@ -846,6 +884,8 @@ const InlineInputBar = forwardRef(function InlineInputBar(
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onPointerDown={openOnPointer ? notePointer : undefined}
+          onClick={openOnPointer ? openFromInput : undefined}
           placeholder={placeholder}
           aria-label={placeholder}
           autoComplete="off"

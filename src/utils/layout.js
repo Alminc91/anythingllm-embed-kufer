@@ -40,6 +40,10 @@ export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
 export const DEFAULT_INLINE_LAYOUT = "flow";
 export const DEFAULT_INLINE_EFFECT = null;
 export const DEFAULT_OVERLAY_EFFECT = "expand";
+// Eingabe-Leiste (inlineInput): Öffnen schon beim Zeiger-Klick ins Feld
+// ("focus") statt erst beim Absenden ("submit", Standard).
+export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
+export const DEFAULT_INLINE_OPEN_ON = "submit";
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -125,6 +129,9 @@ export const layoutValidations = {
   // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
   inlineLayout: (v) => oneOf(v, INLINE_LAYOUT_VALUES),
   inlineEffect: (v) => oneOf(v, INLINE_EFFECT_VALUES),
+  // Öffnen bei Zeiger-Klick: ungültig -> verworfen, Warnung wie oben
+  // (warnInvalidInlineEnums)
+  inlineOpenOn: (v) => oneOf(v, INLINE_OPEN_ON_VALUES),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -137,10 +144,11 @@ export const layoutValidations = {
   },
 };
 
-// Ungültige inlineLayout-/inlineEffect-Werte: je Quelle eine console.warn-Zeile,
-// die den tatsächlich geltenden Wert nennt (gültiger Wert der anderen Quelle
-// bzw. Standard). script/server = Rohwerte (Script-Attribute bzw. nicht leere
-// visual_config-Werte), settings = fertig zusammengeführte Settings.
+// Ungültige inlineLayout-/inlineEffect-Werte (ebenso inlineOpenOn):
+// je Quelle eine console.warn-Zeile, die den tatsächlich geltenden Wert nennt
+// (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
+// (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
+// zusammengeführte Settings.
 const ENUM_SOURCES = [
   ["script", "Script-Attribut"],
   ["server", "Design Center"],
@@ -154,6 +162,7 @@ export function warnInvalidInlineEnums(
   for (const [key, allowed] of [
     ["inlineLayout", INLINE_LAYOUT_VALUES],
     ["inlineEffect", INLINE_EFFECT_VALUES],
+    ["inlineOpenOn", INLINE_OPEN_ON_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {
@@ -166,8 +175,8 @@ export function warnInvalidInlineEnums(
           ? "Script-Attribut"
           : "Standard";
       const effective =
-        key === "inlineLayout"
-          ? `"${settings.inlineLayout}"`
+        key !== "inlineEffect"
+          ? `"${settings[key]}"`
           : resolveInlineEffect(settings)
             ? `"${resolveInlineEffect(settings)}"`
             : "keine Animation";
@@ -283,6 +292,11 @@ export function inlineBoxHeightPx(settings = {}, viewportHeight = 0) {
 // kommen validiert aus loadEmbedSettings; alles andere = flow.
 export function isInlineOverlay(settings = {}) {
   return settings.inlineLayout === "overlay";
+}
+
+// Eingabe-Leiste: öffnet schon der Zeiger-Klick ins Feld (inlineOpenOn "focus")?
+export function opensOnPointer(settings = {}) {
+  return settings.inlineInput === true && settings.inlineOpenOn === "focus";
 }
 
 // Inline: wirksamer Aufklapp-Effekt. Ausdrücklich gesetzt -> dieser; ohne

@@ -7,6 +7,7 @@ import {
   DEFAULT_INLINE_HEIGHT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_LAYOUT,
+  DEFAULT_INLINE_OPEN_ON,
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
@@ -83,6 +84,9 @@ export const DEFAULT_SETTINGS = {
   inlineInput: false,
   inlineInputPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER, // max. 120 Zeichen
   inlineSendText: DEFAULT_INLINE_SEND_TEXT, // Knopf, max. 40 Zeichen
+  // Eingabe-Leiste: "submit" = öffnet erst beim Absenden (bisher) | "focus" =
+  // schon beim Klick/Tippen ins Feld (nur Zeiger/Touch, nie per Tab-Fokus).
+  inlineOpenOn: DEFAULT_INLINE_OPEN_ON,
   // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
   // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
   inlineTheme: null,
