@@ -1,15 +1,6 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
 import { stripCardsMarker } from "@/utils/courseCards";
-import { summarizeHistory } from "@/utils/chat";
-
-// Verlauf einer Konversation (bzw. der Session ohne conversationId)
-function historyUrl(embedSettings, sessionId, conversationId = null) {
-  const { embedId, baseApiUrl } = embedSettings;
-  return conversationId
-    ? `${baseApiUrl}/${embedId}/${sessionId}?conversationId=${encodeURIComponent(conversationId)}`
-    : `${baseApiUrl}/${embedId}/${sessionId}`;
-}
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -31,7 +22,11 @@ const ChatService = {
     sessionId,
     conversationId = null,
   ) {
-    return await fetch(historyUrl(embedSettings, sessionId, conversationId))
+    const { embedId, baseApiUrl } = embedSettings;
+    const url = conversationId
+      ? `${baseApiUrl}/${embedId}/${sessionId}?conversationId=${encodeURIComponent(conversationId)}`
+      : `${baseApiUrl}/${embedId}/${sessionId}`;
+    return await fetch(url)
       .then((res) => {
         if (res.ok) return res.json();
         throw new Error("Invalid response from server");
@@ -57,29 +52,6 @@ const ChatService = {
         console.error(e);
         return [];
       });
-  },
-  // Inline-Leiste (inlineResumeHint): nur Anzahl der Fragen und Zeitstempel
-  // (sentAt, Sekunden) der letzten Nachricht der Konversation (summarizeHistory) —
-  // derselbe Endpunkt wie embedSessionHistory, aber ohne die Nachrichten
-  // aufzubereiten oder zu behalten (Inhalte/Quellen werden nicht gelesen).
-  // Fehler -> { count: 0, lastAt: null } (kein Hinweis).
-  embedHistorySummary: async function (
-    embedSettings,
-    sessionId,
-    conversationId = null,
-  ) {
-    const empty = { count: 0, lastAt: null };
-    if (!sessionId) return empty;
-    try {
-      const res = await fetch(
-        historyUrl(embedSettings, sessionId, conversationId),
-      );
-      if (!res.ok) return empty;
-      const history = (await res.json())?.history;
-      return Array.isArray(history) ? summarizeHistory(history) : empty;
-    } catch (e) {
-      return empty;
-    }
   },
   // KIE-503: Frühere Konversationen dieser Session auflisten (für das
   // "Frühere Chats"-Panel). Server bindet die Liste an die session_id (BOLA).

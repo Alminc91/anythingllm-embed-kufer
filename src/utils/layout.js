@@ -15,8 +15,6 @@ export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …
 export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
 // Wunschfragen-Chips unter der Leiste (aus defaultMessages): höchstens so viele
 export const INLINE_CHIPS_MAX = 6;
-// … solange der Hinweis „Unterhaltung fortsetzen“ davor steht (eine Zeile)
-export const INLINE_CHIPS_MAX_WITH_HINT = 3;
 
 // Grenzen (Widget-seitig geklemmt, unabhängig davon was gespeichert ist)
 export const INLINE_MIN_HEIGHT_PX = 400;
@@ -36,25 +34,23 @@ export const DEFAULT_COURSE_CARDS_POSITION = "below";
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
 // nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
 // Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
-// wie bisher, schwebend gilt expand (resolveInlineEffect).
+// wie bisher, schwebend gilt expand (resolveInlineEffect). "morph": die
+// Leiste wächst zum Panel (Maße/Rundung per CSS-Transition, InlineChat).
 export const INLINE_LAYOUT_VALUES = ["flow", "overlay"];
-export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
+export const INLINE_EFFECT_VALUES = [
+  "expand",
+  "grow",
+  "spring",
+  "float",
+  "morph",
+];
 export const DEFAULT_INLINE_LAYOUT = "flow";
 export const DEFAULT_INLINE_EFFECT = null;
 export const DEFAULT_OVERLAY_EFFECT = "expand";
 // Eingabe-Leiste (inlineInput): Öffnen schon beim Zeiger-Klick ins Feld
-// ("focus") statt erst beim Absenden ("submit", Standard); Overlay-Box schließt
-// zusätzlich beim Verlassen mit dem Zeiger ("leave") statt nur bei Außenklick/
-// Escape ("outside", Standard). Hinweis „Unterhaltung fortsetzen (n)“ in der
-// eingeklappten Leiste (inlineResumeHint, Standard aus).
+// ("focus") statt erst beim Absenden ("submit", Standard).
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
-export const INLINE_CLOSE_ON_VALUES = ["outside", "leave"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
-export const DEFAULT_INLINE_CLOSE_ON = "outside";
-export const DEFAULT_INLINE_RESUME_PLACEHOLDER = "Weiter fragen …";
-// Karenz bis zum Schließen beim Verlassen (--allm-leave-delay, utils/theme.js)
-export const DEFAULT_LEAVE_DELAY_MS = 600;
-const LEAVE_DELAY_MAX_MS = 10000;
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -140,17 +136,9 @@ export const layoutValidations = {
   // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
   inlineLayout: (v) => oneOf(v, INLINE_LAYOUT_VALUES),
   inlineEffect: (v) => oneOf(v, INLINE_EFFECT_VALUES),
-  // Öffnen bei Zeiger-Klick / Schließen beim Verlassen: ungültig -> verworfen,
-  // Warnung wie oben (warnInvalidInlineEnums)
+  // Öffnen bei Zeiger-Klick: ungültig -> verworfen, Warnung wie oben
+  // (warnInvalidInlineEnums)
   inlineOpenOn: (v) => oneOf(v, INLINE_OPEN_ON_VALUES),
-  inlineCloseOn: (v) => oneOf(v, INLINE_CLOSE_ON_VALUES),
-  // Hinweis auf eine vorhandene Unterhaltung in der eingeklappten Leiste
-  inlineResumeHint: bool,
-  inlineResumePlaceholder: (v) => shortText(v),
-  // Texte von Hinweis-Chip und Link (ohne Angabe: i18n chat.inline-resume /
-  // chat.inline-restart); die Anzahl hängt das Widget als " (n)" an
-  inlineResumeText: (v) => shortText(v),
-  inlineRestartText: (v) => shortText(v, INLINE_SEND_TEXT_MAX_LEN),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -163,7 +151,7 @@ export const layoutValidations = {
   },
 };
 
-// Ungültige inlineLayout-/inlineEffect-Werte (ebenso inlineOpenOn/-CloseOn):
+// Ungültige inlineLayout-/inlineEffect-Werte (ebenso inlineOpenOn):
 // je Quelle eine console.warn-Zeile, die den tatsächlich geltenden Wert nennt
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
@@ -182,7 +170,6 @@ export function warnInvalidInlineEnums(
     ["inlineLayout", INLINE_LAYOUT_VALUES],
     ["inlineEffect", INLINE_EFFECT_VALUES],
     ["inlineOpenOn", INLINE_OPEN_ON_VALUES],
-    ["inlineCloseOn", INLINE_CLOSE_ON_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {
@@ -219,15 +206,15 @@ export function warnIfInlineInputIgnored(settings = {}, isInline = false) {
 }
 
 // Wunschfragen-Chips: defaultMessages (Liste von Strings), leere/Nicht-Strings
-// verworfen, höchstens max (Standard INLINE_CHIPS_MAX).
-export function inlineChips(settings = {}, max = INLINE_CHIPS_MAX) {
+// verworfen, höchstens INLINE_CHIPS_MAX.
+export function inlineChips(settings = {}) {
   const list = Array.isArray(settings.defaultMessages)
     ? settings.defaultMessages
     : [];
   return list
     .filter((m) => typeof m === "string" && m.trim().length > 0)
     .map((m) => m.trim())
-    .slice(0, max);
+    .slice(0, INLINE_CHIPS_MAX);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,34 +304,6 @@ export function isInlineOverlay(settings = {}) {
 // Eingabe-Leiste: öffnet schon der Zeiger-Klick ins Feld (inlineOpenOn "focus")?
 export function opensOnPointer(settings = {}) {
   return settings.inlineInput === true && settings.inlineOpenOn === "focus";
-}
-
-// Schwebende Box: schließt beim Verlassen mit dem Zeiger (inlineCloseOn "leave")?
-// Nur bei inlineLayout "overlay"; Fallback im Seitenfluss/mobil prüft InlineChat.
-export function closesOnLeave(settings = {}) {
-  return isInlineOverlay(settings) && settings.inlineCloseOn === "leave";
-}
-
-// Hinweis „Unterhaltung fortsetzen“: nur mit Eingabe-Leiste und nur, wenn
-// „Frühere Chats“/Verlauf nicht abgeschaltet ist (KIE-503; Script-Attribut
-// liefert ggf. den String "false").
-export function resumeHintEnabled(settings = {}) {
-  return (
-    settings.inlineInput === true &&
-    settings.inlineResumeHint === true &&
-    settings.historyEnabled !== false &&
-    String(settings.historyEnabled) !== "false"
-  );
-}
-
-// CSS-Zeitwert ("600ms", "0.6s", " 200ms ") -> Millisekunden, geklemmt
-// 0–10 s; ungültig/leer -> fallback.
-export function cssTimeMs(value, fallback = DEFAULT_LEAVE_DELAY_MS) {
-  if (typeof value !== "string") return fallback;
-  const m = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(value.trim().toLowerCase());
-  if (!m) return fallback;
-  const ms = m[2] === "s" ? Number(m[1]) * 1000 : Number(m[1]);
-  return Math.min(Math.round(ms), LEAVE_DELAY_MAX_MS);
 }
 
 // Inline: wirksamer Aufklapp-Effekt. Ausdrücklich gesetzt -> dieser; ohne

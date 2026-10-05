@@ -1,8 +1,8 @@
 import { embedderSettings } from "../main";
 
 // sentAt in Sekunden. Option { withDate: true } (statt oder nach hour24):
-// Datum + Uhrzeit mit Sekunden, deutsch "DD.MM.YYYY, HH:MM:SS Uhr", sonst im
-// Format des Browsers (z. B. Tooltip des Hinweises „Unterhaltung fortsetzen“).
+// Datum + Uhrzeit mit Sekunden, deutsch "DD.MM.YYYY, HH:MM:SS Uhr" (Vorgabe
+// CLAUDE.md für Zeitstempel), sonst im Format des Browsers.
 export function formatDate(sentAt, hour24 = null, options = {}) {
   if (!sentAt) return "";
   if (hour24 !== null && typeof hour24 === "object") {

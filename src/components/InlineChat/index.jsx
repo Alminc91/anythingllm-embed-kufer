@@ -8,25 +8,18 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { useTranslation } from "react-i18next";
 import { CaretDown, ChatCircleDots } from "@phosphor-icons/react";
 import ChatWindow from "@/components/ChatWindow";
 import { resolveChatIcon } from "@/components/OpenButton";
 import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
-import ChatService from "@/models/chatService";
-import { formatDate } from "@/utils/date";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
 import { BAR_THEMES, ON_ACCENT_TEXT } from "@/utils/theme";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
-  DEFAULT_INLINE_RESUME_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
-  INLINE_CHIPS_MAX_WITH_HINT,
-  closesOnLeave,
-  cssTimeMs,
   findClippingAncestor,
   inlineBoxHeightPx,
   inlineBoxStyle,
@@ -35,7 +28,7 @@ import {
   inlineMaxWidth,
   isInlineOverlay,
   opensOnPointer,
-  resumeHintEnabled,
+  resolveInlineEffect,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -80,24 +73,16 @@ import {
 // Seitenfluss keine), Animation in main.jsx, nur beim Aufklappen durch den
 // Nutzer. Solange die Box aufgeklappt ist, trägt der Platzhalter
 // data-allm-expanded="true" (Signal für Seiten-CSS).
+// inlineEffect "morph" (ab 768px, nicht bei reduzierter Bewegung): die Leiste
+// wächst zum Panel und beim Einklappen zurück (runMorph) — die Leistenform
+// wird beim Aufklappen einmal gemessen, das Panel im ersten Commit (vor dem
+// Paint), dann laufen CSS-Transitionen; Einklappen erst nach dem Rückweg.
 //
-// Drei schaltbare Varianten der Eingabe-Leiste (Standard = Verhalten oben):
+// Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
 //                          (Entwurf wandert per Übergabe send: false mit). Nur
 //                          nach pointerdown mit mouse/touch/pen — Tab-Fokus
 //                          öffnet nie (Tastatur/Screenreader), Enter wie bisher.
-//   inlineCloseOn "leave"  schwebende Box (overlay, ab 768px, feiner Zeiger)
-//                          klappt ein, wenn der Zeiger Box und Leiste verlässt,
-//                          nach --allm-leave-delay; nie solange eine Antwort
-//                          läuft, ein Element im Widget per Tastatur
-//                          fokussiert ist, das fokussierte Eingabefeld einen
-//                          Entwurf enthält oder ein Menü / „Frühere Chats“
-//                          offen ist ([data-allm-layer]).
-//   inlineResumeHint       eingeklappt: Chip „Unterhaltung fortsetzen (n)“ +
-//                          „Neu starten“, wenn die Konversation Fragen hat
-//                          (n = Fragen; einmal nach dem Mount abgefragt, danach
-//                          vom ChatContainer gemeldet); dann höchstens
-//                          INLINE_CHIPS_MAX_WITH_HINT Wunschfragen-Chips.
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -110,50 +95,125 @@ const TAP_SLOP_PX = 10;
 // Touch: auf den click nach dem Tippen warten (ein Link soll ihn bekommen);
 // Safari schickt für nicht-interaktive Stellen keinen -> danach einklappen
 const TOUCH_CLICK_WAIT_MS = 350;
-// Offenes Menü/„Frühere Chats“ im Chat-Fenster (sperrt Schließen beim Verlassen)
-const LAYER_SELECTOR = "[data-allm-layer]";
-const TEXT_FIELD_SELECTOR = "input, textarea, select, [contenteditable]";
-const NO_CHAT = { count: 0, lastAt: null };
+// Leiste (Klick-Leiste bzw. Pille der Eingabe-Leiste): Startform von "morph"
+const BAR_SELECTOR = "#anything-llm-inline-bar";
+const MORPH_WIN_VARS = ["mw", "mh", "mt", "mr", "cw", "ch"];
+const MORPH_CLASSES = ["allm-morph", "allm-morph-from", "allm-morph-close"];
+const MORPH_FLOW_CLASSES = ["allm-morph-flow", "allm-morph-flow-from"];
 
-// Sperre „Fokus“ für das Schließen beim Verlassen — nur, wenn das fokussierte
-// Element im Widget per Tastatur fokussiert ist (Tastaturnutzer fallen nicht
-// aus dem Panel) oder das fokussierte Eingabefeld einen nicht gesendeten
-// Entwurf enthält. Ein leeres, automatisch (nach dem Öffnen/der Antwort) oder
-// per Zeiger fokussiertes Feld und ein per Maus geklickter Knopf sperren
-// nicht. „Per Tastatur“: Knöpfe/Links über :focus-visible; Textfelder treffen
-// :focus-visible bei jedem Fokus, dort zählt die letzte Navigation (Tab nach
-// dem letzten Zeiger-Klick, tabNav).
-function focusInWidget(root) {
-  const a =
-    embedderSettings.shadowRoot?.activeElement || document.activeElement;
-  return a && root?.contains(a) ? a : null;
-}
-function focusLocksLeave(root, tabNav) {
-  const a = focusInWidget(root);
-  if (!a) return false;
-  if (a.matches?.(TEXT_FIELD_SELECTOR))
-    return tabNav || (typeof a.value === "string" && a.value.trim() !== "");
+function prefersReducedMotion() {
   try {
-    return a.matches(":focus-visible");
+    return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   } catch (e) {
     return false;
   }
 }
-// Steht der Zeiger über el? :hover; trägt das im Shadow-Root nicht, die
-// zuletzt bekannte Zeigerposition (point) per elementFromPoint.
-function pointerOver(el, point) {
-  try {
-    if (el.matches(":hover")) return true;
-  } catch (e) {
-    // Selektor nicht unterstützt -> Fallback
+const px = (n) => `${Math.round(n * 100) / 100}px`;
+
+// Rundung einer Ecke (computed border-*-radius: "999px", "30%", "40px 10px")
+// für die Startform von "morph": Prozent gegen die kleinere Seite, bei zwei
+// Werten (horizontal/vertikal) der kleinere, höchstens halbe Höhe (Pille).
+function cornerRadiusPx(value, w, h) {
+  const radii = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .map((v) =>
+      v.endsWith("%") ? (Math.min(w, h) * parseFloat(v)) / 100 : parseFloat(v),
+    )
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  return radii.length ? Math.min(...radii, h / 2) : 0;
+}
+
+// Leistenform für "morph" (Rect in Viewport-Koordinaten + Rundung)
+function measureBar(pill) {
+  const r = pill.getBoundingClientRect();
+  return {
+    x: r.left,
+    y: r.top,
+    w: r.width,
+    h: r.height,
+    r: cornerRadiusPx(
+      getComputedStyle(pill).borderTopLeftRadius,
+      r.width,
+      r.height,
+    ),
+  };
+}
+
+// Ende eines Laufs: erste beendete Transition einer Form-Eigenschaft des
+// Fensters (im Seitenfluss sind Leiste und Panel gleich breit -> kein
+// width-Übergang; border-radius meldet die Längsform je Ecke)
+const isMorphProperty = (p) =>
+  p === "width" ||
+  p === "height" ||
+  p === "transform" ||
+  /^border-(.+-)?radius$/.test(p);
+
+// Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
+// deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
+// Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
+// zeigen, dann Transition zum Panel; Zuklappen: Transition vom aktuellen
+// Stand zur Leistenform — steht die Leistenform noch an (Zuklappen vor dem
+// ersten Frame des Aufklappens), endet der Lauf sofort. Ende per
+// transitionend (isMorphProperty) bzw. Sicherheits-Timer; onEnd läuft vor dem
+// Aufräumen (Zuklappen: erst einklappen, kein Rücksprung).
+// Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
+function runMorph(win, box, geom, { opening, flow, onEnd }) {
+  const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
+  set(win, "mw", px(geom.w));
+  set(win, "mh", px(geom.h));
+  set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
+  set(win, "mr", px(geom.r));
+  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte)
+  if (!win.style.getPropertyValue("--allmi-cw")) {
+    set(win, "cw", px(win.clientWidth));
+    set(win, "ch", px(win.clientHeight));
   }
-  if (!point) return false;
-  const root = embedderSettings.shadowRoot;
-  const hit = (root?.elementFromPoint ? root : document).elementFromPoint?.(
-    point.x,
-    point.y,
-  );
-  return !!hit && el.contains(hit);
+  if (flow) set(box, "bh", px(geom.rootH));
+  let raf = 0;
+  let timer = 0;
+  const onTransitionEnd = (e) => {
+    if (e.target === win && isMorphProperty(e.propertyName)) finish();
+  };
+  const stop = (keep = false) => {
+    cancelAnimationFrame(raf);
+    clearTimeout(timer);
+    win.removeEventListener("transitionend", onTransitionEnd);
+    if (keep) return;
+    win.classList.remove(...MORPH_CLASSES);
+    box.classList.remove(...MORPH_FLOW_CLASSES);
+    MORPH_WIN_VARS.forEach((k) => win.style.removeProperty(`--allmi-${k}`));
+    box.style.removeProperty("--allmi-bh");
+  };
+  function finish() {
+    stop(true);
+    onEnd?.();
+    stop();
+  }
+  const run = () => {
+    win.classList.add("allm-morph");
+    if (flow) box.classList.add("allm-morph-flow");
+    win.classList.toggle("allm-morph-from", !opening);
+    win.classList.toggle("allm-morph-close", !opening);
+    if (flow) box.classList.toggle("allm-morph-flow-from", !opening);
+    const d = getComputedStyle(win).transitionDuration.split(",")[0];
+    const ms = parseFloat(d) * (d.trim().endsWith("ms") ? 1 : 1000) || 0;
+    win.addEventListener("transitionend", onTransitionEnd);
+    timer = setTimeout(finish, ms + 100);
+  };
+  if (opening) {
+    win.classList.add("allm-morph-from");
+    if (flow) box.classList.add("allm-morph-flow-from");
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(run);
+    });
+  } else if (
+    win.classList.contains("allm-morph-from") &&
+    !win.classList.contains("allm-morph")
+  )
+    finish(); // nichts transitioniert (Leistenform liegt schon an)
+  else run();
+  return stop;
 }
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
@@ -222,6 +282,9 @@ const OVERLAY_BOX_STYLE = {
   right: 0,
   zIndex: "var(--allmi-overlay-z, 1000)",
 };
+
+// Inhalt des Chat-Fensters (füllt es wie bisher das ChatWindow selbst)
+const CONTENT_STYLE = { height: "100%", minHeight: 0 };
 
 const chatClasses = {
   box: "allm-relative allm-w-full allm-h-full allm-border allm-border-solid allm-overflow-hidden allm-flex allm-flex-col allm-box-border",
@@ -296,6 +359,14 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
+  // "morph": { geom, stop, closing, scroll } des laufenden bzw. letzten Laufs;
+  // geom.open = Panel im nächsten Commit messen und Lauf starten
+  const morphRef = useRef(null);
+  // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
+  // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
+  const invalidateMorph = () => {
+    if (morphRef.current) morphRef.current.geom = null;
+  };
   const chatMountedRef = useRef(false);
   // Übergabe Frage/Entwurf aus der Leiste (inlineInput), einzige Quelle der
   // Wahrheit: { ticket, text, send, suppressAutoFocus } | null. ticket ist eine
@@ -325,18 +396,6 @@ export default function InlineChat({
   const floating = wantOverlay && !overlayClipped;
   // Varianten der Eingabe-Leiste (siehe Kopfkommentar)
   const openOnPointer = opensOnPointer(settings);
-  const leaveEnabled = closesOnLeave(settings);
-  const hintEnabled = resumeHintEnabled(settings);
-  // Antwort läuft (vom ChatContainer gemeldet); Ref, kein Re-Render
-  const replyRunningRef = useRef(false);
-  // Schließen beim Verlassen: letzte Navigation per Tab (true) bzw. Zeiger
-  // (false) und letzte Zeigerposition (Fallback für :hover)
-  const tabNavRef = useRef(false);
-  const pointRef = useRef(null);
-  // Schließen beim Verlassen: nach Antwort-Ende neu starten (Karenz ab Ende)
-  const leaveRestartRef = useRef(null);
-  // Hinweis: Anzahl/Zeitstempel der Nachrichten der aktuellen Konversation
-  const [chatInfo, setChatInfo] = useState(NO_CHAT);
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -411,6 +470,7 @@ export default function InlineChat({
   // Leiste ist noch zu sehen): wie beim Aufklappen messen — Höhe der Leiste
   // in der neuen Breite und Abschneide-Prüfung —, aber ohne Effekt.
   beforeViewportChangeRef.current = (desktop) => {
+    invalidateMorph();
     if (!desktop || isDesktop || overlay || !expanded) return;
     animateRef.current = false;
     if (!wantOverlay) return;
@@ -428,12 +488,53 @@ export default function InlineChat({
     return () => mountTarget.removeAttribute(EXPANDED_ATTR);
   }, [view, mountTarget]);
 
+  // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
+  // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
+  // (auch für den Rückweg) und den Lauf starten. Box verlassen (Einklappen,
+  // Vollbild, Unmount) bricht einen Lauf ab.
+  useLayoutEffect(() => {
+    const m = morphRef.current;
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    if (view !== "box" || !m?.geom?.open || !win || !box) return;
+    const g = m.geom;
+    g.open = false;
+    const f = win.getBoundingClientRect();
+    g.dx = g.x - f.left;
+    g.dy = g.y - f.top;
+    m.stop = runMorph(win, box, g, {
+      opening: true,
+      flow: !floating,
+      onEnd: () => {
+        m.stop = null;
+        if (m.scroll) scrollBoxIntoView();
+        m.scroll = false;
+      },
+    });
+  }, [view]);
+  // Abgebrochener Rückweg (Fenster <768px, Unmount): trotzdem einklappen wie
+  // am Ende des Laufs (Übergabe/Text wie beim Zuklappen, Fokus bleibt) —
+  // sonst bliebe die Box aufgeklappt und käme ab 768px wieder.
+  useLayoutEffect(() => {
+    if (view !== "box") return;
+    return () => {
+      const m = morphRef.current;
+      if (!m) return;
+      const wasClosing = m.closing;
+      m.stop?.();
+      m.stop = null;
+      m.closing = false;
+      if (wasClosing) collapseNowRef.current(false, false);
+    };
+  }, [view]);
+
   // Drehen/Vergrößern auf >=768px bei offenem Overlay -> zurück in die Seite,
   // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter). Ohne
   // Effekt; schwebend: Leiste in natürlicher Höhe (die Leiste war im Vollbild
   // nicht zu sehen), Abschneide-Prüfung im nächsten Commit (Box schwebt dann).
   useEffect(() => {
     if (overlay && isDesktop) {
+      invalidateMorph();
       animateRef.current = false;
       flowHeightRef.current = null;
       clipCheckRef.current = wantOverlay;
@@ -459,17 +560,22 @@ export default function InlineChat({
   // Box eingeblendet: Verlauf ans Ende; nach Klick genau EINMAL scrollen — und
   // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
   // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
-  useEffect(() => {
-    if (view !== "box") return;
-    scrollChatToBottom();
-    if (!scrollOnExpandRef.current) return;
-    scrollOnExpandRef.current = false;
+  // "morph": erst nach dem Lauf (die Box hat dann ihre volle Höhe).
+  const scrollBoxIntoView = () => {
     const el = boxRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
     if (rect.top < 0 || rect.bottom > vh)
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (view !== "box") return;
+    scrollChatToBottom();
+    if (!scrollOnExpandRef.current) return;
+    scrollOnExpandRef.current = false;
+    if (morphRef.current?.stop) morphRef.current.scroll = true;
+    else scrollBoxIntoView();
   }, [view]);
 
   // Fokus direkt in der Klick-Geste setzen; existiert das Eingabefeld noch
@@ -526,6 +632,19 @@ export default function InlineChat({
     animateRef.current = true;
     flowHeightRef.current =
       rootRef.current?.getBoundingClientRect().height || null;
+    // "morph": Leistenform einmal messen (Panel misst der Effekt oben)
+    morphRef.current = null;
+    const pill = rootRef.current?.querySelector(BAR_SELECTOR);
+    if (
+      pill &&
+      resolveInlineEffect(settings) === "morph" &&
+      !prefersReducedMotion()
+    ) {
+      const g = measureBar(pill);
+      morphRef.current = {
+        geom: { ...g, open: true, rootH: flowHeightRef.current || g.h },
+      };
+    }
     const clipped = isOverlayClipped();
     flushSync(() => {
       queue();
@@ -563,32 +682,90 @@ export default function InlineChat({
   // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
   // Eine noch nicht verbrauchte Übergabe wird verworfen (nie unsichtbar
   // senden), ihr Text kommt zurück ins Leisten-Feld.
-  // focus "bar": auf die Leiste; "none": Fokus nicht anfassen (Schließen beim
-  // Verlassen, Fokus lag nicht im Widget); "if-free" (Klick außerhalb, Escape
-  // auf der Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
+  // focus "bar": auf die Leiste; "if-free" (Klick außerhalb, Escape auf der
+  // Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
   // Element der Seite (Link, Eingabefeld), bleibt er dort. Außenklicks kommen
   // erst nach dem click hier an, der Fokus des Klicks steht dann schon.
-  const collapse = (focus = "bar") => {
+  // focus false: Fokus bleibt; flush false: ohne flushSync (aus einem
+  // Effekt-Cleanup, dort darf React nicht synchron rendern).
+  const collapseNow = (focus = "bar", flush = true) => {
     const unsent = pendingFirstMessage?.text;
-    flushSync(() => {
+    const apply = () => {
       setPendingFirstMessage(null);
       if (unsent) setBarText(unsent);
       setOverlay(false);
       setExpanded(false);
-    });
-    if (focus === "none") return;
+    };
+    if (flush) flushSync(apply);
+    else apply();
+    if (!focus) return;
     const a = document.activeElement;
     const free =
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
+  };
+  // "morph", Leistenform vor jedem Rückweg frisch messen (Fenstergröße,
+  // Umbruch, Scrollen seit dem Aufklappen). Die Seite zeigt dafür ohne Paint
+  // kurz den eingeklappten Stand (Signal data-allm-expanded weg, Layout lesen,
+  // Signal wieder an), damit ein per Seiten-CSS verbreiterter Platzhalter
+  // nicht mitzählt. Schwebend: die unsichtbare Leiste im Seitenfluss messen;
+  // im Seitenfluss (Leiste nicht gerendert): Lage/Breite der Inline-Fläche,
+  // Höhe/Rundung vom Aufklappen. Panel-Ecke = äußere Box (nie transformiert).
+  const measureCloseGeom = (g, box) => {
+    const panel = box.getBoundingClientRect();
+    const root = rootRef.current;
+    const signal = !!mountTarget?.hasAttribute(EXPANDED_ATTR);
+    if (signal) mountTarget.removeAttribute(EXPANDED_ATTR);
+    try {
+      const pill = floating ? root?.querySelector(BAR_SELECTOR) : null;
+      if (pill) Object.assign(g, measureBar(pill));
+      else if (root) {
+        const r = root.getBoundingClientRect();
+        Object.assign(g, { x: r.left, y: r.top, w: r.width });
+      }
+    } finally {
+      if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
+    }
+    g.dx = g.x - panel.left;
+    g.dy = g.y - panel.top;
+  };
+  // "morph": erst zur Leistenform zurück, dann einklappen (aktuelle Übergabe/
+  // Fokus beim Ende); weitere Aufrufe während des Rückwegs zählen nicht.
+  const collapse = (focus = "bar") => {
+    const m = morphRef.current;
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
+      if (m.closing) return;
+      m.closing = true;
+      m.stop?.(true);
+      // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
+      // (runMorph endet dann sofort): nichts zu messen
+      if (!win.classList.contains("allm-morph-from"))
+        measureCloseGeom(m.geom, box);
+      const stop = runMorph(win, box, m.geom, {
+        opening: false,
+        flow: !floating,
+        onEnd: () => {
+          m.stop = null;
+          m.closing = false;
+          collapseNowRef.current(focus);
+        },
+      });
+      if (m.closing) m.stop = stop;
+      return;
+    }
+    collapseNow(focus);
   };
   // Für ChatWindow (Button "Schließen" o. ä.): ohne Argumente
   const closeChat = () => collapse("bar");
   // Escape-/Außenklick-Listener rufen immer das aktuelle collapse (sieht die
   // aktuelle Übergabe), ohne bei jedem Render neu angehängt zu werden.
   const collapseRef = useRef(collapse);
+  const collapseNowRef = useRef(collapseNow);
   useLayoutEffect(() => {
     collapseRef.current = collapse;
+    collapseNowRef.current = collapseNow;
   });
 
   // Escape schließt das Overlay bzw. klappt die Box ein — nur wenn der Fokus
@@ -690,23 +867,6 @@ export default function InlineChat({
     };
   }, [floating, view]);
 
-  // Vom ChatContainer: { streaming, count?, lastAt? }. Ohne aktive Variante
-  // nichts (kein State, kein Re-Render -> Bestand unverändert).
-  const reportChat = useCallback(
-    ({ streaming, count, lastAt }) => {
-      const was = replyRunningRef.current;
-      replyRunningRef.current = streaming === true;
-      if (was && !replyRunningRef.current) leaveRestartRef.current?.();
-      if (hintEnabled && Number.isInteger(count))
-        setChatInfo((prev) =>
-          prev.count === count && prev.lastAt === (lastAt ?? null)
-            ? prev
-            : { count, lastAt: lastAt ?? null },
-        );
-    },
-    [hintEnabled],
-  );
-
   const embedMode = useMemo(
     () => ({
       inline: true,
@@ -716,151 +876,9 @@ export default function InlineChat({
         focusRequestRef.current = false;
         return wanted;
       },
-      reportChat,
     }),
-    [overlay, reportChat],
+    [overlay],
   );
-
-  // inlineCloseOn "leave": letzte Navigation (Tab/Zeiger) und Zeigerposition
-  // mitschreiben — auch eingeklappt, denn die Leiste wird per Tab erreicht und
-  // per Enter geöffnet, bevor die Box (und der Effekt unten) existiert.
-  useEffect(() => {
-    if (!leaveEnabled) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Tab") tabNavRef.current = true;
-    };
-    const onPointer = (e) => {
-      pointRef.current = { x: e.clientX, y: e.clientY };
-      if (e.type === "pointerdown") tabNavRef.current = false;
-    };
-    const opts = { capture: true, passive: true };
-    document.addEventListener("keydown", onKeyDown, true);
-    document.addEventListener("pointerdown", onPointer, opts);
-    document.addEventListener("pointermove", onPointer, opts);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      document.removeEventListener("pointerdown", onPointer, opts);
-      document.removeEventListener("pointermove", onPointer, opts);
-    };
-  }, [leaveEnabled]);
-
-  // inlineCloseOn "leave": Zeiger verlässt Box + Leiste (beide liegen in der
-  // Inline-Fläche rootRef; pointerleave zählt Nachfahren mit, auch die über
-  // die Fläche hinausragende schwebende Box) -> nach --allm-leave-delay
-  // einklappen; Rückkehr innerhalb der Karenz bricht ab. Steht der Zeiger beim
-  // Start nicht über der Fläche (Enter nach Tab, Startzustand "expanded",
-  // Neustart des Effekts), läuft die Karenz sofort. Nur schwebende Box (nicht
-  // im Seitenfluss-Fallback, nicht mobil/Vollbild), nur feiner Zeiger;
-  // Touch-pointerleave (nach jedem Tippen) zählt nicht. Ist beim Ablauf eine
-  // Sperre aktiv (Antwort läuft, Tastatur-Fokus/Entwurf, Menü offen), bleibt
-  // die Box offen — kein Nachprüfen per Timer: erst ein Ereignis, das eine
-  // Sperre beenden kann (Fokus verlässt ein Element, Entwurf geleert, Menü/
-  // „Frühere Chats“ zu, Antwort-Ende), startet die volle Karenz neu.
-  // Außenklick/Escape bleiben unberührt.
-  useEffect(() => {
-    if (!leaveEnabled || view !== "box" || !floating) return;
-    const el = rootRef.current;
-    if (!el || isCoarsePointer()) return;
-    let timer = 0;
-    let inside = pointerOver(el, pointRef.current);
-    const delay = () =>
-      cssTimeMs(getComputedStyle(el).getPropertyValue("--allmi-leave-delay"));
-    const hasLayer = () => !!el.querySelector(LAYER_SELECTOR);
-    const locked = () =>
-      replyRunningRef.current ||
-      focusLocksLeave(el, tabNavRef.current) ||
-      hasLayer();
-    const arm = () => {
-      clearTimeout(timer);
-      timer = setTimeout(fire, delay());
-    };
-    // Ereignis, nach dem eine Sperre vorbei sein kann: Zeiger draußen ->
-    // volle Karenz (neu); ob dann noch gesperrt ist, prüft fire
-    const rearm = () => {
-      if (!inside) arm();
-    };
-    const fire = () => {
-      timer = 0;
-      if (inside || locked()) return;
-      // Fokus im Widget (leeres Feld, Maus-Knopf) lösen, nicht auf die Leiste
-      // setzen: sonst stünde ein Fokusring in der Leiste
-      focusInWidget(el)?.blur?.();
-      clearTimeout(timer); // focusout des blur hat neu gestartet
-      timer = 0;
-      collapseRef.current("none");
-    };
-    const onEnter = (e) => {
-      if (e.pointerType === "touch") return;
-      inside = true;
-      clearTimeout(timer);
-      timer = 0;
-    };
-    const onLeave = (e) => {
-      if (e.pointerType === "touch") return;
-      inside = false;
-      arm();
-    };
-    // Entwurf geleert (Eingabe im Textfeld)
-    const onInput = (e) => {
-      const v = e.target?.value;
-      if (typeof v === "string" && v.trim() === "") rearm();
-    };
-    // Menü/„Frühere Chats“ geschlossen: nur der Übergang offen -> zu zählt
-    let layerOpen = hasLayer();
-    const layers =
-      typeof MutationObserver === "undefined"
-        ? null
-        : new MutationObserver(() => {
-            const open = hasLayer();
-            if (layerOpen && !open) rearm();
-            layerOpen = open;
-          });
-    layers?.observe(el, { childList: true, subtree: true });
-    leaveRestartRef.current = rearm; // Antwort-Ende
-    el.addEventListener("pointerenter", onEnter);
-    el.addEventListener("pointerleave", onLeave);
-    el.addEventListener("focusout", rearm);
-    el.addEventListener("input", onInput);
-    if (!inside) arm();
-    return () => {
-      clearTimeout(timer);
-      layers?.disconnect();
-      leaveRestartRef.current = null;
-      el.removeEventListener("pointerenter", onEnter);
-      el.removeEventListener("pointerleave", onLeave);
-      el.removeEventListener("focusout", rearm);
-      el.removeEventListener("input", onInput);
-    };
-  }, [leaveEnabled, view, floating]);
-
-  // inlineResumeHint: einmal nach dem Mount (bzw. je Konversation) nur die
-  // Anzahl der Nachrichten abfragen — nie ohne die Einstellung, nie bei
-  // abgeschalteten „Frühere Chats“ (historyEnabled false), nie für eine
-  // soeben neu angelegte Konversation (hat sicher keinen Verlauf). Ist der
-  // Chat schon gemountet, meldet der ChatContainer selbst.
-  useEffect(() => {
-    if (!hintEnabled || !sessionId || !conversationId) return;
-    if (justCreatedRef?.current || chatMountedRef.current) return;
-    let cancelled = false;
-    ChatService.embedHistorySummary(settings, sessionId, conversationId).then(
-      (summary) => {
-        if (!cancelled && !chatMountedRef.current && summary)
-          setChatInfo({ count: summary.count, lastAt: summary.lastAt });
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [hintEnabled, sessionId, conversationId]);
-
-  // „Neu starten“: wie „Chat zurücksetzen“ im Menü — neue Konversation (die
-  // alte bleibt unter „Frühere Chats“), Hinweis weg, Panel bleibt zu.
-  const restartConversation = () => {
-    newConversation?.();
-    setChatInfo(NO_CHAT);
-    focusBar();
-  };
-  const resume = hintEnabled && chatInfo.count > 0 ? chatInfo : null;
 
   const inheritFont = settings.inheritFont === true;
   const boxFloating = view === "box" && floating;
@@ -877,8 +895,6 @@ export default function InlineChat({
         expanded={view !== "bar"}
         onOpen={openChat}
         openOnPointer={openOnPointer}
-        resume={resume}
-        onRestart={restartConversation}
       />
     ) : (
       <InlineBar
@@ -953,18 +969,22 @@ export default function InlineChat({
                   style={FOCUS_PROXY_STYLE}
                 />
               )}
-              <ChatWindow
-                closeChat={closeChat}
-                settings={settings}
-                sessionId={sessionId}
-                conversationId={conversationId}
-                newConversation={newConversation}
-                switchConversation={switchConversation}
-                justCreatedRef={justCreatedRef}
-                compactHeader={isKeyboardOpen}
-                pendingFirstMessage={pendingFirstMessage}
-                onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
-              />
+              {/* fester Inhalts-Container: "morph" blendet ihn ein (der
+                  Inhalt darin wechselt beim Laden das Element) */}
+              <div className="allm-inline-content" style={CONTENT_STYLE}>
+                <ChatWindow
+                  closeChat={closeChat}
+                  settings={settings}
+                  sessionId={sessionId}
+                  conversationId={conversationId}
+                  newConversation={newConversation}
+                  switchConversation={switchConversation}
+                  justCreatedRef={justCreatedRef}
+                  compactHeader={isKeyboardOpen}
+                  pendingFirstMessage={pendingFirstMessage}
+                  onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -1033,9 +1053,11 @@ const InlineBar = forwardRef(function InlineBar(
   );
 });
 
-// Wunschfragen-Chips und Hinweis-Chip „Unterhaltung fortsetzen“ (dieser nur
-// mit Rand in Akzentfarbe; Schriftstärke/Hover und der Link „Neu starten“ per
-// CSS in index.css): Fläche/Text/Rundung der Leiste über --allmi-bar-*
+// Leiste als Eingabefeld (inlineInput): Feld + Absende-Knopf (bewusst ohne
+// Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
+// die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
+// Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
+// Wunschfragen-Chips: Fläche/Text/Rundung der Leiste über --allmi-bar-*
 const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
@@ -1049,10 +1071,6 @@ const CHIP_STYLE = {
   overflowWrap: "anywhere",
 };
 
-// Leiste als Eingabefeld (inlineInput): Feld + Absende-Knopf (bewusst ohne
-// Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
-// die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
-// Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
 const InlineInputBar = forwardRef(function InlineInputBar(
   {
     settings,
@@ -1062,30 +1080,15 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     expanded,
     onOpen,
     openOnPointer = false,
-    resume = null,
-    onRestart,
   },
   ref,
 ) {
-  // Sprache aus den aufgelösten Settings (Standard "de"); i18n selbst startet
-  // nur mit dem Script-Attribut data-language (sonst "en")
-  const { t: translate } = useTranslation();
-  const t = (key, vars) => translate(key, { lng: settings.language, ...vars });
   const accent = barAccent(settings);
   // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
-  const label =
+  const placeholder =
     settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
-  // Hinweis „Unterhaltung fortsetzen“ sichtbar: eigener Platzhalter
-  const placeholder = resume
-    ? settings.inlineResumePlaceholder || DEFAULT_INLINE_RESUME_PLACEHOLDER
-    : label;
   const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
-  // Mit Hinweis-Chip höchstens INLINE_CHIPS_MAX_WITH_HINT Wunschfragen
-  const chips = inlineChips(
-    settings,
-    resume ? INLINE_CHIPS_MAX_WITH_HINT : undefined,
-  );
-  const chipFont = narrow ? "13px" : "14px";
+  const chips = inlineChips(settings);
   // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
   // mouse/touch/pen, Maus nur linke Taste) öffnet; der click danach klappt
   // auf. Fokus per Tab (kein pointerdown) öffnet nie.
@@ -1138,7 +1141,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
       <form
         id="anything-llm-inline-bar"
         role="search"
-        aria-label={label}
+        aria-label={placeholder}
         onSubmit={submit}
         onClick={openWithDraft}
         className="allm-w-full allm-flex allm-items-center allm-box-border allm-m-0 allm-font-sans allm-cursor-pointer"
@@ -1201,54 +1204,19 @@ const InlineInputBar = forwardRef(function InlineInputBar(
           {sendText}
         </button>
       </form>
-      {(chips.length > 0 || resume) && (
+      {chips.length > 0 && (
         <div
           id="anything-llm-inline-chips"
           className="allm-flex allm-items-center allm-justify-center"
           style={{ flexWrap: "wrap", gap: "8px", marginTop: "12px" }}
         >
-          {resume && (
-            <>
-              <button
-                type="button"
-                id="anything-llm-inline-resume"
-                className="allm-inline-resume allm-font-sans allm-cursor-pointer"
-                onClick={openDraft}
-                aria-controls={CHAT_WINDOW_ID}
-                aria-expanded={false}
-                title={
-                  resume.lastAt
-                    ? t("chat.inline-last-message", {
-                        time: formatDate(resume.lastAt, { withDate: true }),
-                      })
-                    : undefined
-                }
-                style={{
-                  ...CHIP_STYLE,
-                  border: `1px solid ${accent}`,
-                  fontSize: chipFont,
-                }}
-              >
-                {`${settings.inlineResumeText || t("chat.inline-resume")} (${resume.count})`}
-              </button>
-              <button
-                type="button"
-                id="anything-llm-inline-restart"
-                className="allm-inline-restart allm-font-sans allm-cursor-pointer"
-                onClick={onRestart}
-                style={{ fontSize: narrow ? "12px" : "13px" }}
-              >
-                {settings.inlineRestartText || t("chat.inline-restart")}
-              </button>
-            </>
-          )}
           {chips.map((chip, i) => (
             <button
               key={i}
               type="button"
               className="allm-inline-chip allm-font-sans allm-cursor-pointer"
               onClick={(e) => pickChip(e, chip)}
-              style={{ ...CHIP_STYLE, fontSize: chipFont }}
+              style={{ ...CHIP_STYLE, fontSize: narrow ? "13px" : "14px" }}
             >
               {chip}
             </button>

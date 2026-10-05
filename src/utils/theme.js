@@ -180,6 +180,13 @@ export const THEME_VARIABLES = [
     light: "calc(var(--allmi-radius) * 1.125)",
     dark: "calc(var(--allmi-radius) * 1.125)",
   },
+  // Kurskarten getrennt vom Panel rundbar (Panel 40px, Karten 14px);
+  // Standard wie bisher 0,75 × --allm-radius
+  {
+    name: "radius-card",
+    light: "calc(var(--allmi-radius) * 0.75)",
+    dark: "calc(var(--allmi-radius) * 0.75)",
+  },
   { name: "shadow", light: null, dark: DARK.shadow },
   {
     name: "bubble-shadow",
@@ -199,15 +206,14 @@ export const THEME_VARIABLES = [
     dark: "cubic-bezier(0.4, 0, 0.2, 1)",
   },
   // Inline-Box: Aufklapp-Effekt (inlineEffect) und Stapelhöhe des Overlays
-  // (inlineLayout "overlay"). effect-easing ohne Standard: dann gilt die
-  // Kurve des Effekts (main.jsx, .allm-effect-*). Reduzierte Bewegung schaltet
-  // den Effekt dort per animation: none ab (die Dauer bleibt unverändert).
-  { name: "effect-duration", light: "320ms", dark: "320ms" },
+  // (inlineLayout "overlay"). effect-duration und effect-easing ohne
+  // Standard: ohne Seiten-CSS ist --allmi-* ungültig und es gilt der Standard
+  // des Effekts an der Verwendungsstelle (main.jsx: .allm-effect 320ms,
+  // "morph" 460ms; Kurve je Effekt). Reduzierte Bewegung schaltet den Effekt
+  // dort per animation/transition: none ab (die Dauer bleibt unverändert).
+  { name: "effect-duration", light: null, dark: null },
   { name: "effect-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
-  // Karenz bis zum Schließen der schwebenden Box beim Verlassen mit dem
-  // Zeiger (inlineCloseOn "leave"); wird in InlineChat gelesen
-  { name: "leave-delay", light: "600ms", dark: "600ms" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
   {
     name: "focus-ring",

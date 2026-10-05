@@ -51,27 +51,3 @@
 .allm-group:hover .allm-hover-icon {
   color: var(--allmi-hover-icon, #222628e6);
 }
-
-/* Kufer: Hinweis „Unterhaltung fortsetzen (n)“ (inlineResumeHint; Form und
-   Akzent-Rand inline wie die Wunschfragen-Chips) und Textlink „Neu starten“
-   in Link-Farbe (--allm-link), unterstrichen. Erscheint erst nach der
-   Verlaufsabfrage (dieses CSS ist dann in der Regel geladen). */
-.allm-inline-resume {
-  font-weight: 600;
-}
-.allm-inline-resume:hover {
-  opacity: 0.85;
-}
-.allm-inline-restart {
-  margin: 0;
-  padding: 6px 4px;
-  border: none;
-  background: transparent;
-  color: var(--allmi-link, #01a5a9);
-  line-height: 1.3;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.allm-inline-restart:hover {
-  opacity: 0.8;
-}

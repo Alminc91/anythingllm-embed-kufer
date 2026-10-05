@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // main.jsx baut beim Import den Shadow-Host und rendert die App -> für die
 // reinen Settings-/Theme-Tests durch ein Minimal-Objekt ersetzen.
@@ -225,6 +227,10 @@ describe("theme.test.js", () => {
       expect(css).toContain(`--allmi-${name}: var(--allm-${name});`);
     expect(css).toContain("--allmi-surface: var(--allm-surface, #FFFFFF);");
     expect(css).toContain("--allmi-radius: var(--allm-radius, 16px);");
+    // Kurskarten getrennt rundbar, Standard 0,75 × --allm-radius (AK-6)
+    expect(css).toContain(
+      "--allmi-radius-card: var(--allm-radius-card, calc(var(--allmi-radius) * 0.75));",
+    );
     expect(css).toContain(
       "--allmi-assistant-text: var(--allm-assistant-text, var(--allmi-text, #222628));",
     );
@@ -438,5 +444,38 @@ describe("theme.test.js", () => {
     );
     expect(s.theme).toBe("dark");
     expect(s.loaded).toBe(true);
+  });
+});
+
+describe("Effekt-Dauer (Review 5: nur --allmi-*, Vorrang über theme.js)", () => {
+  const mainSrc = readFileSync(resolve(process.cwd(), "src/main.jsx"), "utf8");
+
+  it("Mapping ohne Standard: Seiten-CSS --allm-effect-duration gewinnt, sonst Standard je Effekt (morph 460ms)", () => {
+    for (const mode of ["light", "dark"]) {
+      const css = buildThemeCss(
+        { ...DEFAULT_SETTINGS, buttonColor: "#123456" },
+        mode,
+      );
+      expect(css).toContain(
+        "--allmi-effect-duration: var(--allm-effect-duration);",
+      );
+      expect(
+        resolveThemeVars(DEFAULT_SETTINGS, mode)["--allm-effect-duration"],
+      ).toBeNull();
+    }
+    // Standard an der Verwendungsstelle: Keyframe-Effekte 320ms, morph 460ms
+    expect(mainSrc).toContain(
+      "animation-duration: var(--allmi-effect-duration, 320ms);",
+    );
+    expect(mainSrc).toContain(
+      "--allmi-fx-d:var(--allmi-effect-duration,460ms)",
+    );
+    expect(mainSrc).toContain(
+      "--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1))",
+    );
+  });
+
+  it("Widget-CSS in main.jsx liest keine öffentliche --allm-* direkt", () => {
+    expect(mainSrc.match(/var\(\s*--allm-[a-z]/g)).toBeNull();
   });
 });

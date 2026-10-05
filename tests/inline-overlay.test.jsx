@@ -209,10 +209,10 @@ describe("AK-4: Klassenwahl des Effekts", () => {
     ).toBe("allm-effect allm-effect-expand");
   });
 
-  it("Variablen: Dauer/Stapel mit Standard, Kurve ohne; reduzierte Bewegung nur per animation: none (main.jsx)", () => {
+  it("Variablen: Stapel mit Standard, Dauer/Kurve ohne (Standard je Effekt in main.jsx); reduzierte Bewegung nur per animation: none (main.jsx)", () => {
     const css = buildThemeCss(DEFAULT_SETTINGS, "light");
     expect(css).toContain(
-      "--allmi-effect-duration: var(--allm-effect-duration, 320ms);",
+      "--allmi-effect-duration: var(--allm-effect-duration);",
     );
     expect(css).toContain("--allmi-effect-easing: var(--allm-effect-easing);");
     expect(css).toContain("--allmi-overlay-z: var(--allm-overlay-z, 1000);");

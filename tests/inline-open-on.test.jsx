@@ -23,7 +23,6 @@ const chatService = vi.hoisted(() => ({
   streamChat: vi.fn(() => new Promise(() => {})),
   getAudioStatus: vi.fn(async () => ({ stt: false, tts: false })),
   embedSessionHistory: vi.fn(async () => []),
-  embedHistorySummary: vi.fn(async () => ({ count: 0, lastAt: null })),
   listConversations: vi.fn(async () => []),
 }));
 vi.mock("@/models/chatService", () => ({ default: chatService }));
