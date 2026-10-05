@@ -408,8 +408,14 @@ export default function InlineChat({
       setOverlayClipped(clipped);
       setExpanded(true);
     });
-    // Touch-Tablets: kein Auto-Fokus (Tastatur würde die Seite verschieben)
-    if (!isTouchDevice()) focusInput(false);
+    // Touch-Tablets: kein Auto-Fokus (Tastatur würde die Seite verschieben).
+    // Frage abgeschickt: kein Fokus ins Chat-Eingabefeld — es wird mit dem
+    // Senden gesperrt (disabled) und verliert den Fokus in einem React-Commit;
+    // React stellt dann den Fokus des Hosts und die scrollTop-Werte ALLER
+    // Vorfahren (auch <html>) wieder her und bricht damit das sanfte Scrollen
+    // zur Box ab. Nach der Antwort kommt der Fokus wie gewohnt ins Feld
+    // (onPendingFirstMessageConsumed).
+    if (!sending && !isTouchDevice()) focusInput(false);
   };
 
   // Vom ChatContainer aufgerufen, sobald er ein Ticket verbraucht hat.
