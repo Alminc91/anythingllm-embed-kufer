@@ -191,12 +191,14 @@ const customCss = `
   }
 
   /* Inline-Box: Aufklapp-Effekte (inlineEffect, utils/layout.js
-     inlineEffectClass). Nur transform/opacity (float zusätzlich der Schatten),
-     keine Layout-Eigenschaft: der Seiteninhalt springt sofort an seinen Platz
-     (flow) bzw. bleibt stehen (overlay). Startet bei jedem Aufklappen neu (die
-     Box war display:none). Dauer --allm-effect-duration (0ms bei reduzierter
-     Bewegung, utils/theme.js), Kurve --allm-effect-easing, sonst die des
-     Effekts. Hier statt in index.css: steht ohne Tailwind-Ladezeit bereit. */
+     inlineEffectClass; nur bei ausdrücklich gewähltem Effekt bzw. overlay).
+     Nur transform/opacity (float zusätzlich der Schatten), keine
+     Layout-Eigenschaft: der Seiteninhalt springt sofort an seinen Platz (flow)
+     bzw. bleibt stehen (overlay). Läuft nur beim Aufklappen durch den Nutzer
+     (die Box war display:none). Dauer --allm-effect-duration, Kurve
+     --allm-effect-easing, sonst die des Effekts. Reduzierte Bewegung: einzige
+     Stelle ist die Media Query unten (animation: none, Endzustand sofort).
+     Hier statt in index.css: steht ohne Tailwind-Ladezeit bereit. */
   .allm-effect {
     animation-duration: var(--allmi-effect-duration, 320ms);
     animation-timing-function: var(--allmi-effect-easing, var(--allmi-fx-ease));

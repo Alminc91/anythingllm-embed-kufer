@@ -242,12 +242,19 @@ export function bubbleButtonStyle(settings = {}, position = "bottom-right") {
   return style;
 }
 
+// Inline: eingestellte Höhe der Box (validiert, px oder vh), sonst Standard.
+// Gemeinsame Quelle für inlineBoxStyle (CSS) und inlineBoxHeightPx (Messung).
+export function resolveInlineHeight(settings = {}) {
+  return (
+    layoutValidations.inlineHeight(settings.inlineHeight) ||
+    DEFAULT_INLINE_HEIGHT
+  );
+}
+
 // Inline: Höhe der aufgeklappten Box (fest, wächst NICHT mit dem Inhalt).
 // Nur Tablet/Desktop (>=768px) — mobil gibt es keine Box, nur das Vollbild.
 export function inlineBoxStyle(settings = {}) {
-  const h =
-    layoutValidations.inlineHeight(settings.inlineHeight) ||
-    DEFAULT_INLINE_HEIGHT;
+  const h = resolveInlineHeight(settings);
   return {
     height: `clamp(${INLINE_MIN_HEIGHT_PX}px, ${h}, ${INLINE_MAX_HEIGHT_PX}px)`,
     maxHeight: "calc(100vh - 32px)", // nie höher als der sichtbare Bereich
@@ -257,9 +264,7 @@ export function inlineBoxStyle(settings = {}) {
 // Inline: Höhe der Box in px (wie inlineBoxStyle, für die Überlauf-Prüfung
 // des Overlays vor dem Aufklappen).
 export function inlineBoxHeightPx(settings = {}, viewportHeight = 0) {
-  const h =
-    layoutValidations.inlineHeight(settings.inlineHeight) ||
-    DEFAULT_INLINE_HEIGHT;
+  const h = resolveInlineHeight(settings);
   const n = parseFloat(h);
   const px = h.endsWith("vh") ? (n * viewportHeight) / 100 : n;
   const clamped = Math.min(
