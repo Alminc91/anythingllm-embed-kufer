@@ -46,6 +46,8 @@ Ergebnisse (Screenshots, Diff-Bilder, `summary.json`) landen in `tests/visual/re
 
 Leiste als Eingabefeld (`data-inline-input`): `python3 tests/visual/inline_input.py` (Pixel-Vergleich Bestand/neue Zustände, Enter/Knopf/Chips mit gezählten `stream-chat`-Anfragen, Tastatur, Mobil-Vollbild; alle Aufrufe gemockt). Ergebnisse: `tests/visual/results/inline-input-*.png`, `summary-inline-input.json`.
 
+Kurskarten (`data-course-cards`): `python3 tests/visual/course_cards.py` (gemockter Stream mit `courseSources` im Abschluss-Chunk; Pixel-Vergleich ohne Option gegen den Bestand, Karten hell/dunkel/mobil/Kompaktliste/Rückfrage, Stream ohne Flackern, Theme-Variablen + Kontrast, 360 px, keine zusätzlichen Server-Aufrufe). Ergebnisse: `tests/visual/results/course-cards-*.png`, `summary-course-cards.json`.
+
 Live-Prüfung (optional): `EMBED_LIVE_TESTS=1 python3 tests/visual/inline_input.py --live-demo` stellt zusätzlich **eine echte Frage** auf demo.ki.kufer.de und gleicht den serverseitigen Verlauf ab. Dabei entsteht ein echter Chat auf dem Demo-Container (Kontingent, Verlauf) — deshalb bricht `--live-demo` ohne `EMBED_LIVE_TESTS=1` mit einem Hinweis ab. Nur gezielt und sparsam einsetzen.
 
 ## Integrations & Embed Types
@@ -151,6 +153,15 @@ REQUIRED data attributes:
 - `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.
 
 - `data-theme` - `light` (Standard), `dark` oder `auto` (folgt der Hell/Dunkel-Einstellung des Systems): Theme des ganzen Chatfensters. Details und alle Farb-/Form-Variablen: [Styling per CSS-Variablen](#styling-per-css-variablen).
+
+- `data-course-cards` - `auto`: unter einer Antwort, die Kurse nennt, erscheinen die genannten Kurse als **Kurskarten** (Wochentag + Uhrzeit, Titel als Link zur Kursseite, Beginn, Ort bzw. „online“/„vor Ort“, Preis, Status „buchbar“/„nicht buchbar“). Standard `off` = keine Karten, Aussehen unverändert. Auch im Design Center (`visual_config.courseCards`, `"off"` | `"auto"`; Vorrang wie üblich). **Server-Teil ab Image ≥ 7.9:** Der Server liefert die Kurs-Metadaten (`courseSources`, nur Metadaten, nie Kontexttext) nur bei `visual_config.courseCards = "auto"` und erst ab Image 7.9 — mit älteren Images oder ohne die Server-Einstellung bleibt das Attribut ohne Wirkung. Verhalten:
+  - Die Antwort bestimmt die Auswahl: Karten nur für Kurse, deren Kursseite in der Antwort verlinkt ist oder deren Titel genannt wird (normalisiert, ≥ 90 % ähnlich; nur eindeutige Titel mit mindestens zwei Wörtern — gleichnamige Termine ohne Link bekommen keine Karte). Der Antworttext bleibt unverändert.
+  - Jeder Kurs höchstens einmal (gleiche Kurs-URL), sortiert nach Beginn. Höchstens 5 Karten; ab 6 genannten Kursen eine **Kompaktliste** (eine Zeile je Kurs: Wochentag/Uhrzeit · Titel · Ort, höchstens 10 Zeilen, danach „weitere Kurse im Programm“).
+  - Enthält die Antwort einen Link auf eine Programm-/Kategorieseite derselben Domain (keine Kursseite), steht er als Abschlusslink unter den Karten (Linktext aus der Antwort + „→“).
+  - Rückfragen, Antworten ohne Kurse und reine Info-Seiten (Anmeldung, Kontakt) bleiben reiner Text, ohne leere Kartenfläche. Fehlende Angaben (z. B. Preis, Ort) entfallen; Preis 0 wird nicht angezeigt; Terminanzahl und freie Plätze gibt es nicht (nicht im Feed).
+  - Kurse auf fremden Domains (nicht die Domain der Webseite und nicht die der meisten Kurse) werden weggelassen.
+  - Bei einer laufenden Antwort erscheinen die Karten einmal nach dem letzten Wort (Abschluss-Chunk), auch im gespeicherten Verlauf.
+  - Optik über `--allm-surface`, `--allm-text`, `--allm-text-muted`, `--allm-border`, `--allm-accent` (Rand links, Unterstreichung), `--allm-radius`; erbt hell/dunkel. Schmale Breite (z. B. 360 px): einspaltig, Titel bricht um.
 
 - `data-text-size` - Set the text size of the chats in pixels.
 
