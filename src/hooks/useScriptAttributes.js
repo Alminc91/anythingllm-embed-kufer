@@ -81,6 +81,9 @@ export const DEFAULT_SETTINGS = {
   // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
   theme: "light",
   inheritFont: false, // Inline: Schrift der Webseite übernehmen
+  // Kurskarten unter Antworten, die Kurse nennen: "off" | "auto". Braucht
+  // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
+  courseCards: "off",
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
