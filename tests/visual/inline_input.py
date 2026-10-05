@@ -609,12 +609,14 @@ def check_window_body(browser, base_url):
 
 
 def check_live_demo(browser):
-    """AK-3 live auf demo.ki.kufer.de (eine echte Frage)."""
+    """AK-3 live auf demo.ki.kufer.de (eine echte Frage) + NAK-4 über den
+    Verlauf: die Frage steht danach genau einmal im serverseitigen Verlauf
+    (embed_chats) derselben Konversation."""
     ctx = browser.new_context(viewport={"width": 1280, "height": 900}, locale="de-DE")
     ctx.add_init_script(tv.INIT_JS)
     page = ctx.new_page()
     reqs = []
-    page.on("request", lambda r: reqs.append(r.url) if "stream-chat" in r.url else None)
+    page.on("request", lambda r: reqs.append(r) if "stream-chat" in r.url else None)
     try:
         page.goto("https://demo.ki.kufer.de/", wait_until="networkidle")
         page.evaluate("localStorage.clear()")
@@ -630,11 +632,29 @@ def check_live_demo(browser):
         st = expanded_state(page)
         users = page.evaluate(
             "() => [...window.__allmShadow.querySelectorAll('.allm-anything-llm-user-message')].map(e => e.textContent)")
-        page.wait_for_timeout(1500)
+        # Antwort fertig (Text 3 s unverändert)
+        last, since, deadline = None, time.time(), time.time() + 120
+        while time.time() < deadline:
+            txt = page.evaluate("() => window.__allmShadow.textContent")
+            if txt != last:
+                last, since = txt, time.time()
+            elif time.time() - since > 3:
+                break
+            page.wait_for_timeout(500)
         page.screenshot(path=str(RESULTS_DIR / "inline-input-live-demo.png"))
         ok = st.get("open") and len(reqs) == 1 and dt < 10 and any(QUESTION in u for u in users)
         record("AK-3 LIVE demo.ki.kufer.de", ok,
                f"erstes Token nach {dt:.2f} s, stream-chat-Anfragen={len(reqs)}, offen={st.get('open')}")
+        body = json.loads(reqs[0].post_data or "{}") if reqs else {}
+        base = reqs[0].url.rsplit("/stream-chat", 1)[0] if reqs else ""
+        hist = page.request.get(
+            f"{base}/{body.get('sessionId')}?conversationId={body.get('conversationId')}").json().get("history", [])
+        asked = [h for h in hist if h.get("role") == "user" and h.get("content") == QUESTION]
+        answered = [h for h in hist if h.get("role") == "assistant" and h.get("content")]
+        record("NAK-4 LIVE Verlauf/Konversation (embed_chats)",
+               len(asked) == 1 and len(answered) >= 1 and bool(body.get("conversationId")),
+               f"conversationId={body.get('conversationId')}, Verlauf: {len(hist)} Einträge, Frage {len(asked)}x, "
+               f"Antworten {len(answered)}")
     finally:
         ctx.close()
 
