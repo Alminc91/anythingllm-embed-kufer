@@ -783,7 +783,8 @@ const InlineBar = forwardRef(function InlineBar(
   );
 });
 
-// Leiste als Eingabefeld (inlineInput): Icon, Feld, Absende-Knopf; darunter
+// Leiste als Eingabefeld (inlineInput): Feld + Absende-Knopf (bewusst ohne
+// Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
 // die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
 // Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
 const InlineInputBar = forwardRef(function InlineInputBar(
@@ -791,7 +792,6 @@ const InlineInputBar = forwardRef(function InlineInputBar(
   ref,
 ) {
   const accent = barAccent(settings);
-  const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
   // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
   const placeholder =
     settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
@@ -835,26 +835,11 @@ const InlineInputBar = forwardRef(function InlineInputBar(
         className="allm-w-full allm-flex allm-items-center allm-box-border allm-m-0 allm-font-sans allm-cursor-pointer"
         style={{
           ...BAR_STYLE,
-          padding: narrow ? "6px 6px 6px 14px" : "8px 8px 8px 12px",
+          padding: narrow ? "6px 6px 6px 16px" : "8px 8px 8px 24px",
           gap: narrow ? "8px" : "12px",
           minHeight: narrow ? "56px" : "66px",
         }}
       >
-        {/* schmale Spalte (<480px): ohne Icon, damit Feld + Platzhalter Platz haben */}
-        {!narrow && (
-          <span
-            className="allm-flex-shrink-0 allm-rounded-full allm-flex allm-items-center allm-justify-center"
-            style={{
-              width: "42px",
-              height: "42px",
-              backgroundColor: accent,
-              color: ON_ACCENT_TEXT,
-              boxShadow: "var(--allmi-bar-ring)",
-            }}
-          >
-            <Icon size={22} weight="fill" />
-          </span>
-        )}
         <input
           ref={ref}
           id="anything-llm-inline-input"

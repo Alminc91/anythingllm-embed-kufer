@@ -534,7 +534,7 @@ describe("InlineChat: Leiste -> pendingFirstMessage", () => {
     expect(ui.pending()).toMatchObject({ send: true, suppressAutoFocus: true });
     ui.close();
     typeInto(ui.input(), "Töpfern");
-    click(ui.form().querySelector("span"));
+    click(ui.form());
     expect(ui.pending()).toMatchObject({
       send: false,
       suppressAutoFocus: false,
@@ -586,12 +586,18 @@ describe("InlineChat: Leiste -> pendingFirstMessage", () => {
   it("NAK-2: Klick in die Leiste neben das Feld -> Entwurf, nicht gesendet", () => {
     const ui = setup();
     typeInto(ui.input(), "Töpfern am Wochenende");
-    const icon = ui.form().querySelector("span");
-    click(icon);
+    // Klick auf die Leiste selbst (Rand neben Feld/Knopf)
+    click(ui.form());
     expect(ui.pending()).toMatchObject({
       text: "Töpfern am Wochenende",
       send: false,
     });
+  });
+
+  it("Eingabe-Leiste hat kein Chat-Icon links (Absende-Knopf ist der Einstieg)", () => {
+    const ui = setup();
+    expect(ui.form().querySelector("svg")).toBeNull();
+    expect(ui.form().firstElementChild).toBe(ui.input());
   });
 
   it("Klick ins Feld selbst klappt nicht auf", () => {
