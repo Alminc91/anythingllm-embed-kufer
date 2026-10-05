@@ -1,15 +1,39 @@
 import { embedderSettings } from "../main";
 
-export function formatDate(sentAt, hour24 = null) {
+// sentAt in Sekunden. Option { withDate: true } (statt oder nach hour24):
+// Datum + Uhrzeit mit Sekunden, deutsch "DD.MM.YYYY, HH:MM:SS Uhr", sonst im
+// Format des Browsers (z. B. Tooltip des Hinweises „Unterhaltung fortsetzen“).
+export function formatDate(sentAt, hour24 = null, options = {}) {
   if (!sentAt) return "";
+  if (hour24 !== null && typeof hour24 === "object") {
+    options = hour24;
+    hour24 = null;
+  }
 
   try {
     const date = new Date(sentAt * 1000);
+    const isGerman = embedderSettings?.settings?.language === "de";
 
     // Check if we should use 24-hour format
     // Priority: explicit parameter > language setting > default
-    const useHour24 =
-      hour24 !== null ? hour24 : embedderSettings?.settings?.language === "de";
+    const useHour24 = hour24 !== null ? hour24 : isGerman;
+
+    if (options?.withDate) {
+      if (Number.isNaN(date.getTime())) return "";
+      const locale = isGerman ? "de-DE" : [];
+      const day = date.toLocaleDateString(locale, {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+      const time = date.toLocaleTimeString(locale, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: !useHour24,
+      });
+      return isGerman ? `${day}, ${time} Uhr` : `${day}, ${time}`;
+    }
 
     if (useHour24) {
       // 24-hour format
@@ -20,7 +44,7 @@ export function formatDate(sentAt, hour24 = null) {
       });
 
       // Add "Uhr" for German
-      if (embedderSettings?.settings?.language === "de") {
+      if (isGerman) {
         return `${timeString} Uhr`;
       }
       return timeString;
@@ -33,20 +57,6 @@ export function formatDate(sentAt, hour24 = null) {
       hour12: true,
     });
     return timeString;
-  } catch (e) {
-    return "";
-  }
-}
-
-// Datum + Uhrzeit im deutschen Format "DD.MM.YYYY, HH:MM:SS Uhr" (sentAt in
-// Sekunden), z. B. für den Hinweis „Unterhaltung fortsetzen“ der Inline-Leiste.
-export function formatDateTime(sentAt) {
-  if (!sentAt) return "";
-  try {
-    const d = new Date(sentAt * 1000);
-    if (Number.isNaN(d.getTime())) return "";
-    const p = (n) => String(n).padStart(2, "0");
-    return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} Uhr`;
   } catch (e) {
     return "";
   }

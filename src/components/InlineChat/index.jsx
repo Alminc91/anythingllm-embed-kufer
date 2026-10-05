@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { CaretDown, ChatCircleDots } from "@phosphor-icons/react";
 import ChatWindow from "@/components/ChatWindow";
 import { resolveChatIcon } from "@/components/OpenButton";
@@ -15,7 +16,7 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import ChatService from "@/models/chatService";
-import { formatDateTime } from "@/utils/date";
+import { formatDate } from "@/utils/date";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
 import { BAR_THEMES, ON_ACCENT_TEXT } from "@/utils/theme";
 import {
@@ -87,13 +88,14 @@ import {
 //   inlineCloseOn "leave"  schwebende Box (overlay, ab 768px, feiner Zeiger)
 //                          klappt ein, wenn der Zeiger Box und Leiste verlässt,
 //                          nach --allm-leave-delay; nie solange eine Antwort
-//                          läuft, ein Eingabefeld (oder per Tastatur ein
-//                          Element) im Widget fokussiert ist oder ein Menü /
-//                          „Frühere Chats“ offen ist ([data-allm-layer]).
+//                          läuft, ein Element im Widget per Tastatur
+//                          fokussiert ist, das fokussierte Eingabefeld einen
+//                          Entwurf enthält oder ein Menü / „Frühere Chats“
+//                          offen ist ([data-allm-layer]).
 //   inlineResumeHint       eingeklappt: Chip „Unterhaltung fortsetzen (n)“ +
-//                          „Neu starten“, wenn die Konversation Nachrichten hat
-//                          (Anzahl einmal nach dem Mount abgefragt, danach vom
-//                          ChatContainer gemeldet).
+//                          „Neu starten“, wenn die Konversation Fragen hat
+//                          (n = Fragen; einmal nach dem Mount abgefragt, danach
+//                          vom ChatContainer gemeldet).
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -108,28 +110,48 @@ const TAP_SLOP_PX = 10;
 const TOUCH_CLICK_WAIT_MS = 350;
 // Offenes Menü/„Frühere Chats“ im Chat-Fenster (sperrt Schließen beim Verlassen)
 const LAYER_SELECTOR = "[data-allm-layer]";
-const RESUME_TEXT = "Unterhaltung fortsetzen";
-const RESTART_TEXT = "Neu starten";
+const TEXT_FIELD_SELECTOR = "input, textarea, select, [contenteditable]";
 const NO_CHAT = { count: 0, lastAt: null };
 
-// Sperre „Fokus“ für das Schließen beim Verlassen: ein Eingabefeld im Widget
-// ist fokussiert — oder irgendein Element per Tastatur (:focus-visible), damit
-// Tastaturnutzer nicht aus dem Panel fallen. Ein per Maus geklickter Knopf
-// sperrt nicht.
+// Sperre „Fokus“ für das Schließen beim Verlassen — nur, wenn das fokussierte
+// Element im Widget per Tastatur fokussiert ist (Tastaturnutzer fallen nicht
+// aus dem Panel) oder das fokussierte Eingabefeld einen nicht gesendeten
+// Entwurf enthält. Ein leeres, automatisch (nach dem Öffnen/der Antwort) oder
+// per Zeiger fokussiertes Feld und ein per Maus geklickter Knopf sperren
+// nicht. „Per Tastatur“: Knöpfe/Links über :focus-visible; Textfelder treffen
+// :focus-visible bei jedem Fokus, dort zählt die letzte Navigation (Tab nach
+// dem letzten Zeiger-Klick, tabNav).
 function focusInWidget(root) {
   const a =
     embedderSettings.shadowRoot?.activeElement || document.activeElement;
   return a && root?.contains(a) ? a : null;
 }
-function focusLocksLeave(root) {
+function focusLocksLeave(root, tabNav) {
   const a = focusInWidget(root);
   if (!a) return false;
-  if (a.matches?.("input, textarea, select, [contenteditable]")) return true;
+  if (a.matches?.(TEXT_FIELD_SELECTOR))
+    return tabNav || (typeof a.value === "string" && a.value.trim() !== "");
   try {
     return a.matches(":focus-visible");
   } catch (e) {
     return false;
   }
+}
+// Steht der Zeiger über el? :hover; trägt das im Shadow-Root nicht, die
+// zuletzt bekannte Zeigerposition (point) per elementFromPoint.
+function pointerOver(el, point) {
+  try {
+    if (el.matches(":hover")) return true;
+  } catch (e) {
+    // Selektor nicht unterstützt -> Fallback
+  }
+  if (!point) return false;
+  const root = embedderSettings.shadowRoot;
+  const hit = (root?.elementFromPoint ? root : document).elementFromPoint?.(
+    point.x,
+    point.y,
+  );
+  return !!hit && el.contains(hit);
 }
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
@@ -305,6 +327,10 @@ export default function InlineChat({
   const hintEnabled = resumeHintEnabled(settings);
   // Antwort läuft (vom ChatContainer gemeldet); Ref, kein Re-Render
   const replyRunningRef = useRef(false);
+  // Schließen beim Verlassen: letzte Navigation per Tab (true) bzw. Zeiger
+  // (false) und letzte Zeigerposition (Fallback für :hover)
+  const tabNavRef = useRef(false);
+  const pointRef = useRef(null);
   // Schließen beim Verlassen: nach Antwort-Ende neu starten (Karenz ab Ende)
   const leaveRestartRef = useRef(null);
   // Hinweis: Anzahl/Zeitstempel der Nachrichten der aktuellen Konversation
@@ -693,37 +719,73 @@ export default function InlineChat({
     [overlay, reportChat],
   );
 
+  // inlineCloseOn "leave": letzte Navigation (Tab/Zeiger) und Zeigerposition
+  // mitschreiben — auch eingeklappt, denn die Leiste wird per Tab erreicht und
+  // per Enter geöffnet, bevor die Box (und der Effekt unten) existiert.
+  useEffect(() => {
+    if (!leaveEnabled) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Tab") tabNavRef.current = true;
+    };
+    const onPointer = (e) => {
+      pointRef.current = { x: e.clientX, y: e.clientY };
+      if (e.type === "pointerdown") tabNavRef.current = false;
+    };
+    const opts = { capture: true, passive: true };
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("pointerdown", onPointer, opts);
+    document.addEventListener("pointermove", onPointer, opts);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("pointerdown", onPointer, opts);
+      document.removeEventListener("pointermove", onPointer, opts);
+    };
+  }, [leaveEnabled]);
+
   // inlineCloseOn "leave": Zeiger verlässt Box + Leiste (beide liegen in der
   // Inline-Fläche rootRef; pointerleave zählt Nachfahren mit, auch die über
   // die Fläche hinausragende schwebende Box) -> nach --allm-leave-delay
-  // einklappen; Rückkehr innerhalb der Karenz bricht ab. Nur schwebende Box
-  // (nicht im Seitenfluss-Fallback, nicht mobil/Vollbild), nur feiner Zeiger;
-  // Touch-pointerleave (nach jedem Tippen) zählt nicht. Gesperrt (Antwort
-  // läuft, Fokus, Menü offen) -> nach einer weiteren Karenz erneut prüfen;
-  // Antwort-Ende startet die Karenz neu. Außenklick/Escape bleiben unberührt.
+  // einklappen; Rückkehr innerhalb der Karenz bricht ab. Steht der Zeiger beim
+  // Start nicht über der Fläche (Enter nach Tab, Startzustand "expanded",
+  // Neustart des Effekts), läuft die Karenz sofort. Nur schwebende Box (nicht
+  // im Seitenfluss-Fallback, nicht mobil/Vollbild), nur feiner Zeiger;
+  // Touch-pointerleave (nach jedem Tippen) zählt nicht. Ist beim Ablauf eine
+  // Sperre aktiv (Antwort läuft, Tastatur-Fokus/Entwurf, Menü offen), bleibt
+  // die Box offen — kein Nachprüfen per Timer: erst ein Ereignis, das eine
+  // Sperre beenden kann (Fokus verlässt ein Element, Entwurf geleert, Menü/
+  // „Frühere Chats“ zu, Antwort-Ende), startet die volle Karenz neu.
+  // Außenklick/Escape bleiben unberührt.
   useEffect(() => {
     if (!leaveEnabled || view !== "box" || !floating) return;
     const el = rootRef.current;
     if (!el || isCoarsePointer()) return;
     let timer = 0;
-    let inside = true; // geöffnet per Klick: Zeiger steht auf der Leiste
+    let inside = pointerOver(el, pointRef.current);
     const delay = () =>
       cssTimeMs(getComputedStyle(el).getPropertyValue("--allmi-leave-delay"));
+    const hasLayer = () => !!el.querySelector(LAYER_SELECTOR);
     const locked = () =>
       replyRunningRef.current ||
-      focusLocksLeave(el) ||
-      !!el.querySelector(LAYER_SELECTOR);
+      focusLocksLeave(el, tabNavRef.current) ||
+      hasLayer();
     const arm = () => {
       clearTimeout(timer);
       timer = setTimeout(fire, delay());
     };
+    // Ereignis, nach dem eine Sperre vorbei sein kann: Zeiger draußen ->
+    // volle Karenz (neu); ob dann noch gesperrt ist, prüft fire
+    const rearm = () => {
+      if (!inside) arm();
+    };
     const fire = () => {
       timer = 0;
-      if (inside) return;
-      if (locked()) arm();
-      // Fokus nur zurück auf die Leiste, wenn er im Widget lag (sonst ginge
-      // er mit dem Einklappen verloren); sonst bleibt er, wo er ist
-      else collapseRef.current(focusInWidget(el) ? "bar" : "none");
+      if (inside || locked()) return;
+      // Fokus im Widget (leeres Feld, Maus-Knopf) lösen, nicht auf die Leiste
+      // setzen: sonst stünde ein Fokusring in der Leiste
+      focusInWidget(el)?.blur?.();
+      clearTimeout(timer); // focusout des blur hat neu gestartet
+      timer = 0;
+      collapseRef.current("none");
     };
     const onEnter = (e) => {
       if (e.pointerType === "touch") return;
@@ -736,16 +798,36 @@ export default function InlineChat({
       inside = false;
       arm();
     };
-    leaveRestartRef.current = () => {
-      if (!inside) arm();
+    // Entwurf geleert (Eingabe im Textfeld)
+    const onInput = (e) => {
+      const v = e.target?.value;
+      if (typeof v === "string" && v.trim() === "") rearm();
     };
+    // Menü/„Frühere Chats“ geschlossen: nur der Übergang offen -> zu zählt
+    let layerOpen = hasLayer();
+    const layers =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            const open = hasLayer();
+            if (layerOpen && !open) rearm();
+            layerOpen = open;
+          });
+    layers?.observe(el, { childList: true, subtree: true });
+    leaveRestartRef.current = rearm; // Antwort-Ende
     el.addEventListener("pointerenter", onEnter);
     el.addEventListener("pointerleave", onLeave);
+    el.addEventListener("focusout", rearm);
+    el.addEventListener("input", onInput);
+    if (!inside) arm();
     return () => {
       clearTimeout(timer);
+      layers?.disconnect();
       leaveRestartRef.current = null;
       el.removeEventListener("pointerenter", onEnter);
       el.removeEventListener("pointerleave", onLeave);
+      el.removeEventListener("focusout", rearm);
+      el.removeEventListener("input", onInput);
     };
   }, [leaveEnabled, view, floating]);
 
@@ -776,10 +858,7 @@ export default function InlineChat({
     setChatInfo(NO_CHAT);
     focusBar();
   };
-  const resume =
-    hintEnabled && chatInfo.count > 0 && settings.inlineInput === true
-      ? chatInfo
-      : null;
+  const resume = hintEnabled && chatInfo.count > 0 ? chatInfo : null;
 
   const inheritFont = settings.inheritFont === true;
   const boxFloating = view === "box" && floating;
@@ -952,17 +1031,17 @@ const InlineBar = forwardRef(function InlineBar(
   );
 });
 
-// Hinweis-Chip „Unterhaltung fortsetzen“: Form der Wunschfragen-Chips
-// (Fläche/Text/Rundung der Leiste über --allmi-bar-*), Rand in Akzentfarbe
-const RESUME_CHIP_STYLE = {
+// Wunschfragen-Chips und Hinweis-Chip „Unterhaltung fortsetzen“ (dieser mit
+// Rand in Akzentfarbe, fett): Fläche/Text/Rundung der Leiste über --allmi-bar-*
+const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
   padding: "6px 14px",
+  border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
   borderRadius: "var(--allmi-bar-radius, 16px)",
   backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
   color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
   lineHeight: 1.3,
-  fontWeight: 600,
   textAlign: "center",
   overflowWrap: "anywhere",
 };
@@ -996,6 +1075,10 @@ const InlineInputBar = forwardRef(function InlineInputBar(
   },
   ref,
 ) {
+  // Sprache aus den aufgelösten Settings (Standard "de"); i18n selbst startet
+  // nur mit dem Script-Attribut data-language (sonst "en")
+  const { t: translate } = useTranslation();
+  const t = (key, vars) => translate(key, { lng: settings.language, ...vars });
   const accent = barAccent(settings);
   // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
   const label =
@@ -1006,6 +1089,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     : label;
   const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
   const chips = inlineChips(settings);
+  const chipFont = narrow ? "13px" : "14px";
   // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
   // mouse/touch/pen, Maus nur linke Taste) öffnet; der click danach klappt
   // auf. Fokus per Tab (kein pointerdown) öffnet nie.
@@ -1138,16 +1222,19 @@ const InlineInputBar = forwardRef(function InlineInputBar(
                 aria-expanded={false}
                 title={
                   resume.lastAt
-                    ? `Letzte Nachricht: ${formatDateTime(resume.lastAt)}`
+                    ? t("chat.inline-last-message", {
+                        time: formatDate(resume.lastAt, { withDate: true }),
+                      })
                     : undefined
                 }
                 style={{
-                  ...RESUME_CHIP_STYLE,
+                  ...CHIP_STYLE,
                   border: `1px solid ${accent}`,
-                  fontSize: narrow ? "13px" : "14px",
+                  fontWeight: 600,
+                  fontSize: chipFont,
                 }}
               >
-                {`${RESUME_TEXT} (${resume.count})`}
+                {`${settings.inlineResumeText || t("chat.inline-resume")} (${resume.count})`}
               </button>
               <button
                 type="button"
@@ -1159,7 +1246,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
                   fontSize: narrow ? "12px" : "13px",
                 }}
               >
-                {RESTART_TEXT}
+                {settings.inlineRestartText || t("chat.inline-restart")}
               </button>
             </>
           )}
@@ -1169,19 +1256,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
               type="button"
               className="allm-inline-chip allm-font-sans allm-cursor-pointer"
               onClick={(e) => pickChip(e, chip)}
-              style={{
-                maxWidth: "100%",
-                margin: 0,
-                padding: "6px 14px",
-                border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
-                borderRadius: "var(--allmi-bar-radius, 16px)",
-                backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
-                color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
-                fontSize: narrow ? "13px" : "14px",
-                lineHeight: 1.3,
-                textAlign: "center",
-                overflowWrap: "anywhere",
-              }}
+              style={{ ...CHIP_STYLE, fontSize: chipFont }}
             >
               {chip}
             </button>

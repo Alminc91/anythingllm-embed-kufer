@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
-import handleChat from "@/utils/chat";
+import handleChat, { summarizeHistory } from "@/utils/chat";
 import ChatService from "@/models/chatService";
 import useEmbedMode from "@/hooks/useEmbedMode";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
@@ -193,17 +193,18 @@ export default function ChatContainer({
   }, [pendingFirstMessage, loadingResponse, replyStreaming]);
 
   // Zustand melden (nur lesend): Antwort läuft = wartet/streamt/Verbindung
-  // offen; Anzahl + Zeitstempel der letzten Nachricht.
+  // offen; Anzahl der Fragen + Zeitstempel der letzten Nachricht — nur
+  // gespeicherte Einträge (ohne Platzhalter/Fehler-Blasen, summarizeHistory).
   const replyRunning = loadingResponse || replyStreaming || streamOpen;
-  const messageCount = chatHistory.length;
-  const lastSentAt = chatHistory[messageCount - 1]?.sentAt ?? null;
+  const { count: questionCount, lastAt: lastSentAt } =
+    summarizeHistory(chatHistory);
   useEffect(() => {
     reportChat?.({
       streaming: replyRunning,
-      count: messageCount,
+      count: questionCount,
       lastAt: lastSentAt,
     });
-  }, [replyRunning, messageCount, lastSentAt]);
+  }, [replyRunning, questionCount, lastSentAt]);
   useEffect(() => () => reportChat?.({ streaming: false }), []);
 
   const handleAutofillEvent = (event) => {

@@ -145,6 +145,10 @@ export const layoutValidations = {
   // Hinweis auf eine vorhandene Unterhaltung in der eingeklappten Leiste
   inlineResumeHint: bool,
   inlineResumePlaceholder: (v) => shortText(v),
+  // Texte von Hinweis-Chip und Link (ohne Angabe: i18n chat.inline-resume /
+  // chat.inline-restart); die Anzahl hängt das Widget als " (n)" an
+  inlineResumeText: (v) => shortText(v),
+  inlineRestartText: (v) => shortText(v, INLINE_SEND_TEXT_MAX_LEN),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {

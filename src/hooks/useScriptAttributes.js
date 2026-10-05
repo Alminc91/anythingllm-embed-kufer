@@ -98,6 +98,10 @@ export const DEFAULT_SETTINGS = {
   // nur mit dieser Einstellung ab (und nur bei historyEnabled !== false).
   inlineResumeHint: false,
   inlineResumePlaceholder: DEFAULT_INLINE_RESUME_PLACEHOLDER, // max. 120 Zeichen
+  // Text des Hinweis-Chips (max. 120) bzw. des Links (max. 40); null = i18n
+  // („Unterhaltung fortsetzen“ / „Neu starten“), Anzahl wird angehängt
+  inlineResumeText: null,
+  inlineRestartText: null,
   // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
   // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
   inlineTheme: null,

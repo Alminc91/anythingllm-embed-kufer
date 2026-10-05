@@ -173,3 +173,25 @@ export function chatPrompt(workspace) {
     "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed."
   );
 }
+
+// Hinweis „Unterhaltung fortsetzen (n)“: n = Anzahl der Fragen (user-Einträge)
+// mit gespeicherter Antwort; lastAt = sentAt der letzten gespeicherten
+// Nachricht. Gilt für den Server-Verlauf und die Chat-Liste im Widget: lokale
+// Platzhalter (pending) und Fehler-Blasen (error) zählen nicht — eine Frage,
+// deren Antwort noch läuft oder fehlschlug, ebenfalls nicht.
+export function summarizeHistory(history = []) {
+  let count = 0;
+  let lastAt = null;
+  history.forEach((msg, i) => {
+    if (msg?.role !== "user" && msg?.role !== "assistant") return;
+    if (msg.pending || msg.error) return;
+    if (msg.role === "user") {
+      const reply = history[i + 1];
+      if (reply?.role === "assistant" && (reply.pending || reply.error)) return;
+      count += 1;
+    }
+    const at = Number(msg.sentAt);
+    if (Number.isFinite(at) && at > 0) lastAt = at;
+  });
+  return { count, lastAt: count > 0 ? lastAt : null };
+}

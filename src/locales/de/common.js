@@ -5,6 +5,9 @@ const TRANSLATIONS = {
     "reset-chat": "Chat zurücksetzen",
     "start-recording": "Aufnahme starten",
     "stop-recording": "Aufnahme stoppen",
+    "inline-resume": "Unterhaltung fortsetzen",
+    "inline-restart": "Neu starten",
+    "inline-last-message": "Letzte Nachricht: {{time}}",
   },
 };
 
