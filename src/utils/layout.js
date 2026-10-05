@@ -19,6 +19,7 @@ export const WINDOW_MIN_WIDTH_PX = 320;
 export const WINDOW_MIN_HEIGHT_PX = 400;
 export const OFFSET_MAX_PX = 200;
 export const INLINE_TEXT_MAX_LEN = 120;
+export const THEME_VALUES = ["light", "dark", "auto"];
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -86,8 +87,20 @@ export const layoutValidations = {
   inlineHeight: (v) => cssLength(v, ["px", "vh"]),
   inlineMaxWidth: (v) => cssLength(v, ["px"]),
   inlineStartState: (v) => oneOf(v, ["collapsed", "expanded"]),
+  // explizit "light" | "dark"; leer/ungültig -> verworfen -> Standard null
+  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme)
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
+  // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
+  // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
+  theme: (v) => {
+    const t = oneOf(v, THEME_VALUES);
+    if (t === undefined)
+      console.warn(
+        `[AnythingLLM Embed] Ungültiger theme-Wert ${JSON.stringify(v)} — erlaubt: ${THEME_VALUES.join(", ")}. Es gilt der Standard "light".`,
+      );
+    return t;
+  },
 };
 
 // ---------------------------------------------------------------------------

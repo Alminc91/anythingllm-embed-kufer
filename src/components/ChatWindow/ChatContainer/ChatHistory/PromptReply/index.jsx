@@ -4,11 +4,27 @@ import renderMarkdown from "@/utils/chat/markdown";
 import { embedderSettings } from "@/main";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  MESSAGE_FONT_SIZE,
+  MESSAGE_META_CLASS,
+  MESSAGE_NAME_CLASS,
+} from "@/utils/theme";
+
+// Antwortblase über CSS-Variablen (Fallback = bisherige Werte)
+const replyBubbleStyle = () => ({
+  wordBreak: "break-word",
+  backgroundColor: `var(--allmi-assistant-bg, ${embedderSettings.ASSISTANT_STYLES.msgBg})`,
+  color: "var(--allmi-assistant-text, #222628)",
+  borderRadius: BUBBLE_RADIUS.assistant,
+  boxShadow: BUBBLE_SHADOW,
+});
 
 const ThinkingIndicator = ({ hasThought }) => {
   if (hasThought) {
     return (
-      <div className="allm-flex allm-items-center allm-gap-x-2 allm-text-gray-500">
+      <div className="allm-flex allm-items-center allm-gap-x-2 allm-text-[color:var(--allmi-text-muted,#6b7280)]">
         <CircleNotch size={16} className="allm-animate-spin" />
         <span className="allm-text-sm">Thinking...</span>
       </div>
@@ -27,7 +43,7 @@ const ThoughtBubble = ({ thought }) => {
     <div className="allm-mb-2">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="allm-cursor-pointer allm-flex allm-items-center allm-gap-x-1.5 allm-text-gray-400 hover:allm-text-gray-500"
+        className="allm-cursor-pointer allm-flex allm-items-center allm-gap-x-1.5 allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#6b7280)]"
       >
         <CaretDown
           size={14}
@@ -37,8 +53,8 @@ const ThoughtBubble = ({ thought }) => {
         <span className="allm-text-xs allm-font-medium">View thoughts</span>
       </div>
       {isExpanded && (
-        <div className="allm-mt-2 allm-mb-3 allm-pl-0 allm-border-l-2 allm-border-gray-200">
-          <div className="allm-text-xs allm-text-gray-600 allm-font-mono allm-whitespace-pre-wrap">
+        <div className="allm-mt-2 allm-mb-3 allm-pl-0 allm-border-l-2 allm-border-[color:var(--allmi-border,#e5e7eb)]">
+          <div className="allm-text-xs allm-text-[color:var(--allmi-text-muted,#4b5563)] allm-font-mono allm-whitespace-pre-wrap">
             {cleanThought}
           </div>
         </div>
@@ -83,7 +99,7 @@ const PromptReply = forwardRef(
     if (isThinking) {
       return (
         <div className="allm-py-[5px]">
-          <div className="allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans">
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -98,11 +114,8 @@ const PromptReply = forwardRef(
               className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
             />
             <div
-              style={{
-                wordBreak: "break-word",
-                backgroundColor: embedderSettings.ASSISTANT_STYLES.msgBg,
-              }}
-              className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base} allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
+              style={replyBubbleStyle()}
+              className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
             >
               {hasIncompleteThinkTag && streamingThought && (
                 <ThoughtBubble thought={streamingThought} />
@@ -117,7 +130,7 @@ const PromptReply = forwardRef(
     if (error) {
       return (
         <div className="allm-py-[5px]">
-          <div className="allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans">
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -137,7 +150,9 @@ const PromptReply = forwardRef(
                   <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
                   Unser Chatbot ist vorübergehend nicht verfügbar.
                   <br />
-                  <span className="allm-text-xs">Bitte versuchen Sie es später erneut.</span>
+                  <span className="allm-text-xs">
+                    Bitte versuchen Sie es später erneut.
+                  </span>
                 </span>
               </div>
             </div>
@@ -148,7 +163,7 @@ const PromptReply = forwardRef(
 
     return (
       <div className="allm-py-[5px]">
-        <div className="allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans">
+        <div className={MESSAGE_NAME_CLASS}>
           {embedderSettings.settings.assistantName ||
             "Anything LLM Chat Assistant"}
         </div>
@@ -167,11 +182,8 @@ const PromptReply = forwardRef(
             className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
           />
           <div
-            style={{
-              wordBreak: "break-word",
-              backgroundColor: embedderSettings.ASSISTANT_STYLES.msgBg,
-            }}
-            className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base} allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
+            style={replyBubbleStyle()}
+            className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col ${embedderSettings.ASSISTANT_STYLES.base}`}
           >
             {thoughts.length > 0 && (
               <ThoughtBubble thought={thoughts.join("\n\n")} />
@@ -179,6 +191,7 @@ const PromptReply = forwardRef(
             <div className="allm-flex allm-gap-x-5">
               <span
                 className="allm-font-sans allm-reply allm-whitespace-pre-line allm-font-normal allm-text-sm allm-md:text-sm allm-flex allm-flex-col allm-gap-y-1"
+                style={{ fontSize: MESSAGE_FONT_SIZE }}
                 dangerouslySetInnerHTML={{
                   __html: renderMarkdown(responseContent || ""),
                 }}
@@ -187,7 +200,7 @@ const PromptReply = forwardRef(
           </div>
         </div>
         {sentAt && (
-          <div className="allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 allm-text-left allm-font-sans">
+          <div className={`${MESSAGE_META_CLASS} allm-mt-2 allm-text-left`}>
             {formatDate(sentAt)}
           </div>
         )}

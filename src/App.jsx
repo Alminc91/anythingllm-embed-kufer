@@ -18,12 +18,27 @@ import {
   whenDomReady,
 } from "@/utils/layout";
 
+// Fensterfläche über CSS-Variablen (utils/theme.js); Fallback = bisherige
+// Werte (bg-white, border-gray-300, Schatten). Inline-Style statt Klasse, damit
+// die Fläche auch vor dem Laden des Tailwind-Stylesheets im richtigen Theme ist.
+const BUBBLE_WINDOW_STYLE = {
+  // Grundtextfarbe: hell ungesetzt -> erbt wie bisher von der Seite
+  color: "var(--allmi-text)",
+  backgroundColor: "var(--allmi-surface, #FFFFFF)",
+  borderColor: "var(--allmi-border, #d1d5db)",
+  boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.25))",
+};
+
 export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
-  const { conversationId, newConversation, switchConversation, justCreatedRef } =
-    useConversationId(sessionId);
+  const {
+    conversationId,
+    newConversation,
+    switchConversation,
+    justCreatedRef,
+  } = useConversationId(sessionId);
   const [isEnabled, setIsEnabled] = useState(null); // null = loading, true = enabled, false = disabled
   // Inline-Modus: Platzhalter-Element (null = Chat-Blase, undefined = noch offen)
   const [mountTarget, setMountTarget] = useState(undefined);
@@ -114,7 +129,12 @@ export default function App() {
     );
   }
 
-  const validPositions = ["bottom-left", "bottom-right", "top-left", "top-right"];
+  const validPositions = [
+    "bottom-left",
+    "bottom-right",
+    "top-left",
+    "top-right",
+  ];
   const position = validPositions.includes(embedSettings.position)
     ? embedSettings.position
     : "bottom-right";
@@ -146,7 +166,7 @@ export default function App() {
     allm-inset-0
     allm-w-full allm-h-full
     allm-rounded-none
-    md:allm-inset-auto md:allm-max-w-[40%] md:allm-max-h-[77%] md:allm-rounded-2xl md:allm-mb-4
+    md:allm-inset-auto md:allm-max-w-[40%] md:allm-max-h-[77%] md:allm-rounded-[var(--allmi-radius,16px)] md:allm-mb-4
     xl:allm-max-w-[25%]
   `;
 
@@ -163,7 +183,8 @@ export default function App() {
       >
         <div
           ref={chatWindowRef}
-          className={`allm-bubble-window allm-bg-white allm-fixed allm-border allm-border-gray-300 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
+          className={`allm-bubble-window allm-fixed allm-border allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
+          style={BUBBLE_WINDOW_STYLE}
           id="anything-llm-chat"
         >
           {isChatOpen && (

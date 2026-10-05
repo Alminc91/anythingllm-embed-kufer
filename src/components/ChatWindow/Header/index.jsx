@@ -12,6 +12,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { embedderSettings } from "@/main";
 import useEmbedMode from "@/hooks/useEmbedMode";
+import {
+  HEADER_ICON_STYLE,
+  HEADER_STYLE,
+  headerButtonClass,
+} from "@/utils/theme";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -54,19 +59,10 @@ export default function ChatWindowHeader({
     };
   }, [menuRef]);
 
-  // Header styling with optional custom colors
-  const headerStyle = {
-    borderBottom: settings.headerBgColor ? "none" : "1px solid #E9E9E9",
-    backgroundColor: settings.headerBgColor || "transparent",
-  };
-
-  // Icon button styling - adapt to header background
-  const iconButtonClass = settings.headerBgColor
-    ? "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-white/20 allm-rounded-sm"
-    : "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm allm-text-slate-800/60";
-
-  // Icon color based on header background
-  const iconColor = settings.headerTextColor || (settings.headerBgColor ? "#FFFFFF" : undefined);
+  // Kopfzeile über CSS-Variablen (--allm-header-bg/-text/-icon, Standard aus
+  // headerBgColor/headerTextColor; Unterlinie --allmi-header-border), gemeinsam
+  // mit "Frühere Chats" — siehe utils/theme.js.
+  const iconButtonClass = headerButtonClass(settings);
 
   // Icon container style based on iconStyle setting
   const getIconContainerStyle = () => {
@@ -99,7 +95,7 @@ export default function ChatWindowHeader({
         ...baseStyle,
         borderRadius: "8px",
         backgroundColor: "transparent",
-        border: "2px solid rgba(255, 255, 255, 0.6)"
+        border: "2px solid rgba(255, 255, 255, 0.6)",
       };
     }
 
@@ -109,7 +105,7 @@ export default function ChatWindowHeader({
         ...baseStyle,
         borderRadius: "8px",
         backgroundColor: "transparent",
-        border: "2px solid rgba(0, 0, 0, 0.4)"
+        border: "2px solid rgba(0, 0, 0, 0.4)",
       };
     }
 
@@ -118,7 +114,7 @@ export default function ChatWindowHeader({
       return {
         ...baseStyle,
         borderRadius: "10px",
-        backgroundColor: "rgba(255, 255, 255, 0.2)"
+        backgroundColor: "rgba(255, 255, 255, 0.2)",
       };
     }
 
@@ -129,7 +125,7 @@ export default function ChatWindowHeader({
         borderRadius: "10px",
         backgroundColor: "rgba(255, 255, 255, 0.15)",
         backdropFilter: "blur(4px)",
-        border: "1px solid rgba(255, 255, 255, 0.2)"
+        border: "1px solid rgba(255, 255, 255, 0.2)",
       };
     }
 
@@ -139,7 +135,7 @@ export default function ChatWindowHeader({
         ...baseStyle,
         borderRadius: "8px",
         backgroundColor: "rgba(255, 255, 255, 0.1)",
-        boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.1)"
+        boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.1)",
       };
     }
 
@@ -148,7 +144,8 @@ export default function ChatWindowHeader({
       return {
         ...baseStyle,
         backgroundColor: "transparent",
-        filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.6))"
+        filter:
+          "drop-shadow(0 0 6px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.6))",
       };
     }
 
@@ -157,7 +154,7 @@ export default function ChatWindowHeader({
       return {
         ...pillStyle,
         borderRadius: "20px",
-        backgroundColor: "#FFFFFF"
+        backgroundColor: "#FFFFFF",
       };
     }
 
@@ -167,12 +164,12 @@ export default function ChatWindowHeader({
 
   return (
     <div
-      style={headerStyle}
-      className="allm-flex allm-items-center allm-relative allm-rounded-t-2xl"
+      style={HEADER_STYLE}
+      className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)]"
       id="anything-llm-header"
     >
       <div
-        className={`allm-flex allm-items-center allm-px-4 allm-flex-1 allm-transition-all allm-duration-200 ${
+        className={`allm-flex allm-items-center allm-px-4 allm-flex-1 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
           compact ? "allm-h-[56px]" : "allm-h-[76px]"
         }`}
       >
@@ -187,14 +184,15 @@ export default function ChatWindowHeader({
               maxWidth: compact ? "28px" : "40px",
               maxHeight: compact ? "28px" : "40px",
               objectFit: "contain",
-              transition: "max-width 200ms, max-height 200ms",
+              transition:
+                "max-width var(--allmi-transition, 200ms), max-height var(--allmi-transition, 200ms)",
             }}
           />
         </div>
         {settings.brandText && (
           <span
             className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
-            style={{ color: settings.headerTextColor || "#1f2937" }}
+            style={{ color: "var(--allmi-header-text, #1f2937)" }}
           >
             {settings.brandText}
           </span>
@@ -207,15 +205,16 @@ export default function ChatWindowHeader({
             type="button"
             onClick={() => setShowOptions(!showingOptions)}
             className={iconButtonClass}
+            style={HEADER_ICON_STYLE}
             aria-label="Options"
           >
-            <DotsThreeOutlineVertical size={20} weight="fill" color={iconColor} />
+            <DotsThreeOutlineVertical size={20} weight="fill" />
           </button>
         )}
         <CloseButton
           onClick={closeChat}
           className={iconButtonClass}
-          color={iconColor}
+          style={HEADER_ICON_STYLE}
         />
       </div>
       <OptionsMenu
@@ -240,7 +239,7 @@ export default function ChatWindowHeader({
 
 // Schließen (X) bzw. in der Inline-Box "Einklappen" (Chevron nach oben).
 // Variante kommt aus dem Darstellungs-Kontext (Blase/Overlay: X).
-export function CloseButton({ onClick, className, color }) {
+export function CloseButton({ onClick, className, color, style }) {
   const { inline, overlay } = useEmbedMode();
   const collapse = inline && !overlay;
   const Icon = collapse ? CaretUp : X;
@@ -249,6 +248,7 @@ export function CloseButton({ onClick, className, color }) {
       type="button"
       onClick={onClick}
       className={className}
+      style={style}
       aria-label={collapse ? "Einklappen" : "Close"}
       title={collapse ? "Einklappen" : undefined}
     >
@@ -270,13 +270,13 @@ function OptionsMenu({
   return (
     <div
       ref={menuRef}
-      className="allm-bg-white allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
+      className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
     >
       {/* Reset bleibt oben (häufigste Aktion, gewohnte Position), "Frühere
           Chats" (KIE-503) direkt darunter. */}
       <button
         onClick={resetChat}
-        className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
+        className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4"
       >
         <ArrowCounterClockwise size={24} />
         <p className="allm-text-[14px] allm-font-sans">
@@ -286,7 +286,7 @@ function OptionsMenu({
       {openHistory && (
         <button
           onClick={openHistory}
-          className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
+          className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4"
         >
           <ClockCounterClockwise size={24} />
           <p className="allm-text-[14px] allm-font-sans">
@@ -323,7 +323,7 @@ function SessionID({ sessionId, conversationId, settings }) {
 
   if (sessionIdCopied) {
     return (
-      <div className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4">
+      <div className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4">
         <Check size={24} />
         <p className="allm-text-[14px] allm-font-sans">Copied!</p>
       </div>
@@ -333,7 +333,7 @@ function SessionID({ sessionId, conversationId, settings }) {
   return (
     <button
       onClick={copySessionId}
-      className="hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
+      className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4"
     >
       <Copy size={24} />
       <p className="allm-text-[14px] allm-font-sans">
@@ -351,7 +351,7 @@ function ContactSupport({ email = null, settings, sessionId, conversationId }) {
   return (
     <a
       href={`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
-      className="allm-no-underline hover:allm-underline hover:allm-cursor-pointer allm-bg-white allm-gap-x-[12px] hover:allm-bg-gray-100 allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[#7A7D7E] allm-font-bold allm-px-4"
+      className="allm-no-underline hover:allm-underline hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4"
     >
       <Envelope size={24} />
       <p className="allm-text-[14px] allm-font-sans">

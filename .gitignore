@@ -23,3 +23,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Visuelle Tests: Ergebnis-Screenshots (Referenzen liegen in tests/visual/baseline)
+tests/visual/results
+tests/visual/__pycache__

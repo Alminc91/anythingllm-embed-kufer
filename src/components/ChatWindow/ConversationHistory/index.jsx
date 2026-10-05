@@ -7,6 +7,12 @@ import {
 } from "@phosphor-icons/react";
 import ChatService from "@/models/chatService";
 import { CloseButton } from "../Header";
+import {
+  HEADER_ICON_STYLE,
+  HEADER_STYLE,
+  accentTintFallback,
+  headerButtonClass,
+} from "@/utils/theme";
 
 // KIE-503: Vollbild-Ansicht "Frühere Chats" (Mockup: Burger + Vollbild-Liste).
 // Zeigt die Konversationen der aktuellen Session (serverseitig session-gebunden,
@@ -58,32 +64,32 @@ export default function ConversationHistory({
     };
   }, [settings, sessionId]);
 
-  const headerStyle = {
-    borderBottom: settings.headerBgColor ? "none" : "1px solid #E9E9E9",
-    backgroundColor: settings.headerBgColor || "transparent",
-  };
-  const headerIconColor =
-    settings.headerTextColor || (settings.headerBgColor ? "#FFFFFF" : "#374151");
+  // Kopf wie ChatWindowHeader (gemeinsame Bausteine in utils/theme.js)
+  const buttonClass = headerButtonClass(settings);
+  // Icon-Kachel: 10 % Akzent per color-mix() (.allm-accent-tint, index.css);
+  // ohne color-mix() der bisherige Wert, sofern aus buttonColor gültig ableitbar.
+  const tintFallback = accentTintFallback(accent);
 
   return (
     <div className="allm-flex allm-flex-col allm-h-full">
       {/* Kopf: Zurück ‹ + Titel + Schließen — Muster wie ChatWindowHeader */}
       <div
-        style={headerStyle}
-        className="allm-flex allm-items-center allm-relative allm-rounded-t-2xl allm-h-[56px] allm-flex-shrink-0"
+        style={HEADER_STYLE}
+        className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)] allm-h-[56px] allm-flex-shrink-0"
       >
         <div className="allm-flex allm-items-center allm-gap-x-1 allm-px-3 allm-flex-1 allm-min-w-0">
           <button
             type="button"
             onClick={onBack}
             aria-label="Zurück zum Chat"
-            className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm allm-p-1 allm-flex allm-items-center"
+            className={`${buttonClass} allm-p-1 allm-flex allm-items-center`}
+            style={HEADER_ICON_STYLE}
           >
-            <CaretLeft size={20} weight="bold" color={headerIconColor} />
+            <CaretLeft size={20} weight="bold" />
           </button>
           <span
             className="allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
-            style={{ color: settings.headerTextColor || "#1f2937" }}
+            style={{ color: "var(--allmi-header-text, #1f2937)" }}
           >
             {settings.historyTitleText || "Frühere Chats"}
           </span>
@@ -91,25 +97,25 @@ export default function ConversationHistory({
         <div className="allm-flex allm-items-center allm-px-[22px]">
           <CloseButton
             onClick={closeChat}
-            className="allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-gray-100 allm-rounded-sm"
-            color={headerIconColor}
+            className={buttonClass}
+            style={HEADER_ICON_STYLE}
           />
         </div>
       </div>
 
       {/* Liste */}
-      <div className="allm-flex-1 allm-overflow-y-auto allm-bg-gray-50 allm-p-2.5 allm-no-scroll">
+      <div className="allm-flex-1 allm-overflow-y-auto allm-bg-[color:var(--allmi-bg,#f9fafb)] allm-p-2.5 allm-no-scroll">
         {conversations === null ? (
-          <div className="allm-flex allm-justify-center allm-items-center allm-h-full allm-text-gray-400">
+          <div className="allm-flex allm-justify-center allm-items-center allm-h-full allm-text-[color:var(--allmi-text-muted,#9ca3af)]">
             <CircleNotch size={22} className="allm-animate-spin" />
           </div>
         ) : conversations.length === 0 ? (
-          <p className="allm-text-center allm-text-sm allm-text-gray-400 allm-font-sans allm-py-8">
+          <p className="allm-text-center allm-text-sm allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-font-sans allm-py-8">
             Noch keine früheren Chats vorhanden.
           </p>
         ) : (
           <>
-            <p className="allm-text-[11px] allm-uppercase allm-tracking-wide allm-text-gray-400 allm-font-sans allm-px-1 allm-pb-2 allm-pt-1 allm-m-0">
+            <p className="allm-text-[11px] allm-uppercase allm-tracking-wide allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-font-sans allm-px-1 allm-pb-2 allm-pt-1 allm-m-0">
               {conversations.length}{" "}
               {conversations.length === 1 ? "Konversation" : "Konversationen"}
             </p>
@@ -120,18 +126,27 @@ export default function ConversationHistory({
                   key={conv.conversationId}
                   type="button"
                   onClick={() => onSelect(conv.conversationId)}
-                  style={isCurrent ? { borderColor: accent } : {}}
-                  className="allm-box-border allm-w-full allm-text-left allm-cursor-pointer allm-flex allm-items-start allm-gap-x-2.5 allm-bg-white allm-border allm-border-solid allm-border-gray-200 hover:allm-border-gray-300 allm-rounded-xl allm-p-3 allm-mb-2 allm-font-sans"
+                  style={
+                    isCurrent
+                      ? { borderColor: `var(--allmi-accent, ${accent})` }
+                      : {}
+                  }
+                  className="allm-box-border allm-w-full allm-text-left allm-cursor-pointer allm-flex allm-items-start allm-gap-x-2.5 allm-bg-[color:var(--allmi-surface,#fff)] allm-border allm-border-solid allm-border-[color:var(--allmi-border,#e5e7eb)] hover:allm-border-[color:var(--allmi-border,#d1d5db)] allm-rounded-xl allm-p-3 allm-mb-2 allm-font-sans"
                 >
                   <span
-                    className="allm-flex-shrink-0 allm-w-8 allm-h-8 allm-rounded-lg allm-flex allm-items-center allm-justify-center"
-                    style={{ backgroundColor: `${accent}1a`, color: accent }}
+                    className="allm-accent-tint allm-flex-shrink-0 allm-w-8 allm-h-8 allm-rounded-lg allm-flex allm-items-center allm-justify-center"
+                    style={{
+                      ...(tintFallback
+                        ? { backgroundColor: tintFallback }
+                        : {}),
+                      color: `var(--allmi-accent, ${accent})`,
+                    }}
                   >
                     <ChatCircleDots size={17} weight="fill" />
                   </span>
                   <span className="allm-flex-1 allm-min-w-0">
                     <span
-                      className="allm-block allm-text-[13px] allm-font-semibold allm-text-gray-800 allm-leading-snug allm-overflow-hidden"
+                      className="allm-block allm-text-[13px] allm-font-semibold allm-text-[color:var(--allmi-text,#1f2937)] allm-leading-snug allm-overflow-hidden"
                       style={{
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
@@ -140,7 +155,7 @@ export default function ConversationHistory({
                     >
                       {conv.title || "Konversation"}
                     </span>
-                    <span className="allm-block allm-text-[11px] allm-text-gray-400 allm-mt-1">
+                    <span className="allm-block allm-text-[11px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-mt-1">
                       {/* messageCount = Frage/Antwort-PAARE (eine DB-Zeile je
                           Austausch) — daher "Fragen", nicht "Nachrichten". */}
                       {relativeDayLabel(conv.lastMessageAt)} ·{" "}
@@ -151,7 +166,7 @@ export default function ConversationHistory({
                   </span>
                   <CaretRight
                     size={16}
-                    className="allm-flex-shrink-0 allm-self-center allm-text-gray-300"
+                    className="allm-flex-shrink-0 allm-self-center allm-text-[color:var(--allmi-text-muted,#d1d5db)]"
                   />
                 </button>
               );

@@ -1,4 +1,9 @@
-import { CircleNotch, PaperPlaneRight, Microphone, Stop } from "@phosphor-icons/react";
+import {
+  CircleNotch,
+  PaperPlaneRight,
+  Microphone,
+  Stop,
+} from "@phosphor-icons/react";
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ChatService from "@/models/chatService";
@@ -9,8 +14,20 @@ import { embedderSettings } from "@/main";
 // iOS-only: sticky-Eingabezeile auf eigene Compositing-Ebene zwingen (WebKit-Fix).
 // Auf Desktop weggelassen, da es dort ein Paint-Flackern beim Streaming verursacht.
 const COMPOSITING_HACK_STYLE = isIOS()
-  ? { transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform" }
+  ? {
+      transform: "translateZ(0)",
+      WebkitTransform: "translateZ(0)",
+      willChange: "transform",
+    }
   : undefined;
+
+// Eingabefeld über CSS-Variablen (--allm-input-*, --allm-radius); Fallback =
+// bisheriger Rahmen 1.5px #22262833, transparent, rounded-2xl (16px).
+const INPUT_BOX_STYLE = {
+  border: "1.5px solid var(--allmi-input-border, #22262833)",
+  backgroundColor: "var(--allmi-input-bg, transparent)",
+  borderRadius: "var(--allmi-radius, 16px)",
+};
 
 export default function PromptInput({
   settings,
@@ -122,7 +139,9 @@ export default function PromptInput({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4",
+        mimeType: MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "audio/mp4",
       });
 
       mediaRecorderRef.current = mediaRecorder;
@@ -159,7 +178,10 @@ export default function PromptInput({
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
   };
@@ -171,7 +193,11 @@ export default function PromptInput({
       // This ensures transcription in the original spoken language (not translation)
       console.log("[STT] Transcribing audio, blob size:", audioBlob.size);
 
-      const result = await ChatService.transcribeAudio(settings, audioBlob, null);
+      const result = await ChatService.transcribeAudio(
+        settings,
+        audioBlob,
+        null,
+      );
       console.log("[STT] Transcription result:", result);
 
       if (result.success && result.text) {
@@ -200,7 +226,7 @@ export default function PromptInput({
   return (
     <div
       style={COMPOSITING_HACK_STYLE}
-      className="allm-w-full allm-sticky allm-bottom-0 allm-z-10 allm-flex allm-justify-center allm-items-center allm-bg-white"
+      className="allm-w-full allm-sticky allm-bottom-0 allm-z-10 allm-flex allm-justify-center allm-items-center allm-bg-[color:var(--allmi-surface,#fff)]"
     >
       <form
         onPointerDownCapture={() => {
@@ -211,10 +237,10 @@ export default function PromptInput({
         className="allm-flex allm-flex-col allm-gap-y-1 allm-rounded-t-lg allm-w-full allm-items-center allm-justify-center"
       >
         <div className="allm-flex allm-items-center allm-w-full">
-          <div className="allm-bg-white allm-flex allm-flex-col allm-px-4 allm-overflow-hidden allm-w-full">
+          <div className="allm-bg-[color:var(--allmi-surface,#fff)] allm-flex allm-flex-col allm-px-4 allm-overflow-hidden allm-w-full">
             <div
-              style={{ border: "1.5px solid #22262833" }}
-              className="allm-flex allm-items-center allm-w-full allm-rounded-2xl"
+              style={INPUT_BOX_STYLE}
+              className="allm-flex allm-items-center allm-w-full"
             >
               <textarea
                 ref={textareaRef}
@@ -231,13 +257,13 @@ export default function PromptInput({
                 value={message}
                 rows={1}
                 style={{
-                  height: '20px',
-                  minHeight: '20px',
-                  lineHeight: '20px',
-                  padding: '12px 12px',
-                  margin: '0',
+                  height: "20px",
+                  minHeight: "20px",
+                  lineHeight: "20px",
+                  padding: "12px 12px",
+                  margin: "0",
                 }}
-                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[16px] allm-w-full allm-text-black allm-bg-transparent placeholder:allm-text-slate-800/60 allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
+                className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[16px] allm-w-full allm-text-[color:var(--allmi-input-text,#000)] allm-bg-transparent placeholder:allm-text-[color:var(--allmi-text-muted,#1e293b99)] allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
                 placeholder={settings.sendMessageText || t("chat.send-message")}
                 id="message-input"
               />
@@ -248,16 +274,33 @@ export default function PromptInput({
                   type="button"
                   onClick={handleMicrophoneClick}
                   disabled={inputDisabled || isTranscribing}
-                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
-                  aria-label={isRecording ? "Stop recording" : "Start recording"}
-                  title={isRecording ? t("chat.stop-recording") : t("chat.start-recording")}
+                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
+                  aria-label={
+                    isRecording ? "Stop recording" : "Start recording"
+                  }
+                  title={
+                    isRecording
+                      ? t("chat.stop-recording")
+                      : t("chat.start-recording")
+                  }
                 >
                   {isTranscribing ? (
-                    <CircleNotch size={24} className="allm-my-3 allm-animate-spin allm-text-[#22262899]/60" />
+                    <CircleNotch
+                      size={24}
+                      className="allm-my-3 allm-animate-spin allm-text-[color:var(--allmi-text-muted,#22262899)]"
+                    />
                   ) : isRecording ? (
-                    <Stop size={24} weight="fill" className="allm-my-3 allm-text-red-500 allm-animate-pulse" />
+                    <Stop
+                      size={24}
+                      weight="fill"
+                      className="allm-my-3 allm-text-red-500 allm-animate-pulse"
+                    />
                   ) : (
-                    <Microphone size={24} weight="fill" className="allm-my-3 allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90" />
+                    <Microphone
+                      size={24}
+                      weight="fill"
+                      className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] allm-hover-icon"
+                    />
                   )}
                 </button>
               )}
@@ -266,7 +309,7 @@ export default function PromptInput({
                 ref={formRef}
                 type="submit"
                 disabled={buttonDisabled}
-                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-black group allm-flex-shrink-0"
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
                 id="send-message-button"
                 aria-label="Send message"
               >
@@ -275,7 +318,7 @@ export default function PromptInput({
                 ) : (
                   <PaperPlaneRight
                     size={24}
-                    className="allm-my-3 allm-text-[#22262899]/60 group-hover:allm-text-[#22262899]/90"
+                    className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] allm-hover-icon"
                     weight="fill"
                   />
                 )}

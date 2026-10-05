@@ -14,6 +14,7 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isTouchDevice } from "@/utils/platform";
+import { BAR_THEMES } from "@/utils/theme";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   inlineBoxStyle,
@@ -53,27 +54,24 @@ const TEXT_RESET = {
   fontWeight: 400,
   whiteSpace: "normal",
   fontSize: "16px",
-  color: "#222628",
+  color: "var(--allmi-text, #222628)",
   boxSizing: "border-box",
   marginLeft: "auto",
   marginRight: "auto",
 };
 
-const BAR_THEMES = {
-  light: {
-    backgroundColor: "#FFFFFF",
-    color: "#1f2937",
-    border: "1px solid #d1d5db",
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
-  },
-  dark: {
-    backgroundColor: "rgba(17, 24, 39, 0.78)",
-    color: "#FFFFFF",
-    border: "1px solid rgba(255, 255, 255, 0.16)",
-    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.18)",
-    backdropFilter: "blur(6px)",
-    WebkitBackdropFilter: "blur(6px)",
-  },
+// Leiste: Farben aus den CSS-Variablen --allm-bar-* (Standard je nach
+// inlineTheme bzw. theme, siehe BAR_THEMES in utils/theme.js). Fallbacks =
+// bisherige helle Leiste. --allmi-bar-backdrop/-ring sind nur bei dunkler
+// Leiste gesetzt (sonst ungültig -> none, wie bisher).
+const BAR_STYLE = {
+  backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
+  color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
+  border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
+  boxShadow: `var(--allmi-bar-shadow, ${BAR_THEMES.light.shadow})`,
+  borderRadius: "var(--allmi-bar-radius, 16px)",
+  backdropFilter: "var(--allmi-bar-backdrop)",
+  WebkitBackdropFilter: "var(--allmi-bar-backdrop)",
 };
 
 // Unsichtbares Hilfsfeld fürs erste Öffnen des Overlays: existiert das echte
@@ -94,9 +92,19 @@ const FOCUS_PROXY_STYLE = {
 };
 
 const chatClasses = {
-  box: "allm-relative allm-w-full allm-h-full allm-bg-white allm-border allm-border-solid allm-border-gray-300 allm-rounded-2xl allm-overflow-hidden allm-flex allm-flex-col allm-box-border allm-shadow-[0_4px_14px_rgba(0,0,0,0.12)]",
+  box: "allm-relative allm-w-full allm-h-full allm-border allm-border-solid allm-overflow-hidden allm-flex allm-flex-col allm-box-border",
   overlay:
-    "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-bg-white allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]",
+    "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]",
+};
+// Flächen über CSS-Variablen; Fallbacks = bisherige Klassenwerte.
+const chatStyles = {
+  box: {
+    backgroundColor: "var(--allmi-surface, #FFFFFF)",
+    borderColor: "var(--allmi-border, #d1d5db)",
+    borderRadius: "var(--allmi-radius, 16px)",
+    boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.12))",
+  },
+  overlay: { backgroundColor: "var(--allmi-surface, #FFFFFF)" },
 };
 
 function scrollChatToBottom() {
@@ -326,6 +334,7 @@ export default function InlineChat({
               className={
                 view === "overlay" ? chatClasses.overlay : chatClasses.box
               }
+              style={view === "overlay" ? chatStyles.overlay : chatStyles.box}
             >
               {view === "overlay" && (
                 <input
@@ -357,7 +366,6 @@ const InlineBar = forwardRef(function InlineBar(
   { settings, narrow, onOpen },
   ref,
 ) {
-  const theme = BAR_THEMES[settings.inlineTheme] || BAR_THEMES.light;
   const accent = settings.buttonColor || "#01a5a9";
   const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
   // Immer als Text rendern (React escaped), nie als HTML.
@@ -375,9 +383,9 @@ const InlineBar = forwardRef(function InlineBar(
       onClick={onOpen}
       aria-expanded={false}
       id="anything-llm-inline-bar"
-      className="allm-w-full allm-flex allm-items-center allm-text-left allm-cursor-pointer allm-rounded-2xl allm-box-border allm-m-0 allm-font-sans hover:allm-opacity-95 allm-transition-opacity allm-duration-200"
+      className="allm-w-full allm-flex allm-items-center allm-text-left allm-cursor-pointer allm-box-border allm-m-0 allm-font-sans hover:allm-opacity-95 allm-transition-opacity allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))]"
       style={{
-        ...theme,
+        ...BAR_STYLE,
         padding: narrow ? "10px 12px" : "12px 18px",
         gap: narrow ? "10px" : "14px",
         minHeight: narrow ? "56px" : "66px",
@@ -388,13 +396,11 @@ const InlineBar = forwardRef(function InlineBar(
         style={{
           width: `${iconSize}px`,
           height: `${iconSize}px`,
-          backgroundColor: accent,
+          backgroundColor: `var(--allmi-accent, ${accent})`,
           color: "#FFFFFF",
-          // dunkle Leiste: heller Ring, damit auch dunkle Akzentfarben sichtbar bleiben
-          boxShadow:
-            settings.inlineTheme === "dark"
-              ? "0 0 0 2px rgba(255, 255, 255, 0.28)"
-              : undefined,
+          // dunkle Leiste: heller Ring, damit auch dunkle Akzentfarben sichtbar
+          // bleiben (--allmi-bar-ring nur bei dunkler Leiste gesetzt)
+          boxShadow: "var(--allmi-bar-ring)",
         }}
       >
         <Icon size={narrow ? 20 : 22} weight="fill" />

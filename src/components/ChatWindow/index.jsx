@@ -50,7 +50,7 @@ export default function ChatWindow({
   const historyOverlay = showHistory ? (
     // z-[60]: muss ÜBER dem Scroll-nach-unten-Pfeil (z-50) aus ChatHistory
     // liegen, sonst schwebt der Pfeil über der Liste und scrollt den verdeckten Chat.
-    <div className="allm-absolute allm-inset-0 allm-z-[60] allm-bg-white allm-rounded-2xl allm-overflow-hidden">
+    <div className="allm-absolute allm-inset-0 allm-z-[60] allm-bg-[color:var(--allmi-surface,#fff)] allm-rounded-[var(--allmi-radius,16px)] allm-overflow-hidden">
       <ConversationHistory
         settings={settings}
         sessionId={sessionId}

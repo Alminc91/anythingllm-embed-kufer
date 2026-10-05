@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
+import { suggestionFontSize } from "@/utils/theme";
 import debounce from "lodash.debounce";
 import { SEND_TEXT_EVENT } from "..";
 
@@ -79,7 +80,7 @@ export default function ChatHistory({
     return (
       <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
-          <p className="allm-text-slate-400 allm-text-sm allm-font-sans allm-py-4 allm-text-center">
+          <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
             {settings?.greeting ?? "Send a chat to get started."}
           </p>
           <SuggestedMessages settings={settings} />
@@ -141,11 +142,11 @@ export default function ChatHistory({
 export function ChatHistoryLoading() {
   return (
     <div className="allm-h-full allm-w-full allm-relative">
-      <div className="allm-h-full allm-max-h-[82vh] allm-pb-[100px] allm-pt-[5px] allm-bg-gray-100 allm-rounded-lg allm-px-2 allm-h-full allm-mt-2 allm-gap-y-2 allm-overflow-y-scroll allm-flex allm-flex-col allm-justify-start allm-no-scroll">
+      <div className="allm-h-full allm-max-h-[82vh] allm-pb-[100px] allm-pt-[5px] allm-bg-[color:var(--allmi-bg,#f3f4f6)] allm-rounded-lg allm-px-2 allm-h-full allm-mt-2 allm-gap-y-2 allm-overflow-y-scroll allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
           <CircleNotch
             size={14}
-            className="allm-text-slate-400 allm-animate-spin"
+            className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-animate-spin"
           />
         </div>
       </div>
@@ -164,9 +165,9 @@ function SuggestedMessages({ settings }) {
           style={{
             opacity: 0,
             wordBreak: "break-word",
-            backgroundColor: embedderSettings.USER_STYLES.msgBg,
-            color: embedderSettings.USER_STYLES.msgText || "#FFFFFF",
-            fontSize: settings.textSize,
+            backgroundColor: `var(--allmi-user-bg, ${embedderSettings.USER_STYLES.msgBg})`,
+            color: `var(--allmi-user-text, ${embedderSettings.USER_STYLES.msgText || "#FFFFFF"})`,
+            fontSize: suggestionFontSize(settings.textSize),
           }}
           type="button"
           onClick={() => {

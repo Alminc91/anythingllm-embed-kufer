@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import "./index.css";
 import { parseStylesSrc } from "./utils/constants.js";
 import { initI18n } from "./i18n.js";
+import { THEME_STYLE_ID } from "./utils/theme.js";
 
 // CSS Strings für Shadow DOM (von Head.jsx übernommen)
 const hljsCss = `
@@ -25,14 +26,15 @@ const customCss = `
    * ==============================================
    */
   .allm-dot-falling {
+    --allmi-dot: var(--allmi-text, #000000);
     position: relative;
     left: -9999px;
     width: 10px;
     height: 10px;
     border-radius: 5px;
-    background-color: #000000;
+    background-color: var(--allmi-dot);
     color: #5fa4fa;
-    box-shadow: 9999px 0 0 0 #000000;
+    box-shadow: 9999px 0 0 0 var(--allmi-dot);
     animation: dot-falling 1.5s infinite linear;
     animation-delay: 0.1s;
   }
@@ -49,8 +51,8 @@ const customCss = `
     width: 10px;
     height: 10px;
     border-radius: 5px;
-    background-color: #000000;
-    color: #000000;
+    background-color: var(--allmi-dot);
+    color: var(--allmi-dot);
     animation: dot-falling-before 1.5s infinite linear;
     animation-delay: 0s;
   }
@@ -59,8 +61,8 @@ const customCss = `
     width: 10px;
     height: 10px;
     border-radius: 5px;
-    background-color: #000000;
-    color: #000000;
+    background-color: var(--allmi-dot);
+    color: var(--allmi-dot);
     animation: dot-falling-after 1.5s infinite linear;
     animation-delay: 0.2s;
   }
@@ -72,7 +74,7 @@ const customCss = `
     25%,
     50%,
     75% {
-      box-shadow: 9999px 0 0 0 #000000;
+      box-shadow: 9999px 0 0 0 var(--allmi-dot);
     }
     100% {
       box-shadow: 9999px 15px 0 0 rgba(152, 128, 255, 0);
@@ -86,7 +88,7 @@ const customCss = `
     25%,
     50%,
     75% {
-      box-shadow: 9984px 0 0 0 #000000;
+      box-shadow: 9984px 0 0 0 var(--allmi-dot);
     }
     100% {
       box-shadow: 9984px 15px 0 0 rgba(152, 128, 255, 0);
@@ -100,7 +102,7 @@ const customCss = `
     25%,
     50%,
     75% {
-      box-shadow: 10014px 0 0 0 #000000;
+      box-shadow: 10014px 0 0 0 var(--allmi-dot);
     }
     100% {
       box-shadow: 10014px 15px 0 0 rgba(152, 128, 255, 0);
@@ -139,6 +141,25 @@ const customCss = `
   .allm-inherit-font .allm-font-sans {
     font-family: inherit !important;
   }
+
+  /* Links in Assistenten-Antworten (historisch + Streaming): --allm-link
+     (Standard = linkColor). Ersetzt die frühere Link-Farb-Injektion. */
+  .allm-anything-llm-assistant-message a,
+  .allm-reply a {
+    color: var(--allmi-link, #01a5a9) !important;
+  }
+  .allm-anything-llm-assistant-message a:hover,
+  .allm-reply a:hover {
+    color: var(--allmi-link, #01a5a9) !important;
+    opacity: 0.8;
+  }
+
+  /* Tastatur-Fokus: --allm-focus-ring (z. B. "2px solid #F3A04C"). Ohne Wert
+     (helles Theme) gilt wie bisher der Browser-Standard (revert). */
+  #anythingllm-embed-root button:focus-visible,
+  #anythingllm-embed-root a:focus-visible {
+    outline: var(--allmi-focus-ring, revert);
+  }
 `;
 
 // Script-Settings vor Shadow DOM Erstellung lesen
@@ -148,23 +169,6 @@ const scriptSettings = Object.assign(
 );
 
 const stylesSrc = parseStylesSrc(document?.currentScript?.src);
-
-// Link Color CSS generieren (für Links in Assistant-Nachrichten)
-const getLinkColorCss = (linkColor) => {
-  if (!linkColor) return '';
-  return `
-    /* Link Color - sowohl für historische als auch streaming Nachrichten */
-    .allm-anything-llm-assistant-message a,
-    .allm-reply a {
-      color: ${linkColor} !important;
-    }
-    .allm-anything-llm-assistant-message a:hover,
-    .allm-reply a:hover {
-      color: ${linkColor} !important;
-      opacity: 0.8;
-    }
-  `;
-};
 
 // Shadow DOM Host erstellen. Zunächst immer an <body> (Chat-Blase). Im
 // Inline-Modus hängt App.jsx den Host nach dem Config-Load in den Platzhalter
@@ -177,11 +181,17 @@ document.body.appendChild(hostElement);
 // Shadow DOM anhängen (closed = CSS komplett isoliert, nicht von außen zugreifbar)
 const shadow = hostElement.attachShadow({ mode: "closed" });
 
-// Inline Styles in Shadow DOM laden (inkl. Link Color)
-const linkColorCss = getLinkColorCss(scriptSettings?.linkColor);
+// Inline Styles in Shadow DOM laden
 const inlineStyles = document.createElement("style");
-inlineStyles.textContent = hljsCss + customCss + linkColorCss;
+inlineStyles.textContent = hljsCss + customCss;
 shadow.appendChild(inlineStyles);
+
+// CSS-Variablen/Theme (utils/theme.js): ":host { --allmi-…: var(--allm-…, …) }".
+// Wird nach dem Config-Load von useScriptAttributes synchron vor dem ersten
+// Render gefüllt; "auto" aktualisiert es bei prefers-color-scheme-Wechsel.
+const themeStyle = document.createElement("style");
+themeStyle.id = THEME_STYLE_ID;
+shadow.appendChild(themeStyle);
 
 // External CSS (Tailwind) in Shadow DOM laden
 const linkElement = document.createElement("link");
@@ -235,14 +245,16 @@ export const embedderSettings = {
   stylesSrc: stylesSrc,
   shadowRoot: shadow, // Export Shadow Root for event listeners
   hostElement, // Shadow-Host (Inline-Modus: wird in den Platzhalter umgehängt)
+  themeStyle, // <style> mit den CSS-Variablen (utils/theme.js)
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
     msgText: scriptSettings?.userTextColor ?? "#FFFFFF",
-    base: `allm-rounded-t-[18px] allm-rounded-bl-[18px] allm-rounded-br-[4px] allm-mx-[20px]`,
+    // Rundung/Textfarbe kommen aus den CSS-Variablen (bubbleRadius in utils/theme.js)
+    base: `allm-mx-[20px]`,
   },
   ASSISTANT_STYLES: {
     msgBg: scriptSettings?.assistantBgColor ?? "#FFFFFF",
-    base: `allm-text-[#222628] allm-rounded-t-[18px] allm-rounded-br-[18px] allm-rounded-bl-[4px] allm-mr-[37px] allm-ml-[9px]`,
+    base: `allm-mr-[37px] allm-ml-[9px]`,
   },
 };
 

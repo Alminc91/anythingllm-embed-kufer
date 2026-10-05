@@ -1,5 +1,13 @@
 import React, { memo, forwardRef, useState, useEffect, useRef } from "react";
-import { Warning, CaretDown, SpeakerHigh, Stop, CircleNotch, ThumbsUp, ThumbsDown } from "@phosphor-icons/react";
+import {
+  Warning,
+  CaretDown,
+  SpeakerHigh,
+  Stop,
+  CircleNotch,
+  ThumbsUp,
+  ThumbsDown,
+} from "@phosphor-icons/react";
 import renderMarkdown from "@/utils/chat/markdown";
 import DOMPurify from "@/utils/chat/purify";
 import { embedderSettings } from "@/main";
@@ -7,6 +15,13 @@ import { v4 } from "uuid";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  MESSAGE_FONT_SIZE,
+  MESSAGE_META_CLASS,
+  MESSAGE_NAME_CLASS,
+} from "@/utils/theme";
 
 const ThoughtBubble = ({ thought }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -16,7 +31,7 @@ const ThoughtBubble = ({ thought }) => {
     <div className="allm-mb-2">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="allm-cursor-pointer allm-flex allm-items-center allm-gap-x-1.5 allm-text-gray-400 hover:allm-text-gray-500"
+        className="allm-cursor-pointer allm-flex allm-items-center allm-gap-x-1.5 allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#6b7280)]"
       >
         <CaretDown
           size={14}
@@ -26,8 +41,8 @@ const ThoughtBubble = ({ thought }) => {
         <span className="allm-text-xs allm-font-medium">View thoughts</span>
       </div>
       {isExpanded && (
-        <div className="allm-mt-2 allm-mb-3 allm-pl-0 allm-border-l-2 allm-border-gray-200">
-          <div className="allm-text-xs allm-text-gray-600 allm-font-mono allm-whitespace-pre-wrap">
+        <div className="allm-mt-2 allm-mb-3 allm-pl-0 allm-border-l-2 allm-border-[color:var(--allmi-border,#e5e7eb)]">
+          <div className="allm-text-xs allm-text-[color:var(--allmi-text-muted,#4b5563)] allm-font-mono allm-whitespace-pre-wrap">
             {thought.trim()}
           </div>
         </div>
@@ -71,7 +86,8 @@ const TTSButton = ({ text, size = 14 }) => {
     const handlePause = () => {
       // Only set isPlaying to false if user paused, not if stream ended
       // Check if we're at the end of the audio
-      const isAtEnd = audio.duration &&
+      const isAtEnd =
+        audio.duration &&
         (audio.currentTime >= audio.duration - 0.5 || audio.ended);
       if (isAtEnd) {
         console.log("[TTS] Audio paused at end");
@@ -98,8 +114,11 @@ const TTSButton = ({ text, size = 14 }) => {
       if (!audio) return;
 
       // Check if we're at the end (duration is finite and we're close to it)
-      if (audio.duration && isFinite(audio.duration) &&
-          audio.currentTime >= audio.duration - 0.1) {
+      if (
+        audio.duration &&
+        isFinite(audio.duration) &&
+        audio.currentTime >= audio.duration - 0.1
+      ) {
         console.log("[TTS] Audio reached end via timeupdate");
         setIsPlaying(false);
       }
@@ -172,7 +191,7 @@ const TTSButton = ({ text, size = 14 }) => {
           // onComplete - stream finished downloading
           console.log("[TTS] Stream complete");
           setStreamComplete(true);
-        }
+        },
       );
 
       if (!success) {
@@ -193,7 +212,7 @@ const TTSButton = ({ text, size = 14 }) => {
       <button
         onClick={handleClick}
         disabled={isLoading}
-        className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-gray-400 hover:allm-text-gray-600 disabled:allm-opacity-50 allm-p-0"
+        className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] disabled:allm-opacity-50 allm-p-0"
         aria-label={isPlaying ? "Stop speaking" : "Speak message"}
         title={isPlaying ? "Stop" : "Speak"}
       >
@@ -320,7 +339,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     <>
       <div className="allm-flex allm-items-center allm-gap-x-1.5">
         <span
-          className="allm-text-gray-300 allm-select-none"
+          className="allm-text-[color:var(--allmi-text-muted,#d1d5db)] allm-select-none"
           aria-hidden="true"
         >
           |
@@ -334,7 +353,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           className={`${btnBase} ${
             score === true
               ? "allm-text-green-600"
-              : "allm-text-gray-400 hover:allm-text-gray-600"
+              : "allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)]"
           }`}
         >
           <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
@@ -348,7 +367,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           className={`${btnBase} ${
             score === false
               ? "allm-text-red-600"
-              : "allm-text-gray-400 hover:allm-text-gray-600"
+              : "allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)]"
           }`}
         >
           <ThumbsDown size={16} weight={score === false ? "fill" : "regular"} />
@@ -408,7 +427,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
                   type="button"
                   onClick={sendComment}
                   disabled={sending}
-                  style={{ backgroundColor: accent }}
+                  style={{ backgroundColor: `var(--allmi-accent, ${accent})` }}
                   className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-text-white allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
                 >
                   {sending ? "Senden…" : "Senden"}
@@ -438,9 +457,6 @@ const HistoricalMessage = forwardRef(
     },
     ref,
   ) => {
-    const textSize = !!embedderSettings.settings.textSize
-      ? `allm-text-[${embedderSettings.settings.textSize}px]`
-      : "allm-text-sm";
     if (error) console.error(`ANYTHING_LLM_CHAT_WIDGET_ERROR: ${error}`);
 
     // Extract content between think tags if they exist
@@ -465,7 +481,7 @@ const HistoricalMessage = forwardRef(
     return (
       <div className="allm-py-[5px]">
         {role === "assistant" && (
-          <div className="allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans">
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -500,13 +516,27 @@ const HistoricalMessage = forwardRef(
           <div
             style={{
               wordBreak: "break-word",
+              // Farben/Rundung/Schatten über CSS-Variablen (utils/theme.js);
+              // Fallback = bisherige Werte aus den Settings.
               backgroundColor:
                 role === "user"
-                  ? embedderSettings.USER_STYLES.msgBg
-                  : embedderSettings.ASSISTANT_STYLES.msgBg,
+                  ? `var(--allmi-user-bg, ${embedderSettings.USER_STYLES.msgBg})`
+                  : `var(--allmi-assistant-bg, ${embedderSettings.ASSISTANT_STYLES.msgBg})`,
               ...(role === "user" && embedderSettings.USER_STYLES.msgText
-                ? { color: embedderSettings.USER_STYLES.msgText }
+                ? {
+                    color: `var(--allmi-user-text, ${embedderSettings.USER_STYLES.msgText})`,
+                  }
                 : {}),
+              ...(!error && role !== "user"
+                ? { color: "var(--allmi-assistant-text, #222628)" }
+                : {}),
+              ...(!error
+                ? {
+                    borderRadius:
+                      BUBBLE_RADIUS[role === "user" ? "user" : "assistant"],
+                  }
+                : {}),
+              boxShadow: BUBBLE_SHADOW,
             }}
             className={`allm-py-[11px] allm-px-4 allm-flex allm-flex-col allm-font-sans ${
               error
@@ -514,7 +544,7 @@ const HistoricalMessage = forwardRef(
                 : role === "user"
                   ? `${embedderSettings.USER_STYLES.base} allm-anything-llm-user-message`
                   : `${embedderSettings.ASSISTANT_STYLES.base} allm-anything-llm-assistant-message`
-            } allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
+            }`}
           >
             <div className="allm-flex allm-flex-col">
               {error ? (
@@ -533,7 +563,8 @@ const HistoricalMessage = forwardRef(
                     <ThoughtBubble thought={thoughts.join("\n\n")} />
                   )}
                   <span
-                    className={`allm-whitespace-pre-line allm-flex allm-flex-col allm-gap-y-1 ${textSize} allm-leading-[20px]`}
+                    className="allm-whitespace-pre-line allm-flex allm-flex-col allm-gap-y-1 allm-leading-[20px]"
+                    style={{ fontSize: MESSAGE_FONT_SIZE }}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(
                         renderMarkdown(responseContent || message),
@@ -541,9 +572,12 @@ const HistoricalMessage = forwardRef(
                     }}
                   />
                   {/* TTS Button for assistant messages (bottom-right position) */}
-                  {role === "assistant" && !error && plainTextForTTS && ttsPosition !== "icon-left" && (
-                    <TTSButton text={plainTextForTTS} size={14} />
-                  )}
+                  {role === "assistant" &&
+                    !error &&
+                    plainTextForTTS &&
+                    ttsPosition !== "icon-left" && (
+                      <TTSButton text={plainTextForTTS} size={14} />
+                    )}
                 </>
               )}
             </div>
@@ -552,7 +586,7 @@ const HistoricalMessage = forwardRef(
 
         {sentAt && (
           <div
-            className={`allm-font-sans allm-text-[10px] allm-text-gray-400 allm-ml-[54px] allm-mr-6 allm-mt-2 allm-flex allm-flex-wrap allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
+            className={`${MESSAGE_META_CLASS} allm-mt-2 allm-flex allm-flex-wrap allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
           >
             <span>{formatDate(sentAt)}</span>
             {role === "assistant" && !error && chatId && (
