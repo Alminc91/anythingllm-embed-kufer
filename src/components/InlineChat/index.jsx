@@ -176,7 +176,9 @@ function scrollChatToBottom() {
   });
 }
 
-function useIsDesktopViewport() {
+// beforeChangeRef.current(matches) läuft vor dem Umschalten, solange die
+// Seite noch den bisherigen Zustand zeigt (Messen vor dem Wiedereintritt).
+function useIsDesktopViewport(beforeChangeRef) {
   const [matches, setMatches] = useState(
     () =>
       window.matchMedia?.(DESKTOP_QUERY).matches ?? window.innerWidth >= 768,
@@ -184,7 +186,10 @@ function useIsDesktopViewport() {
   useEffect(() => {
     const mql = window.matchMedia?.(DESKTOP_QUERY);
     if (!mql) return;
-    const onChange = () => setMatches(mql.matches);
+    const onChange = () => {
+      beforeChangeRef?.current?.(mql.matches);
+      setMatches(mql.matches);
+    };
     onChange();
     mql.addEventListener?.("change", onChange);
     return () => mql.removeEventListener?.("change", onChange);
@@ -203,7 +208,8 @@ export default function InlineChat({
   justCreatedRef,
 }) {
   const host = embedderSettings.hostElement;
-  const isDesktop = useIsDesktopViewport();
+  const beforeViewportChangeRef = useRef(null);
+  const isDesktop = useIsDesktopViewport(beforeViewportChangeRef);
   // expanded = Box an Ort und Stelle (nur >=768px wirksam)
   const [expanded, setExpanded] = useState(
     settings.inlineStartState === "expanded",
@@ -232,13 +238,18 @@ export default function InlineChat({
   const wantOverlay = isInlineOverlay(settings);
   const [overlayClipped, setOverlayClipped] = useState(false);
   const warnedClipRef = useRef(false);
-  // Aufklapp-Effekt erst ab dem ersten Aufklappen durch den Nutzer; der
-  // Startzustand "expanded" erscheint wie bisher ohne Animation.
+  // Aufklapp-Effekt nur beim Aufklappen durch den Nutzer (openChat); der
+  // Startzustand "expanded" und der Wiedereintritt (Drehen, Fenster wieder
+  // >=768px) erscheinen ohne Animation.
   const animateRef = useRef(false);
   // Höhe der Inline-Fläche beim Aufklappen (schwebende Box): die unsichtbare
   // Leiste hält genau diese Höhe, auch wenn die Seite den Platzhalter beim
   // Aufklappen verbreitert (Chips brechen dann anders um) -> nichts rückt nach.
+  // null = natürliche Höhe der Leiste.
   const flowHeightRef = useRef(null);
+  // Abschneide-Prüfung nach dem nächsten Commit (Box sichtbar und schwebend):
+  // Startzustand "expanded" und Drehen aus dem Vollbild.
+  const clipCheckRef = useRef(settings.inlineStartState === "expanded");
   const floating = wantOverlay && !overlayClipped;
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
@@ -300,29 +311,47 @@ export default function InlineChat({
     return !!clipper;
   };
 
-  // Startzustand "expanded" (Box im ersten Render): Prüfung vor dem ersten
-  // Paint (Host hängt da schon im Platzhalter, Effekt oben).
+  // Abschneide-Prüfung im Commit, in dem die Box sichtbar wird (Startzustand
+  // "expanded", Drehen aus dem Vollbild): vor dem Paint, Host hängt dann im
+  // Platzhalter (Effekt oben) und die Box schwebt (clipCheckRef wird nur bei
+  // overlayClipped = false gesetzt) -> sie vergrößert keinen Vorfahren.
   useLayoutEffect(() => {
-    if (view === "box" && wantOverlay) setOverlayClipped(isOverlayClipped());
-  }, []);
+    if (!clipCheckRef.current || view !== "box") return;
+    clipCheckRef.current = false;
+    if (wantOverlay && isOverlayClipped()) setOverlayClipped(true);
+  });
+
+  // Fenster wird wieder >=768px, während die Box aufgeklappt sein soll (die
+  // Leiste ist noch zu sehen): wie beim Aufklappen messen — Höhe der Leiste
+  // in der neuen Breite und Abschneide-Prüfung —, aber ohne Effekt.
+  beforeViewportChangeRef.current = (desktop) => {
+    if (!desktop || isDesktop || overlay || !expanded) return;
+    animateRef.current = false;
+    if (!wantOverlay) return;
+    flowHeightRef.current =
+      rootRef.current?.getBoundingClientRect().height || null;
+    setOverlayClipped(isOverlayClipped());
+  };
 
   // Signal für die Seite: Platzhalter trägt data-allm-expanded="true",
   // solange die Box aufgeklappt ist (vor dem Paint, damit Seiten-CSS im
-  // selben Frame greift).
+  // selben Frame greift); Aufräumen auch beim Unmount.
   useLayoutEffect(() => {
-    if (!mountTarget) return;
-    if (view === "box") mountTarget.setAttribute(EXPANDED_ATTR, "true");
-    else mountTarget.removeAttribute(EXPANDED_ATTR);
+    if (!mountTarget || view !== "box") return;
+    mountTarget.setAttribute(EXPANDED_ATTR, "true");
+    return () => mountTarget.removeAttribute(EXPANDED_ATTR);
   }, [view, mountTarget]);
-  useEffect(
-    () => () => mountTarget?.removeAttribute?.(EXPANDED_ATTR),
-    [mountTarget],
-  );
 
   // Drehen/Vergrößern auf >=768px bei offenem Overlay -> zurück in die Seite,
-  // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter).
+  // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter). Ohne
+  // Effekt; schwebend: Leiste in natürlicher Höhe (die Leiste war im Vollbild
+  // nicht zu sehen), Abschneide-Prüfung im nächsten Commit (Box schwebt dann).
   useEffect(() => {
     if (overlay && isDesktop) {
+      animateRef.current = false;
+      flowHeightRef.current = null;
+      clipCheckRef.current = wantOverlay;
+      setOverlayClipped(false);
       setExpanded(true);
       setOverlay(false);
     }
