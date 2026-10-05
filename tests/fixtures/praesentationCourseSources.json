@@ -1,0 +1,311 @@
+{
+ "_note": "Ausgabe von buildCourseSources (Fork, server/utils/chats/embedCourseSources.js) für echte Treffer/Kursdokumente von praesentation (Donau + Bergisch-Land-Klon), Stand 05.10.2026.",
+ "donauYoga": [
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/yoga-aufbaukurs/262-3103",
+   "title": "Yoga (Aufbaukurs)",
+   "start_date": "2026-09-14",
+   "end_date": "2026-12-28",
+   "start_minutes": 1080,
+   "weekdays": ",mon,",
+   "price": 60,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/yoga-fuer-anfaenger-innen-und-teilnehmer-innen-mit-etwas-vorerfahrung/262-3102",
+   "title": "Yoga",
+   "start_date": "2026-11-03",
+   "end_date": "2027-01-19",
+   "start_minutes": 990,
+   "weekdays": ",tue,",
+   "price": 40,
+   "bookable": true,
+   "format": "onsite"
+  }
+ ],
+ "donauEnglish": [
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/englisch-1/262-4601A",
+   "title": "Englisch 1",
+   "start_date": "2026-09-09",
+   "end_date": "2026-12-16",
+   "start_minutes": 990,
+   "weekdays": ",wed,",
+   "price": 60,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/englisch-1/262-4601B",
+   "title": "Englisch 1",
+   "start_date": "2026-10-05",
+   "end_date": "2027-01-11",
+   "start_minutes": 1080,
+   "weekdays": ",mon,",
+   "price": 50,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/englisch-1/262-4601C",
+   "title": "Englisch 1",
+   "start_date": "2026-11-23",
+   "end_date": "2027-03-01",
+   "start_minutes": 1080,
+   "weekdays": ",mon,",
+   "price": 50,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/english-i/262-4605",
+   "title": "English I",
+   "start_date": "2026-09-09",
+   "end_date": "2026-12-09",
+   "start_minutes": 1080,
+   "weekdays": ",wed,",
+   "price": 32,
+   "bookable": true,
+   "format": "onsite"
+  }
+ ],
+ "donauHealth": [
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/rueckenschule/262-3203",
+   "title": "Rückenschule",
+   "start_date": "2026-09-16",
+   "start_minutes": 585,
+   "weekdays": ",wed,",
+   "price": 24,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/leichtes-aerobic/262-3207",
+   "title": "Leichtes Aerobic",
+   "start_date": "2026-10-07",
+   "start_minutes": 585,
+   "weekdays": ",wed,",
+   "price": 30,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/funktionelles-kraft-und-ausdauertraining-fuer-frauen-und-maenner-ab-18-jahren/262-3202",
+   "title": "Funktionelles Kraft- und Ausdauertraining",
+   "start_date": "2026-09-23",
+   "start_minutes": 900,
+   "weekdays": ",wed,",
+   "price": 38,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/yoga-aufbaukurs/262-3103",
+   "title": "Yoga (Aufbaukurs)",
+   "start_date": "2026-09-14",
+   "end_date": "2026-12-28",
+   "start_minutes": 1080,
+   "weekdays": ",mon,",
+   "price": 60,
+   "bookable": true,
+   "format": "onsite"
+  },
+  {
+   "url": "https://aw.donau.kufer.de/kurssuche/kurs/vortrag-gesund-leben/262-1505",
+   "title": "Vortrag: Gesund Leben",
+   "start_date": "2027-01-22",
+   "end_date": "2027-01-22",
+   "start_minutes": 840,
+   "weekdays": ",fri,",
+   "price": 18,
+   "bookable": true,
+   "format": "onsite"
+  }
+ ],
+ "bergischYoga": [
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/hatha-yoga/26266236W",
+   "title": "Hatha Yoga",
+   "start_date": "2026-09-10",
+   "end_date": "2026-11-19",
+   "start_minutes": 1110,
+   "weekdays": ",thu,",
+   "price": 138.8,
+   "bookable": false,
+   "format": "onsite",
+   "location": "leichlingen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/hatha-yoga/27166236W",
+   "title": "Hatha Yoga",
+   "start_date": "2027-01-14",
+   "end_date": "2027-03-04",
+   "start_minutes": 1110,
+   "weekdays": ",thu,",
+   "price": 101,
+   "bookable": true,
+   "format": "onsite",
+   "location": "leichlingen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/hatha-yoga/27166237W",
+   "title": "Hatha Yoga",
+   "start_date": "2027-04-08",
+   "end_date": "2027-06-10",
+   "start_minutes": 1110,
+   "weekdays": ",thu,",
+   "price": 126.2,
+   "bookable": true,
+   "format": "onsite",
+   "location": "leichlingen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/hatha-yoga/27166420",
+   "title": "Hatha Yoga",
+   "start_date": "2027-02-03",
+   "end_date": "2027-05-26",
+   "start_minutes": 1080,
+   "weekdays": ",wed,",
+   "price": 156.7,
+   "bookable": true,
+   "format": "onsite",
+   "location": "leichlingen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/goldenes-yoga-55/26266285",
+   "title": "Goldenes Yoga 55+",
+   "start_date": "2026-09-22",
+   "end_date": "2026-11-24",
+   "start_minutes": 570,
+   "weekdays": ",tue,",
+   "price": 79.1,
+   "bookable": true,
+   "format": "onsite",
+   "location": "wermelskirchen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/goldenes-yoga-55/27166285",
+   "title": "Goldenes Yoga 55+",
+   "start_date": "2027-02-02",
+   "end_date": "2027-03-09",
+   "start_minutes": 570,
+   "weekdays": ",tue,",
+   "price": 47.4,
+   "bookable": true,
+   "format": "onsite",
+   "location": "wermelskirchen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/kundalini-yoga-fuer-anfaenger-innen-mit-und-ohne-vorkenntnisse/26266233W",
+   "title": "Kundalini-Yoga für Anfänger/innen mit und ohne Vorkenntnisse",
+   "start_date": "2026-09-09",
+   "end_date": "2026-11-25",
+   "start_minutes": 1155,
+   "weekdays": ",wed,",
+   "price": 124.6,
+   "bookable": true,
+   "format": "onsite",
+   "location": "burscheid"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/kundalini-yoga-fuer-anfaenger-innen-mit-und-ohne-vorkenntnisse/27166233W",
+   "title": "Kundalini-Yoga für Anfänger/innen mit und ohne Vorkenntnisse",
+   "start_date": "2027-01-27",
+   "end_date": "2027-05-05",
+   "start_minutes": 1155,
+   "weekdays": ",wed,",
+   "price": 155.7,
+   "bookable": true,
+   "format": "onsite",
+   "location": "burscheid"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/aerial-flying-yoga-luftiges-training-im-tuch/26266270W",
+   "title": "Aerial \"Flying Yoga \" - luftiges Training im Tuch",
+   "start_date": "2026-09-30",
+   "end_date": "2026-12-02",
+   "start_minutes": 990,
+   "weekdays": ",wed,",
+   "price": 175.9,
+   "bookable": false,
+   "format": "onsite",
+   "location": "leichlingen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/entspannt-ins-wochenende-mit-yoga-nidra-und-atementspannung-zwei-schnuppertermine-fuer-geduldige-und-ungeduldige/26265",
+   "title": "Entspannt ins Wochenende - mit Yoga Nidra und Atementspannung",
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-20",
+   "start_minutes": 1080,
+   "weekdays": ",fri,",
+   "price": 20.7,
+   "bookable": true,
+   "format": "onsite",
+   "location": "burscheid"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/orthopaedische-yoga-therapie-fuer-reifere-erwachsene-50-nach-den-prinzipien-der-spiraldynamik/26266250",
+   "title": "Orthopädische Yoga-Therapie für reifere Erwachsene (50+), nach den Prinzipien der Spiraldynamik",
+   "start_date": "2026-09-09",
+   "end_date": "2026-10-14",
+   "start_minutes": 660,
+   "weekdays": ",wed,",
+   "price": 102,
+   "bookable": false,
+   "format": "onsite",
+   "location": "wermelskirchen"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/orthopaedische-yoga-therapie-fuer-reifere-erwachsene-50-nach-den-prinzipien-der-spiraldynamik/26266252",
+   "title": "Orthopädische Yoga-Therapie für reifere Erwachsene (50+), nach den Prinzipien der Spiraldynamik",
+   "start_date": "2026-11-04",
+   "end_date": "2026-12-16",
+   "start_minutes": 660,
+   "weekdays": ",wed,",
+   "price": 119,
+   "bookable": false,
+   "format": "onsite",
+   "location": "wermelskirchen"
+  }
+ ],
+ "bergischOnline": [
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/auf-leisen-pfoten-das-geheime-leben-der-wildkatze-online-seminar/27111028E",
+   "title": "Auf leisen Pfoten: Das geheime Leben der Wildkatze",
+   "start_date": "2027-01-26",
+   "end_date": "2027-01-26",
+   "start_minutes": 1140,
+   "weekdays": ",tue,",
+   "price": 0,
+   "bookable": true,
+   "format": "online",
+   "location": "online"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/beziehung-gestalten-zusammen-sein-und-ich-bleiben/27162015S",
+   "title": "Beziehung gestalten - zusammen sein und Ich bleiben",
+   "start_date": "2027-06-03",
+   "end_date": "2027-06-10",
+   "start_minutes": 1140,
+   "weekdays": ",thu,",
+   "price": 27.7,
+   "bookable": true,
+   "format": "online",
+   "location": "online"
+  },
+  {
+   "url": "https://www.vhs-bergisch-land.de/kurssuche/kurs/bildungsurlaub-ki-trifft-office-smarter-arbeiten-weniger-aufwand/26223240B",
+   "title": "Bildungsurlaub: KI trifft Office: Smarter arbeiten, weniger Aufwand",
+   "start_date": "2026-11-23",
+   "end_date": "2026-12-21",
+   "start_minutes": 540,
+   "weekdays": ",mon,",
+   "price": 226.8,
+   "bookable": false,
+   "format": "online",
+   "location": "online"
+  }
+ ]
+}
