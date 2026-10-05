@@ -1,0 +1,12 @@
+/* NAK-2: fremdes Seiten-Stylesheet (per <link>), das versucht, Elemente im
+   Widget direkt umzufärben. Darf im geschlossenen Shadow DOM nichts bewirken. */
+#anythingllm-embed-widget *,
+#anythingllm-embed-root,
+#anything-llm-chat,
+.allm-anything-llm-assistant-message,
+.allm-anything-llm-assistant-message *,
+[class*="allm-"] {
+  color: red !important;
+  background-color: yellow !important;
+  border-radius: 0 !important;
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Embed-Widget Testseite</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #e9e7e4;
+        color: #333;
+        font-family: Georgia, "DejaVu Serif", serif;
+        font-size: 16px;
+      }
+      main {
+        padding: 24px 40px;
+        max-width: 760px;
+      }
+      #kufer-assistent {
+        margin: 16px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Testseite Embed-Widget</h1>
+      <p>Statische Seite für die visuellen Theme-Tests (tests/visual/theme_visual.py).</p>
+      <div id="sibling">Geschwister-Element</div>
+      <div id="slot"></div>
+    </main>
+    <script>
+      // Konfiguration kommt als JSON im Query-Parameter "c":
+      //   attrs: { "embed-id": "...", ... }  -> data-*-Attribute am Script-Tag
+      //   css: "..."                         -> Seiten-CSS (<style>)
+      //   link: true                         -> fremdes Stylesheet (foreign.css)
+      //   inline: true                       -> Platzhalter <div id="kufer-assistent">
+      //   sheets: ["/pfad.css"]              -> zusätzliche Seiten-Stylesheets
+      //   htmlClass: "dark"                  -> Klasse an <html> (Seiten-Theme)
+      const cfg = JSON.parse(new URLSearchParams(location.search).get("c") || "{}");
+      if (cfg.css) {
+        const st = document.createElement("style");
+        st.textContent = cfg.css;
+        document.head.appendChild(st);
+      }
+      if (cfg.htmlClass) document.documentElement.classList.add(cfg.htmlClass);
+      for (const href of cfg.sheets || []) {
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = href;
+        document.head.appendChild(l);
+      }
+      if (cfg.link) {
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = "/tests/visual/fixtures/foreign.css";
+        document.head.appendChild(l);
+      }
+      if (cfg.inline) {
+        const ph = document.createElement("div");
+        ph.id = "kufer-assistent";
+        document.getElementById("slot").appendChild(ph);
+      }
+      const s = document.createElement("script");
+      s.src = "/widget/anythingllm-chat-widget.min.js";
+      for (const [k, v] of Object.entries(cfg.attrs || {})) s.setAttribute("data-" + k, v);
+      document.body.appendChild(s);
+    </script>
+  </body>
+</html>

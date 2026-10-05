@@ -1,0 +1,46 @@
+/* AK-9: Mockup-Tokens "vhs Rhein Suchfeld Chatbot 1.html" (THEMES.light/.dark)
+   auf die --allm-*-Variablen abgebildet — identisch mit dem README-Beispiel.
+   Für die manuelle Abnahme in die Testseite bzw. den Testcontainer einhängen. */
+/* hell */
+#anythingllm-embed-widget {
+  --allm-bg: #F7F5F2;
+  --allm-surface: #FFFFFF;
+  --allm-header-bg: #FFFFFF;
+  --allm-text: #17181B;
+  --allm-text-muted: #5E6167;
+  --allm-border: rgba(23, 24, 27, .07);
+  --allm-assistant-bg: #F5F3F0;
+  --allm-input-bg: #F6F4F1;
+  --allm-accent: #B45309;
+  --allm-link: #B45309;
+  --allm-shadow: 0 40px 90px -30px rgba(64, 36, 8, .45), 0 4px 14px rgba(23, 24, 27, .06);
+  --allm-bar-bg: rgba(255, 255, 255, .82);
+  --allm-bar-text: #17181B;
+  --allm-bar-border: rgba(23, 24, 27, .14);
+  --allm-bar-shadow: 0 18px 40px -22px rgba(23, 24, 27, .45);
+  --allm-radius: 12px;
+  --allm-bar-radius: 999px;
+  --allm-transition: 260ms;
+  --allm-easing: cubic-bezier(.16, 1, .3, 1);
+  --allm-font: Archivo, system-ui, sans-serif;
+}
+
+/* dunkel — hier per Klasse der Seite; alternativ denselben Block in
+   @media (prefers-color-scheme: dark) { … } setzen */
+html.dark #anythingllm-embed-widget {
+  --allm-bg: #131316;
+  --allm-surface: #1D1D21;
+  --allm-header-bg: #18181B;
+  --allm-text: #F4F2EF;
+  --allm-text-muted: #A6A8AD;
+  --allm-border: rgba(255, 255, 255, .07);
+  --allm-assistant-bg: #2A2A2F;
+  --allm-input-bg: #26262B;
+  --allm-accent: #F3A04C;
+  --allm-link: #F3A04C;
+  --allm-shadow: 0 40px 100px -30px rgba(0, 0, 0, .8), 0 0 0 1px rgba(240, 130, 26, .10);
+  --allm-bar-bg: rgba(34, 34, 38, .8);
+  --allm-bar-text: #F4F2EF;
+  --allm-bar-border: rgba(255, 255, 255, .14);
+  --allm-bar-shadow: 0 18px 40px -20px rgba(0, 0, 0, .8);
+}
