@@ -24,6 +24,7 @@ import {
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_RESUME_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
+  INLINE_CHIPS_MAX_WITH_HINT,
   closesOnLeave,
   cssTimeMs,
   findClippingAncestor,
@@ -95,7 +96,8 @@ import {
 //   inlineResumeHint       eingeklappt: Chip „Unterhaltung fortsetzen (n)“ +
 //                          „Neu starten“, wenn die Konversation Fragen hat
 //                          (n = Fragen; einmal nach dem Mount abgefragt, danach
-//                          vom ChatContainer gemeldet).
+//                          vom ChatContainer gemeldet); dann höchstens
+//                          INLINE_CHIPS_MAX_WITH_HINT Wunschfragen-Chips.
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -1031,8 +1033,9 @@ const InlineBar = forwardRef(function InlineBar(
   );
 });
 
-// Wunschfragen-Chips und Hinweis-Chip „Unterhaltung fortsetzen“ (dieser mit
-// Rand in Akzentfarbe, fett): Fläche/Text/Rundung der Leiste über --allmi-bar-*
+// Wunschfragen-Chips und Hinweis-Chip „Unterhaltung fortsetzen“ (dieser nur
+// mit Rand in Akzentfarbe; Schriftstärke/Hover und der Link „Neu starten“ per
+// CSS in index.css): Fläche/Text/Rundung der Leiste über --allmi-bar-*
 const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
@@ -1044,17 +1047,6 @@ const CHIP_STYLE = {
   lineHeight: 1.3,
   textAlign: "center",
   overflowWrap: "anywhere",
-};
-// Textlink „Neu starten“ neben dem Hinweis-Chip
-const RESTART_LINK_STYLE = {
-  margin: 0,
-  padding: "6px 4px",
-  border: "none",
-  background: "transparent",
-  color: "var(--allmi-text-muted, #7A7D7E)",
-  lineHeight: 1.3,
-  textDecoration: "underline",
-  textUnderlineOffset: "2px",
 };
 
 // Leiste als Eingabefeld (inlineInput): Feld + Absende-Knopf (bewusst ohne
@@ -1088,7 +1080,11 @@ const InlineInputBar = forwardRef(function InlineInputBar(
     ? settings.inlineResumePlaceholder || DEFAULT_INLINE_RESUME_PLACEHOLDER
     : label;
   const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
-  const chips = inlineChips(settings);
+  // Mit Hinweis-Chip höchstens INLINE_CHIPS_MAX_WITH_HINT Wunschfragen
+  const chips = inlineChips(
+    settings,
+    resume ? INLINE_CHIPS_MAX_WITH_HINT : undefined,
+  );
   const chipFont = narrow ? "13px" : "14px";
   // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
   // mouse/touch/pen, Maus nur linke Taste) öffnet; der click danach klappt
@@ -1230,7 +1226,6 @@ const InlineInputBar = forwardRef(function InlineInputBar(
                 style={{
                   ...CHIP_STYLE,
                   border: `1px solid ${accent}`,
-                  fontWeight: 600,
                   fontSize: chipFont,
                 }}
               >
@@ -1241,10 +1236,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
                 id="anything-llm-inline-restart"
                 className="allm-inline-restart allm-font-sans allm-cursor-pointer"
                 onClick={onRestart}
-                style={{
-                  ...RESTART_LINK_STYLE,
-                  fontSize: narrow ? "12px" : "13px",
-                }}
+                style={{ fontSize: narrow ? "12px" : "13px" }}
               >
                 {settings.inlineRestartText || t("chat.inline-restart")}
               </button>

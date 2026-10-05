@@ -197,14 +197,6 @@ const customCss = `
   .allm-inline-chip:hover {
     border-color: var(--allmi-accent);
   }
-  /* Hinweis „Unterhaltung fortsetzen (n)“ + Textlink „Neu starten“
-     (inlineResumeHint): Rand in Akzentfarbe steht inline, hier nur Hover. */
-  .allm-inline-resume:hover {
-    opacity: 0.85;
-  }
-  .allm-inline-restart:hover {
-    color: var(--allmi-text, #222628) !important;
-  }
 
   /* Inline-Box: Aufklapp-Effekte (inlineEffect, utils/layout.js
      inlineEffectClass; nur bei ausdrücklich gewähltem Effekt bzw. overlay).

@@ -15,6 +15,8 @@ export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …
 export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
 // Wunschfragen-Chips unter der Leiste (aus defaultMessages): höchstens so viele
 export const INLINE_CHIPS_MAX = 6;
+// … solange der Hinweis „Unterhaltung fortsetzen“ davor steht (eine Zeile)
+export const INLINE_CHIPS_MAX_WITH_HINT = 3;
 
 // Grenzen (Widget-seitig geklemmt, unabhängig davon was gespeichert ist)
 export const INLINE_MIN_HEIGHT_PX = 400;
@@ -217,15 +219,15 @@ export function warnIfInlineInputIgnored(settings = {}, isInline = false) {
 }
 
 // Wunschfragen-Chips: defaultMessages (Liste von Strings), leere/Nicht-Strings
-// verworfen, höchstens INLINE_CHIPS_MAX.
-export function inlineChips(settings = {}) {
+// verworfen, höchstens max (Standard INLINE_CHIPS_MAX).
+export function inlineChips(settings = {}, max = INLINE_CHIPS_MAX) {
   const list = Array.isArray(settings.defaultMessages)
     ? settings.defaultMessages
     : [];
   return list
     .filter((m) => typeof m === "string" && m.trim().length > 0)
     .map((m) => m.trim())
-    .slice(0, INLINE_CHIPS_MAX);
+    .slice(0, max);
 }
 
 // ---------------------------------------------------------------------------

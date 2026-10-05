@@ -64,7 +64,8 @@ MOBILE = {"width": 390, "height": 700}
 MAX_DIFF_RATIO = 0.001  # 0,1 %
 # Basis = main nach Kurskarten v1/Overlay (Build von origin/main, 2026-10-05)
 BASE_JS_SIZE = 758_606
-BASE_CSS_SIZE = 19_529
+# Basis = main nach Kurskarten v2, 2026-10-06 (1e538e5)
+BASE_CSS_SIZE = 20_467
 
 # Stand der visual_config von praesentation (05.10.2026), damit der Test nicht
 # von späteren Design-Center-Änderungen abhängt.
