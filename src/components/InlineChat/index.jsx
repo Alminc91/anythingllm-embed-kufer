@@ -110,12 +110,39 @@ function prefersReducedMotion() {
 }
 const px = (n) => `${Math.round(n * 100) / 100}px`;
 
+// Leistenform für "morph" (Rect in Viewport-Koordinaten + Rundung)
+function measureBar(pill) {
+  const r = pill.getBoundingClientRect();
+  return {
+    x: r.left,
+    y: r.top,
+    w: r.width,
+    h: r.height,
+    // Rundung höchstens halbe Höhe (999px = Pille)
+    r: Math.min(
+      parseFloat(getComputedStyle(pill).borderTopLeftRadius) || 0,
+      r.height / 2,
+    ),
+  };
+}
+
+// Ende eines Laufs: erste beendete Transition einer Form-Eigenschaft des
+// Fensters (im Seitenfluss sind Leiste und Panel gleich breit -> kein
+// width-Übergang; border-radius meldet die Längsform je Ecke)
+const isMorphProperty = (p) =>
+  p === "width" ||
+  p === "height" ||
+  p === "transform" ||
+  /^border-(.+-)?radius$/.test(p);
+
 // Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
 // Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
 // zeigen, dann Transition zum Panel; Zuklappen: Transition vom aktuellen
-// Stand zur Leistenform. Ende per transitionend (width) bzw. Sicherheits-Timer;
-// onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein Rücksprung).
+// Stand zur Leistenform — steht die Leistenform noch an (Zuklappen vor dem
+// ersten Frame des Aufklappens), endet der Lauf sofort. Ende per
+// transitionend (isMorphProperty) bzw. Sicherheits-Timer; onEnd läuft vor dem
+// Aufräumen (Zuklappen: erst einklappen, kein Rücksprung).
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
 function runMorph(win, box, geom, { opening, flow, onEnd }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
@@ -132,7 +159,7 @@ function runMorph(win, box, geom, { opening, flow, onEnd }) {
   let raf = 0;
   let timer = 0;
   const onTransitionEnd = (e) => {
-    if (e.target === win && e.propertyName === "width") finish();
+    if (e.target === win && isMorphProperty(e.propertyName)) finish();
   };
   const stop = (keep = false) => {
     cancelAnimationFrame(raf);
@@ -166,7 +193,12 @@ function runMorph(win, box, geom, { opening, flow, onEnd }) {
     raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(run);
     });
-  } else run();
+  } else if (
+    win.classList.contains("allm-morph-from") &&
+    !win.classList.contains("allm-morph")
+  )
+    finish(); // nichts transitioniert (Leistenform liegt schon an)
+  else run();
   return stop;
 }
 
@@ -316,6 +348,11 @@ export default function InlineChat({
   // "morph": { geom, stop, closing, scroll } des laufenden bzw. letzten Laufs;
   // geom.open = Panel im nächsten Commit messen und Lauf starten
   const morphRef = useRef(null);
+  // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
+  // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
+  const invalidateMorph = () => {
+    if (morphRef.current) morphRef.current.geom = null;
+  };
   const chatMountedRef = useRef(false);
   // Übergabe Frage/Entwurf aus der Leiste (inlineInput), einzige Quelle der
   // Wahrheit: { ticket, text, send, suppressAutoFocus } | null. ticket ist eine
@@ -419,6 +456,7 @@ export default function InlineChat({
   // Leiste ist noch zu sehen): wie beim Aufklappen messen — Höhe der Leiste
   // in der neuen Breite und Abschneide-Prüfung —, aber ohne Effekt.
   beforeViewportChangeRef.current = (desktop) => {
+    invalidateMorph();
     if (!desktop || isDesktop || overlay || !expanded) return;
     animateRef.current = false;
     if (!wantOverlay) return;
@@ -444,7 +482,7 @@ export default function InlineChat({
     const m = morphRef.current;
     const win = chatWindowRef.current;
     const box = boxRef.current;
-    if (view !== "box" || !m?.geom.open || !win || !box) return;
+    if (view !== "box" || !m?.geom?.open || !win || !box) return;
     const g = m.geom;
     g.open = false;
     const f = win.getBoundingClientRect();
@@ -460,15 +498,19 @@ export default function InlineChat({
       },
     });
   }, [view]);
+  // Abgebrochener Rückweg (Fenster <768px, Unmount): trotzdem einklappen wie
+  // am Ende des Laufs (Übergabe/Text wie beim Zuklappen, Fokus bleibt) —
+  // sonst bliebe die Box aufgeklappt und käme ab 768px wieder.
   useLayoutEffect(() => {
     if (view !== "box") return;
     return () => {
       const m = morphRef.current;
-      m?.stop?.();
-      if (m) {
-        m.stop = null;
-        m.closing = false;
-      }
+      if (!m) return;
+      const wasClosing = m.closing;
+      m.stop?.();
+      m.stop = null;
+      m.closing = false;
+      if (wasClosing) collapseNowRef.current(false, false);
     };
   }, [view]);
 
@@ -478,6 +520,7 @@ export default function InlineChat({
   // nicht zu sehen), Abschneide-Prüfung im nächsten Commit (Box schwebt dann).
   useEffect(() => {
     if (overlay && isDesktop) {
+      invalidateMorph();
       animateRef.current = false;
       flowHeightRef.current = null;
       clipCheckRef.current = wantOverlay;
@@ -583,20 +626,9 @@ export default function InlineChat({
       resolveInlineEffect(settings) === "morph" &&
       !prefersReducedMotion()
     ) {
-      const r = pill.getBoundingClientRect();
-      const radius =
-        parseFloat(getComputedStyle(pill).borderTopLeftRadius) || 0;
+      const g = measureBar(pill);
       morphRef.current = {
-        geom: {
-          open: true,
-          x: r.left,
-          y: r.top,
-          w: r.width,
-          h: r.height,
-          // Leistenform: Rundung höchstens halbe Höhe (999px = Pille)
-          r: Math.min(radius, r.height / 2),
-          rootH: flowHeightRef.current || r.height,
-        },
+        geom: { ...g, open: true, rootH: flowHeightRef.current || g.h },
       };
     }
     const clipped = isOverlayClipped();
@@ -640,18 +672,48 @@ export default function InlineChat({
   // Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
   // Element der Seite (Link, Eingabefeld), bleibt er dort. Außenklicks kommen
   // erst nach dem click hier an, der Fokus des Klicks steht dann schon.
-  const collapseNow = (focus = "bar") => {
+  // focus false: Fokus bleibt; flush false: ohne flushSync (aus einem
+  // Effekt-Cleanup, dort darf React nicht synchron rendern).
+  const collapseNow = (focus = "bar", flush = true) => {
     const unsent = pendingFirstMessage?.text;
-    flushSync(() => {
+    const apply = () => {
       setPendingFirstMessage(null);
       if (unsent) setBarText(unsent);
       setOverlay(false);
       setExpanded(false);
-    });
+    };
+    if (flush) flushSync(apply);
+    else apply();
+    if (!focus) return;
     const a = document.activeElement;
     const free =
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
+  };
+  // "morph", Leistenform vor jedem Rückweg frisch messen (Fenstergröße,
+  // Umbruch, Scrollen seit dem Aufklappen). Die Seite zeigt dafür ohne Paint
+  // kurz den eingeklappten Stand (Signal data-allm-expanded weg, Layout lesen,
+  // Signal wieder an), damit ein per Seiten-CSS verbreiterter Platzhalter
+  // nicht mitzählt. Schwebend: die unsichtbare Leiste im Seitenfluss messen;
+  // im Seitenfluss (Leiste nicht gerendert): Lage/Breite der Inline-Fläche,
+  // Höhe/Rundung vom Aufklappen. Panel-Ecke = äußere Box (nie transformiert).
+  const measureCloseGeom = (g, box) => {
+    const panel = box.getBoundingClientRect();
+    const root = rootRef.current;
+    const signal = !!mountTarget?.hasAttribute(EXPANDED_ATTR);
+    if (signal) mountTarget.removeAttribute(EXPANDED_ATTR);
+    try {
+      const pill = floating ? root?.querySelector(BAR_SELECTOR) : null;
+      if (pill) Object.assign(g, measureBar(pill));
+      else if (root) {
+        const r = root.getBoundingClientRect();
+        Object.assign(g, { x: r.left, y: r.top, w: r.width });
+      }
+    } finally {
+      if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
+    }
+    g.dx = g.x - panel.left;
+    g.dy = g.y - panel.top;
   };
   // "morph": erst zur Leistenform zurück, dann einklappen (aktuelle Übergabe/
   // Fokus beim Ende); weitere Aufrufe während des Rückwegs zählen nicht.
@@ -663,7 +725,11 @@ export default function InlineChat({
       if (m.closing) return;
       m.closing = true;
       m.stop?.(true);
-      m.stop = runMorph(win, box, m.geom, {
+      // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
+      // (runMorph endet dann sofort): nichts zu messen
+      if (!win.classList.contains("allm-morph-from"))
+        measureCloseGeom(m.geom, box);
+      const stop = runMorph(win, box, m.geom, {
         opening: false,
         flow: !floating,
         onEnd: () => {
@@ -672,6 +738,7 @@ export default function InlineChat({
           collapseNowRef.current(focus);
         },
       });
+      if (m.closing) m.stop = stop;
       return;
     }
     collapseNow(focus);

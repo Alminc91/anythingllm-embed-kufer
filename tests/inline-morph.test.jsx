@@ -63,11 +63,36 @@ let mountTarget;
 let desktop;
 let reduced;
 let frames;
+let rafSeq;
 let gcsBefore;
+// je Test änderbar: Leiste, Panel, Inline-Fläche, Rundung der Leiste
+let barRect;
+let panelRect;
+let rootRect;
+let barRadius;
+// Signal am Platzhalter bei jeder Messung der Leiste
+let barSignals;
+let mqlListeners;
+const onResize = () => {
+  const was = desktop;
+  desktop = window.innerWidth >= 768;
+  if (was !== desktop) mqlListeners.forEach((fn) => fn());
+};
+let innerWidthBefore;
 beforeEach(() => {
   desktop = true;
   reduced = false;
   frames = [];
+  rafSeq = 0;
+  barRect = BAR;
+  panelRect = PANEL;
+  rootRect = { left: 0, top: 0, width: 760, height: 68 };
+  barRadius = "999px";
+  barSignals = [];
+  mqlListeners = new Set();
+  innerWidthBefore = window.innerWidth;
+  window.innerWidth = 1024;
+  window.addEventListener("resize", onResize);
   vi.spyOn(window, "matchMedia").mockImplementation((q) => ({
     get matches() {
       if (q === "(min-width: 768px)") return desktop;
@@ -75,23 +100,40 @@ beforeEach(() => {
       return false;
     },
     media: q,
-    addEventListener() {},
-    removeEventListener() {},
+    addEventListener(type, fn) {
+      if (q === "(min-width: 768px)" && type === "change") mqlListeners.add(fn);
+    },
+    removeEventListener(type, fn) {
+      mqlListeners.delete(fn);
+    },
   }));
-  vi.stubGlobal("requestAnimationFrame", (fn) => frames.push(fn));
-  vi.stubGlobal("cancelAnimationFrame", () => {});
+  vi.stubGlobal("requestAnimationFrame", (fn) => {
+    frames.push({ id: ++rafSeq, fn });
+    return rafSeq;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id) => {
+    frames = frames.filter((f) => f.id !== id);
+  });
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
     function () {
-      if (this.id === "anything-llm-inline-bar") return rect(BAR);
-      if (this.id === "anything-llm-chat") return rect(PANEL);
-      return rect({ left: 0, top: 0, width: 760, height: 68 });
+      if (this.id === "anything-llm-inline-bar") {
+        barSignals.push(mountTarget?.getAttribute("data-allm-expanded"));
+        return rect(barRect);
+      }
+      // Chat-Fenster und äußere Box (Panel-Ecke)
+      if (
+        this.id === "anything-llm-chat" ||
+        this.firstElementChild?.id === "anything-llm-chat"
+      )
+        return rect(panelRect);
+      return rect(rootRect);
     },
   );
   gcsBefore = window.getComputedStyle;
   vi.spyOn(window, "getComputedStyle").mockImplementation((el) => {
     const cs = gcsBefore(el);
     if (el.id === "anything-llm-inline-bar")
-      return { ...cs, borderTopLeftRadius: "999px" };
+      return { ...cs, borderTopLeftRadius: barRadius };
     if (el.id === "anything-llm-chat")
       return {
         ...cs,
@@ -109,6 +151,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => root.unmount());
+  window.removeEventListener("resize", onResize);
+  window.innerWidth = innerWidthBefore;
   container.remove();
   mountTarget?.remove();
   vi.useRealTimers();
@@ -154,8 +198,19 @@ function setup(extra = {}) {
 const nextFrames = () =>
   act(() => {
     for (let i = 0; i < 3 && frames.length; i++)
-      frames.splice(0).forEach((f) => f());
+      frames.splice(0).forEach((f) => f.fn());
   });
+const resizeTo = (w) =>
+  act(() => {
+    window.innerWidth = w;
+    window.dispatchEvent(new Event("resize"));
+  });
+const escapeOnPage = () =>
+  act(() =>
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
 function transitionEnd(el, propertyName = "width") {
   const ev = new Event("transitionend", { bubbles: true });
   Object.defineProperty(ev, "propertyName", { value: propertyName });
@@ -303,5 +358,172 @@ describe("AK-4 / AK-5: reduzierte Bewegung, mobil", () => {
     expect(ui.chat().className).not.toContain("allm-morph");
     act(() => chatWindowProps.current.closeChat());
     expect(visible(ui)).toBe(false);
+  });
+});
+
+// Review-Befunde (Code-Review high, 05.10.)
+const typeInto = (input, text) =>
+  act(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    ).set.call(input, text);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+const openAndSettle = (ui) => {
+  ui.open();
+  nextFrames();
+  transitionEnd(ui.chat());
+};
+
+describe("Review 1: abgebrochener Rückweg klappt trotzdem ein", () => {
+  it("Schließen läuft, Fenster <768px: eingeklappt, zurück ab 768px bleibt die Box zu", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    resizeTo(390);
+    expect(visible(ui)).toBe(false);
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    resizeTo(1024);
+    expect(visible(ui)).toBe(false);
+    expect(ui.bar()).not.toBeNull();
+    expect(win.classList.contains("allm-morph")).toBe(false);
+  });
+
+  it("wartende Übergabe wird wie beim Zuklappen verworfen, Text zurück ins Leisten-Feld", () => {
+    const ui = setup({ inlineLayout: "overlay", inlineInput: true });
+    typeInto(
+      container.querySelector("#anything-llm-inline-input"),
+      "Gibt es Yoga?",
+    );
+    act(() =>
+      ui
+        .bar()
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+    nextFrames();
+    expect(chatWindowProps.current.pendingFirstMessage?.text).toBe(
+      "Gibt es Yoga?",
+    );
+    act(() => chatWindowProps.current.closeChat());
+    resizeTo(390);
+    expect(chatWindowProps.current.pendingFirstMessage).toBeNull();
+    expect(container.querySelector("#anything-llm-inline-input").value).toBe(
+      "Gibt es Yoga?",
+    );
+    resizeTo(1024);
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("Unmount während des Rückwegs: kein Fehler, kein späterer Lauf", () => {
+    vi.useFakeTimers();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    act(() => chatWindowProps.current.closeChat());
+    act(() => root.unmount());
+    act(() => vi.advanceTimersByTime(1000));
+    expect(errors).not.toHaveBeenCalled();
+    root = createRoot(container); // afterEach unmountet erneut
+  });
+});
+
+describe("Review 2: Leistenform vor jedem Rückweg frisch gemessen", () => {
+  it("overlay: unsichtbare Leiste ohne Signal gemessen, Panel-Ecke frisch", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    // Fenster/Seite geändert: Leiste schmaler und tiefer, Panel verschoben
+    barRect = { left: 150, top: 80, width: 500, height: 60 };
+    panelRect = { left: 40, top: 80, width: 700, height: 520 };
+    barSignals = [];
+    act(() => chatWindowProps.current.closeChat());
+    expect(v(win, "mw")).toBe("500px");
+    expect(v(win, "mh")).toBe("60px");
+    expect(v(win, "mt")).toBe("translate(110px, 0px)");
+    expect(v(win, "mr")).toBe("30px");
+    // eingeklappter Stand der Seite (Signal kurz weg), danach wieder gesetzt
+    expect(barSignals).toEqual([null]);
+    expect(mountTarget.getAttribute("data-allm-expanded")).toBe("true");
+  });
+
+  it("flow: Lage/Breite der Inline-Fläche, Höhe der Leiste vom Aufklappen", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    rootRect = { left: 30, top: 90, width: 640, height: 520 };
+    panelRect = { left: 30, top: 90, width: 640, height: 520 };
+    act(() => chatWindowProps.current.closeChat());
+    expect(v(win, "mw")).toBe("640px");
+    expect(v(win, "mh")).toBe("56px");
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+  });
+
+  it("Viewport-Wechsel verwirft die Leistenform: Zuklappen danach ohne Morph", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    resizeTo(390);
+    resizeTo(1024);
+    expect(visible(ui)).toBe(true);
+    act(() => chatWindowProps.current.closeChat());
+    expect(visible(ui)).toBe(false);
+    expect(ui.chat().classList.contains("allm-morph")).toBe(false);
+  });
+});
+
+describe("Review 3: Ende per transitionend jeder Form-Eigenschaft", () => {
+  it("gleiche Breite (PANEL = BAR = 600): height beendet den Lauf ohne Timer", () => {
+    vi.useFakeTimers();
+    barRect = { left: 20, top: 50, width: 600, height: 56 };
+    panelRect = { left: 20, top: 50, width: 600, height: 520 };
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    nextFrames();
+    const win = ui.chat();
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    transitionEnd(win, "opacity");
+    transitionEnd(win, "box-shadow");
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    transitionEnd(win, "height");
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    expect(visible(ui)).toBe(true);
+    // Rückweg: Rundung (Längsform je Ecke) beendet ihn ebenso
+    act(() => chatWindowProps.current.closeChat());
+    expect(visible(ui)).toBe(true);
+    transitionEnd(win, "border-top-left-radius");
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("transform beendet den Lauf; Ereignisse aus dem Inhalt zählen nicht", () => {
+    vi.useFakeTimers();
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    const win = ui.chat();
+    transitionEnd(win.querySelector(".allm-inline-content"), "width");
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    transitionEnd(win, "transform");
+    expect(win.classList.contains("allm-morph")).toBe(false);
+  });
+});
+
+describe("Review 4: Zuklappen vor dem ersten Frame", () => {
+  it("Öffnen und sofort Escape: sofort zu, keine leere Leistenform", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    expect(win.classList.contains("allm-morph-from")).toBe(true);
+    escapeOnPage();
+    expect(visible(ui)).toBe(false);
+    expect(ui.bar()).not.toBeNull();
+    expect(win.classList.contains("allm-morph-from")).toBe(false);
+    expect(v(win, "mw")).toBe("");
+    // der abgebrochene Frame startet nichts mehr
+    nextFrames();
+    expect(win.classList.contains("allm-morph")).toBe(false);
   });
 });
