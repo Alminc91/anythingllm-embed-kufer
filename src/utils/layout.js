@@ -28,6 +28,9 @@ export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
 // Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
 export const COURSE_CARDS_VALUES = ["off", "auto"];
+// Kurskarten über ("above") oder unter ("below", Standard) der Antwort
+export const COURSE_CARDS_POSITION_VALUES = ["below", "above"];
+export const DEFAULT_COURSE_CARDS_POSITION = "below";
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
 // nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
 // Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
@@ -115,6 +118,8 @@ export const layoutValidations = {
   // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
   // ungültig -> verworfen -> Standard "off"
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
+  // Position der Kurskarten; ungültig -> verworfen -> Standard "below"
+  courseCardsPosition: (v) => oneOf(v, COURSE_CARDS_POSITION_VALUES),
   // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> verworfen,
   // die Warnung (mit dem tatsächlich geltenden Wert) schreibt
   // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.

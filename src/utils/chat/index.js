@@ -18,8 +18,17 @@ export default function handleChat(
     // Kurskarten: Kurs-Metadaten (nie Kontexttext), kommen mit dem
     // Abschluss-Chunk; ohne Feld bleibt die Nachricht unverändert.
     courseSources = null,
+    // Kurskarten v2: Anzahl vorab angekündigter Kurse am Listenanfang
+    courseCardsAnnounced = null,
   } = chatResult;
-  const courseExtra = Array.isArray(courseSources) ? { courseSources } : {};
+  const courseExtra = Array.isArray(courseSources)
+    ? {
+        courseSources,
+        ...(Number.isInteger(courseCardsAnnounced) && courseCardsAnnounced > 0
+          ? { courseCardsAnnounced }
+          : {}),
+      }
+    : {};
 
   // Preserve the sentAt from the last message in the chat history
   const lastMessage = _chatHistory[_chatHistory.length - 1];
@@ -115,6 +124,31 @@ export default function handleChat(
         pending: false,
         sentAt,
         ...courseExtra,
+      });
+    }
+    setChatHistory([..._chatHistory]);
+  } else if (type === "courseSources") {
+    // Kurskarten v2: vom Server vorab angekündigte Kurse (Karten-Marker),
+    // kommen VOR dem ersten Text-Token. Existiert die Nachricht noch nicht,
+    // wird sie als wartende Antwort (Tipp-Indikator) angelegt; der Text
+    // hängt sich danach wie gewohnt an. Stream/Kontingent/Abbruch unberührt.
+    if (!Array.isArray(courseSources) || courseSources.length === 0) return;
+    const announced = {
+      courseSources,
+      courseCardsAnnounced: courseSources.length,
+    };
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    if (chatIdx !== -1) {
+      _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], ...announced };
+    } else {
+      _chatHistory.push({
+        uuid,
+        content: "",
+        role: "assistant",
+        animate: true,
+        pending: true,
+        sentAt,
+        ...announced,
       });
     }
     setChatHistory([..._chatHistory]);

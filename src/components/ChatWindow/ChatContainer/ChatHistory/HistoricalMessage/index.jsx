@@ -16,6 +16,7 @@ import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
 import CourseCards from "../CourseCards";
+import { stripCardsMarker } from "@/utils/courseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -451,6 +452,12 @@ const HistoricalMessage = forwardRef(
       sources = [],
       courseSources = null,
       courseCards = "off",
+      // Kurskarten v2: "above" -> Karten rendert der umgebende Block
+      // (ChatHistory) über der Antwort; hier nur noch der Abschlusslink.
+      courseCardsPosition = "below",
+      courseCardsAnnounced,
+      // Name steht schon im umgebenden Block (Kurskarten "above")
+      nameInWrapper = false,
       error = false,
       errorMsg = null,
       sentAt,
@@ -468,10 +475,16 @@ const HistoricalMessage = forwardRef(
       match.replace(/<think>|<\/think>/g, "").trim(),
     );
 
-    // Get the response content without the think tags
-    const responseContent = message
+    // Get the response content without the think tags (und ohne Karten-
+    // Marker, falls ein älterer Server ihn durchreicht)
+    const withoutThink = message
       ?.replace(/<think>[\s\S]*?<\/think>/g, "")
       .trim();
+    const responseContent = stripCardsMarker(withoutThink);
+    // Nur-Marker-Antwort: leer statt Rohtext (sonst wie bisher: Fallback
+    // auf die Original-Nachricht)
+    const markdownSource =
+      responseContent || (responseContent !== withoutThink ? "" : message);
 
     // Clean text for TTS (remove markdown, HTML, etc.)
     const plainTextForTTS = responseContent
@@ -482,8 +495,8 @@ const HistoricalMessage = forwardRef(
     const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";
 
     return (
-      <div className="allm-py-[5px]">
-        {role === "assistant" && (
+      <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
+        {role === "assistant" && !nameInWrapper && (
           <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
@@ -570,7 +583,7 @@ const HistoricalMessage = forwardRef(
                     style={{ fontSize: MESSAGE_FONT_SIZE }}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(
-                        renderMarkdown(responseContent || message),
+                        renderMarkdown(markdownSource),
                       ),
                     }}
                   />
@@ -594,13 +607,23 @@ const HistoricalMessage = forwardRef(
         {role === "assistant" &&
           !error &&
           Array.isArray(courseSources) &&
-          courseSources.length > 0 && (
+          courseSources.length > 0 &&
+          (courseCardsPosition === "above" ? (
+            <CourseCards
+              reply={responseContent}
+              courseSources={courseSources}
+              courseCards={courseCards}
+              position="above"
+              part="footer"
+              announced={courseCardsAnnounced}
+            />
+          ) : (
             <CourseCards
               reply={responseContent}
               courseSources={courseSources}
               courseCards={courseCards}
             />
-          )}
+          ))}
 
         {sentAt && (
           <div

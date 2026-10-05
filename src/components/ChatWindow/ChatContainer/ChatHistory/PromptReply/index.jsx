@@ -4,6 +4,7 @@ import renderMarkdown from "@/utils/chat/markdown";
 import { embedderSettings } from "@/main";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
+import { stripCardsMarker } from "@/utils/courseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -63,8 +64,26 @@ const ThoughtBubble = ({ thought }) => {
   );
 };
 
+// nameInWrapper: Name steht schon im umgebenden Block (Kurskarten "above",
+// ChatHistory) -> hier ohne Namen und ohne obere Polsterung; sonst wie bisher.
 const PromptReply = forwardRef(
-  ({ uuid, reply, pending, error, sources = [], sentAt }, ref) => {
+  (
+    {
+      uuid,
+      reply,
+      pending,
+      error,
+      sources = [],
+      sentAt,
+      nameInWrapper = false,
+    },
+    ref,
+  ) => {
+    // Karten-Marker nie anzeigen (ältere Server reichen ihn durch); ein noch
+    // offener Marker zählt als "wartet" (Tipp-Indikator).
+    const visibleReply = stripCardsMarker(reply, { partial: true });
+    if (reply && !visibleReply && !error) pending = true;
+    reply = visibleReply;
     if (!reply && sources.length === 0 && !pending && !error) return null;
     if (error) console.error(`ANYTHING_LLM_CHAT_WIDGET_ERROR: ${error}`);
 
@@ -98,11 +117,13 @@ const PromptReply = forwardRef(
 
     if (isThinking) {
       return (
-        <div className="allm-py-[5px]">
-          <div className={MESSAGE_NAME_CLASS}>
-            {embedderSettings.settings.assistantName ||
-              "Anything LLM Chat Assistant"}
-          </div>
+        <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
+          {!nameInWrapper && (
+            <div className={MESSAGE_NAME_CLASS}>
+              {embedderSettings.settings.assistantName ||
+                "Anything LLM Chat Assistant"}
+            </div>
+          )}
           <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
             <img
               src={
@@ -129,11 +150,13 @@ const PromptReply = forwardRef(
 
     if (error) {
       return (
-        <div className="allm-py-[5px]">
-          <div className={MESSAGE_NAME_CLASS}>
-            {embedderSettings.settings.assistantName ||
-              "Anything LLM Chat Assistant"}
-          </div>
+        <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
+          {!nameInWrapper && (
+            <div className={MESSAGE_NAME_CLASS}>
+              {embedderSettings.settings.assistantName ||
+                "Anything LLM Chat Assistant"}
+            </div>
+          )}
           <div className="allm-flex allm-items-start allm-w-full allm-h-fit allm-justify-start">
             <img
               src={
@@ -162,11 +185,13 @@ const PromptReply = forwardRef(
     }
 
     return (
-      <div className="allm-py-[5px]">
-        <div className={MESSAGE_NAME_CLASS}>
-          {embedderSettings.settings.assistantName ||
-            "Anything LLM Chat Assistant"}
-        </div>
+      <div className={nameInWrapper ? "allm-pb-[5px]" : "allm-py-[5px]"}>
+        {!nameInWrapper && (
+          <div className={MESSAGE_NAME_CLASS}>
+            {embedderSettings.settings.assistantName ||
+              "Anything LLM Chat Assistant"}
+          </div>
+        )}
         <div
           key={uuid}
           ref={ref}

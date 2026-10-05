@@ -89,6 +89,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-username` | `null` | Anzeigename des Benutzers |
 | `data-default-messages` | `[]` | Vordefinierte Schnellantworten (kommagetrennt) |
 | `data-course-cards` | `off` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste). Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
+| `data-course-cards-position` | `below` | `below` \| `above`: Kurskarten unter bzw. über der Antwort. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
 
 ---
 

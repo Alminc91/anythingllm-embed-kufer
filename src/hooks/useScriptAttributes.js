@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { embedderSettings } from "../main";
 import {
+  DEFAULT_COURSE_CARDS_POSITION,
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_EFFECT,
   DEFAULT_INLINE_HEIGHT,
@@ -93,6 +94,9 @@ export const DEFAULT_SETTINGS = {
   // Kurskarten unter Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
   courseCards: "off",
+  // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
+  // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
+  courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface

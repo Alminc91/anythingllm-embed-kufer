@@ -1,10 +1,12 @@
 import HistoricalMessage from "./HistoricalMessage";
 import PromptReply from "./PromptReply";
+import CourseCards from "./CourseCards";
+import { courseCardsAbove, stripCardsMarker } from "@/utils/courseCards";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
-import { suggestionFontSize } from "@/utils/theme";
+import { MESSAGE_NAME_CLASS, suggestionFontSize } from "@/utils/theme";
 import debounce from "lodash.debounce";
 import { SEND_TEXT_EVENT } from "..";
 
@@ -24,9 +26,11 @@ export default function ChatHistory({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const chatHistoryRef = useRef(null);
   const arrowSlot = useContext(ScrollArrowSlotContext);
+  const cardsAbove = courseCardsAbove(settings);
 
   useEffect(() => {
-    scrollToBottom();
+    if (cardsAbove) scrollToLatestTurn();
+    else scrollToBottom();
   }, [history]);
 
   const handleScroll = () => {
@@ -58,6 +62,26 @@ export default function ChatHistory({
         behavior: "auto",
       });
     }
+  };
+
+  // Kurskarten über der Antwort: nach unten scrollen, aber höchstens bis die
+  // letzte Frage oben steht — sonst schöbe der wachsende Text die Karten aus
+  // dem Bild. Der Pfeil führt weiter ganz nach unten.
+  const scrollToLatestTurn = () => {
+    const el = chatHistoryRef.current;
+    if (!el) return;
+    const turns = el.querySelectorAll("[data-assistant-turn]");
+    const turn = turns[turns.length - 1];
+    const anchor = turn?.previousElementSibling || turn;
+    let top = el.scrollHeight;
+    if (anchor) {
+      const anchorTop =
+        anchor.getBoundingClientRect().top -
+        el.getBoundingClientRect().top +
+        el.scrollTop;
+      top = Math.min(top, Math.max(0, anchorTop - 8));
+    }
+    el.scrollTo({ top, behavior: "auto" });
   };
 
   const scrollArrow = (
@@ -101,22 +125,25 @@ export default function ChatHistory({
           const isLastBotReply =
             index === history.length - 1 && props.role === "assistant";
 
-          if (isLastBotReply && props.animate) {
-            return (
-              <PromptReply
-                key={props.uuid}
-                ref={isLastMessage ? replyRef : null}
-                uuid={props.uuid}
-                reply={props.content}
-                pending={props.pending}
-                sources={props.sources}
-                error={props.error}
-                closed={props.closed}
-              />
-            );
-          }
+          // Kurskarten über der Antwort: stabiler Block je Antwort (Name,
+          // Karten, Antwort). Die Karten bleiben beim Wechsel PromptReply ->
+          // HistoricalMessage am Stream-Ende im DOM (kein Neuaufbau).
+          const above = cardsAbove && props.role === "assistant";
+          const live = isLastBotReply && !!props.animate;
 
-          return (
+          const body = live ? (
+            <PromptReply
+              key={props.uuid}
+              ref={isLastMessage ? replyRef : null}
+              uuid={props.uuid}
+              reply={props.content}
+              pending={props.pending}
+              sources={props.sources}
+              error={props.error}
+              closed={props.closed}
+              nameInWrapper={above}
+            />
+          ) : (
             <HistoricalMessage
               key={index}
               ref={isLastMessage ? replyRef : null}
@@ -126,17 +153,69 @@ export default function ChatHistory({
               sources={props.sources}
               courseSources={props.courseSources}
               courseCards={settings?.courseCards}
+              courseCardsPosition={above ? "above" : "below"}
+              courseCardsAnnounced={props.courseCardsAnnounced}
               chatId={props.chatId}
               feedbackScore={props.feedbackScore}
               sessionId={sessionId}
               error={props.error}
               errorMsg={props.errorMsg}
+              nameInWrapper={above}
             />
+          );
+          if (!above) return body;
+          return (
+            <AssistantTurnAbove
+              key={index}
+              message={props}
+              live={live}
+              courseCards={settings?.courseCards}
+            >
+              {body}
+            </AssistantTurnAbove>
           );
         })}
       </div>
       {!isAtBottom &&
         (arrowSlot ? createPortal(scrollArrow, arrowSlot) : scrollArrow)}
+    </div>
+  );
+}
+
+// Assistenten-Antwort mit Kurskarten oben (courseCardsPosition "above"):
+// [Name] [Karten] [Antwortblase]. Ohne Karten pixelgleich zur normalen
+// Antwort (Name + 5px Polsterung wandern nur in den umgebenden Block).
+// Die Karten erscheinen, sobald der Server sie ankündigt (Chunk
+// "courseSources", vor dem ersten Text-Token); bis zum ersten Token zeigt
+// PromptReply den Tipp-Indikator. Ergänzungen am Stream-Ende werden angehängt.
+function AssistantTurnAbove({ message: props, live, courseCards, children }) {
+  const hasCards =
+    !props.error &&
+    Array.isArray(props.courseSources) &&
+    props.courseSources.length > 0;
+  return (
+    <div className="allm-pt-[5px]" data-assistant-turn="">
+      <div className={MESSAGE_NAME_CLASS}>
+        {embedderSettings.settings.assistantName ||
+          "Anything LLM Chat Assistant"}
+      </div>
+      {hasCards && (
+        <CourseCards
+          reply={stripCardsMarker(
+            String(props.content || "").replace(
+              /<think>[\s\S]*?<\/think>/g,
+              "",
+            ),
+            { partial: live },
+          )}
+          courseSources={props.courseSources}
+          courseCards={courseCards}
+          position="above"
+          part="cards"
+          announced={props.courseCardsAnnounced}
+        />
+      )}
+      {children}
     </div>
   );
 }
