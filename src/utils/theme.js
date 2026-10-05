@@ -180,6 +180,13 @@ export const THEME_VARIABLES = [
     light: "calc(var(--allmi-radius) * 1.125)",
     dark: "calc(var(--allmi-radius) * 1.125)",
   },
+  // Kurskarten getrennt vom Panel rundbar (Panel 40px, Karten 14px);
+  // Standard wie bisher 0,75 × --allm-radius
+  {
+    name: "radius-card",
+    light: "calc(var(--allmi-radius) * 0.75)",
+    dark: "calc(var(--allmi-radius) * 0.75)",
+  },
   { name: "shadow", light: null, dark: DARK.shadow },
   {
     name: "bubble-shadow",

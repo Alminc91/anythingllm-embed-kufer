@@ -13,7 +13,9 @@ const MUTED = "var(--allmi-text-muted, #5f6368)";
 const ACCENT = "var(--allmi-accent, #01a5a9)";
 const BORDER = "var(--allmi-border, #e5e7eb)";
 const SURFACE = "var(--allmi-surface, #FFFFFF)";
-const RADIUS = "calc(var(--allmi-radius, 16px) * 0.75)";
+// --allm-radius-card (utils/theme.js), Standard 0,75 × --allm-radius
+const RADIUS =
+  "var(--allmi-radius-card, calc(var(--allmi-radius, 16px) * 0.75))";
 
 const boxStyle = {
   boxSizing: "border-box",
