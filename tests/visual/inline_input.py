@@ -16,8 +16,10 @@ Aufruf (aus dem Repo-Wurzelverzeichnis):
   # 3) Prüfen (npm run build vorher)
   python3 tests/visual/inline_input.py
 
-  # optional: AK-3 live auf der Vorschau-Website (eine echte Frage)
-  python3 tests/visual/inline_input.py --live-demo
+  # optional: AK-3 live auf der Vorschau-Website (eine echte Frage). Erzeugt
+  # einen ECHTEN Chat auf dem Demo-Container (Kontingent, Verlauf) und läuft
+  # daher nur mit ausdrücklicher Freigabe per Umgebungsvariable:
+  EMBED_LIVE_TESTS=1 python3 tests/visual/inline_input.py --live-demo
 
 Alle Aufrufe an praesentation werden gemockt (Config, Status, Verlauf,
 stream-chat); stream-chat-Anfragen werden gezählt (genau 1 / 0 Anfragen).
@@ -26,6 +28,7 @@ Ergebnisse: tests/visual/results/inline-input-*.png, summary-inline-input.json.
 
 import argparse
 import json
+import os
 import pathlib
 import sys
 import time
@@ -87,6 +90,38 @@ def mock(**k):
     k.setdefault("config", CFG_NO_MSGS)
     k.setdefault("stream", STREAM)
     return CountingMock(**k)
+
+
+class HeldHistoryMock(CountingMock):
+    """Wie mock(), hält aber das Laden des Verlaufs an, bis release_history()
+    aufgerufen wird: der Chat ist aufgeklappt, der ChatContainer aber noch nicht
+    bereit -> die Frage aus der Leiste ist noch nicht verbraucht."""
+
+    def __init__(self, *a, **k):
+        k.setdefault("config", CFG_NO_MSGS)
+        k.setdefault("stream", STREAM)
+        super().__init__(*a, **k)
+        self.held = []
+        self.holding = True
+
+    def handle(self, route):
+        path = route.request.url.split("?")[0]
+        is_history = (route.request.method == "GET" and not path.endswith(("/config", "/status", "/audio/status",
+                                                                            "/conversations")))
+        if self.holding and is_history:
+            self.held.append(route)
+            return None
+        return super().handle(route)
+
+    def release_history(self):
+        self.holding = False
+        while self.held:
+            route = self.held.pop(0)
+            route.fulfill(json={"history": self.history})
+
+
+# Touch-Telefon (pointer: coarse, hover: none)
+TOUCH = {"has_touch": True, "is_mobile": True}
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +229,9 @@ def active_id(page):
 
 
 def collapsed(page):
-    return page.evaluate("() => !!window.__q('#anything-llm-inline-bar') && !window.__q('#anything-llm-chat')")
+    """Leiste sichtbar, Chat nicht gemountet oder (nach dem ersten Öffnen) ausgeblendet."""
+    return page.evaluate(
+        "() => { const c = window.__q('#anything-llm-chat'); return !!window.__q('#anything-llm-inline-bar') && (!c || c.getBoundingClientRect().height === 0); }")
 
 
 def expanded_state(page):
@@ -228,6 +265,21 @@ def wait_user_and_token(page, question, token=CHUNK, timeout=10000):
     }""",
         arg=[question, token], timeout=timeout)
     return time.time() - t0
+
+
+def bar_value(page):
+    return page.evaluate("() => { const i = window.__q('#anything-llm-inline-input'); return i ? i.value : null; }")
+
+
+def user_messages(page):
+    return page.evaluate(
+        "() => [...window.__allmShadow.querySelectorAll('.allm-anything-llm-user-message')].map(e => e.textContent.trim())")
+
+
+def click_collapse(page):
+    """Header-Knopf „Einklappen“ (bzw. „Close“ im Overlay) — braucht keinen Fokus im Widget."""
+    page.evaluate(
+        "() => window.__q('button[aria-label=\"Einklappen\"], button[aria-label=\"Close\"]').click()")
 
 
 def bar_center_left(page):
@@ -552,6 +604,198 @@ def check_draft(browser, base_url):
         ctx.close()
 
 
+def check_replace_after_close(browser, base_url):
+    """Fund 1: B nach Escape bei noch nicht verbrauchter A -> Chat offen, B
+    gesendet, A nicht. Die Leiste ist nie „tot“."""
+    m = HeldHistoryMock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        type_in_bar(page, "Frage A")
+        page.keyboard.press("Enter")
+        tv.wait_shadow(page, "#anything-llm-chat")
+        page.wait_for_timeout(300)
+        # Fokus ins Widget (Header-Knopf), dann Escape
+        page.evaluate("() => window.__q('button[aria-label=\"Einklappen\"]').focus()")
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => !!window.__q('#anything-llm-inline-input')")
+        restored = bar_value(page)
+        page.evaluate("() => { const i = window.__q('#anything-llm-inline-input'); i.focus(); i.select(); }")
+        page.keyboard.type("Frage B")
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(300)
+        opened = expanded_state(page).get("open")
+        m.release_history()
+        try:
+            wait_user_and_token(page, "Frage B")
+        except Exception:
+            pass  # B kam nicht an -> unten als Fehler erfasst
+        page.wait_for_timeout(800)
+        msgs = [r.get("message") for r in m.stream_requests]
+        users = user_messages(page)
+        ok = restored == "Frage A" and opened and msgs == ["Frage B"] and users == ["Frage B"]
+        record("Fund 1 B nach Escape bei unverbrauchter A (B gesendet, A nicht)", ok,
+               f"Text nach Escape={restored!r}, offen={opened}, Anfragen={msgs}, Nutzer-Nachrichten={users}")
+    finally:
+        ctx.close()
+
+
+def check_close_discards(browser, base_url):
+    """Fund 2: Enter -> Zuklappen vor Verbrauch -> 0 Anfragen, Text wieder im Feld."""
+    for label, viewport in (("Box", None), ("Mobil-Overlay", tv.MOBILE)):
+        m = HeldHistoryMock()
+        ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m, viewport=viewport)
+        try:
+            tv.wait_shadow(page, "#anything-llm-inline-input")
+            type_in_bar(page, QUESTION)
+            page.keyboard.press("Enter")
+            tv.wait_shadow(page, "#anything-llm-chat")
+            page.wait_for_timeout(300)
+            click_collapse(page)
+            page.wait_for_function("() => !!window.__q('#anything-llm-inline-input')")
+            value = bar_value(page)
+            # Verlauf jetzt laden: der (ausgeblendete) Chat wird bereit, darf aber nichts senden
+            m.release_history()
+            page.wait_for_timeout(1500)
+            ok = value == QUESTION and not m.stream_requests and collapsed(page) and not user_messages(page)
+            record(f"Fund 2 Zuklappen vor Verbrauch verwirft die Frage ({label})", ok,
+                   f"Feld={value!r}, Anfragen={len(m.stream_requests)}, eingeklappt={collapsed(page)}")
+        finally:
+            ctx.close()
+
+
+def check_touch_no_keyboard(browser, base_url):
+    """Fund 3: Touch-Telefon, Enter aus der Leiste -> während der laufenden
+    Antwort liegt der Fokus NICHT im Chat-Eingabefeld (keine Tastatur)."""
+    m = mock(stream="hang")
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m, viewport=tv.MOBILE,
+                             context_options=TOUCH)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        coarse = page.evaluate("() => matchMedia('(pointer: coarse)').matches")
+        # jeden Fokuswechsel im Widget mitschreiben: auch ein kurzer Fokus aufs
+        # Chat-Feld (danach durch disabled wieder verloren) öffnet die Tastatur
+        page.evaluate(
+            "() => { window.__focusLog = []; window.__allmShadow.addEventListener('focusin', (e) => window.__focusLog.push(e.target.id || e.target.tagName)); }")
+        type_in_bar(page, QUESTION)
+        page.keyboard.press("Enter")
+        page.wait_for_function(
+            "(q) => [...window.__allmShadow.querySelectorAll('.allm-anything-llm-user-message')].some(e => e.textContent.includes(q))",
+            arg=QUESTION, timeout=10000)
+        page.wait_for_timeout(1500)
+        focus = active_id(page)
+        log = page.evaluate("() => window.__focusLog")
+        st = expanded_state(page)
+        ok = (coarse and st.get("overlay") and len(m.stream_requests) == 1 and focus != "message-input"
+              and "message-input" not in log)
+        record("Fund 3 Touch: keine Tastatur über der laufenden Antwort", ok,
+               f"pointer:coarse={coarse}, Overlay={st.get('overlay')}, Anfragen={len(m.stream_requests)}, "
+               f"Fokus={focus}, Fokuswechsel={log}")
+    finally:
+        m.release()
+        ctx.close()
+
+
+def check_draft_append(browser, base_url):
+    """Fund 4: Entwurf aus der Leiste überschreibt Getipptes im Chat-Feld nicht."""
+    m = mock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+        page.keyboard.press("Enter")  # leer: nur aufklappen
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(500)
+        page.evaluate("() => window.__q('#message-input').focus()")
+        page.keyboard.type("Ich suche")
+        click_collapse(page)
+        page.wait_for_function("() => !!window.__q('#anything-llm-inline-input')")
+        type_in_bar(page, "Yoga am Abend")
+        page.mouse.click(*bar_center_left(page))
+        page.wait_for_timeout(800)
+        value = page.evaluate("() => window.__q('#message-input').value")
+        ok = value == "Ich suche Yoga am Abend" and not m.stream_requests and expanded_state(page).get("open")
+        record("Fund 4 Entwurf an Getipptes im Chat-Feld angehängt", ok,
+               f"Chat-Feld={value!r}, Anfragen={len(m.stream_requests)}")
+    finally:
+        ctx.close()
+
+
+def check_escape_focus_narrow(browser, base_url):
+    """Fund 5: Desktop 700 px breit (Maus/Tastatur) -> nach Escape Fokus im Leisten-Feld."""
+    m = mock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m,
+                             viewport={"width": 700, "height": 900})
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+        page.keyboard.press("Enter")  # leer: Overlay auf, Fokus im Chat-Feld
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(800)
+        before = active_id(page)
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(300)
+        focus = active_id(page)
+        ok = collapsed(page) and focus == "anything-llm-inline-input"
+        record("Fund 5 Escape (700 px Desktop): Fokus im Leisten-Feld", ok,
+               f"Fokus vorher={before}, nachher={focus}, eingeklappt={collapsed(page)}")
+    finally:
+        ctx.close()
+
+
+def check_aria(browser, base_url):
+    """Fund 6: role=search + aria-label am Formular, aria-expanded/-controls am Knopf."""
+    probe = """() => {
+      const f = window.__q('#anything-llm-inline-bar'), b = window.__q('#anything-llm-inline-send');
+      const chat = window.__q('#anything-llm-chat');
+      return {
+        role: f && f.getAttribute('role'), label: f && f.getAttribute('aria-label'),
+        expanded: b && b.getAttribute('aria-expanded'), controls: b && b.getAttribute('aria-controls'),
+        chatVisible: !!chat && chat.getBoundingClientRect().height > 0,
+      };
+    }"""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, mock())
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        before = page.evaluate(probe)
+        page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+        page.keyboard.press("Enter")
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(300)
+        opened = page.evaluate(probe)
+        click_collapse(page)
+        page.wait_for_function("() => !!window.__q('#anything-llm-inline-input')")
+        after = page.evaluate(probe)
+        ok = (before == {"role": "search", "label": "Stellen Sie hier Ihre Frage …", "expanded": "false",
+                         "controls": "anything-llm-chat", "chatVisible": False}
+              and opened["expanded"] is None and opened["chatVisible"]
+              and after["expanded"] == "false" and after["controls"] == "anything-llm-chat")
+        record("Fund 6 Barrierefreiheit (role=search, aria-expanded/-controls)", ok,
+               f"eingeklappt={json.dumps(before, ensure_ascii=False)}, aufgeklappt={json.dumps(opened)}, "
+               f"wieder eingeklappt={json.dumps(after, ensure_ascii=False)}")
+    finally:
+        ctx.close()
+
+
+def check_chip_with_text(browser, base_url):
+    """Fund 7: Chip bei Text im Feld hängt an und sendet nicht."""
+    m = mock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, ".allm-inline-chip")
+        type_in_bar(page, "Ich suche")
+        box = page.evaluate(
+            "() => { const r = window.__allmShadow.querySelectorAll('.allm-inline-chip')[1].getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        page.mouse.click(*box)
+        page.wait_for_timeout(600)
+        value, focus = bar_value(page), active_id(page)
+        ok = value == "Ich suche Yoga" and collapsed(page) and not m.stream_requests and focus == "anything-llm-inline-input"
+        record("Fund 7 Chip bei Text im Feld: angehängt, nicht gesendet", ok,
+               f"Feld={value!r}, eingeklappt={collapsed(page)}, Anfragen={len(m.stream_requests)}, Fokus={focus}")
+    finally:
+        ctx.close()
+
+
 def check_server_config(browser, base_url):
     """AK-9 im Browser: kein data-inline-input, visual_config.inlineInput = true."""
     cfg = {**CFG_NO_MSGS, "inlineInput": True, "inlineInputPlaceholder": "Was suchen Sie?",
@@ -665,8 +909,14 @@ def main():
     ap.add_argument("--new-states", action="store_true", help="mit --baseline: Referenzen der neuen Zustände")
     ap.add_argument("--dist", default=str(ROOT / "dist"), help="Verzeichnis mit dem gebauten Widget")
     ap.add_argument("--only", nargs="*", help="nur diese Pixel-Zustände")
-    ap.add_argument("--live-demo", action="store_true", help="zusätzlich AK-3 live auf demo.ki.kufer.de")
+    ap.add_argument("--live-demo", action="store_true",
+                    help="zusätzlich AK-3 live auf demo.ki.kufer.de (nur mit EMBED_LIVE_TESTS=1)")
     args = ap.parse_args()
+    if args.live_demo and os.environ.get("EMBED_LIVE_TESTS") != "1":
+        print("Abbruch: --live-demo stellt eine ECHTE Frage auf dem Demo-Container (demo.ki.kufer.de) — "
+              "es entsteht ein echter Chat (Kontingent, Verlauf). Nur mit ausdrücklicher Freigabe starten: "
+              "EMBED_LIVE_TESTS=1 python3 tests/visual/inline_input.py --live-demo", file=sys.stderr)
+        return 2
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     srv, base_url = tv.start_server(args.dist)
@@ -689,6 +939,13 @@ def main():
                 check_keyboard(browser, base_url)
                 check_double_enter(browser, base_url)
                 check_draft(browser, base_url)
+                check_replace_after_close(browser, base_url)
+                check_close_discards(browser, base_url)
+                check_touch_no_keyboard(browser, base_url)
+                check_draft_append(browser, base_url)
+                check_escape_focus_narrow(browser, base_url)
+                check_aria(browser, base_url)
+                check_chip_with_text(browser, base_url)
                 check_bubble_dom(browser, base_url)
                 check_nak4_body(body)
                 wbody = check_window_body(browser, base_url)
