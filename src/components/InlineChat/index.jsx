@@ -226,6 +226,10 @@ export default function InlineChat({
   // Aufklapp-Effekt erst ab dem ersten Aufklappen durch den Nutzer; der
   // Startzustand "expanded" erscheint wie bisher ohne Animation.
   const animateRef = useRef(false);
+  // Höhe der Inline-Fläche beim Aufklappen (schwebende Box): die unsichtbare
+  // Leiste hält genau diese Höhe, auch wenn die Seite den Platzhalter beim
+  // Aufklappen verbreitert (Chips brechen dann anders um) -> nichts rückt nach.
+  const flowHeightRef = useRef(null);
   const floating = wantOverlay && !overlayClipped;
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
@@ -396,6 +400,8 @@ export default function InlineChat({
     }
     scrollOnExpandRef.current = true;
     animateRef.current = true;
+    flowHeightRef.current =
+      rootRef.current?.getBoundingClientRect().height || null;
     const clipped = isOverlayClipped();
     flushSync(() => {
       queue();
@@ -567,7 +573,16 @@ export default function InlineChat({
         {view === "bar" && bar}
         {/* schwebende Box: Leiste bleibt unsichtbar im Seitenfluss (Höhe) */}
         {boxFloating && (
-          <div aria-hidden="true" style={{ visibility: "hidden" }}>
+          <div
+            aria-hidden="true"
+            style={{
+              visibility: "hidden",
+              height: flowHeightRef.current
+                ? `${flowHeightRef.current}px`
+                : undefined,
+              overflow: "hidden",
+            }}
+          >
             {bar}
           </div>
         )}
