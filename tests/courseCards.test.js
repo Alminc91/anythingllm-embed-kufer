@@ -206,7 +206,9 @@ describe("selectCourseCards", () => {
     expect(r.cards).toHaveLength(8);
     expect(r.more).toBe(0);
     // sortiert nach Beginn
-    const dates = r.cards.map((c) => c.startDate);
+    const dates = r.cards.map(
+      (c) => BY.find((b) => b.url === c.url).start_date,
+    );
     expect([...dates].sort()).toEqual(dates);
   });
 
@@ -387,6 +389,153 @@ describe("selectCourseCards", () => {
   });
 });
 
+describe("selectCourseCards — Review-Funde", () => {
+  const X = { pageHost: "www.vhs-x.de" };
+  const course = (path, title, extra = {}) => ({
+    url: `https://www.vhs-x.de${path}`,
+    title,
+    start_date: "2026-10-06",
+    weekdays: ",tue,",
+    ...extra,
+  });
+  const hatha = course("/kurssuche/kurs/hatha-yoga/100", "Hatha Yoga");
+  const senior = course(
+    "/kurssuche/kurs/hatha-yoga-fuer-senioren/200",
+    "Hatha Yoga für Senioren",
+  );
+
+  it("Titel-Präfix: nur der längere genannte Titel bekommt eine Karte", () => {
+    const reply =
+      "Für Sie passt Hatha Yoga für Senioren am Dienstagvormittag in Burscheid.";
+    const r = selectCourseCards(reply, [hatha, senior], AUTO, X);
+    expect(r.cards.map((c) => c.title)).toEqual(["Hatha Yoga für Senioren"]);
+    // auch als Linktext eines verlinkten Kurses
+    const linked = `Tipp: [Hatha Yoga für Senioren](${senior.url}).`;
+    expect(
+      selectCourseCards(linked, [hatha, senior], AUTO, X).cards.map(
+        (c) => c.title,
+      ),
+    ).toEqual(["Hatha Yoga für Senioren"]);
+    // Gegenprobe: beide getrennt genannt -> zwei Karten
+    const both =
+      "Es gibt Hatha Yoga am Montag und außerdem Hatha Yoga für Senioren am Dienstag.";
+    expect(
+      selectCourseCards(both, [hatha, senior], AUTO, X).cards,
+    ).toHaveLength(2);
+  });
+
+  it("Rückfrage 'Meinen Sie den Kurs Hatha Yoga für Senioren …?' -> keine Karte", () => {
+    const reply = "Meinen Sie den Kurs Hatha Yoga für Senioren …?";
+    expect(selectCourseCards(reply, [hatha, senior], AUTO, X).cards).toEqual(
+      [],
+    );
+    expect(selectCourseCards(reply, [hatha], AUTO, X).cards).toEqual([]);
+    // Titel, der selbst mit "?" endet, bleibt zuordenbar
+    const question = course(
+      "/kurssuche/kurs/achtsamkeit/300",
+      "Was ist Achtsamkeit?",
+    );
+    expect(
+      selectCourseCards(
+        "Neu im Programm: Was ist Achtsamkeit? Der Kurs beginnt im Oktober.",
+        [question],
+        AUTO,
+        X,
+      ).cards,
+    ).toHaveLength(1);
+  });
+
+  it("Kategorie-Erkennung über den Kurs-Pfadpräfix der courseSources", () => {
+    const a1 = course("/kurse/26H-40123-englisch-a1", "Englisch A1 am Abend");
+    const b1 = course("/kurse/26H-40125-englisch-b1", "Englisch B1 am Abend");
+    const reply =
+      `Ja: [Englisch A1 am Abend](${a1.url}) oder ` +
+      `[Englisch A2](https://www.vhs-x.de/kurse/26H-40124-englisch-a2).`;
+    const r = selectCourseCards(reply, [a1, b1], AUTO, X);
+    expect(r.cards.map((c) => c.url)).toEqual([a1.url]);
+    expect(r.categoryLink).toBeNull();
+    // auch mit nur einer Kursquelle (Präfix = Elternverzeichnis)
+    expect(selectCourseCards(reply, [a1], AUTO, X).categoryLink).toBeNull();
+    // echter Kategorie-Link außerhalb des Präfixes bleibt Abschlusslink
+    const withCategory = `${reply} Alle Sprachkurse: [Sprachen](https://www.vhs-x.de/programm/sprachen)`;
+    expect(
+      selectCourseCards(withCategory, [a1, b1], AUTO, X).categoryLink,
+    ).toEqual({
+      url: "https://www.vhs-x.de/programm/sprachen",
+      text: "Sprachen",
+    });
+  });
+
+  it("Markdown-Link mit Klammern in der URL", () => {
+    const evening = course("/kurs/123-(abend)", "Yoga am Abend kompakt");
+    const reply = `Siehe [Kurs](https://www.vhs-x.de/kurs/123-(abend)).`;
+    expect(extractLinks(reply)).toEqual([
+      { url: "https://www.vhs-x.de/kurs/123-(abend)", text: "Kurs", index: 6 },
+    ]);
+    expect(
+      selectCourseCards(reply, [evening], AUTO, X).cards.map((c) => c.url),
+    ).toEqual(["https://www.vhs-x.de/kurs/123-(abend)"]);
+    // Klammer um eine nackte URL gehört nicht zur URL
+    expect(extractLinks("(siehe https://www.vhs-x.de/kurs/9)")[0].url).toBe(
+      "https://www.vhs-x.de/kurs/9",
+    );
+  });
+
+  it("gleicher Beginn: Reihenfolge der Fundstellen im Text (Titel vor Link)", () => {
+    const pilates = course(
+      "/kurssuche/kurs/pilates/1",
+      "Pilates Grundkurs Montag",
+    );
+    const zumba = course("/kurssuche/kurs/zumba/2", "Zumba Fitness");
+    const reply = `Zuerst Pilates Grundkurs Montag, danach [Zumba Fitness](${zumba.url}).`;
+    expect(
+      selectCourseCards(reply, [zumba, pilates], AUTO, X).cards.map(
+        (c) => c.title,
+      ),
+    ).toEqual(["Pilates Grundkurs Montag", "Zumba Fitness"]);
+  });
+
+  it("Laufzeit: 1500-Wort-Antwort x 12 Titel unter 50 ms", () => {
+    const titles = [
+      "Hatha Yoga für Senioren",
+      "Kundalini-Yoga für Anfänger/innen mit und ohne Vorkenntnisse",
+      "Goldenes Yoga 55+",
+      "Aerial Flying Yoga luftiges Training im Tuch",
+      "Entspannt ins Wochenende mit Yoga Nidra und Atementspannung",
+      "Orthopädische Yoga-Therapie für reifere Erwachsene",
+      "Englisch A2 am Abend",
+      "Spanisch für die Reise",
+      "Pilates Grundkurs Montag",
+      "Fotografie mit dem Smartphone",
+      "Excel Grundlagen kompakt",
+      "Italienisch Konversation B1",
+    ];
+    const sources = titles.map((t, i) =>
+      course(`/kurssuche/kurs/k${i}/${i}`, t),
+    );
+    // gleiche Antwort wie die Messung im Review (Zufallsfolge, fester Seed)
+    const vocab =
+      "die der und Kurs Yoga am Abend wir bieten Ihnen viele Angebote im Herbst Anmeldung über Kursseite Termine Entspannung Gesundheit Sprache Programm finden Sie hier mit ohne für Anfänger Fortgeschrittene Woche".split(
+        " ",
+      );
+    let seed = 7;
+    const rnd = () =>
+      (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const reply = Array.from(
+      { length: 1500 },
+      () => vocab[Math.floor(rnd() * vocab.length)],
+    ).join(" ");
+    const times = [];
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      selectCourseCards(reply, sources, AUTO, X);
+      times.push(performance.now() - t0);
+    }
+    times.sort((a, b) => a - b);
+    expect(times[2]).toBeLessThan(50);
+  });
+});
+
 describe("Stream-Verarbeitung (handleChat)", () => {
   it("courseSources kommen mit dem Abschluss-Chunk an die Nachricht, Text bleibt", () => {
     const set = vi.fn();
@@ -480,7 +629,7 @@ describe("HistoricalMessage mit Kurskarten", () => {
     expect(el.querySelectorAll(".allm-course-card")).toHaveLength(0);
   });
 
-  it("NAK-5: mit Karten bleibt der Antworttext identisch; Links öffnen neu mit noopener", () => {
+  it("NAK-5: mit Karten bleibt der Antworttext identisch; Links öffnen neu mit noopener noreferrer", () => {
     const without = render({
       message: reply,
       courseSources: clone(fixtures.donauHealth),
@@ -508,7 +657,7 @@ describe("HistoricalMessage mit Kurskarten", () => {
     expect(el.textContent).not.toMatch(/undefined|NaN/);
     for (const a of el.querySelectorAll("[data-course-cards] a")) {
       expect(a.getAttribute("target")).toBe("_blank");
-      expect(a.getAttribute("rel")).toBe("noopener");
+      expect(a.getAttribute("rel")).toBe("noopener noreferrer");
     }
     const footer = el.querySelector(".allm-course-category");
     expect(footer.textContent).toBe("Gesundheitskurse →");

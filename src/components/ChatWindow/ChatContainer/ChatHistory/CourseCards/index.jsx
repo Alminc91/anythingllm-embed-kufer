@@ -42,18 +42,13 @@ function joinParts(parts) {
   return parts.filter(Boolean).join(" · ");
 }
 
+// card.url ist immer gesetzt (selectCourseCards nimmt nur http(s)-Kurs-URLs)
 function CourseTitle({ card, style }) {
-  if (!card.url)
-    return (
-      <span style={{ ...linkStyle, textDecoration: "none", ...style }}>
-        {card.title}
-      </span>
-    );
   return (
     <a
       href={card.url}
       target="_blank"
-      rel="noopener"
+      rel="noopener noreferrer"
       style={{ ...linkStyle, ...style }}
       data-course-link=""
     >
@@ -137,10 +132,12 @@ function CompactRow({ card, first }) {
   );
 }
 
-function CourseCards({ reply, courseSources, settings }) {
+// courseCards als String-Prop (kein Objekt pro Render) -> memo greift;
+// die Aktivierung prüft allein selectCourseCards.
+function CourseCards({ reply, courseSources, courseCards }) {
   const selection = useMemo(
-    () => selectCourseCards(reply, courseSources, settings),
-    [reply, courseSources, settings?.courseCards],
+    () => selectCourseCards(reply, courseSources, { courseCards }),
+    [reply, courseSources, courseCards],
   );
   const { cards, compact, categoryLink, more } = selection;
   if (!cards || cards.length === 0) return null;
@@ -182,7 +179,7 @@ function CourseCards({ reply, courseSources, settings }) {
         <a
           href={categoryLink.url}
           target="_blank"
-          rel="noopener"
+          rel="noopener noreferrer"
           className="allm-course-category"
           style={{
             ...linkStyle,

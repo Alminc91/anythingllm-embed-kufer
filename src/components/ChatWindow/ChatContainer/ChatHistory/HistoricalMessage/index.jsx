@@ -588,16 +588,17 @@ const HistoricalMessage = forwardRef(
         </div>
 
         {/* Kurskarten (opt-in): nur unter Assistenten-Antworten mit
-            courseSources vom Server; ohne Option wird nichts gerendert. */}
+            courseSources vom Server; ob die Option an ist, prüft allein
+            selectCourseCards (ohne Option rendert CourseCards nichts).
+            responseContent ist bereits ohne <think>-Blöcke. */}
         {role === "assistant" &&
           !error &&
-          courseCards === "auto" &&
           Array.isArray(courseSources) &&
           courseSources.length > 0 && (
             <CourseCards
-              reply={responseContent || message}
+              reply={responseContent}
               courseSources={courseSources}
-              settings={{ courseCards }}
+              courseCards={courseCards}
             />
           )}
 

@@ -304,9 +304,9 @@ def check_ak2(browser, base_url):
         )
         record("AK-2 Felder je Karte (Link, Wochentag/Uhrzeit, Beginn, Ort, Preis)", ok_fields,
                " | ".join(c["text"].replace("\n", " / ") for c in info["cards"]))
-        links_ok = all(c["target"] == "_blank" and c["rel"] == "noopener" for c in info["cards"])
+        links_ok = all(c["target"] == "_blank" and c["rel"] == "noopener noreferrer" for c in info["cards"])
         f = info["footer"]
-        record("Links target=_blank rel=noopener", links_ok and f and f["target"] == "_blank" and f["rel"] == "noopener",
+        record("Links target=_blank rel=noopener noreferrer", links_ok and f and f["target"] == "_blank" and f["rel"] == "noopener noreferrer",
                f"Karten {links_ok}, Abschluss {f}")
         record("AK-5 Abschlusslink mit Linktext der Antwort", f and f["text"] == "Umwelt und Gesundheit →"
                and f["href"] == CATEGORY_URL, f"{f}")
