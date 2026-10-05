@@ -28,6 +28,12 @@ export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
 // Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
 export const COURSE_CARDS_VALUES = ["off", "auto"];
+// Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
+// nachfolgenden Inhalt (overlay); Aufklapp-Effekt (expand = Standard)
+export const INLINE_LAYOUT_VALUES = ["flow", "overlay"];
+export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
+export const DEFAULT_INLINE_LAYOUT = "flow";
+export const DEFAULT_INLINE_EFFECT = "expand";
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -79,6 +85,17 @@ function shortText(value, maxLen = INLINE_TEXT_MAX_LEN) {
   return v;
 }
 
+// Enum mit Warnung: ungültig -> eine console.warn-Zeile, Feld fällt weg ->
+// nächstniedrigerer Wert (Script-Attribut bzw. Standard).
+function oneOfOrWarn(name, value, allowed, fallback) {
+  const v = oneOf(value, allowed);
+  if (v === undefined)
+    console.warn(
+      `[AnythingLLM Embed] Ungültiger ${name}-Wert ${JSON.stringify(value)} — erlaubt: ${allowed.join(", ")}. Es gilt der Standard "${fallback}".`,
+    );
+  return v;
+}
+
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
 // genutzt). Rückgabe undefined = verwerfen.
 export const layoutValidations = {
@@ -106,6 +123,11 @@ export const layoutValidations = {
   // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
   // ungültig -> verworfen -> Standard "off"
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
+  // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> Warnung
+  inlineLayout: (v) =>
+    oneOfOrWarn("inlineLayout", v, INLINE_LAYOUT_VALUES, DEFAULT_INLINE_LAYOUT),
+  inlineEffect: (v) =>
+    oneOfOrWarn("inlineEffect", v, INLINE_EFFECT_VALUES, DEFAULT_INLINE_EFFECT),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -197,6 +219,59 @@ export function inlineBoxStyle(settings = {}) {
     height: `clamp(${INLINE_MIN_HEIGHT_PX}px, ${h}, ${INLINE_MAX_HEIGHT_PX}px)`,
     maxHeight: "calc(100vh - 32px)", // nie höher als der sichtbare Bereich
   };
+}
+
+// Inline: Höhe der Box in px (wie inlineBoxStyle, für die Überlauf-Prüfung
+// des Overlays vor dem Aufklappen).
+export function inlineBoxHeightPx(settings = {}, viewportHeight = 0) {
+  const h =
+    layoutValidations.inlineHeight(settings.inlineHeight) ||
+    DEFAULT_INLINE_HEIGHT;
+  const n = parseFloat(h);
+  const px = h.endsWith("vh") ? (n * viewportHeight) / 100 : n;
+  const clamped = Math.min(
+    Math.max(px, INLINE_MIN_HEIGHT_PX),
+    INLINE_MAX_HEIGHT_PX,
+  );
+  return viewportHeight > 0 ? Math.min(clamped, viewportHeight - 32) : clamped;
+}
+
+// Inline: schwebt die aufgeklappte Box (inlineLayout "overlay")? Werte
+// kommen validiert aus loadEmbedSettings; alles andere = flow.
+export function isInlineOverlay(settings = {}) {
+  return settings.inlineLayout === "overlay";
+}
+
+// Inline: Klassen des Aufklapp-Effekts (Animation in main.jsx, customCss).
+// Unbekannt/fehlend -> expand.
+export function inlineEffectClass(settings = {}) {
+  const effect = INLINE_EFFECT_VALUES.includes(settings.inlineEffect)
+    ? settings.inlineEffect
+    : DEFAULT_INLINE_EFFECT;
+  return `allm-effect allm-effect-${effect}`;
+}
+
+// Overlay-Fallback: schneidet ein Vorfahre des Platzhalters (overflow
+// hidden/clip, contain: paint) die schwebende Box unten ab, bleibt die Box im
+// Seitenfluss. boxBottom = Unterkante der Box im Viewport (px). Rückgabe: das
+// beschneidende Element oder null. body/html zählen nicht (deren overflow
+// wirkt auf den Viewport, der scrollt).
+export function findClippingAncestor(mount, boxBottom) {
+  for (
+    let el = mount;
+    el &&
+    el.nodeType === 1 &&
+    el !== document.body &&
+    el !== document.documentElement;
+    el = el.parentElement
+  ) {
+    const cs = getComputedStyle(el);
+    const clips =
+      /hidden|clip/.test(`${cs.overflow} ${cs.overflowX} ${cs.overflowY}`) ||
+      /paint|strict|content/.test(cs.contain || "");
+    if (clips && el.getBoundingClientRect().bottom < boxBottom - 1) return el;
+  }
+  return null;
 }
 
 // Inline: optionale Maximalbreite (zentriert), sonst volle Container-Breite.

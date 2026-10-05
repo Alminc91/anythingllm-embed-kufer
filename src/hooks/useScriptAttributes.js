@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { embedderSettings } from "../main";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
+  DEFAULT_INLINE_EFFECT,
   DEFAULT_INLINE_HEIGHT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
+  DEFAULT_INLINE_LAYOUT,
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
@@ -67,6 +69,11 @@ export const DEFAULT_SETTINGS = {
   inlineHeight: DEFAULT_INLINE_HEIGHT, // px oder vh, geklemmt 400–1200px
   inlineMaxWidth: null, // px, null = volle Container-Breite
   inlineStartState: "collapsed", // "collapsed" | "expanded"
+  // Aufgeklappte Box (ab 768px): "flow" = im Seitenfluss (schiebt den Inhalt
+  // darunter nach unten, bisher) | "overlay" = schwebt über dem Inhalt.
+  inlineLayout: DEFAULT_INLINE_LAYOUT,
+  // Aufklapp-Effekt: "expand" | "grow" | "spring" | "float"
+  inlineEffect: DEFAULT_INLINE_EFFECT,
   // Eingeklappte Leiste als Eingabefeld mit Absende-Knopf; darunter die
   // defaultMessages als Chips (max. 6). false = Klickfläche wie bisher.
   // Nur Inline-Modus (Blase: ignoriert, eine Warnung).

@@ -20,9 +20,13 @@ import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
+  findClippingAncestor,
+  inlineBoxHeightPx,
   inlineBoxStyle,
   inlineChips,
+  inlineEffectClass,
   inlineMaxWidth,
+  isInlineOverlay,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -52,11 +56,24 @@ import {
 // wird unsichtbar gesendet). Klick in die Leiste neben das Feld: aufklappen,
 // getippter Text landet unversendet im Chat-Eingabefeld (send: false). Es gibt
 // nur EIN Eingabefeld je Zustand.
+//
+// inlineLayout "overlay" (ab 768px): die eingeklappte Leiste bleibt im
+// Seitenfluss (unsichtbar, gleiche Höhe), die aufgeklappte Box liegt
+// position:absolute darüber (oben an der Leiste, Breite der Inline-Fläche =
+// Platzhalter bzw. inlineMaxWidth, Stapel --allm-overlay-z) und verschiebt den
+// Inhalt darunter nicht. Klick außerhalb des Widgets und Escape klappen ein.
+// Kein Scroll-Lock, keine Styles an body/html. Schneidet ein Vorfahre des
+// Platzhalters (overflow hidden/clip) die Box ab, bleibt es beim Aufklappen im
+// Seitenfluss (eine Warnung). inlineEffect: Klasse am Chat-Fenster
+// (inlineEffectClass), Animation in main.jsx. Solange die Box aufgeklappt ist,
+// trägt der Platzhalter data-allm-expanded="true" (Signal für Seiten-CSS).
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
 const CHAT_WINDOW_ID = "anything-llm-chat";
 const DESKTOP_QUERY = "(min-width: 768px)"; // = Tailwind md
+// Signal am Platzhalter, solange die Box aufgeklappt ist (README)
+const EXPANDED_ATTR = "data-allm-expanded";
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
 // mitten im Inhalt (text-align:center, line-height:2, Großbuchstaben o. ä. würden
@@ -113,6 +130,16 @@ const FOCUS_PROXY_STYLE = {
   padding: 0,
   fontSize: "16px",
   pointerEvents: "none",
+};
+
+// Schwebende Box (inlineLayout "overlay"): relativ zur Inline-Fläche
+// (#anything-llm-embed-inline, position:relative), oben an der Leiste.
+const OVERLAY_BOX_STYLE = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: "var(--allmi-overlay-z, 1000)",
 };
 
 const chatClasses = {
@@ -191,6 +218,15 @@ export default function InlineChat({
   // Text der Eingabe-Leiste. Liegt hier, weil die Leiste beim Aufklappen
   // abgebaut wird: beim Zuklappen kommt eine verworfene Frage zurück ins Feld.
   const [barText, setBarText] = useState("");
+  // inlineLayout "overlay": Box schwebt, außer ein Vorfahre schneidet sie ab
+  // (beim Aufklappen geprüft, dann bleibt sie im Seitenfluss).
+  const wantOverlay = isInlineOverlay(settings);
+  const [overlayClipped, setOverlayClipped] = useState(false);
+  const warnedClipRef = useRef(false);
+  // Aufklapp-Effekt erst ab dem ersten Aufklappen durch den Nutzer; der
+  // Startzustand "expanded" erscheint wie bisher ohne Animation.
+  const animateRef = useRef(false);
+  const floating = wantOverlay && !overlayClipped;
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -229,6 +265,46 @@ export default function InlineChat({
       scrollChatToBottom();
     };
   }, [overlay, mountTarget]);
+
+  // Overlay-Fallback: würde die schwebende Box (Oberkante = Inline-Fläche)
+  // von einem Vorfahren des Platzhalters abgeschnitten? Vor dem Aufklappen
+  // messen (Seitenfluss = wie eingeklappt).
+  const isOverlayClipped = () => {
+    if (!wantOverlay || !mountTarget || !rootRef.current) return false;
+    const top = rootRef.current.getBoundingClientRect().top;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const clipper = findClippingAncestor(
+      mountTarget,
+      top + inlineBoxHeightPx(settings, vh),
+    );
+    if (clipper && !warnedClipRef.current) {
+      warnedClipRef.current = true;
+      console.warn(
+        '[AnythingLLM Embed] inlineLayout "overlay": ein Vorfahre des Platzhalters schneidet die Box ab (overflow hidden/clip) — die Box klappt im Seitenfluss auf (flow).',
+        clipper,
+      );
+    }
+    return !!clipper;
+  };
+
+  // Startzustand "expanded" (Box im ersten Render): Prüfung vor dem ersten
+  // Paint (Host hängt da schon im Platzhalter, Effekt oben).
+  useLayoutEffect(() => {
+    if (view === "box" && wantOverlay) setOverlayClipped(isOverlayClipped());
+  }, []);
+
+  // Signal für die Seite: Platzhalter trägt data-allm-expanded="true",
+  // solange die Box aufgeklappt ist (vor dem Paint, damit Seiten-CSS im
+  // selben Frame greift).
+  useLayoutEffect(() => {
+    if (!mountTarget) return;
+    if (view === "box") mountTarget.setAttribute(EXPANDED_ATTR, "true");
+    else mountTarget.removeAttribute(EXPANDED_ATTR);
+  }, [view, mountTarget]);
+  useEffect(
+    () => () => mountTarget?.removeAttribute?.(EXPANDED_ATTR),
+    [mountTarget],
+  );
 
   // Drehen/Vergrößern auf >=768px bei offenem Overlay -> zurück in die Seite,
   // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter).
@@ -319,8 +395,11 @@ export default function InlineChat({
       return;
     }
     scrollOnExpandRef.current = true;
+    animateRef.current = true;
+    const clipped = isOverlayClipped();
     flushSync(() => {
       queue();
+      setOverlayClipped(clipped);
       setExpanded(true);
     });
     // Touch-Tablets: kein Auto-Fokus (Tastatur würde die Seite verschieben)
@@ -337,10 +416,21 @@ export default function InlineChat({
     if (pending?.send) focusRequestRef.current = true;
   }, []);
 
+  // Fokus auf die Leiste. Eingabe-Leiste bei Finger-Bedienung nicht
+  // fokussieren: ein Textfeld würde sofort die Bildschirmtastatur öffnen.
+  // Schmale Desktop-Fenster (Maus/Tastatur) bekommen den Fokus wie breite.
+  const focusBar = () => {
+    if (settings.inlineInput === true && isCoarsePointer()) return;
+    barRef.current?.focus({ preventScroll: true });
+  };
+
   // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
   // Eine noch nicht verbrauchte Übergabe wird verworfen (nie unsichtbar
   // senden), ihr Text kommt zurück ins Leisten-Feld.
-  const closeChat = () => {
+  // focus "bar": sofort auf die Leiste; "if-free" (Klick außerhalb): erst nach
+  // dem Klick und nur, wenn er den Fokus nicht auf ein Element der Seite
+  // gesetzt hat (Link, Eingabefeld).
+  const collapse = (focus = "bar") => {
     const unsent = pendingFirstMessage?.text;
     flushSync(() => {
       setPendingFirstMessage(null);
@@ -348,17 +438,29 @@ export default function InlineChat({
       setOverlay(false);
       setExpanded(false);
     });
-    // Eingabe-Leiste bei Finger-Bedienung nicht fokussieren: ein Textfeld
-    // würde sofort die Bildschirmtastatur öffnen. Schmale Desktop-Fenster
-    // (Maus/Tastatur) bekommen den Fokus wie breite.
-    if (settings.inlineInput === true && isCoarsePointer()) return;
-    barRef.current?.focus({ preventScroll: true });
+    if (focus !== "if-free") {
+      focusBar();
+      return;
+    }
+    // nach mousedown (gleicher Task wie pointerdown): hat der Klick ein
+    // Element der Seite fokussiert, bleibt der Fokus dort
+    setTimeout(() => {
+      const a = document.activeElement;
+      const free =
+        !a ||
+        a === document.body ||
+        a === document.documentElement ||
+        a === host;
+      if (free) focusBar();
+    }, 0);
   };
-  // Escape-Listener ruft immer das aktuelle closeChat (sieht die aktuelle
-  // Übergabe), ohne bei jedem Render neu angehängt zu werden.
-  const closeChatRef = useRef(closeChat);
+  // Für ChatWindow (Button "Schließen" o. ä.): ohne Argumente
+  const closeChat = () => collapse("bar");
+  // Escape-/Außenklick-Listener rufen immer das aktuelle collapse (sieht die
+  // aktuelle Übergabe), ohne bei jedem Render neu angehängt zu werden.
+  const collapseRef = useRef(collapse);
   useLayoutEffect(() => {
-    closeChatRef.current = closeChat;
+    collapseRef.current = collapse;
   });
 
   // Escape schließt das Overlay bzw. klappt die Box ein — nur wenn der Fokus
@@ -368,11 +470,56 @@ export default function InlineChat({
     if (!root || view === "bar") return;
     const onKeyDown = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      closeChatRef.current();
+      collapseRef.current();
     };
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
   }, [view]);
+
+  // Schwebende Box: Klick außerhalb des Widgets und Escape (auch wenn der
+  // Fokus nicht im Widget liegt) klappen ein. pointerdown in der
+  // Capture-Phase, damit Seiten-Scripts (stopPropagation) es nicht
+  // verschlucken; nie preventDefault -> der Klick (Link) läuft normal weiter.
+  // Touch: erst beim Tippen (click), damit Wischen zum Scrollen nicht schließt.
+  useEffect(() => {
+    if (!floating || view !== "box") return;
+    let lastPointer = "";
+    const isOutside = (e) => {
+      const path = e.composedPath?.() || [];
+      if (host && path.includes(host)) return false;
+      // Scrollleiste des Viewports ist kein Klick in die Seite
+      const de = document.documentElement;
+      if (
+        e.target === de &&
+        (e.clientX >= de.clientWidth || e.clientY >= de.clientHeight)
+      )
+        return false;
+      return true;
+    };
+    const onPointerDown = (e) => {
+      lastPointer = e.pointerType || "";
+      if (lastPointer === "touch") return;
+      if (isOutside(e)) collapseRef.current("if-free");
+    };
+    const onClick = (e) => {
+      if (lastPointer === "touch" && isOutside(e))
+        collapseRef.current("if-free");
+    };
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // aus dem Widget: Listener am Shadow Root (oben)
+      if (host && e.composedPath?.().includes(host)) return;
+      collapseRef.current();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [floating, view]);
 
   const embedMode = useMemo(
     () => ({
@@ -388,6 +535,26 @@ export default function InlineChat({
   );
 
   const inheritFont = settings.inheritFont === true;
+  const boxFloating = view === "box" && floating;
+  const bar =
+    settings.inlineInput === true ? (
+      <InlineInputBar
+        ref={barRef}
+        settings={settings}
+        narrow={narrow}
+        value={barText}
+        onChange={setBarText}
+        expanded={view !== "bar"}
+        onOpen={openChat}
+      />
+    ) : (
+      <InlineBar
+        ref={barRef}
+        settings={settings}
+        narrow={narrow}
+        onOpen={() => openChat()}
+      />
+    );
 
   return (
     <EmbedModeContext.Provider value={embedMode}>
@@ -397,42 +564,42 @@ export default function InlineChat({
         className={`allm-relative allm-w-full allm-font-sans ${inheritFont ? "allm-inherit-font" : ""}`}
         style={{ ...TEXT_RESET, maxWidth: inlineMaxWidth(settings) }}
       >
-        {view === "bar" &&
-          (settings.inlineInput === true ? (
-            <InlineInputBar
-              ref={barRef}
-              settings={settings}
-              narrow={narrow}
-              value={barText}
-              onChange={setBarText}
-              expanded={view !== "bar"}
-              onOpen={openChat}
-            />
-          ) : (
-            <InlineBar
-              ref={barRef}
-              settings={settings}
-              narrow={narrow}
-              onOpen={() => openChat()}
-            />
-          ))}
+        {view === "bar" && bar}
+        {/* schwebende Box: Leiste bleibt unsichtbar im Seitenfluss (Höhe) */}
+        {boxFloating && (
+          <div aria-hidden="true" style={{ visibility: "hidden" }}>
+            {bar}
+          </div>
+        )}
         {chatMountedRef.current && (
           <div
             ref={boxRef}
             className={
               view === "box"
-                ? "allm-relative allm-w-full"
+                ? boxFloating
+                  ? ""
+                  : "allm-relative allm-w-full"
                 : view === "bar"
                   ? "allm-hidden"
                   : ""
             }
-            style={view === "box" ? inlineBoxStyle(settings) : undefined}
+            style={
+              view === "box"
+                ? boxFloating
+                  ? { ...OVERLAY_BOX_STYLE, ...inlineBoxStyle(settings) }
+                  : inlineBoxStyle(settings)
+                : undefined
+            }
           >
             <div
               ref={chatWindowRef}
               id={CHAT_WINDOW_ID}
               className={
-                view === "overlay" ? chatClasses.overlay : chatClasses.box
+                view === "overlay"
+                  ? chatClasses.overlay
+                  : view === "box" && animateRef.current
+                    ? `${chatClasses.box} ${inlineEffectClass(settings)}`
+                    : chatClasses.box
               }
               style={view === "overlay" ? chatStyles.overlay : chatStyles.box}
             >
