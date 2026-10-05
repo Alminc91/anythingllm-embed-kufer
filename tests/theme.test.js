@@ -225,6 +225,10 @@ describe("theme.test.js", () => {
       expect(css).toContain(`--allmi-${name}: var(--allm-${name});`);
     expect(css).toContain("--allmi-surface: var(--allm-surface, #FFFFFF);");
     expect(css).toContain("--allmi-radius: var(--allm-radius, 16px);");
+    // Kurskarten getrennt rundbar, Standard 0,75 × --allm-radius (AK-6)
+    expect(css).toContain(
+      "--allmi-radius-card: var(--allm-radius-card, calc(var(--allmi-radius) * 0.75));",
+    );
     expect(css).toContain(
       "--allmi-assistant-text: var(--allm-assistant-text, var(--allmi-text, #222628));",
     );

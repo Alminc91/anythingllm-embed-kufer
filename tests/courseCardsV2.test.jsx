@@ -1122,3 +1122,20 @@ describe("Fallback-Karten: Darstellung", () => {
     expect(early.querySelectorAll(".allm-course-card")).toHaveLength(1);
   });
 });
+
+describe("Karten-Rundung getrennt vom Panel (--allm-radius-card, AK-6)", () => {
+  it("Karte rundet über --allmi-radius-card, Fallback 0,75 × --allmi-radius", () => {
+    const el = mount(
+      h(HistoricalMessage, {
+        role: "assistant",
+        message: `${link(BY[0])}`,
+        courseSources: clone(BY),
+        courseCards: "auto",
+      }),
+    );
+    const card = el.querySelector(".allm-course-card");
+    expect(card.getAttribute("style")).toContain(
+      "border-radius: var(--allmi-radius-card, calc(var(--allmi-radius, 16px) * 0.75))",
+    );
+  });
+});

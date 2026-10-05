@@ -31,6 +31,9 @@ die Widget-Abwehr gegen einen durchgereichten Marker "[[KARTEN: …]]".
 Schlanke Fallback-Karte: Zustand cc-fallback (Kurslink ohne courseSources-
 Eintrag -> Karte nur mit Titel) + DOM-Prüfung below/above.
 
+Getrennte Rundung (--allm-radius-card): Zustand cc-radius-card (Panel 40 px,
+Karten 14 px, Blasen 18 px) + Messung mit/ohne --allm-radius-card.
+
 Ergebnisse: tests/visual/results/course-cards-*.png, summary-course-cards.json.
 """
 
@@ -153,6 +156,9 @@ def announced_history():
     return h
 SMALL = {"width": 360, "height": 740}
 CARD_SEL = "[data-course-cards]"
+# Mockup vhs Rhein: Panel 40 px, Karten 14 px, Blasen 18 px (--allm-radius-card)
+RADIUS_CSS = ("#anythingllm-embed-widget { --allm-radius: 40px; --allm-radius-card: 14px; "
+              "--allm-radius-bubble: 18px; }")
 
 # ---------------------------------------------------------------------------
 # Testseiten-Helfer: Stream mit Pausen (fetch-Ersatz) + Protokoll der Karten
@@ -249,6 +255,9 @@ def pixel_cases():
         # Schlanke Fallback-Karte (Kurslink ohne Serverdaten)
         ("cc-fallback", {"attrs": CARDS}, tv.Mock(config={}, stream=stream_events(ANSWER_FB)), "#message-input",
          "send", None, "new"),
+        # Karten getrennt vom Panel gerundet (--allm-radius-card)
+        ("cc-radius-card", {"attrs": CARDS, "css": RADIUS_CSS}, tv.Mock(config={}, stream=stream_events(ANSWER_3)),
+         "#message-input", "send", None, "new"),
     ]
 
 
@@ -826,6 +835,25 @@ def check_ak4c(browser, base_url):
             ctx.close()
 
 
+def check_radius_card(browser, base_url):
+    """AK-6: --allm-radius 40px + --allm-radius-card 14px -> Panel 40, Karte 14;
+    ohne --allm-radius-card Karte 0,75 × 40 = 30 px; ohne beides 12 px (wie bisher)."""
+    js = ("() => ({ win: getComputedStyle(window.__q('#anything-llm-chat')).borderTopLeftRadius, "
+          "card: getComputedStyle(window.__q('.allm-course-card')).borderTopLeftRadius })")
+    for label, css, want in (("40/14", RADIUS_CSS, ("40px", "14px")),
+                             ("40 ohne --allm-radius-card", "#anythingllm-embed-widget { --allm-radius: 40px; }",
+                              ("40px", "30px")),
+                             ("Standard", None, ("16px", "12px"))):
+        ctx, page = open_and_send(browser, base_url, CARDS, tv.Mock(config={}, stream=stream_events(ANSWER_3)), css=css)
+        try:
+            page.wait_for_function("() => !!window.__q('.allm-course-card')", timeout=10000)
+            r = page.evaluate(js)
+            record(f"AK-6 Karten-Rundung getrennt ({label})", (r["win"], r["card"]) == want,
+                   f"Panel {r['win']}, Karte {r['card']} (Soll {want[0]} / {want[1]})")
+        finally:
+            ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true")
@@ -851,6 +879,7 @@ def main():
                 check_marker_passthrough(browser, base_url)
                 check_ak4c(browser, base_url)
                 check_fallback(browser, base_url)
+                check_radius_card(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()

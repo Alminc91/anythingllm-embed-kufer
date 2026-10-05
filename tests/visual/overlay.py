@@ -957,6 +957,316 @@ def check_warn(browser, base_url):
             ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Effekt "morph": Leiste wächst zum Panel (Issue „morph + Rückbau“)
+# ---------------------------------------------------------------------------
+MORPH = {**OVERLAY, "inline-effect": "morph", "inline-height": "520px"}
+MORPH_FLOW = {**INLINE, "inline-effect": "morph", "inline-height": "520px"}
+# AK-2: Leiste 600 px breit (Pille), Panel 760 × 520 px (die Seite verbreitert
+# den Platzhalter beim Aufklappen), Panel-Rundung 40 px
+MORPH_CSS = ("#kufer-assistent { width: 600px; } #kufer-assistent[data-allm-expanded] { width: 760px; } "
+             "#anythingllm-embed-widget { --allm-bar-radius: 999px; --allm-radius: 40px; }")
+MORPH_MS = 460
+
+MORPH_STATE_JS = r"""
+() => {
+  const w = window.__q('#anything-llm-chat');
+  const c = w && w.querySelector('.allm-inline-content');
+  const r = w.getBoundingClientRect();
+  const cs = getComputedStyle(w);
+  return { w: r.width, h: r.height, x: r.x, y: r.y, radius: parseFloat(cs.borderTopLeftRadius),
+    dur: cs.transitionDuration.split(',')[0].trim(), tf: cs.transform, cls: w.className,
+    op: c ? parseFloat(getComputedStyle(c).opacity) : null, ctf: c ? getComputedStyle(c).transform : null,
+    box: w.parentElement.getBoundingClientRect().height,
+    morph: w.classList.contains('allm-morph') || w.classList.contains('allm-morph-from') };
+}
+"""
+# Alle Transitionen des Laufs anhalten und auf t ms setzen (deterministischer Frame)
+MORPH_SEEK_JS = r"""
+(t) => {
+  const w = window.__q('#anything-llm-chat');
+  const anims = [...w.getAnimations({ subtree: true }), ...w.parentElement.getAnimations()];
+  anims.forEach((a) => { a.pause(); a.currentTime = t; });
+  return anims.length;
+}
+"""
+MORPH_PLAY_JS = r"""
+() => { const w = window.__q('#anything-llm-chat');
+  [...w.getAnimations({ subtree: true }), ...w.parentElement.getAnimations()].forEach((a) => a.play()); }
+"""
+# Ab dem nächsten pointerdown jeden Frame messen (700 ms): Chat-Fenster, äußere Box, #below
+MORPH_SAMPLER_JS = r"""
+() => { window.__ms = []; document.addEventListener('pointerdown', () => {
+  const t0 = performance.now();
+  const tick = () => {
+    const w = window.__q('#anything-llm-chat');
+    if (w) { const r = w.getBoundingClientRect();
+      window.__ms.push({ t: performance.now() - t0, w: r.width, h: r.height,
+        box: w.parentElement.getBoundingClientRect().height,
+        below: document.getElementById('below').getBoundingClientRect().top + scrollY }); }
+    if (performance.now() - t0 < 700) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick); }, { capture: true, once: true }); }
+"""
+
+
+def morph_state(page):
+    return page.evaluate(MORPH_STATE_JS)
+
+
+def pill_rect(page):
+    return page.evaluate(
+        "() => { const r = window.__q('#anything-llm-inline-bar').getBoundingClientRect(); return { w: r.width, h: r.height, x: r.x, y: r.y }; }")
+
+
+def wait_morph_running(page):
+    page.wait_for_function("() => { const w = window.__q('#anything-llm-chat'); return !!w && w.classList.contains('allm-morph'); }",
+                           timeout=3000)
+
+
+def wait_morph_done(page):
+    page.wait_for_function(
+        "() => { const w = window.__q('#anything-llm-chat'); return !w || !(w.classList.contains('allm-morph') || w.classList.contains('allm-morph-from')); }",
+        timeout=3000)
+
+
+def wait_bar_back(page):
+    page.wait_for_function(
+        "() => { const w = window.__q('#anything-llm-chat'); return (!w || w.getBoundingClientRect().height === 0) && !!window.__q('#anything-llm-inline-input'); }",
+        timeout=3000)
+
+
+def morph_page(browser, base_url, attrs=None, viewport=None, reduced_motion="no-preference", css=MORPH_CSS):
+    attrs = attrs or {**MORPH, **INPUT}
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": css},
+                             tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=viewport,
+                             reduced_motion=reduced_motion)
+    ready(page, "#anything-llm-inline-input" if attrs.get("inline-input") else "#anything-llm-inline-bar")
+    return ctx, page
+
+
+def morph_click(page):
+    """Leiste aufklappen: leeres Feld -> Knopf „Chatten“ (Fokus ins Chat-Feld)."""
+    click_bar(page, "#anything-llm-inline-send")
+
+
+def morph_prepared(browser, base_url, attrs=None):
+    """Einmal auf- und (per Escape, rückwärts) zuklappen: Chat geladen, Leiste
+    wieder da -> der nächste Lauf ist deterministisch (Inhalt steht)."""
+    ctx, page = morph_page(browser, base_url, attrs)
+    morph_click(page)
+    wait_open(page)
+    tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+    wait_morph_done(page)
+    tv.settle(page, 300)
+    page.keyboard.press("Escape")
+    wait_bar_back(page)
+    tv.settle(page, 200)
+    page.mouse.move(990, 690)
+    return ctx, page
+
+
+def run_morph_pixel(browser, base_url, baseline, new_states, only=None):
+    """Zustände ov-morph-mid (alle Transitionen bei 50 % der Dauer angehalten)
+    und ov-morph-end (Endzustand) — neue Zustände, Referenz aus diesem Branch."""
+    names = [n for n in ("ov-morph-mid", "ov-morph-end") if not only or n in only]
+    if not names or (baseline and not new_states):
+        return
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        morph_click(page)
+        wait_morph_running(page)
+        page.evaluate(MORPH_SEEK_JS, MORPH_MS / 2)
+        blur_widget(page)
+        page.mouse.move(990, 690)
+        page.wait_for_timeout(100)
+        shots = {}
+        mid = RESULTS_DIR / "overlay-ov-morph-mid.png"
+        page.screenshot(path=str(mid), caret="hide")
+        shots["ov-morph-mid"] = mid
+        page.evaluate(MORPH_PLAY_JS)
+        wait_morph_done(page)
+        tv.settle(page)
+        blur_widget(page)
+        page.wait_for_timeout(100)
+        end = RESULTS_DIR / "overlay-ov-morph-end.png"
+        page.screenshot(path=str(end), animations="disabled", caret="hide")
+        shots["ov-morph-end"] = end
+        errs = tv.errors_of(page)
+    finally:
+        ctx.close()
+    for name in names:
+        ref = BASELINE_DIR / f"{name}.png"
+        if baseline:
+            if ref.exists():
+                print(f"[SKIP] {name}: Referenz existiert (wird nie überschrieben)")
+                continue
+            ref.write_bytes(shots[name].read_bytes())
+            print(f"[BASE] {name} -> {ref.relative_to(ROOT)}" + (f" (Konsole: {errs})" if errs else ""))
+            continue
+        if not ref.exists():
+            record(f"PIX {name}", False, "keine Referenz (erst --baseline --new-states laufen lassen)")
+            continue
+        ratio, maxd = tv.diff_ratio(ref, shots[name], RESULTS_DIR / f"overlay-{name}.diff.png")
+        record(f"REG {name}", ratio <= tv.MAX_DIFF_RATIO and not errs,
+               f"Pixel-Diff {ratio * 100:.4f} % (max. Kanal-Abw. {maxd})" + (f", Konsole: {errs}" if errs else ""))
+
+
+def check_morph(browser, base_url):
+    """AK-2 Geometrie (Start/50 %/Ende), NAK-1 kein Textzoom, AK-3 rückwärts, AK-10 Frames."""
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        bar = pill_rect(page)
+        morph_click(page)
+        wait_morph_running(page)
+        page.evaluate(MORPH_SEEK_JS, 0)
+        start = morph_state(page)
+        page.evaluate(MORPH_SEEK_JS, MORPH_MS / 2)
+        mid = morph_state(page)
+        page.evaluate(MORPH_PLAY_JS)
+        wait_morph_done(page)
+        tv.settle(page, 200)
+        end = morph_state(page)
+        lo, hi = 600 * 0.95, 760 * 1.05
+        ok = (abs(start["w"] - bar["w"]) <= 1 and abs(start["h"] - bar["h"]) <= 1 and start["radius"] >= bar["h"] / 2 - 0.5
+              and abs(start["x"] - bar["x"]) <= 1 and start["op"] == 0 and start["dur"] == "0.46s")
+        record("AK-2 morph Start = Leistenform", ok,
+               f"Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f}; Box {start['w']:.0f}×{start['h']:.0f} @ {start['x']:.0f}, "
+               f"Rundung {start['radius']:.1f} px (Pille = halbe Höhe; Leiste 999px), Inhalt-Opacity {start['op']}, Dauer {start['dur']}")
+        ok = bar["w"] < mid["w"] < 760 and lo <= mid["w"] <= hi and bar["h"] < mid["h"] < 520 and mid["op"] < 1
+        record("AK-2 morph bei 50 % Zwischengröße, Inhalt noch nicht voll", ok,
+               f"{mid['w']:.1f}×{mid['h']:.1f} px, Rundung {mid['radius']:.1f} px, Inhalt-Opacity {mid['op']:.3f}")
+        ok = (abs(end["w"] - 760) <= 1 and abs(end["h"] - 520) <= 1 and end["radius"] == 40 and end["op"] == 1
+              and not end["morph"] and end["tf"] == "none")
+        record("AK-2 morph Ende = Panel 760×520, --allm-radius", ok,
+               f"{end['w']:.0f}×{end['h']:.0f} px, Rundung {end['radius']} px, transform {end['tf']}, Klassen weg: {not end['morph']}")
+        a, b, c, d, _, _ = matrix(mid["tf"])
+        record("NAK-1 morph kein Textzoom (Inhalt nur Opacity)", mid["ctf"] == "none" and a == 1 and d == 1 and b == 0 and c == 0,
+               f"transform Inhalt {mid['ctf']}, Box {mid['tf']}")
+        # AK-10: ungestörter Lauf, jeden Frame gemessen (nach Escape-Zuklappen)
+        page.evaluate("() => window.__q('#message-input').focus()")
+        page.keyboard.press("Escape")
+        wait_bar_back(page)
+        page.mouse.move(990, 690)
+        page.evaluate(MORPH_SAMPLER_JS)
+        morph_click(page)
+        page.wait_for_timeout(MORPH_MS + 300)
+        samples = page.evaluate("() => window.__ms")
+        buckets = {}
+        for sm in samples:
+            buckets.setdefault(int(sm["t"] // 40), sm)
+        growing = sum(1 for sm in buckets.values() if bar["w"] + 0.5 < sm["w"] < 760 - 0.5)
+        record("AK-10 morph wächst über mehrere 40-ms-Frames (Messung)", growing >= 6,
+               f"{growing} von {len(buckets)} Frames (40-ms-Takt) zwischen Leiste und Panel; Soll ≥ 6 von 14")
+        # AK-3: Escape -> rückwärts, danach Leiste wie vorher, Fokus auf der Leiste
+        page.evaluate("() => window.__q('#message-input').focus()")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(int(MORPH_MS * 0.3))
+        during = morph_state(page)
+        wait_bar_back(page)
+        page.wait_for_timeout(100)
+        after = pill_rect(page)
+        focus = active_id(page)
+        g = geom(page)
+        ok = (during["morph"] and bar["w"] - 1 <= during["w"] < 760 - 1 and abs(after["w"] - bar["w"]) <= 1
+              and abs(after["h"] - bar["h"]) <= 1 and focus == "anything-llm-inline-input" and g["expandedAttr"] is None
+              and not tv.errors_of(page))
+        record("AK-3 morph Zuklappen rückwärts (Escape)", ok,
+               f"nach 30 % {during['w']:.0f}×{during['h']:.0f} px, danach Leiste {after['w']:.0f}×{after['h']:.0f} "
+               f"(vorher {bar['w']:.0f}×{bar['h']:.0f}), Fokus {focus}, data-allm-expanded={g['expandedAttr']}")
+        # Außenklick ebenfalls rückwärts
+        morph_click(page)
+        wait_open(page)
+        wait_morph_done(page)
+        page.mouse.click(930, 120)
+        page.wait_for_timeout(int(MORPH_MS * 0.3) + 20)
+        during = morph_state(page)
+        wait_bar_back(page)
+        record("AK-3 morph Zuklappen rückwärts (Außenklick)", during["morph"] and during["w"] < 760 - 1,
+               f"nach 30 % {during['w']:.0f}×{during['h']:.0f} px, Leiste zurück")
+    finally:
+        ctx.close()
+
+
+def check_morph_reduced_mobile(browser, base_url):
+    """AK-4 reduzierte Bewegung (0 ms, Endzustand sofort), AK-5 mobil Vollbild ohne Morph."""
+    ctx, page = morph_page(browser, base_url, reduced_motion="reduce")
+    try:
+        morph_click(page)
+        wait_open(page)
+        s = morph_state(page)
+        ok = s["dur"] == "0s" and not s["morph"] and abs(s["w"] - 760) <= 1 and abs(s["h"] - 520) <= 1 and s["op"] == 1
+        record("AK-4 morph reduzierte Bewegung: sofort Endzustand", ok,
+               f"transition-duration {s['dur']}, {s['w']:.0f}×{s['h']:.0f} px direkt nach dem Klick, Morph-Klassen: {s['morph']}")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(50)
+        closed = page.evaluate("() => window.__q('#anything-llm-chat').getBoundingClientRect().height === 0")
+        record("AK-4 morph reduzierte Bewegung: Zuklappen sofort", closed, f"nach 50 ms zu: {closed}")
+    finally:
+        ctx.close()
+    ctx, page = morph_page(browser, base_url, viewport=tv.MOBILE, css=None)
+    try:
+        morph_click(page)
+        wait_open(page)
+        tv.settle(page, 400)
+        g = geom(page)
+        vw, vh = page.evaluate("() => [innerWidth, innerHeight]")
+        ok = (g["chatPos"] == "fixed" and abs(g["chat"]["w"] - vw) <= 1 and abs(g["chat"]["h"] - vh) <= 1
+              and "allm-morph" not in g["cls"].replace("allm-effect-morph", "") and g["hostParent"] == "BODY")
+        record("AK-5 morph mobil 390 px: Vollbild ohne Morph", ok,
+               f"{g['chatPos']} {g['chat']['w']:.0f}×{g['chat']['h']:.0f} (Viewport {vw}×{vh}), Host in {g['hostParent']}")
+    finally:
+        ctx.close()
+
+
+def check_morph_nak2(browser, base_url):
+    """NAK-2: Klick in die Box auf halbem Weg -> keine Konsolenfehler, Endzustand erreicht."""
+    ctx, page = morph_page(browser, base_url)
+    try:
+        morph_click(page)
+        page.wait_for_timeout(int(MORPH_MS * 0.4))
+        x, y = page.evaluate("() => { const r = window.__q('#anything-llm-chat').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        page.mouse.click(x, y)
+        page.wait_for_timeout(MORPH_MS + 300)
+        s = morph_state(page)
+        errs = tv.errors_of(page)
+        ok = not errs and not s["morph"] and abs(s["w"] - 760) <= 1 and abs(s["h"] - 520) <= 1
+        record("NAK-2 morph Klick auf halbem Weg", ok,
+               f"Endzustand {s['w']:.0f}×{s['h']:.0f} px, Morph-Klassen: {s['morph']}, Konsole: {errs or 'leer'}")
+    finally:
+        ctx.close()
+
+
+def check_morph_flow(browser, base_url):
+    """NAK-3: im Seitenfluss Höhe monoton wachsend, #below am Ende wie bei expand."""
+    shifts = {}
+    for eff in ("morph", "expand"):
+        attrs = {**MORPH_FLOW, "inline-effect": eff}
+        ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": MORPH_CSS}, tv.Mock())
+        try:
+            ready(page)
+            before = geom(page)
+            page.evaluate(MORPH_SAMPLER_JS)
+            click_bar(page)
+            wait_open(page)
+            page.wait_for_timeout(MORPH_MS + 300)
+            after = geom(page)
+            shifts[eff] = after["below"]["dy"] - before["below"]["dy"]
+            samples = page.evaluate("() => window.__ms")
+            if eff == "morph":
+                boxes = [sm["box"] for sm in samples]
+                below = [sm["below"] for sm in samples]
+                mono = all(b2 >= b1 - 0.5 for b1, b2 in zip(boxes, boxes[1:]))
+                mono_below = all(b2 >= b1 - 0.5 for b1, b2 in zip(below, below[1:]))
+                record("NAK-3 morph flow: Höhe monoton wachsend, Inhalt wandert mit", mono and mono_below and
+                       boxes[0] < boxes[-1] and len(set(round(b) for b in boxes)) >= 6,
+                       f"Box {boxes[0]:.0f} -> {boxes[-1]:.0f} px in {len(boxes)} Frames, #below monoton: {mono_below}, "
+                       f"Konsole: {tv.errors_of(page) or 'leer'}")
+        finally:
+            ctx.close()
+    record("NAK-3 morph flow: #below am Ende wie expand", abs(shifts["morph"] - shifts["expand"]) <= 1,
+           f"#below Δ morph {shifts['morph']:+.1f} px, expand {shifts['expand']:+.1f} px")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
@@ -971,6 +1281,7 @@ def main():
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
             run_pixel(browser, base_url, args.baseline, args.new_states, args.only)
+            run_morph_pixel(browser, base_url, args.baseline, args.new_states, args.only)
             if not args.baseline:
                 check_default_shift(browser, base_url)
                 check_ak2(browser, base_url)
@@ -991,6 +1302,10 @@ def main():
                 check_nak4(browser, base_url)
                 check_fallback(browser, base_url)
                 check_signal(browser, base_url)
+                check_morph(browser, base_url)
+                check_morph_reduced_mobile(browser, base_url)
+                check_morph_nak2(browser, base_url)
+                check_morph_flow(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()
