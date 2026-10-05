@@ -7,6 +7,9 @@ import {
   DEFAULT_INLINE_HEIGHT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_LAYOUT,
+  DEFAULT_INLINE_CLOSE_ON,
+  DEFAULT_INLINE_OPEN_ON,
+  DEFAULT_INLINE_RESUME_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
@@ -83,6 +86,22 @@ export const DEFAULT_SETTINGS = {
   inlineInput: false,
   inlineInputPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER, // max. 120 Zeichen
   inlineSendText: DEFAULT_INLINE_SEND_TEXT, // Knopf, max. 40 Zeichen
+  // Eingabe-Leiste: "submit" = öffnet erst beim Absenden (bisher) | "focus" =
+  // schon beim Klick/Tippen ins Feld (nur Zeiger/Touch, nie per Tab-Fokus).
+  inlineOpenOn: DEFAULT_INLINE_OPEN_ON,
+  // Schwebende Box (inlineLayout "overlay", ab 768px, feiner Zeiger):
+  // "outside" = Außenklick/Escape (bisher) | "leave" = zusätzlich nach
+  // --allm-leave-delay, wenn der Zeiger Box und Leiste verlässt.
+  inlineCloseOn: DEFAULT_INLINE_CLOSE_ON,
+  // Eingeklappte Eingabe-Leiste: Chip „Unterhaltung fortsetzen (n)“ + „Neu
+  // starten“, wenn die Konversation schon Nachrichten hat. Fragt den Verlauf
+  // nur mit dieser Einstellung ab (und nur bei historyEnabled !== false).
+  inlineResumeHint: false,
+  inlineResumePlaceholder: DEFAULT_INLINE_RESUME_PLACEHOLDER, // max. 120 Zeichen
+  // Text des Hinweis-Chips (max. 120) bzw. des Links (max. 40); null = i18n
+  // („Unterhaltung fortsetzen“ / „Neu starten“), Anzahl wird angehängt
+  inlineResumeText: null,
+  inlineRestartText: null,
   // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
   // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
   inlineTheme: null,

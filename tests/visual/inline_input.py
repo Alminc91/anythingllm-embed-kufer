@@ -24,6 +24,13 @@ Aufruf (aus dem Repo-Wurzelverzeichnis):
 Alle Aufrufe an praesentation werden gemockt (Config, Status, Verlauf,
 stream-chat); stream-chat-Anfragen werden gezählt (genau 1 / 0 Anfragen).
 Ergebnisse: tests/visual/results/inline-input-*.png, summary-inline-input.json.
+
+Leisten-Varianten (data-inline-open-on / -close-on / -resume-hint): neue
+Zustände ii-focus-open, ii-leave-close, ii-resume-hint, ii-resume-hint-dark
+(Referenz aus diesem Branch: --baseline --new-states --only …) und
+Funktionsprüfungen „LV …“. NAK-3 vergleicht die API-Anfragen beim Laden mit
+dem unveränderten Build, wenn --main-dist angegeben ist (sonst mit der Liste
+GET /config, GET /status).
 """
 
 import argparse
@@ -123,6 +130,21 @@ class HeldHistoryMock(CountingMock):
 # Touch-Telefon (pointer: coarse, hover: none)
 TOUCH = {"has_touch": True, "is_mobile": True}
 
+# Leisten-Varianten (Issue „Öffnen bei Klick / Schließen bei Verlassen /
+# Hinweis Unterhaltung“)
+FOCUS = {**INPUT, "inline-open-on": "focus"}
+LEAVE = {**INPUT, "inline-layout": "overlay", "inline-close-on": "leave"}
+RESUME = {**INPUT, "inline-resume-hint": "true"}
+LEAVE_CSS = "#anythingllm-embed-widget { --allm-leave-delay: 200ms; }"
+HISTORY_4 = [
+    {"role": "user", "content": "Gibt es Yogakurse am Abend?", "sentAt": tv.SENT_AT},
+    {"role": "assistant", "content": "Ja, dienstags um 19 Uhr.", "sentAt": tv.SENT_AT + 5, "chatId": 1,
+     "sources": [{"title": "yoga.pdf", "text": "Kontext darf nie ankommen"}]},
+    {"role": "user", "content": "Und Töpfern?", "sentAt": tv.SENT_AT + 60},
+    {"role": "assistant", "content": "Samstags um 10 Uhr.", "sentAt": tv.SENT_AT + 65, "chatId": 2},
+]
+OUTSIDE = (990, 690)  # rechts unten, außerhalb von Leiste und Box
+
 
 # ---------------------------------------------------------------------------
 # Pixel-Zustände
@@ -161,6 +183,15 @@ def pixel_cases():
          "new"),
         ("ii-input-360-10chips", {"attrs": {**INPUT, "default-messages": TEN}, "inline": True}, mock(),
          "#anything-llm-inline-input", SMALL, "new"),
+        # Leisten-Varianten (neue Zustände, Aktion vor dem Screenshot)
+        ("ii-focus-open", {"attrs": FOCUS, "inline": True}, mock(), "#anything-llm-inline-input", None, "new",
+         act_focus_open),
+        ("ii-leave-close", {"attrs": LEAVE, "inline": True, "css": LEAVE_CSS}, mock(),
+         "#anything-llm-inline-input", None, "new", act_leave_close),
+        ("ii-resume-hint", {"attrs": RESUME, "inline": True}, mock(history=HISTORY_4),
+         "#anything-llm-inline-resume", None, "new"),
+        ("ii-resume-hint-dark", {"attrs": {**RESUME, "theme": "dark"}, "inline": True}, mock(history=HISTORY_4),
+         "#anything-llm-inline-resume", None, "new"),
     ]
 
 
@@ -172,12 +203,17 @@ REF_ALIAS = {
 
 
 def shoot(browser, base_url, case, out_path):
-    name, cfg, m, sel, viewport, _ = case
+    name, cfg, m, sel, viewport, _ = case[:6]
+    action = case[6] if len(case) > 6 else None
     ctx, page = tv.open_page(browser, base_url, cfg, m, viewport=viewport)
     try:
         tv.wait_shadow(page, sel)
         tv.settle(page)
-        page.mouse.move(0, 0)
+        if action:
+            action(page)
+            tv.settle(page, 400)
+        else:
+            page.mouse.move(0, 0)
         page.wait_for_timeout(100)
         page.screenshot(path=str(out_path), animations="disabled", caret="hide")
         return tv.errors_of(page), page.console_log
@@ -188,6 +224,7 @@ def shoot(browser, base_url, case, out_path):
 def run_pixel(browser, base_url, baseline, new_states, only=None):
     for case in pixel_cases():
         name, origin = case[0], case[5]
+        # neue Zustände mit Aktion: Referenz nur aus diesem Branch
         if only and name not in only:
             continue
         if baseline:
@@ -903,12 +940,368 @@ def check_live_demo(browser):
         ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Leisten-Varianten: Öffnen bei Klick, Schließen bei Verlassen, Hinweis
+# ---------------------------------------------------------------------------
+def center_of(page, sel, dx=None):
+    return page.evaluate(
+        "([s, dx]) => { const r = window.__q(s).getBoundingClientRect(); return [dx === null ? r.x + r.width / 2 : r.x + dx, r.y + r.height / 2]; }",
+        [sel, dx])
+
+
+def is_open(page):
+    """Chat-Fenster sichtbar (die schwebende Box lässt eine unsichtbare Kopie der Leiste stehen)."""
+    return page.evaluate(
+        "() => { const c = window.__q('#anything-llm-chat'); return !!c && c.getBoundingClientRect().height > 0; }")
+
+
+def expanded_attr(page):
+    return page.evaluate("() => document.getElementById('kufer-assistent').getAttribute('data-allm-expanded')")
+
+
+def blur_in_panel(page):
+    """Klick auf eine nicht fokussierbare Stelle (Logo im Kopf): Eingabe verliert den Fokus (Sperre a)."""
+    x, y = page.evaluate(
+        "() => { const r = window.__q('#anything-llm-header').getBoundingClientRect(); return [r.x + 40, r.y + r.height / 2]; }")
+    page.mouse.move(x, y)
+    page.mouse.click(x, y)
+    page.wait_for_timeout(100)
+
+
+def act_focus_open(page):
+    page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+    tv.wait_shadow(page, "#message-input")
+    page.wait_for_timeout(600)
+
+
+def act_leave_close(page):
+    page.mouse.move(*center_of(page, "#anything-llm-inline-input", 20))  # Zeiger auf der Leiste
+    page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+    page.keyboard.press("Enter")  # leer: nur aufklappen
+    tv.wait_shadow(page, "#message-input")
+    page.wait_for_timeout(600)
+    blur_in_panel(page)
+    page.mouse.move(*OUTSIDE)
+    page.wait_for_timeout(600)
+
+
+def check_focus_open(browser, base_url):
+    """AK-2: Maus-Klick ins Leisten-Feld öffnet < 500 ms, Fokus in der Panel-Eingabe, leer.
+    AK-3: Escape, Text in der Leiste, erneuter Klick -> Text im Panel, nichts gesendet."""
+    m = mock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FOCUS, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        tv.settle(page, 300)
+        t0 = time.time()
+        page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+        page.wait_for_function(
+            "() => { const c = window.__q('#anything-llm-chat'); return !!c && c.getBoundingClientRect().height > 0; }",
+            timeout=2000)
+        dt = time.time() - t0
+        page.wait_for_function("() => window.__allmShadow.activeElement && window.__allmShadow.activeElement.id === 'message-input'",
+                               timeout=3000)
+        value = page.evaluate("() => window.__q('#message-input').value")
+        ok = dt < 0.5 and value == "" and active_id(page) == "message-input" and not m.stream_requests
+        record("LV AK-2 Öffnen bei Klick ins Feld (Maus)", ok,
+               f"offen nach {dt * 1000:.0f} ms, Fokus={active_id(page)}, Feld={value!r}, Anfragen={len(m.stream_requests)}")
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => !!window.__q('#anything-llm-inline-input')")
+        page.wait_for_timeout(200)
+        after_esc = active_id(page)
+        page.keyboard.type("Yoga")
+        still_closed = not is_open(page)
+        page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+        page.wait_for_timeout(800)
+        value = page.evaluate("() => window.__q('#message-input').value")
+        ok = after_esc == "anything-llm-inline-input" and still_closed and value == "Yoga" and not m.stream_requests \
+            and is_open(page) and not user_messages(page)
+        record("LV AK-3 Text wandert mit (Escape, tippen, Klick)", ok,
+               f"Fokus nach Escape={after_esc}, zu beim Tippen={still_closed}, Panel-Feld={value!r}, "
+               f"Anfragen={len(m.stream_requests)}")
+    finally:
+        ctx.close()
+    # AK-4: Tab öffnet nicht, Enter öffnet
+    m = mock()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FOCUS, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(500)
+        focus, closed = active_id(page), not is_open(page)
+        page.keyboard.press("Enter")
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(300)
+        ok = focus == "anything-llm-inline-input" and closed and is_open(page) and not m.stream_requests
+        record("LV AK-4 Tab-Fokus öffnet nicht, Enter öffnet", ok,
+               f"Fokus nach Tab={focus}, geschlossen={closed}, nach Enter offen={is_open(page)}")
+    finally:
+        ctx.close()
+    # Touch-Tippen (Tablet, ab 768 px) öffnet ebenfalls; AK-1: Standard öffnet beim Klick nicht
+    ctx, page = tv.open_page(browser, base_url, {"attrs": FOCUS, "inline": True}, mock(), context_options=TOUCH)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.touchscreen.tap(*center_of(page, "#anything-llm-inline-input", 20))
+        page.wait_for_timeout(800)
+        record("LV Touch-Tippen ins Feld öffnet (focus)", is_open(page), f"offen={is_open(page)}")
+    finally:
+        ctx.close()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INPUT, "inline": True}, mock())
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+        page.wait_for_timeout(600)
+        record("LV AK-1 Standard: Klick ins Feld öffnet nicht", not is_open(page), f"offen={is_open(page)}")
+    finally:
+        ctx.close()
+
+
+def open_leave_page(browser, base_url, m, attrs=LEAVE, viewport=None, context_options=None, pointer=True):
+    """Box per Enter öffnen; pointer=True: Zeiger steht dabei auf der Leiste (sonst bei OUTSIDE)."""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": LEAVE_CSS}, m,
+                             viewport=viewport, context_options=context_options)
+    tv.wait_shadow(page, "#anything-llm-inline-input")
+    page.mouse.move(*(center_of(page, "#anything-llm-inline-input", 20) if pointer else OUTSIDE))
+    page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+    page.keyboard.press("Enter")
+    tv.wait_shadow(page, "#message-input")
+    page.wait_for_timeout(600)
+    return ctx, page
+
+
+def check_leave(browser, base_url):
+    """AK-5 Karenz (200 ms per --allm-leave-delay), Rückkehr, AK-6a Sperre nur bei
+    Tastatur-Fokus oder Entwurf (leeres, automatisch fokussiertes Feld sperrt nicht),
+    Sperr-Ende ohne erneutes Verlassen, Enter-Öffnen bei Zeiger außerhalb,
+    NAK-1 Antwort läuft, AK-7 Verlauf/Entwurf, NAK-2 Touch/mobil."""
+    m = mock(history=tv.HISTORY_ANSWER)
+    ctx, page = open_leave_page(browser, base_url, m)
+    try:
+        delay = page.evaluate("() => window.__hostVar('--allmi-leave-delay')")
+        focus_before = active_id(page)  # automatisch im leeren Chat-Feld
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(120)
+        mid = is_open(page)
+        x, y = center_of(page, "#anything-llm-header")
+        page.mouse.move(x, y)  # zurück innerhalb der Karenz
+        page.wait_for_timeout(500)
+        back = is_open(page)
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(450)
+        closed = not is_open(page)
+        focus_after = active_id(page)
+        record("LV AK-6a leeres, automatisch fokussiertes Feld sperrt nicht", focus_before == "message-input" and closed
+               and focus_after != "anything-llm-inline-input",
+               f"Fokus vorher={focus_before}, zu={closed}, Fokus danach={focus_after}")
+        record("LV AK-5 Schließen nach --allm-leave-delay, Rückkehr bricht ab", mid and back and closed
+               and expanded_attr(page) is None and delay == "200ms",
+               f"Karenz={delay}, nach 120 ms offen={mid}, nach Rückkehr offen={back}, nach Verlassen zu={closed}")
+        # AK-7: wieder öffnen -> Verlauf da
+        page.mouse.move(*center_of(page, "#anything-llm-inline-input", 20))
+        page.evaluate("() => window.__q('#anything-llm-inline-input').focus()")
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(600)
+        msgs = page.evaluate("() => window.__allmShadow.querySelectorAll('.allm-anything-llm-user-message, .allm-anything-llm-assistant-message').length")
+        record("LV AK-7 Verlauf nach leave erhalten", is_open(page) and msgs == 2, f"Nachrichten={msgs}")
+    finally:
+        ctx.close()
+    # AK-6a Entwurf sperrt; Entwurf gelöscht -> volle Karenz, zu (ohne erneutes Verlassen)
+    ctx, page = open_leave_page(browser, base_url, mock())
+    try:
+        page.keyboard.type("Yoga")
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(800)
+        locked = is_open(page)
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(120)
+        mid = is_open(page)
+        page.wait_for_timeout(330)
+        record("LV AK-6a Entwurf sperrt; geleert -> Karenz, zu", locked and mid and not is_open(page),
+               f"mit Entwurf offen={locked}, 120 ms nach Löschen offen={mid}, danach zu={not is_open(page)}")
+    finally:
+        ctx.close()
+    # AK-6a Tastatur: Tab zur Leiste, Enter (Zeiger außerhalb) -> Fokus im Feld sperrt
+    ctx, page = tv.open_page(browser, base_url, {"attrs": LEAVE, "inline": True, "css": LEAVE_CSS}, mock())
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        page.mouse.move(*OUTSIDE)
+        page.keyboard.press("Tab")
+        page.keyboard.press("Enter")
+        tv.wait_shadow(page, "#message-input")
+        page.wait_for_timeout(800)
+        record("LV AK-6a Tastatur (Tab, Enter): Fokus im Feld sperrt", is_open(page)
+               and active_id(page) == "message-input", f"offen={is_open(page)}, Fokus={active_id(page)}")
+    finally:
+        ctx.close()
+    # Enter-Öffnen bei Zeiger außerhalb (kein pointerleave): schließt nach der Karenz
+    ctx, page = open_leave_page(browser, base_url, mock(), pointer=False)
+    try:
+        page.wait_for_timeout(200)
+        record("LV Enter-Öffnen bei Zeiger außerhalb: zu nach Karenz", not is_open(page),
+               f"zu={not is_open(page)}")
+    finally:
+        ctx.close()
+    # NAK-1: Antwort läuft -> bleibt offen; nach dem Ende zu, ohne erneutes Verlassen
+    m = mock(stream="hang")
+    ctx, page = open_leave_page(browser, base_url, m)
+    try:
+        page.keyboard.type(QUESTION)
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(300)
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(1500)
+        during = is_open(page)
+        m.release()  # Antwort endet (Abbruch)
+        page.wait_for_timeout(1000)
+        record("LV NAK-1 kein Schließen während der Antwort; danach zu ohne erneutes Verlassen",
+               during and not is_open(page) and len(m.stream_requests) == 1,
+               f"offen während Antwort={during}, nach Ende zu={not is_open(page)}")
+    finally:
+        ctx.close()
+    # NAK-2: Touch (pointer: coarse) und 390 px
+    for label, viewport, opts in (("pointer: coarse", None, TOUCH), ("390 px", tv.MOBILE, None)):
+        ctx, page = open_leave_page(browser, base_url, mock(), viewport=viewport, context_options=opts)
+        try:
+            coarse = page.evaluate("() => matchMedia('(pointer: coarse)').matches")
+            st0 = expanded_state(page)
+            page.evaluate("() => window.__q('#message-input').blur()")
+            page.mouse.move(5, 5)
+            page.mouse.move(380, 690)
+            page.wait_for_timeout(800)
+            record(f"LV NAK-2 kein leave ({label})", is_open(page),
+                   f"offen={is_open(page)}, pointer:coarse={coarse}, Vollbild={st0.get('overlay')}")
+        finally:
+            ctx.close()
+    # NAK-7: Außenklick schließt sofort, Seiten-Link wird ausgelöst
+    ctx, page = open_leave_page(browser, base_url, mock(), attrs={**LEAVE})
+    try:
+        page.evaluate("() => { document.getElementById('sibling').innerHTML = '<a id=\"lnk\" href=\"#ziel\">Link</a>'; }")
+        blur_in_panel(page)
+        box = page.evaluate("() => { const r = document.getElementById('lnk').getBoundingClientRect(); return [r.x + 5, r.y + 5]; }")
+        page.mouse.click(*box)
+        page.wait_for_timeout(100)
+        record("LV NAK-7 Außenklick bei leave: sofort zu, Link ausgelöst", not is_open(page)
+               and page.evaluate("() => location.hash") == "#ziel", f"zu={not is_open(page)}, hash={page.evaluate('() => location.hash')}")
+    finally:
+        ctx.close()
+
+
+def api_requests(browser, base_url, attrs, m):
+    reqs = []
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True}, m,
+                             before_goto=lambda c, p: p.on("request", lambda r: reqs.append(r)))
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-input")
+        tv.settle(page, 1000)
+        return sorted(f"{r.method} {r.url.split('?')[0].replace(tv.API, '')}" for r in reqs if r.url.startswith(tv.API))
+    finally:
+        ctx.close()
+
+
+def check_resume(browser, base_url, main_dist=None):
+    """AK-8 Chip + Klick, AK-9 Neu starten, NAK-3 keine Anfrage ohne Option,
+    NAK-5 historyEnabled=false, AK-10 visual_config."""
+    m = mock(history=HISTORY_4)
+    ctx, page = tv.open_page(browser, base_url, {"attrs": RESUME, "inline": True}, m)
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-resume")
+        st = page.evaluate(
+            """() => ({ chip: window.__q('#anything-llm-inline-resume').textContent,
+              first: window.__q('#anything-llm-inline-chips').firstElementChild.id,
+              link: window.__q('#anything-llm-inline-restart').textContent,
+              linkColor: getComputedStyle(window.__q('#anything-llm-inline-restart')).color,
+              linkDeco: getComputedStyle(window.__q('#anything-llm-inline-restart')).textDecorationLine,
+              linkVar: window.__hostVar('--allmi-link'),
+              weight: getComputedStyle(window.__q('#anything-llm-inline-resume')).fontWeight,
+              wishes: window.__allmShadow.querySelectorAll('.allm-inline-chip').length,
+              rows: new Set([...window.__q('#anything-llm-inline-chips').children]
+                .map((c) => { const r = c.getBoundingClientRect(); return Math.round(r.top + r.height / 2); })).size,
+              border: getComputedStyle(window.__q('#anything-llm-inline-resume')).borderTopColor,
+              placeholder: window.__q('#anything-llm-inline-input').placeholder })""")
+        # 4 Nachrichten = 2 Fragen; mit Hinweis höchstens 3 der 4 Wunschfragen;
+        # Link in --allm-link (praesentation #FFA102), unterstrichen
+        ok = (st["chip"] == "Unterhaltung fortsetzen (2)" and st["first"] == "anything-llm-inline-resume"
+              and st["link"] == "Neu starten" and st["placeholder"] == "Weiter fragen …"
+              and st["border"] == "rgb(255, 161, 2)" and st["linkColor"] == "rgb(255, 161, 2)"
+              and st["linkDeco"] == "underline" and st["weight"] == "600" and st["wishes"] == 3
+              and st["rows"] == 1)
+        record("LV AK-8 Hinweis-Chip, Link, Platzhalter", ok, json.dumps(st, ensure_ascii=False))
+        page.mouse.click(*center_of(page, "#anything-llm-inline-resume"))
+        page.wait_for_function(
+            "() => window.__allmShadow.querySelectorAll('.allm-anything-llm-user-message, .allm-anything-llm-assistant-message').length === 4",
+            timeout=5000)
+        record("LV AK-8 Klick öffnet Panel mit 4 Nachrichten", is_open(page), f"offen={is_open(page)}")
+        click_collapse(page)
+        page.wait_for_timeout(300)
+        chip_after = page.evaluate("() => window.__q('#anything-llm-inline-resume')?.textContent")
+        record("LV AK-8 nach dem Einklappen: Chip zählt Fragen (Chat meldet)", chip_after == "Unterhaltung fortsetzen (2)",
+               f"Chip={chip_after!r}")
+        before = page.evaluate("() => Object.entries(localStorage).filter(([k]) => k.endsWith('_conversation_id'))")
+        page.mouse.click(*center_of(page, "#anything-llm-inline-restart"))
+        page.wait_for_timeout(500)
+        after = page.evaluate("() => Object.entries(localStorage).filter(([k]) => k.endsWith('_conversation_id'))")
+        st = page.evaluate(
+            """() => ({ chip: !!window.__q('#anything-llm-inline-resume'), link: !!window.__q('#anything-llm-inline-restart'),
+              placeholder: window.__q('#anything-llm-inline-input').placeholder })""")
+        wishes = page.evaluate("() => window.__allmShadow.querySelectorAll('.allm-inline-chip').length")
+        ok = (before and after and before[0][1] != after[0][1] and not st["chip"] and not st["link"]
+              and st["placeholder"] == "Stellen Sie hier Ihre Frage …" and not is_open(page) and wishes == 4)
+        record("LV AK-9 Neu starten (neue conversationId, Chip weg, Panel zu)", ok,
+               f"conversationId {before[0][1] if before else None} -> {after[0][1] if after else None}, "
+               f"{json.dumps(st, ensure_ascii=False)}, Wunschfragen={wishes}")
+    finally:
+        ctx.close()
+    # NAK-3: Anfragen beim Laden ohne Option = main; mit Option genau eine Verlaufsabfrage mehr
+    plain = api_requests(browser, base_url, INPUT, mock(history=HISTORY_4))
+    if main_dist:
+        srv2, base2 = tv.start_server(main_dist)
+        try:
+            ref = api_requests(browser, base2, INPUT, mock(history=HISTORY_4))
+        finally:
+            srv2.shutdown()
+        origin = "main-Build"
+    else:
+        ref = sorted(["GET /78eda2c6-5bd0-44b5-b097-30d694a56677/config",
+                      "GET /78eda2c6-5bd0-44b5-b097-30d694a56677/status"])
+        origin = "Referenzliste"
+    hinted = api_requests(browser, base_url, RESUME, mock(history=HISTORY_4))
+    extra = [r for r in hinted if r not in plain]
+    record("LV NAK-3 keine zusätzliche Anfrage ohne inlineResumeHint", plain == ref,
+           f"ohne Option={plain}, {origin}={ref}")
+    record("LV Hinweis: genau eine Verlaufsabfrage beim Laden", len(hinted) == len(plain) + 1
+           and len(extra) == 1 and extra[0].startswith("GET /78eda2c6") and extra[0].count("/") == 2,
+           f"zusätzlich={extra}")
+    off = api_requests(browser, base_url, {**RESUME, "history-enabled": "false"}, mock(history=HISTORY_4))
+    record("LV NAK-5 historyEnabled=false: keine Abfrage", off == plain, f"Anfragen={off}")
+    # AK-10: visual_config ohne Script-Attribute
+    cfg = {**CFG_NO_MSGS, "inlineInput": True, "inlineOpenOn": "focus", "inlineCloseOn": "leave",
+           "inlineLayout": "overlay", "inlineResumeHint": True, "defaultMessages": "Yoga,Töpfern"}
+    ctx, page = tv.open_page(browser, base_url, {"attrs": INLINE, "inline": True, "css": LEAVE_CSS},
+                             mock(config=cfg, history=HISTORY_4))
+    try:
+        tv.wait_shadow(page, "#anything-llm-inline-resume")
+        hint = page.evaluate("() => window.__q('#anything-llm-inline-resume').textContent")
+        page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+        page.wait_for_timeout(800)
+        opened = is_open(page)
+        focus = active_id(page)  # Klick öffnet -> Fokus automatisch im leeren Feld, sperrt nicht
+        page.mouse.move(*OUTSIDE)
+        page.wait_for_timeout(500)
+        record("LV AK-10 visual_config (focus, leave, Hinweis)", hint == "Unterhaltung fortsetzen (2)" and opened
+               and focus == "message-input"
+               and not is_open(page), f"Hinweis={hint!r}, Klick öffnet={opened}, leave schließt={not is_open(page)}")
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
     ap.add_argument("--new-states", action="store_true", help="mit --baseline: Referenzen der neuen Zustände")
     ap.add_argument("--dist", default=str(ROOT / "dist"), help="Verzeichnis mit dem gebauten Widget")
     ap.add_argument("--only", nargs="*", help="nur diese Pixel-Zustände")
+    ap.add_argument("--main-dist", help="Build von main (NAK-3 Anfragenvergleich der Leisten-Varianten)")
     ap.add_argument("--live-demo", action="store_true",
                     help="zusätzlich AK-3 live auf demo.ki.kufer.de (nur mit EMBED_LIVE_TESTS=1)")
     args = ap.parse_args()
@@ -947,6 +1340,9 @@ def main():
                 check_aria(browser, base_url)
                 check_chip_with_text(browser, base_url)
                 check_bubble_dom(browser, base_url)
+                check_focus_open(browser, base_url)
+                check_leave(browser, base_url)
+                check_resume(browser, base_url, args.main_dist)
                 check_nak4_body(body)
                 wbody = check_window_body(browser, base_url)
                 record("NAK-4 gleiche Body-Schlüssel wie Chatfenster", sorted(wbody) == sorted(body),
