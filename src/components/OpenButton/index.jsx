@@ -50,8 +50,8 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
     ? { left: "-12px" }
     : { right: "-12px" };
   const tailClasses = isRightDirection
-    ? "allm-absolute allm-top-full allm-left-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm"
-    : "allm-absolute allm-top-full allm-right-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-white allm-filter allm-drop-shadow-sm";
+    ? "allm-absolute allm-top-full allm-left-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-[color:var(--allmi-surface,#fff)] allm-filter allm-drop-shadow-sm"
+    : "allm-absolute allm-top-full allm-right-5 allm-w-0 allm-h-0 allm-border-l-[10px] allm-border-r-[10px] allm-border-t-[10px] allm-border-l-transparent allm-border-r-transparent allm-border-t-[color:var(--allmi-surface,#fff)] allm-filter allm-drop-shadow-sm";
   const animationName = isRightDirection ? "slideInLeft" : "slideInRight";
 
   if (isOpen) return null;
@@ -71,7 +71,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
         >
           {/* Single X button for entire group */}
           <button
-            className="allm-absolute allm-top-0 allm-z-10 allm-text-gray-400 hover:allm-text-gray-600 allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-200 allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-gray-100 allm-bg-white allm-shadow-sm allm-border"
+            className="allm-absolute allm-top-0 allm-z-10 allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-bg-[color:var(--allmi-surface,#fff)] allm-shadow-sm allm-border"
             style={closeButtonPosition}
             onClick={(e) => {
               e.stopPropagation();
@@ -85,9 +85,11 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           {welcomeMessages.map((msg, i) => (
             <div
               key={i}
-              className={`allm-font-sans allm-relative allm-bg-white allm-text-[#2d3748] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-300 group-hover:allm-shadow-xl allm-border allm-border-gray-200 group-hover:allm-scale-[1.02] ${i === 0 ? "allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]" : "allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"}`}
+              className={`allm-font-sans allm-relative allm-bg-[color:var(--allmi-surface,#fff)] allm-text-[color:var(--allmi-text,#2d3748)] allm-rounded-2xl allm-shadow-lg allm-px-4 allm-transition-all allm-duration-[calc(var(--allmi-transition,200ms)*1.5)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] group-hover:allm-shadow-xl allm-border allm-border-[color:var(--allmi-border,#e5e7eb)] group-hover:allm-scale-[1.02] ${i === 0 ? "allm-py-3 allm-max-w-[350px] sm:allm-max-w-[400px] allm-min-w-[250px]" : "allm-py-2 allm-max-w-[380px] sm:allm-max-w-[430px] allm-min-w-[280px]"}`}
               style={{
-                animation: `0.4s ease-out ${i * 0.1}s 1 normal forwards running ${animationName}`,
+                // Dauer = 2 x --allm-transition (bisher 0.4s); reduzierte
+                // Bewegung -> 0 (Endzustand sofort)
+                animation: `calc(var(--allmi-transition, 200ms) * 2) ease-out ${i * 0.1}s 1 normal forwards running ${animationName}`,
               }}
             >
               <div className="allm-leading-snug allm-text-sm sm:allm-text-base allm-font-sans">
@@ -105,14 +107,14 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       {/* Chat button */}
       <button
         style={{
-          backgroundColor: settings.buttonColor,
+          backgroundColor: `var(--allmi-accent, ${settings.buttonColor})`,
           ...(settings.buttonOutline === "white" && {
             border: "2px solid rgba(255, 255, 255, 0.8)",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)"
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }),
           ...(settings.buttonOutline === "black" && {
             border: "2px solid rgba(0, 0, 0, 0.4)",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)"
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
           }),
         }}
         id="anything-llm-embed-chat-button"
@@ -120,7 +122,7 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           dismissBubblesOnChatOpen();
           toggleOpen();
         }}
-        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-200 hover:allm-scale-105`}
+        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] hover:allm-scale-105`}
         aria-label="Toggle Menu"
       >
         <ChatIcon weight="fill" className="text-white" />

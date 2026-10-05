@@ -6,13 +6,14 @@ import {
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
 } from "@/utils/layout";
+import { applyTheme } from "@/utils/theme";
 
 // Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
 // / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
 const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   embedId: null, //required
   baseApiUrl: null, // required
 
@@ -65,6 +66,10 @@ const DEFAULT_SETTINGS = {
   inlineMaxWidth: null, // px, null = volle Container-Breite
   inlineStartState: "collapsed", // "collapsed" | "expanded"
   inlineTheme: "light", // Stil der eingeklappten Leiste: "light" | "dark"
+  // Theme des ganzen Fensters: "light" | "dark" | "auto" (folgt
+  // prefers-color-scheme). Setzt den Standard-Satz der CSS-Variablen
+  // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
+  theme: "light",
   inheritFont: false, // Inline: Schrift der Webseite übernehmen
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
@@ -93,6 +98,39 @@ const DEFAULT_SETTINGS = {
   historyEnabled: true,
 };
 
+// Script-Attribute + Server-visual_config zu den finalen Settings auflösen
+// (ohne Seiteneffekte; testbar mit gemocktem fetch).
+// Priority: defaults < script data-attributes < server config (live design)
+export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
+  const scriptSettings = parseAndValidateEmbedSettings(dataset);
+  for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
+
+  // Fetch live visual config from server (admin panel settings)
+  let serverConfig = {};
+  try {
+    const res = await fetchFn(
+      `${scriptSettings.baseApiUrl}/${scriptSettings.embedId}/config`,
+    );
+    if (res.ok) serverConfig = await res.json();
+  } catch (e) {
+    console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
+  }
+
+  // Only merge non-empty server values so script attributes remain as fallback
+  const mergedServerConfig = {};
+  for (const [key, value] of Object.entries(serverConfig || {})) {
+    if (value !== null && value !== undefined && value !== "")
+      mergedServerConfig[key] = value;
+  }
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...scriptSettings,
+    ...parseAndValidateEmbedSettings(mergedServerConfig),
+    loaded: true,
+  };
+}
+
 export default function useGetScriptAttributes() {
   const [settings, setSettings] = useState({
     loaded: false,
@@ -110,36 +148,7 @@ export default function useGetScriptAttributes() {
           "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!",
         );
 
-      const scriptSettings = parseAndValidateEmbedSettings(
-        embedderSettings.settings
-      );
-      for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
-
-      // Fetch live visual config from server (admin panel settings)
-      let serverConfig = {};
-      try {
-        const res = await fetch(
-          `${scriptSettings.baseApiUrl}/${scriptSettings.embedId}/config`
-        );
-        if (res.ok) serverConfig = await res.json();
-      } catch (e) {
-        console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
-      }
-
-      // Priority: defaults < script data-attributes < server config (live design)
-      // Only merge non-empty server values so script attributes remain as fallback
-      const mergedServerConfig = {};
-      for (const [key, value] of Object.entries(serverConfig)) {
-        if (value !== null && value !== undefined && value !== "")
-          mergedServerConfig[key] = value;
-      }
-
-      const finalSettings = {
-        ...DEFAULT_SETTINGS,
-        ...scriptSettings,
-        ...parseAndValidateEmbedSettings(mergedServerConfig),
-        loaded: true,
-      };
+      const finalSettings = await loadEmbedSettings(embedderSettings.settings);
 
       // Update module-level settings so components that read embedderSettings
       // directly (assistantName, assistantIcon, brandImageUrl, etc.) see the
@@ -159,32 +168,14 @@ export default function useGetScriptAttributes() {
       if (finalSettings.userTextColor)
         embedderSettings.USER_STYLES.msgText = finalSettings.userTextColor;
       if (finalSettings.assistantBgColor)
-        embedderSettings.ASSISTANT_STYLES.msgBg = finalSettings.assistantBgColor;
+        embedderSettings.ASSISTANT_STYLES.msgBg =
+          finalSettings.assistantBgColor;
 
-      // Link color comes from server config asynchronously, so re-inject
-      // CSS into the shadow root after fetch (initial CSS at module-boot only
-      // sees data-attributes, not server values).
-      if (finalSettings.linkColor && embedderSettings.shadowRoot) {
-        const id = "allm-dynamic-link-color";
-        const css = `
-          .allm-anything-llm-assistant-message a,
-          .allm-reply a {
-            color: ${finalSettings.linkColor} !important;
-          }
-          .allm-anything-llm-assistant-message a:hover,
-          .allm-reply a:hover {
-            color: ${finalSettings.linkColor} !important;
-            opacity: 0.8;
-          }
-        `;
-        let styleEl = embedderSettings.shadowRoot.getElementById(id);
-        if (!styleEl) {
-          styleEl = document.createElement("style");
-          styleEl.id = id;
-          embedderSettings.shadowRoot.appendChild(styleEl);
-        }
-        styleEl.textContent = css;
-      }
+      // CSS-Variablen (Farben inkl. Link, Theme hell/dunkel/auto) im Shadow-Root
+      // setzen — synchron VOR dem ersten Render, damit kein Frame im falschen
+      // Theme entsteht. Ersetzt die frühere Link-Farb-Injektion.
+      if (embedderSettings.themeStyle)
+        applyTheme(embedderSettings.themeStyle, finalSettings);
 
       setSettings(finalSettings);
     }
@@ -224,7 +215,7 @@ const validations = {
   },
 };
 
-function parseAndValidateEmbedSettings(settings = {}) {
+export function parseAndValidateEmbedSettings(settings = {}) {
   const validated = {};
   for (let [key, value] of Object.entries(settings)) {
     if (!validations.hasOwnProperty(key)) {

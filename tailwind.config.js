@@ -121,22 +121,10 @@ export default {
         "switch-selected": "linear-gradient(146deg, #5B616A 0%, #3F434B 100%)"
       },
       fontFamily: {
+        // --allm-font (Seiten-CSS) überschreibt die Widget-Schrift; ohne
+        // Variable exakt der bisherige Stack.
         sans: [
-          "plus-jakarta-sans",
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          '"Segoe UI"',
-          "Roboto",
-          '"Helvetica Neue"',
-          "Arial",
-          '"Noto Sans"',
-          "sans-serif",
-          '"Apple Color Emoji"',
-          '"Segoe UI Emoji"',
-          '"Segoe UI Symbol"',
-          '"Noto Color Emoji"'
+          'var(--allm-font, plus-jakarta-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji")'
         ]
       },
       animation: {
