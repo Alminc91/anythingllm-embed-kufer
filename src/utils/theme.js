@@ -206,10 +206,12 @@ export const THEME_VARIABLES = [
     dark: "cubic-bezier(0.4, 0, 0.2, 1)",
   },
   // Inline-Box: Aufklapp-Effekt (inlineEffect) und Stapelhöhe des Overlays
-  // (inlineLayout "overlay"). effect-easing ohne Standard: dann gilt die
-  // Kurve des Effekts (main.jsx, .allm-effect-*). Reduzierte Bewegung schaltet
-  // den Effekt dort per animation: none ab (die Dauer bleibt unverändert).
-  { name: "effect-duration", light: "320ms", dark: "320ms" },
+  // (inlineLayout "overlay"). effect-duration und effect-easing ohne
+  // Standard: ohne Seiten-CSS ist --allmi-* ungültig und es gilt der Standard
+  // des Effekts an der Verwendungsstelle (main.jsx: .allm-effect 320ms,
+  // "morph" 460ms; Kurve je Effekt). Reduzierte Bewegung schaltet den Effekt
+  // dort per animation/transition: none ab (die Dauer bleibt unverändert).
+  { name: "effect-duration", light: null, dark: null },
   { name: "effect-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },

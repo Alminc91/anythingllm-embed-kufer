@@ -110,6 +110,20 @@ function prefersReducedMotion() {
 }
 const px = (n) => `${Math.round(n * 100) / 100}px`;
 
+// Rundung einer Ecke (computed border-*-radius: "999px", "30%", "40px 10px")
+// für die Startform von "morph": Prozent gegen die kleinere Seite, bei zwei
+// Werten (horizontal/vertikal) der kleinere, höchstens halbe Höhe (Pille).
+function cornerRadiusPx(value, w, h) {
+  const radii = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .map((v) =>
+      v.endsWith("%") ? (Math.min(w, h) * parseFloat(v)) / 100 : parseFloat(v),
+    )
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  return radii.length ? Math.min(...radii, h / 2) : 0;
+}
+
 // Leistenform für "morph" (Rect in Viewport-Koordinaten + Rundung)
 function measureBar(pill) {
   const r = pill.getBoundingClientRect();
@@ -118,10 +132,10 @@ function measureBar(pill) {
     y: r.top,
     w: r.width,
     h: r.height,
-    // Rundung höchstens halbe Höhe (999px = Pille)
-    r: Math.min(
-      parseFloat(getComputedStyle(pill).borderTopLeftRadius) || 0,
-      r.height / 2,
+    r: cornerRadiusPx(
+      getComputedStyle(pill).borderTopLeftRadius,
+      r.width,
+      r.height,
     ),
   };
 }
@@ -1043,6 +1057,20 @@ const InlineBar = forwardRef(function InlineBar(
 // Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
 // die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
 // Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
+// Wunschfragen-Chips: Fläche/Text/Rundung der Leiste über --allmi-bar-*
+const CHIP_STYLE = {
+  maxWidth: "100%",
+  margin: 0,
+  padding: "6px 14px",
+  border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
+  borderRadius: "var(--allmi-bar-radius, 16px)",
+  backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
+  color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
+  lineHeight: 1.3,
+  textAlign: "center",
+  overflowWrap: "anywhere",
+};
+
 const InlineInputBar = forwardRef(function InlineInputBar(
   {
     settings,
@@ -1188,19 +1216,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
               type="button"
               className="allm-inline-chip allm-font-sans allm-cursor-pointer"
               onClick={(e) => pickChip(e, chip)}
-              style={{
-                maxWidth: "100%",
-                margin: 0,
-                padding: "6px 14px",
-                border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
-                borderRadius: "var(--allmi-bar-radius, 16px)",
-                backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
-                color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
-                fontSize: narrow ? "13px" : "14px",
-                lineHeight: 1.3,
-                textAlign: "center",
-                overflowWrap: "anywhere",
-              }}
+              style={{ ...CHIP_STYLE, fontSize: narrow ? "13px" : "14px" }}
             >
               {chip}
             </button>

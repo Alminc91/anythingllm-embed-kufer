@@ -527,3 +527,26 @@ describe("Review 4: Zuklappen vor dem ersten Frame", () => {
     expect(win.classList.contains("allm-morph")).toBe(false);
   });
 });
+
+describe("Review 6: Startrundung in px oder %", () => {
+  it("30 %: gegen die kleinere Seite (56px) = 16,8px", () => {
+    barRadius = "30%";
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    expect(v(ui.chat(), "mr")).toBe("16.8px");
+  });
+
+  it("zwei Werte (horizontal/vertikal): der kleinere", () => {
+    barRadius = "40px 20%";
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    expect(v(ui.chat(), "mr")).toBe("11.2px");
+  });
+
+  it("weiter höchstens halbe Höhe", () => {
+    barRadius = "80%";
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    expect(v(ui.chat(), "mr")).toBe("28px");
+  });
+});

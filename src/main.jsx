@@ -249,8 +249,10 @@ const customCss = `
      Chat-Fensters zwischen Leistenform (allm-morph-from, Maße als --allmi-m*)
      und Panel. Inhalt in fester Panelgröße (kein Umbruch, keine Skalierung),
      blendet nach 35 % der Dauer ein (Zuklappen: zuerst aus). Seitenfluss:
-     die äußere Box wächst in der Höhe mit (allm-morph-flow). Standard 460ms. */
-  .allm-morph,.allm-morph-flow{--allmi-fx-d:var(--allm-effect-duration,460ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1))}
+     die äußere Box wächst in der Höhe mit (allm-morph-flow). Dauer
+     --allmi-effect-duration (utils/theme.js; ohne Seiten-CSS ungültig ->
+     Standard 460ms). */
+  .allm-morph,.allm-morph-flow{--allmi-fx-d:var(--allmi-effect-duration,460ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1))}
   .allm-morph{transition:width var(--allmi-fx-d) var(--allmi-fx-e),height var(--allmi-fx-d) var(--allmi-fx-e),transform var(--allmi-fx-d) var(--allmi-fx-e),border-radius var(--allmi-fx-d) var(--allmi-fx-e),box-shadow var(--allmi-fx-d) var(--allmi-fx-e)}
   .allm-morph-from{width:var(--allmi-mw)!important;height:var(--allmi-mh)!important;transform:var(--allmi-mt);border-radius:var(--allmi-mr)!important;box-shadow:var(--allmi-bar-shadow,none)!important}
   .allm-morph>*,.allm-morph-from>*{width:var(--allmi-cw)!important;height:var(--allmi-ch)!important;flex:none;transition:opacity calc(var(--allmi-fx-d)*.65) var(--allmi-fx-e) calc(var(--allmi-fx-d)*.35)}
