@@ -2,7 +2,8 @@
 //
 // Der Server (Fork, Image >= 7.9) liefert zu einer Antwort `courseSources`:
 // nur Kurs-Metadaten (url, title, start_date, end_date, start_minutes,
-// weekdays, price, bookable, format, location), nie Kontexttext. Welche davon
+// weekdays, price, bookable, format, location), nie Kontexttext; nur url und
+// title sind Pflicht, alle anderen Felder optional. Welche davon
 // als Karte erscheinen, bestimmt allein die Antwort:
 //   - Kurse, deren Kursseite in der Antwort verlinkt ist (URL-Match, Vorrang)
 //   - Kurse, deren Titel in der Antwort genannt wird (normalisiert, >= 90 %
@@ -289,15 +290,16 @@ function replyWords(replyText) {
   return words;
 }
 
+// Kurs = http(s)-url + Titel. Die Einstufung als Kurs trifft der Server
+// (Kurs-URL aus der Kopfzeile "Kurs-Link:", Info-Seiten kommen gar nicht erst
+// als courseSources an); Datum/Wochentage sind nur Anreicherung.
 function isCourseSource(entry) {
   return (
-    entry &&
+    !!entry &&
     typeof entry === "object" &&
     typeof entry.title === "string" &&
     entry.title.trim().length > 0 &&
-    !!httpUrl(entry.url) &&
-    ((typeof entry.start_date === "string" && DATE_RX.test(entry.start_date)) ||
-      (typeof entry.weekdays === "string" && WEEKDAYS_RX.test(entry.weekdays)))
+    !!httpUrl(entry.url)
   );
 }
 

@@ -295,27 +295,53 @@ describe("selectCourseCards", () => {
     expect(r.cards.find((c) => c.url === englishI.url).schedule).toBe(
       "Mi · 18:00 Uhr",
     );
-    // ohne start_date UND ohne weekdays ist es kein Kurs
+    // ohne start_date UND ohne weekdays: Karte ohne Datums-/Wochentagszeile
     const none = { ...noDate };
     delete none.weekdays;
-    expect(selectCourseCards(link(none), [none], AUTO, DONAU).cards).toEqual(
-      [],
-    );
+    const [bare] = selectCourseCards(link(none), [none], AUTO, DONAU).cards;
+    expect(bare).toMatchObject({
+      url: none.url,
+      title: none.title,
+      schedule: null,
+      start: null,
+    });
   });
 
-  it("info-pages-no-cards: nur Info-Seiten -> 0 Karten, auch bei auto (NAK-2)", () => {
-    const info = [
-      { url: "https://aw.donau.kufer.de/kontakt", title: "Kontakt" },
-      { url: "https://aw.donau.kufer.de/kontakt/agb", title: "AGB" },
-      {
-        url: "https://aw.donau.kufer.de/kurse/gesundheit",
-        title: "Gesundheit",
-      },
+  it("Einträge ohne url oder title werden ignoriert (NAK-2 stellt der Server sicher)", () => {
+    // Info-Seiten kommen serverseitig nicht als courseSources an (Kurs-URL nur
+    // aus "Kurs-Link:"); das Widget prüft nur noch url + title.
+    const broken = [
+      { title: "Kontakt" },
+      { url: "https://aw.donau.kufer.de/kontakt", title: "  " },
+      { url: "file://kontakt.txt", title: "Kontakt" },
+      { url: "https://aw.donau.kufer.de/kontakt/agb" },
+      null,
+      "x",
     ];
     const reply =
       "Sie erreichen uns über die [Kontaktseite](https://aw.donau.kufer.de/kontakt), die [AGB](https://aw.donau.kufer.de/kontakt/agb) gelten.";
-    expect(selectCourseCards(reply, info, AUTO, DONAU).cards).toEqual([]);
+    expect(selectCourseCards(reply, broken, AUTO, DONAU).cards).toEqual([]);
     expect(selectCourseCards(reply, [], AUTO, DONAU).cards).toEqual([]);
+  });
+
+  it("url + title ohne Datumsfelder -> Karte ohne Datumszeile", () => {
+    const plain = {
+      url: "https://aw.donau.kufer.de/kurssuche/kurs/englisch-a2/262-4701",
+      title: "Englisch A2",
+    };
+    const r = selectCourseCards(`Tipp: ${link(plain)}`, [plain], AUTO, DONAU);
+    expect(r.cards).toHaveLength(1);
+    const [card] = r.cards;
+    expect(card).toMatchObject({
+      url: plain.url,
+      title: "Englisch A2",
+      schedule: null,
+      start: null,
+      price: null,
+      place: null,
+      status: null,
+    });
+    expect(JSON.stringify(card)).not.toMatch(/undefined|NaN/);
   });
 
   it("NAK-3: Quelle auf fremder Domain wird nicht verlinkt (weggelassen)", () => {
