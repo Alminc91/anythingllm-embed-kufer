@@ -274,7 +274,7 @@ export default function PromptInput({
                   type="button"
                   onClick={handleMicrophoneClick}
                   disabled={inputDisabled || isTranscribing}
-                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] group allm-flex-shrink-0"
+                  className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
                   aria-label={
                     isRecording ? "Stop recording" : "Start recording"
                   }
@@ -299,7 +299,7 @@ export default function PromptInput({
                     <Microphone
                       size={24}
                       weight="fill"
-                      className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] group-hover:allm-text-[#22262899]/90"
+                      className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] allm-hover-icon"
                     />
                   )}
                 </button>
@@ -309,7 +309,7 @@ export default function PromptInput({
                 ref={formRef}
                 type="submit"
                 disabled={buttonDisabled}
-                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] group allm-flex-shrink-0"
+                className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
                 id="send-message-button"
                 aria-label="Send message"
               >
@@ -318,7 +318,7 @@ export default function PromptInput({
                 ) : (
                   <PaperPlaneRight
                     size={24}
-                    className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] group-hover:allm-text-[#22262899]/90"
+                    className="allm-my-3 allm-text-[color:var(--allmi-text-muted,#22262899)] allm-hover-icon"
                     weight="fill"
                   />
                 )}

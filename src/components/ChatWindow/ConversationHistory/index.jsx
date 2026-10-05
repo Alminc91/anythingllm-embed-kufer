@@ -7,6 +7,12 @@ import {
 } from "@phosphor-icons/react";
 import ChatService from "@/models/chatService";
 import { CloseButton } from "../Header";
+import {
+  HEADER_ICON_STYLE,
+  HEADER_STYLE,
+  accentTintFallback,
+  headerButtonClass,
+} from "@/utils/theme";
 
 // KIE-503: Vollbild-Ansicht "Frühere Chats" (Mockup: Burger + Vollbild-Liste).
 // Zeigt die Konversationen der aktuellen Session (serverseitig session-gebunden,
@@ -58,22 +64,17 @@ export default function ConversationHistory({
     };
   }, [settings, sessionId]);
 
-  // Kopf wie ChatWindowHeader über CSS-Variablen (utils/theme.js)
-  const headerStyle = {
-    borderBottom: settings.headerBgColor
-      ? "none"
-      : "1px solid var(--allmi-border, #E9E9E9)",
-    backgroundColor: "var(--allmi-header-bg, transparent)",
-  };
-  const headerIconStyle = { color: "var(--allmi-header-icon, #374151)" };
-  const headerButtonClass =
-    "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-sm";
+  // Kopf wie ChatWindowHeader (gemeinsame Bausteine in utils/theme.js)
+  const buttonClass = headerButtonClass(settings);
+  // Icon-Kachel: 10 % Akzent per color-mix() (.allm-accent-tint, index.css);
+  // ohne color-mix() der bisherige Wert, sofern aus buttonColor gültig ableitbar.
+  const tintFallback = accentTintFallback(accent);
 
   return (
     <div className="allm-flex allm-flex-col allm-h-full">
       {/* Kopf: Zurück ‹ + Titel + Schließen — Muster wie ChatWindowHeader */}
       <div
-        style={headerStyle}
+        style={HEADER_STYLE}
         className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)] allm-h-[56px] allm-flex-shrink-0"
       >
         <div className="allm-flex allm-items-center allm-gap-x-1 allm-px-3 allm-flex-1 allm-min-w-0">
@@ -81,8 +82,8 @@ export default function ConversationHistory({
             type="button"
             onClick={onBack}
             aria-label="Zurück zum Chat"
-            className={`${headerButtonClass} allm-p-1 allm-flex allm-items-center`}
-            style={headerIconStyle}
+            className={`${buttonClass} allm-p-1 allm-flex allm-items-center`}
+            style={HEADER_ICON_STYLE}
           >
             <CaretLeft size={20} weight="bold" />
           </button>
@@ -96,8 +97,8 @@ export default function ConversationHistory({
         <div className="allm-flex allm-items-center allm-px-[22px]">
           <CloseButton
             onClick={closeChat}
-            className={headerButtonClass}
-            style={headerIconStyle}
+            className={buttonClass}
+            style={HEADER_ICON_STYLE}
           />
         </div>
       </div>
@@ -133,9 +134,11 @@ export default function ConversationHistory({
                   className="allm-box-border allm-w-full allm-text-left allm-cursor-pointer allm-flex allm-items-start allm-gap-x-2.5 allm-bg-[color:var(--allmi-surface,#fff)] allm-border allm-border-solid allm-border-[color:var(--allmi-border,#e5e7eb)] hover:allm-border-[color:var(--allmi-border,#d1d5db)] allm-rounded-xl allm-p-3 allm-mb-2 allm-font-sans"
                 >
                   <span
-                    className="allm-flex-shrink-0 allm-w-8 allm-h-8 allm-rounded-lg allm-flex allm-items-center allm-justify-center"
+                    className="allm-accent-tint allm-flex-shrink-0 allm-w-8 allm-h-8 allm-rounded-lg allm-flex allm-items-center allm-justify-center"
                     style={{
-                      backgroundColor: `${accent}1a`,
+                      ...(tintFallback
+                        ? { backgroundColor: tintFallback }
+                        : {}),
                       color: `var(--allmi-accent, ${accent})`,
                     }}
                   >

@@ -87,6 +87,8 @@ export const layoutValidations = {
   inlineHeight: (v) => cssLength(v, ["px", "vh"]),
   inlineMaxWidth: (v) => cssLength(v, ["px"]),
   inlineStartState: (v) => oneOf(v, ["collapsed", "expanded"]),
+  // explizit "light" | "dark"; leer/ungültig -> verworfen -> Standard null
+  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme)
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->

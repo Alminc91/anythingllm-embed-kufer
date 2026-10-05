@@ -15,7 +15,13 @@ import { v4 } from "uuid";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
-import { BUBBLE_RADIUS, BUBBLE_SHADOW } from "@/utils/theme";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  MESSAGE_FONT_SIZE,
+  MESSAGE_META_CLASS,
+  MESSAGE_NAME_CLASS,
+} from "@/utils/theme";
 
 const ThoughtBubble = ({ thought }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -475,7 +481,7 @@ const HistoricalMessage = forwardRef(
     return (
       <div className="allm-py-[5px]">
         {role === "assistant" && (
-          <div className="allm-text-[10px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans">
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -558,7 +564,7 @@ const HistoricalMessage = forwardRef(
                   )}
                   <span
                     className="allm-whitespace-pre-line allm-flex allm-flex-col allm-gap-y-1 allm-leading-[20px]"
-                    style={{ fontSize: "var(--allmi-font-size)" }}
+                    style={{ fontSize: MESSAGE_FONT_SIZE }}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(
                         renderMarkdown(responseContent || message),
@@ -580,7 +586,7 @@ const HistoricalMessage = forwardRef(
 
         {sentAt && (
           <div
-            className={`allm-font-sans allm-text-[10px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-ml-[54px] allm-mr-6 allm-mt-2 allm-flex allm-flex-wrap allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
+            className={`${MESSAGE_META_CLASS} allm-mt-2 allm-flex allm-flex-wrap allm-items-center allm-gap-x-1.5 ${role === "user" ? "allm-justify-end" : "allm-justify-start"}`}
           >
             <span>{formatDate(sentAt)}</span>
             {role === "assistant" && !error && chatId && (

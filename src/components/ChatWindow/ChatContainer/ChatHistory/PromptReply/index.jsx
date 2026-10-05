@@ -4,7 +4,13 @@ import renderMarkdown from "@/utils/chat/markdown";
 import { embedderSettings } from "@/main";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
-import { BUBBLE_RADIUS, BUBBLE_SHADOW } from "@/utils/theme";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  MESSAGE_FONT_SIZE,
+  MESSAGE_META_CLASS,
+  MESSAGE_NAME_CLASS,
+} from "@/utils/theme";
 
 // Antwortblase über CSS-Variablen (Fallback = bisherige Werte)
 const replyBubbleStyle = () => ({
@@ -14,8 +20,6 @@ const replyBubbleStyle = () => ({
   borderRadius: BUBBLE_RADIUS.assistant,
   boxShadow: BUBBLE_SHADOW,
 });
-const NAME_CLASS =
-  "allm-text-[10px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-ml-[54px] allm-mr-6 allm-mb-2 allm-text-left allm-font-sans";
 
 const ThinkingIndicator = ({ hasThought }) => {
   if (hasThought) {
@@ -95,7 +99,7 @@ const PromptReply = forwardRef(
     if (isThinking) {
       return (
         <div className="allm-py-[5px]">
-          <div className={NAME_CLASS}>
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -126,7 +130,7 @@ const PromptReply = forwardRef(
     if (error) {
       return (
         <div className="allm-py-[5px]">
-          <div className={NAME_CLASS}>
+          <div className={MESSAGE_NAME_CLASS}>
             {embedderSettings.settings.assistantName ||
               "Anything LLM Chat Assistant"}
           </div>
@@ -159,7 +163,7 @@ const PromptReply = forwardRef(
 
     return (
       <div className="allm-py-[5px]">
-        <div className={NAME_CLASS}>
+        <div className={MESSAGE_NAME_CLASS}>
           {embedderSettings.settings.assistantName ||
             "Anything LLM Chat Assistant"}
         </div>
@@ -187,7 +191,7 @@ const PromptReply = forwardRef(
             <div className="allm-flex allm-gap-x-5">
               <span
                 className="allm-font-sans allm-reply allm-whitespace-pre-line allm-font-normal allm-text-sm allm-md:text-sm allm-flex allm-flex-col allm-gap-y-1"
-                style={{ fontSize: "var(--allm-font-size, 14px)" }}
+                style={{ fontSize: MESSAGE_FONT_SIZE }}
                 dangerouslySetInnerHTML={{
                   __html: renderMarkdown(responseContent || ""),
                 }}
@@ -196,7 +200,7 @@ const PromptReply = forwardRef(
           </div>
         </div>
         {sentAt && (
-          <div className="allm-text-[10px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-ml-[54px] allm-mr-6 allm-mt-2 allm-text-left allm-font-sans">
+          <div className={`${MESSAGE_META_CLASS} allm-mt-2 allm-text-left`}>
             {formatDate(sentAt)}
           </div>
         )}

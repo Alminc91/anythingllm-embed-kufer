@@ -65,7 +65,9 @@ export const DEFAULT_SETTINGS = {
   inlineHeight: DEFAULT_INLINE_HEIGHT, // px oder vh, geklemmt 400–1200px
   inlineMaxWidth: null, // px, null = volle Container-Breite
   inlineStartState: "collapsed", // "collapsed" | "expanded"
-  inlineTheme: "light", // Stil der eingeklappten Leiste: "light" | "dark"
+  // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
+  // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
+  inlineTheme: null,
   // Theme des ganzen Fensters: "light" | "dark" | "auto" (folgt
   // prefers-color-scheme). Setzt den Standard-Satz der CSS-Variablen
   // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.

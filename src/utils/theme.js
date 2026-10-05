@@ -95,7 +95,8 @@ export function legacyTextSize(textSize) {
 
 // Spezifikation je öffentlicher Variable. light/dark: Standardwert (String,
 // Funktion der Settings oder null = keiner). chain: Variable, der dieser Wert
-// folgt, solange er nicht explizit per Setting vorgegeben ist (explicit).
+// folgt, solange er nicht explizit per Setting vorgegeben ist
+// (explicit(settings, mode)).
 export const THEME_VARIABLES = [
   // Flächen/Text
   { name: "bg", light: null, dark: DARK.bg },
@@ -144,8 +145,12 @@ export const THEME_VARIABLES = [
   {
     name: "header-text",
     chain: "text",
-    explicit: (s) =>
-      cssValue(s.headerTextColor) || (s.headerBgColor ? "#1f2937" : null),
+    // headerBgColor ohne headerTextColor: bisher fest #1f2937 — nur im hellen
+    // Theme beibehalten; im dunklen Theme folgt der Text dem dunklen Satz
+    // (DARK.text), sonst stünde dunkelgrauer Text neben weißen Icons.
+    explicit: (s, mode) =>
+      cssValue(s.headerTextColor) ||
+      (s.headerBgColor && mode !== "dark" ? "#1f2937" : null),
     light: "#1f2937",
     dark: DARK.text,
   },
@@ -215,9 +220,13 @@ export function resolveThemeMode(theme, prefersDark = false) {
   return "light";
 }
 
-// Leiste: dunkel bei inlineTheme "dark" (Bestand) ODER dunklem Theme.
+// Leiste: ein explizit gesetztes inlineTheme ("light" | "dark") gewinnt;
+// ohne Angabe (null, Standard) folgt die Leiste dem Fenster-Theme.
+// Bestand data-inline-theme="dark" ohne data-theme bleibt dunkel (AK-8).
 export function resolveBarTheme(settings = {}, mode = "light") {
-  return settings.inlineTheme === "dark" || mode === "dark" ? "dark" : "light";
+  const t = settings.inlineTheme;
+  if (t === "light" || t === "dark") return t;
+  return mode === "dark" ? "dark" : "light";
 }
 
 function pick(spec, settings, mode) {
@@ -235,7 +244,7 @@ export function resolveThemeVars(settings = {}, mode = "light") {
     let value;
     if (spec.bar) value = bar[spec.bar];
     else {
-      const explicit = spec.explicit?.(settings) ?? null;
+      const explicit = spec.explicit?.(settings, mode) ?? null;
       const chained = spec.chain ? out[`--allm-${spec.chain}`] : null;
       value = explicit ?? chained ?? pick(spec, settings, mode);
     }
@@ -253,7 +262,7 @@ export function buildThemeCss(settings = {}, mode = "light") {
     let fallback;
     if (spec.bar) fallback = bar[spec.bar];
     else {
-      const explicit = spec.explicit?.(settings) ?? null;
+      const explicit = spec.explicit?.(settings, mode) ?? null;
       const def = pick(spec, settings, mode);
       if (explicit) fallback = explicit;
       else if (spec.chain)
@@ -271,6 +280,11 @@ export function buildThemeCss(settings = {}, mode = "light") {
   // interne Hilfswerte
   decls.push(
     "--allmi-radius-bubble-small: min(4px, calc(var(--allmi-radius-bubble) / 4.5));",
+    // Icons im Eingabefeld beim Hover: folgen der Eingabe-Textfarbe (Seiten-CSS
+    // --allm-input-text bzw. --allm-text); ohne Vorgabe hell der bisherige Wert
+    // (#22262899 mit /90 = #222628e6), dunkel der Text des dunklen Satzes.
+    `--allmi-hover-icon: var(--allm-input-text, var(--allm-text, ${mode === "dark" ? DARK.text : "#222628e6"}));`,
+    `--allmi-header-border: ${headerBorder(settings)};`,
   );
   if (resolveBarTheme(settings, mode) === "dark")
     decls.push(
@@ -338,13 +352,76 @@ export const BUBBLE_RADIUS = {
 export const BUBBLE_SHADOW =
   "var(--allmi-bubble-shadow, 0 4px 14px rgba(0, 0, 0, 0.25))";
 
+// Schriftgröße der Antworttexte — streamend (PromptReply) und im Verlauf
+// (HistoricalMessage) identisch, damit nach dem Stream nichts umbricht.
+// --allmi-font-size = Seiten-CSS --allm-font-size, sonst textSize (legacyTextSize);
+// ungültig (z. B. textSize 15) -> erbt wie bisher.
+export const MESSAGE_FONT_SIZE = "var(--allmi-font-size)";
+
 // Vorschläge (SuggestedMessages) setzten fontSize bisher direkt aus textSize
-// (Zahl -> px, String unverändert -> bei "14" ungültig -> erbt). Exakt so als
-// Fallback beibehalten; --allm-font-size (Seiten-CSS) gewinnt.
+// (Zahl -> px, String unverändert). Dieser Wert bleibt Fallback, falls
+// --allmi-font-size ungültig ist (textSize ohne bisherige Klasse, z. B. 15);
+// sonst gilt dieselbe interne Variable wie für die Antworttexte.
 export function suggestionFontSize(textSize) {
   const legacy =
     typeof textSize === "number"
       ? `${textSize}px`
       : cssValue(typeof textSize === "string" ? textSize : null);
-  return legacy ? `var(--allm-font-size, ${legacy})` : "var(--allm-font-size)";
+  return legacy
+    ? `var(--allmi-font-size, ${legacy})`
+    : "var(--allmi-font-size)";
+}
+
+// Name über / Zeitstempel unter einer Antwortblase (PromptReply +
+// HistoricalMessage).
+export const MESSAGE_META_CLASS =
+  "allm-text-[10px] allm-text-[color:var(--allmi-text-muted,#9ca3af)] allm-ml-[54px] allm-mr-6 allm-font-sans";
+export const MESSAGE_NAME_CLASS = `${MESSAGE_META_CLASS} allm-mb-2 allm-text-left`;
+
+// --- Kopfzeile (ChatWindowHeader + "Frühere Chats") ---
+// Unterlinie: keine, wenn eine Header-Hintergrundfarbe wirkt. Aus dem Setting
+// (headerBgColor) ist das bekannt -> "none". Ob das Seiten-CSS
+// --allm-header-bg setzt, lässt sich in CSS nicht abfragen; deshalb nimmt die
+// Linie dann die Header-Farbe an und ist nicht mehr als Linie sichtbar (die
+// Höhe bleibt wie ohne Header-Farbe). Ohne beides: Rahmenfarbe (hell
+// bisher #E9E9E9, dunkel DARK.border).
+export function headerBorder(settings = {}) {
+  if (settings.headerBgColor) return "none"; // wie bisher: jeder gesetzte Wert
+  return "1px solid var(--allm-header-bg, var(--allmi-border, #E9E9E9))";
+}
+export const HEADER_STYLE = {
+  borderBottom: "var(--allmi-header-border, 1px solid #E9E9E9)",
+  backgroundColor: "var(--allmi-header-bg, transparent)",
+};
+// Icon-Knöpfe: auf farbigem Header heller Hover, sonst --allm-hover-bg.
+export function headerButtonClass(settings = {}) {
+  return settings.headerBgColor
+    ? "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-white/20 allm-rounded-sm"
+    : "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-sm";
+}
+// Icons nutzen currentColor. Fallback = bisheriger Wert des Chat-Headers
+// (allm-text-slate-800/60); "Frühere Chats" hatte #374151 und übernimmt ihn.
+export const HEADER_ICON_STYLE = {
+  color: "var(--allmi-header-icon, #1e293b99)",
+};
+
+// Kachel-Tönung (10 % Akzent) für Browser OHNE color-mix(): bisher
+// `${buttonColor}1a`, was nur für #rrggbb gültig war. Hex (3/6/8 Stellen) und
+// rgb()/rgba() werden umgerechnet, alles andere -> null (keine Tönung statt
+// eines ungültigen Werts). Mit color-mix() (index.css, .allm-accent-tint)
+// folgt die Tönung --allm-accent.
+export function accentTintFallback(color) {
+  if (typeof color !== "string") return null;
+  const c = color.trim();
+  let m = /^#([0-9a-f]{3})$/i.exec(c);
+  if (m) return `#${[...m[1]].map((ch) => ch + ch).join("")}1a`;
+  m = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(c);
+  if (m) return `#${m[1]}1a`;
+  m =
+    /^rgba?\(\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*(?:[,/]\s*[\d.]+%?\s*)?\)$/i.exec(
+      c,
+    );
+  if (m && m.slice(1, 4).every((v) => Number(v) <= 255))
+    return `rgba(${m[1]}, ${m[2]}, ${m[3]}, 0.102)`;
+  return null;
 }

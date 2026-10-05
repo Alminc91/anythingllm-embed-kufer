@@ -30,3 +30,24 @@
     opacity: 100%;
   }
 }
+
+/* Kufer: Icon-Kachel "Frühere Chats" — 10 % Akzent per color-mix(), folgt
+   --allm-accent (auch per Seiten-CSS). Ohne color-mix() bleibt der inline
+   gesetzte bisherige Wert aus buttonColor (accentTintFallback). 10,2 % =
+   Alpha 0x1a wie bisher (pixelgleich). */
+@supports (background: color-mix(in srgb, red, blue)) {
+  .allm-accent-tint {
+    background-color: color-mix(
+      in srgb,
+      var(--allmi-accent) 10.2%,
+      transparent
+    ) !important;
+  }
+}
+
+/* Kufer: Icons im Eingabefeld (Mikrofon/Senden) beim Hover — folgen der
+   Eingabe-Textfarbe (--allmi-hover-icon, utils/theme.js); Fallback = bisher
+   #22262899/90. Eigene kurze Klasse statt Tailwind-Arbitrary (Build-Größe). */
+.allm-group:hover .allm-hover-icon {
+  color: var(--allmi-hover-icon, #222628e6);
+}

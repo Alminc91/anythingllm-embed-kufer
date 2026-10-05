@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Visuelle und DOM-Tests für CSS-Variablen / Theme des Embed-Widgets.
 
+Einrichtung: pip install -r tests/visual/requirements.txt && playwright install chromium
+
 Aufruf (aus dem Repo-Wurzelverzeichnis):
 
   # 1) Referenz-Screenshots vom UNVERÄNDERTEN Build erzeugen (einmalig, z. B. main)
   python3 tests/visual/theme_visual.py --baseline --dist /pfad/zum/alten/dist
+
+  #    Ausnahme NEW_STATES (Zustände, die es auf main nicht gab): Referenz aus
+  #    diesem Branch, nur gezielt: --baseline --only <zustand> …
+  #    Bestehende Referenzen nie überschreiben.
 
   # 2) Neuen Build prüfen (npm run build vorher)
   python3 tests/visual/theme_visual.py
@@ -21,6 +27,9 @@ Bilder werden durch fixtures/brand.png ersetzt.
 
 Prüfungen:
   AK-1 / AK-8   Pixel-Vergleich gegen tests/visual/baseline/*.png (<= 0,1 %)
+  REG           Pixel-Vergleich neuer Zustände (Review-Funde: Hover dunkel,
+                Markenheader dunkel, Header-Linie per Seiten-CSS) gegen ihre
+                eigene Referenz aus diesem Branch (NEW_STATES)
   AK-2 .. AK-7, AK-11, AK-12, NAK-1 .. NAK-5   computed styles / Konsole / Größe
 Ergebnis-Screenshots (und Diff-Bilder) landen in tests/visual/results/.
 """
@@ -82,6 +91,15 @@ HISTORY_ANSWER = [
 ]
 
 BASE_ATTRS = {"embed-id": EMBED_ID, "base-api-url": API}
+
+# Zustände, die es auf main nicht gab (dunkles Theme, Seiten-CSS): Referenz
+# stammt aus diesem Branch (Regressionsschutz), nicht vom alten Build.
+NEW_STATES = {"dark-input-hover", "dark-bubble-brand-header", "header-border-page-css"}
+BRAND_DARK = "#0b3d6b"
+CONVERSATIONS = [
+    {"conversationId": "c-1", "title": "Integrationskurse", "lastMessageAt": None, "messageCount": 2},
+    {"conversationId": "c-2", "title": "Anmeldung Sprachkurs Englisch", "lastMessageAt": None, "messageCount": 1},
+]
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +338,7 @@ def pixel_cases():
         ("bubble-menu", {"attrs": {**BASE_ATTRS, "open-on-load": "on"}}, Mock(history=HISTORY_ANSWER),
          ".allm-anything-llm-assistant-message", "menu"),
         ("bubble-history", {"attrs": {**BASE_ATTRS, "open-on-load": "on"}},
-         Mock(history=HISTORY_ANSWER, conversations=[
-             {"conversationId": "c-1", "title": "Integrationskurse", "lastMessageAt": None, "messageCount": 2},
-             {"conversationId": "c-2", "title": "Anmeldung Sprachkurs Englisch", "lastMessageAt": None, "messageCount": 1},
-         ]), ".allm-anything-llm-assistant-message", "history"),
+         Mock(history=HISTORY_ANSWER, conversations=CONVERSATIONS), ".allm-anything-llm-assistant-message", "history"),
         ("bubble-brand-header", {"attrs": {**BASE_ATTRS, "open-on-load": "on"}},
          Mock(config={**PRAES_CONFIG, "headerBgColor": "#0b5f8a", "headerTextColor": "#FFFFFF",
                       "iconStyle": "circle", "assistantBgColor": "#f1f5f9"}, history=HISTORY_ANSWER),
@@ -354,7 +369,29 @@ def pixel_cases():
          Mock(stream=[{"uuid": "u-1", "type": "textResponseChunk", "close": False, "sources": [],
                        "textResponse": "Ja. Termine finden Sie [auf der Kursseite](https://example.org/kurse)."}]),
          "#message-input", "send"),
+        # --- NEW_STATES (Review-Funde) ---
+        # Senden-Icon im dunklen Theme mit Maus darüber
+        ("dark-input-hover", {"attrs": {**BASE_ATTRS, "open-on-load": "on", "theme": "dark"}},
+         Mock(history=HISTORY_ANSWER), ".allm-anything-llm-assistant-message a", "hover-send"),
+        # Markenheader (headerBgColor ohne headerTextColor) im dunklen Theme
+        ("dark-bubble-brand-header", {"attrs": {**BASE_ATTRS, "open-on-load": "on", "theme": "dark"}},
+         Mock(config={**PRAES_CONFIG, "headerBgColor": BRAND_DARK}, history=HISTORY_ANSWER),
+         ".allm-anything-llm-assistant-message a", None),
+        # Header-Farbe nur per Seiten-CSS -> keine sichtbare Unterlinie
+        ("header-border-page-css",
+         {"attrs": {**BASE_ATTRS, "open-on-load": "on"},
+          "css": f"#anythingllm-embed-widget {{ --allm-header-bg: {BRAND_DARK}; --allm-header-text: #FFFFFF; --allm-header-icon: #FFFFFF; }}"},
+         Mock(history=HISTORY_ANSWER), ".allm-anything-llm-assistant-message a", None),
     ]
+
+
+def hover_shadow(page, selector):
+    """Maus auf die Mitte eines Elements im (geschlossenen) Shadow-Root."""
+    box = page.evaluate(
+        "(s) => { const r = window.__q(s).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }",
+        selector)
+    page.mouse.move(*box)
+    page.wait_for_timeout(150)
 
 
 def run_action(page, action):
@@ -388,6 +425,11 @@ def screenshot_case(browser, base_url, case, out_path):
         settle(page)
         page.mouse.move(0, 0)
         page.wait_for_timeout(100)
+        if action == "hover-send":
+            # Fokus raus: der blinkende Cursor im (geschlossenen) Shadow-Root
+            # wird von caret="hide" nicht erfasst -> sonst nicht deterministisch
+            page.evaluate("() => window.__allmShadow.activeElement && window.__allmShadow.activeElement.blur()")
+            hover_shadow(page, "#send-message-button")
         page.screenshot(path=str(out_path), animations="disabled", caret="hide")
         return errors_of(page)
     finally:
@@ -428,7 +470,7 @@ def run_pixel(browser, base_url, baseline_mode, only=None):
             record(f"AK-1 {name}", False, "keine Referenz (erst --baseline laufen lassen)")
             continue
         ratio, maxd = diff_ratio(ref, out, RESULTS_DIR / f"{name}.diff.png")
-        key = "AK-8" if name.startswith("inline-dark") else "AK-1"
+        key = "REG" if name in NEW_STATES else "AK-8" if name.startswith("inline-dark") else "AK-1"
         record(
             f"{key} {name}",
             ratio <= MAX_DIFF_RATIO and not errs,
@@ -583,7 +625,7 @@ def dark_review_shots(browser, base_url):
     kein Vergleich): results/dark-<zustand>.png"""
     for case in pixel_cases():
         name, cfg = case[0], case[1]
-        if name.startswith("inline-dark"):
+        if name.startswith("inline-dark") or name in NEW_STATES:
             continue
         cfg = {**cfg, "attrs": {**cfg["attrs"], "theme": "dark"}}
         errs = screenshot_case(browser, base_url, (name, cfg, *case[2:]),
@@ -607,6 +649,158 @@ def mockup_shots(browser, base_url):
             cfg = {**cfg, "sheets": [sheet], **extra}
             screenshot_case(browser, base_url, (name, cfg, mock, sel, None),
                             RESULTS_DIR / f"mockup-{theme}-{name}.png")
+
+
+def check_hover_icons(browser, base_url):
+    """Fund 1: Senden-Icon beim Hover — hell bisheriger Wert (#22262899/90),
+    dunkel sichtbar (Text des dunklen Satzes, Kontrast >= 3:1 zum Eingabefeld)."""
+    for theme, expect in (("light", "rgba(34, 38, 40, 0.9)"), ("dark", "rgb(244, 242, 239)")):
+        ctx, page = open_page(browser, base_url, {"attrs": {**OPEN, "theme": theme}}, Mock(history=HISTORY_ANSWER))
+        try:
+            wait_shadow(page, "#send-message-button svg")
+            settle(page, 300)
+            sel = "#send-message-button svg"
+            rest = page.evaluate("(s) => __cs(s, 'color')", sel)
+            hover_shadow(page, "#send-message-button")
+            hov = page.evaluate("(s) => __cs(s, 'color')", sel)
+            box = page.evaluate("() => __cs(window.__q('#message-input').parentElement, 'background-color')")
+            win = parse_rgb(page.evaluate("() => __cs('#anything-llm-chat', 'background-color')"))
+            box_c = parse_rgb(box)
+            box_c = over(box_c, win) if box_c[3] < 1 else box_c
+            c = contrast(over(parse_rgb(hov), box_c), box_c)
+            ok = hov == expect and c >= 3.0
+            record(f"Fund-1 Hover Eingabe-Icon ({theme})", ok,
+                   f"Ruhe={rest}, Hover={hov} (erwartet {expect}), Kontrast zum Eingabefeld {c:.2f}:1")
+        finally:
+            ctx.close()
+
+
+def header_probe(page):
+    return page.evaluate(
+        """() => {
+      const h = window.__q('#anything-llm-header') || [...window.__allmShadow.querySelectorAll('div')].find(d => d.style.borderBottom);
+      const c = getComputedStyle(h);
+      return {style: c.borderBottomStyle, width: c.borderBottomWidth, color: c.borderBottomColor, bg: c.backgroundColor};
+    }"""
+    )
+
+
+def history_header_probe(page):
+    return page.evaluate(
+        """() => {
+      const back = window.__q('button[aria-label="Zurück zum Chat"]');
+      let h = back; while (h && !(h.style && h.style.borderBottom)) h = h.parentElement;
+      const c = getComputedStyle(h);
+      return {style: c.borderBottomStyle, width: c.borderBottomWidth, color: c.borderBottomColor, bg: c.backgroundColor};
+    }"""
+    )
+
+
+def check_header_border(browser, base_url):
+    """Fund 5: Unterlinie nur über --allmi-header-border. Seiten-CSS
+    --allm-header-bg -> keine sichtbare Linie (Linie = Header-Farbe); Setting
+    headerBgColor -> keine Linie; dunkel ohne Setting -> Rahmen des dunklen Satzes."""
+    def invisible(p):
+        return p["style"] == "none" or p["width"] == "0px" or p["color"] == p["bg"]
+
+    cases = (
+        ("Seiten-CSS --allm-header-bg", {"attrs": OPEN, "css": f"#anythingllm-embed-widget {{ --allm-header-bg: {BRAND_DARK}; }}"},
+         PRAES_CONFIG, invisible),
+        ("Setting headerBgColor (dunkel)", {"attrs": {**OPEN, "theme": "dark"}}, {**PRAES_CONFIG, "headerBgColor": BRAND_DARK},
+         lambda p: p["style"] == "none"),
+        ("dunkel ohne Setting", {"attrs": {**OPEN, "theme": "dark"}}, PRAES_CONFIG,
+         lambda p: p["style"] == "solid" and p["width"] == "1px" and p["color"] == "rgb(120, 123, 130)"),
+        ("hell ohne Setting", {"attrs": OPEN}, PRAES_CONFIG,
+         lambda p: p["style"] == "solid" and p["width"] == "1px" and p["color"] == "rgb(233, 233, 233)"),
+    )
+    for label, cfg, config, pred in cases:
+        ctx, page = open_page(browser, base_url, cfg, Mock(config=config, history=HISTORY_ANSWER,
+                                                          conversations=CONVERSATIONS))
+        try:
+            wait_shadow(page, ".allm-anything-llm-assistant-message")
+            settle(page, 300)
+            main_h = header_probe(page)
+            run_action(page, "history")
+            settle(page, 300)
+            hist_h = history_header_probe(page)
+            ok = pred(main_h) and pred(hist_h)
+            record(f"Fund-5 Header-Linie ({label})", ok, f"Header={json.dumps(main_h)}, Frühere Chats={json.dumps(hist_h)}")
+        finally:
+            ctx.close()
+
+
+def check_brand_header_dark(browser, base_url):
+    """Fund 3: theme=dark + headerBgColor ohne headerTextColor -> Kontrast."""
+    ctx, page = open_page(browser, base_url, {"attrs": {**OPEN, "theme": "dark"}},
+                          Mock(config={**PRAES_CONFIG, "headerBgColor": BRAND_DARK}, history=HISTORY_ANSWER))
+    try:
+        wait_shadow(page, ".allm-anything-llm-assistant-message")
+        settle(page, 300)
+        p = page.evaluate(
+            """() => {
+          const h = window.__q('#anything-llm-header');
+          const brand = h.querySelector('span');
+          const icon = h.querySelector('button[aria-label=Options]');
+          return {bg: getComputedStyle(h).backgroundColor, text: getComputedStyle(brand).color,
+                  icon: getComputedStyle(icon).color};
+        }"""
+        )
+        bg = parse_rgb(p["bg"])
+        ct = contrast(parse_rgb(p["text"]), bg)
+        ci = contrast(parse_rgb(p["icon"]), bg)
+        record("Fund-3 Markenheader dunkel Kontrast", ct >= 4.5 and ci >= 4.5,
+               f"Header={p['bg']}, Text={p['text']} {ct:.2f}:1, Icons={p['icon']} {ci:.2f}:1")
+    finally:
+        ctx.close()
+
+
+def check_stream_font_size(browser, base_url):
+    """Fund 4: textSize=16 -> streamende Antwort und Verlaufseintrag gleich groß."""
+    mock = Mock(history=HISTORY_ANSWER, stream=[
+        {"uuid": "u-1", "type": "textResponseChunk", "close": False, "sources": [],
+         "textResponse": "Ja. Termine finden Sie [auf der Kursseite](https://example.org/kurse)."}])
+    for size in ("16", None):
+        attrs = {**OPEN, "text-size": size} if size else OPEN
+        ctx, page = open_page(browser, base_url, {"attrs": attrs}, mock,
+                              before_goto=lambda c, p: p.clock.set_fixed_time(SENT_AT))
+        try:
+            wait_shadow(page, ".allm-anything-llm-assistant-message a")
+            run_action(page, "send")
+            page.wait_for_function("() => !!window.__q('.allm-reply a')", timeout=10000)
+            res = page.evaluate(
+                """() => {
+              const hist = window.__q('.allm-anything-llm-assistant-message span');
+              const live = window.__q('.allm-reply');
+              const f = (el) => ({size: getComputedStyle(el).fontSize, line: getComputedStyle(el).lineHeight});
+              return {hist: f(hist), live: f(live)};
+            }"""
+            )
+            want = f"{size or 14}px"
+            ok = res["hist"] == res["live"] and res["live"]["size"] == want
+            record(f"Fund-4 Schriftgröße Stream = Verlauf (textSize={size or 'Standard'})", ok, json.dumps(res))
+        finally:
+            mock.release()
+            ctx.close()
+
+
+def check_inline_theme_explicit(browser, base_url):
+    """Fund 9: inlineTheme explizit gewinnt, ohne Angabe folgt die Leiste dem Theme."""
+    inline = {**BASE_ATTRS, "display-mode": "inline"}
+    for label, attrs, want in (
+        ('theme=dark, ohne inline-theme', {**inline, "theme": "dark"}, "dark"),
+        ('theme=dark + inline-theme=light', {**inline, "theme": "dark", "inline-theme": "light"}, "light"),
+        ('ohne theme + inline-theme=dark (AK-8)', {**inline, "inline-theme": "dark"}, "dark"),
+        ('ohne theme, ohne inline-theme', inline, "light"),
+    ):
+        ctx, page = open_page(browser, base_url, {"attrs": attrs, "inline": True}, Mock(config={}))
+        try:
+            wait_shadow(page, "#anything-llm-inline-bar")
+            settle(page, 200)
+            bg = page.evaluate("() => __cs('#anything-llm-inline-bar', 'background-color')")
+            got = "light" if bg == "rgb(255, 255, 255)" else "dark"
+            record(f"Fund-9 Leiste ({label})", got == want, f"Leiste bg={bg} -> {got}, erwartet {want}")
+        finally:
+            ctx.close()
 
 
 def check_auto(browser, base_url):
@@ -919,6 +1113,11 @@ def main():
                 dark_review_shots(browser, base_url)
                 mockup_shots(browser, base_url)
                 check_auto(browser, base_url)
+                check_hover_icons(browser, base_url)
+                check_header_border(browser, base_url)
+                check_brand_header_dark(browser, base_url)
+                check_stream_font_size(browser, base_url)
+                check_inline_theme_explicit(browser, base_url)
                 check_server_theme(browser, base_url)
                 check_legacy(browser, base_url)
                 check_reduced_motion(browser, base_url)

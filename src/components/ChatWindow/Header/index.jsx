@@ -12,6 +12,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { embedderSettings } from "@/main";
 import useEmbedMode from "@/hooks/useEmbedMode";
+import {
+  HEADER_ICON_STYLE,
+  HEADER_STYLE,
+  headerButtonClass,
+} from "@/utils/theme";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -54,25 +59,10 @@ export default function ChatWindowHeader({
     };
   }, [menuRef]);
 
-  // Header styling with optional custom colors. Farben über CSS-Variablen
-  // (--allm-header-bg/-text/-icon, Standard aus headerBgColor/headerTextColor,
-  // siehe utils/theme.js); Fallbacks = bisherige Werte.
-  const headerStyle = {
-    borderBottom: settings.headerBgColor
-      ? "none"
-      : "1px solid var(--allmi-border, #E9E9E9)",
-    backgroundColor: "var(--allmi-header-bg, transparent)",
-  };
-
-  // Icon button styling - adapt to header background
-  const iconButtonClass = settings.headerBgColor
-    ? "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-white/20 allm-rounded-sm"
-    : "allm-bg-transparent hover:allm-cursor-pointer allm-border-none hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-sm";
-
-  // Icon color based on header background (Icons nutzen currentColor)
-  const iconButtonStyle = {
-    color: "var(--allmi-header-icon, #1e293b99)",
-  };
+  // Kopfzeile über CSS-Variablen (--allm-header-bg/-text/-icon, Standard aus
+  // headerBgColor/headerTextColor; Unterlinie --allmi-header-border), gemeinsam
+  // mit "Frühere Chats" — siehe utils/theme.js.
+  const iconButtonClass = headerButtonClass(settings);
 
   // Icon container style based on iconStyle setting
   const getIconContainerStyle = () => {
@@ -174,7 +164,7 @@ export default function ChatWindowHeader({
 
   return (
     <div
-      style={headerStyle}
+      style={HEADER_STYLE}
       className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)]"
       id="anything-llm-header"
     >
@@ -215,7 +205,7 @@ export default function ChatWindowHeader({
             type="button"
             onClick={() => setShowOptions(!showingOptions)}
             className={iconButtonClass}
-            style={iconButtonStyle}
+            style={HEADER_ICON_STYLE}
             aria-label="Options"
           >
             <DotsThreeOutlineVertical size={20} weight="fill" />
@@ -224,7 +214,7 @@ export default function ChatWindowHeader({
         <CloseButton
           onClick={closeChat}
           className={iconButtonClass}
-          style={iconButtonStyle}
+          style={HEADER_ICON_STYLE}
         />
       </div>
       <OptionsMenu
