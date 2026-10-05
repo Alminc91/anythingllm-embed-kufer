@@ -44,6 +44,8 @@ python3 tests/visual/theme_visual.py           # bzw. npm run test:visual
 
 Ergebnisse (Screenshots, Diff-Bilder, `summary.json`) landen in `tests/visual/results/`. Die Unit-Tests laufen mit `npm test` (Vitest).
 
+Leiste als Eingabefeld (`data-inline-input`): `python3 tests/visual/inline_input.py` (Pixel-Vergleich Bestand/neue Zustände, Enter/Knopf/Chips mit gezählten `stream-chat`-Anfragen, Tastatur, Mobil-Vollbild; `--live-demo` stellt zusätzlich eine echte Frage auf demo.ki.kufer.de). Ergebnisse: `tests/visual/results/inline-input-*.png`, `summary-inline-input.json`.
+
 ## Integrations & Embed Types
 
 ### `<script>` tag HTML embed
@@ -122,6 +124,26 @@ REQUIRED data attributes:
 
 - `data-inline-start-state` - `collapsed` (Standard) oder `expanded` (nur ab 768px; mobil wird immer die Leiste gezeigt).
 
+- `data-inline-input` - `true`: die eingeklappte Inline-Leiste wird zum **Eingabefeld mit Absende-Knopf** (Standard `false` = Klickfläche wie bisher). Enter oder Klick auf den Knopf klappt auf **und** sendet die Frage sofort (gleicher Weg wie aus dem Chatfenster: Kontingent, Verlauf, Konversation); mobil (<768px) öffnet sich dabei wie gewohnt der Vollbild-Chat mit der bereits gesendeten Frage. Leeres Feld → nur aufklappen, Fokus im Chat-Eingabefeld. Klick in die Leiste neben das Feld → aufklappen, der getippte Text steht unversendet im Chat-Eingabefeld. Unter der Leiste erscheinen die `data-default-messages` als Chips (höchstens 6, umbrechen bei schmaler Breite); ein Klick sendet die Frage wie Enter. Im aufgeklappten Chat stehen die Vorschläge wie bisher (die Chips sind dann ausgeblendet). Auch im Design Center (`visual_config.inlineInput`, Boolean; Vorrang wie üblich). Nur im Inline-Modus: in der Chat-Blase wird das Attribut ignoriert (eine `console.warn`-Zeile). Farben/Rundung über die Leisten-Variablen (`--allm-bar-*`, `--allm-accent`, `--allm-radius`/`--allm-bar-radius`, Fokusring `--allm-focus-ring`), siehe [Styling per CSS-Variablen](#styling-per-css-variablen).
+
+- `data-inline-input-placeholder` - Platzhalter des Eingabefelds bei `data-inline-input` (max. 120 Zeichen, reiner Text). Standard „Stellen Sie hier Ihre Frage …“. Design Center: `visual_config.inlineInputPlaceholder`.
+
+- `data-inline-send-text` - Text des Absende-Knopfs bei `data-inline-input` (max. 40 Zeichen, reiner Text). Standard „Chatten“. Design Center: `visual_config.inlineSendText`.
+
+  ```html
+  <div id="kufer-assistent"></div>
+  <script
+    data-embed-id="…"
+    data-base-api-url="https://<kunde>.ki.kufer.de/api/embed"
+    data-display-mode="inline"
+    data-inline-input="true"
+    data-inline-input-placeholder="Stellen Sie hier Ihre Frage …"
+    data-inline-send-text="Chatten"
+    data-default-messages="Spanisch A1,Yoga,KI-Basics,Töpfern"
+    src="https://<kunde>.ki.kufer.de/embed/anythingllm-chat-widget.min.js"
+  ></script>
+  ```
+
 - `data-inline-theme` - Stil der eingeklappten Leiste: `light` oder `dark`. Ohne Angabe folgt die Leiste dem Theme (`data-theme`, Standard hell); ein explizit gesetzter Wert gewinnt.
 
 - `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.
@@ -192,7 +214,7 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 | `--allm-text` | Grundtext (Fenster, Listentitel, Willkommensblasen) | — (`#222628` Inline, `#1f2937` Titel, `#2d3748` Willkommensblasen; Blase erbt die Seitenfarbe) | `#F4F2EF` |
 | `--allm-text-muted` | gedämpfter Text/Icons: Begrüßung, Name, Zeitstempel, Menüeinträge, Platzhalter, Senden-Icon, Bewertung | — (`#94a3b8`, `#9ca3af`, `#7A7D7E`, `#1e293b99`, `#22262899` …) | `#A6A8AD` |
 | `--allm-border` | Header-Linie (entfällt, sobald eine Header-Farbe wirkt: `headerBgColor` oder `--allm-header-bg`), Rahmen der Inline-Box, Karten in „Frühere Chats“ | — (`#E9E9E9` Header, `#d1d5db` Box, `#e5e7eb` Karten) | `#787B82` |
-| `--allm-accent` | Chat-Button, Icon der Leiste, Akzente („Frühere Chats“, Senden im Feedback) | `buttonColor` (`#01a5a9`) | `buttonColor` |
+| `--allm-accent` | Chat-Button, Icon der Leiste, Absende-Knopf und Fokusring (Standard) der Eingabe-Leiste, Akzente („Frühere Chats“, Senden im Feedback) | `buttonColor` (`#01a5a9`) | `buttonColor` |
 | `--allm-user-bg` | Nutzer-Blase, Vorschlags-Buttons | `userBgColor` (`#01a5a9`) | `userBgColor` |
 | `--allm-user-text` | Text der Nutzer-Blase/Vorschläge | `userTextColor` (`#FFFFFF`) | `userTextColor` |
 | `--allm-assistant-bg` | Antwortblase | `assistantBgColor` (`#FFFFFF`) | `#2A2A2F` |
@@ -213,12 +235,12 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 | `--allm-transition` | Dauer der Übergänge (Button, Leiste, Header, Willkommensblasen ×1,5/×2) | `200ms` (`0ms` bei reduzierter Bewegung) | `200ms` |
 | `--allm-easing` * | Zeitfunktion der Übergänge | `cubic-bezier(0.4, 0, 0.2, 1)` | wie hell |
 | `--allm-hover-bg` | Hover-Fläche (Menü, Header-Buttons, ×-Button) | — (`#f3f4f6`) | `rgba(255,255,255,.08)` |
-| `--allm-focus-ring` | Tastatur-Fokus von Buttons/Links (`outline`-Kurzform, z. B. `2px solid #F3A04C`) | — (Browser-Standard) | `2px solid` + Akzent |
-| `--allm-bar-bg` | eingeklappte Inline-Leiste | `#FFFFFF` (`inlineTheme: dark`: `rgba(17,24,39,.78)` + Weichzeichner) | `rgba(17,24,39,.78)` (`inlineTheme: light`: `#FFFFFF`) |
-| `--allm-bar-text` | Text der Leiste | `#1f2937` (dark: `#FFFFFF`) | `#FFFFFF` |
-| `--allm-bar-border` | Rahmen der Leiste (1px) | `#d1d5db` (dark: `rgba(255,255,255,.16)`) | `rgba(255,255,255,.16)` |
+| `--allm-focus-ring` | Tastatur-Fokus von Buttons/Links und der Eingabe-Leiste (`outline`-Kurzform, z. B. `2px solid #F3A04C`; ohne Wert: Leisten-Feld 2px Akzent) | — (Browser-Standard) | `2px solid` + Akzent |
+| `--allm-bar-bg` | eingeklappte Inline-Leiste, Chips (`data-inline-input`) | `#FFFFFF` (`inlineTheme: dark`: `rgba(17,24,39,.78)` + Weichzeichner) | `rgba(17,24,39,.78)` (`inlineTheme: light`: `#FFFFFF`) |
+| `--allm-bar-text` | Text der Leiste und der Chips, Platzhalter (70 %) | `#1f2937` (dark: `#FFFFFF`) | `#FFFFFF` |
+| `--allm-bar-border` | Rahmen der Leiste und der Chips (1px; Chips beim Hover `--allm-accent`) | `#d1d5db` (dark: `rgba(255,255,255,.16)`) | `rgba(255,255,255,.16)` |
 | `--allm-bar-shadow` * | Schatten der Leiste | `0 1px 3px rgba(0,0,0,.06)` (dark: `0 4px 16px rgba(0,0,0,.18)`) | `0 4px 16px rgba(0,0,0,.18)` |
-| `--allm-bar-radius` * | Rundung der Leiste, folgt `--allm-radius` | `16px` | `16px` |
+| `--allm-bar-radius` * | Rundung der Leiste und der Chips, Absende-Knopf 6px kleiner; folgt `--allm-radius` | `16px` | `16px` |
 
 Nicht über Variablen gesteuert (bewusst): Fehler-/Hinweisboxen (rot/amber), das Feedback-Kommentarfeld, Code-Blöcke (eigenes dunkles Schema), die Icon-Kachel im Marken-Header (`iconStyle`). Die Tönung der Icons in „Frühere Chats“ folgt `--allm-accent` (10 %, per `color-mix()`; ältere Browser ohne `color-mix()`: wie bisher aus `buttonColor`).
 
@@ -293,7 +315,7 @@ html.dark #anythingllm-embed-widget {
 
 Hinweise: Setzt die Seite nur einen Teil der Variablen, gelten für den Rest die Standardwerte des eingestellten Themes. Für eine dunkle Seite also entweder alle relevanten Variablen setzen oder zusätzlich `data-theme="dark"` (bzw. `auto`, wenn die Seite dem System folgt). Die Mockup-Linie `line` (`.07`) unterschreitet den 3:1-Rahmenkontrast — der eingebaute dunkle Satz nutzt deshalb `#787B82`.
 
-Bekannte Abweichungen zum Mockup: Nutzer-Blase als Verlauf (`linear-gradient`) ist nicht abbildbar (`--allm-user-bg` ist eine Hintergrundfarbe); die Zipfel-Ecke der Blasen ist höchstens 4px (Mockup 6px); die eingeklappte Leiste hat kein Eingabefeld und das Panel schwebt nicht (eigene Issues).
+Bekannte Abweichungen zum Mockup: Nutzer-Blase als Verlauf (`linear-gradient`) ist nicht abbildbar (`--allm-user-bg` ist eine Hintergrundfarbe); die Zipfel-Ecke der Blasen ist höchstens 4px (Mockup 6px); das Panel schwebt nicht (eigenes Issue). Die Leiste als Suchfeld mit „Beliebt gerade“-Chips: `data-inline-input="true"` + `data-default-messages` (ohne die Beschriftung „Beliebt gerade“). Schrift auf Akzentflächen (Icon, Absende-Knopf) ist fest weiß.
 
 ### `<iframe>` tag HTML embed
 
