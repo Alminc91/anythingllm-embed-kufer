@@ -48,6 +48,8 @@ Leiste als Eingabefeld (`data-inline-input`): `python3 tests/visual/inline_input
 
 Kurskarten (`data-course-cards`): `python3 tests/visual/course_cards.py` (gemockter Stream mit `courseSources` im Abschluss-Chunk; Pixel-Vergleich ohne Option gegen den Bestand, Karten hell/dunkel/mobil/Kompaktliste/Rückfrage, Stream ohne Flackern, Theme-Variablen + Kontrast, 360 px, keine zusätzlichen Server-Aufrufe). Ergebnisse: `tests/visual/results/course-cards-*.png`, `summary-course-cards.json`. Reale Trefferquote (AK-11, Reviewer, erst mit Fork-Image ≥ 7.9 und `visual_config.courseCards = "auto"` sinnvoll): `EMBED_LIVE_TESTS=1 python3 tests/visual/course_cards_ak11.py --base-api … --embed-id …` stellt 20 Kursfragen (Zeit/Thema, HybridSearch v2) als **echte Chats** und schreibt Protokoll + Screenshots nach `tests/visual/results/ak11/`.
 
+Schwebende Box und Aufklapp-Effekte (`data-inline-layout`, `data-inline-effect`): `python3 tests/visual/overlay.py` (Pixel-Vergleich Standard gegen main und neue Zustände; Messungen: Inhalt unter dem Platzhalter bleibt stehen, Außenklick/Escape/Fokus, Links der Seite werden ausgelöst, computed `animation` je Effekt, Mobil-Vollbild, reduzierte Bewegung, `--allm-overlay-z` gegen Banner per `elementFromPoint`, kein Scroll-Lock, erster Frame positioniert, `overflow:hidden`-Fallback; alle Aufrufe gemockt). Ergebnisse: `tests/visual/results/overlay-*.png`, `summary-overlay.json`.
+
 Live-Prüfung (optional): `EMBED_LIVE_TESTS=1 python3 tests/visual/inline_input.py --live-demo` stellt zusätzlich **eine echte Frage** auf demo.ki.kufer.de und gleicht den serverseitigen Verlauf ab. Dabei entsteht ein echter Chat auf dem Demo-Container (Kontingent, Verlauf) — deshalb bricht `--live-demo` ohne `EMBED_LIVE_TESTS=1` mit einem Hinweis ab. Nur gezielt und sparsam einsetzen.
 
 ## Integrations & Embed Types
@@ -127,6 +129,24 @@ REQUIRED data attributes:
 - `data-inline-max-width` - Maximalbreite der Inline-Darstellung in px (zentriert). Standard: volle Container-Breite.
 
 - `data-inline-start-state` - `collapsed` (Standard) oder `expanded` (nur ab 768px; mobil wird immer die Leiste gezeigt).
+
+- `data-inline-layout` - Wohin die Box ab 768px aufklappt: `flow` (Standard, wie bisher: die Box steht im Seitenfluss und schiebt den Inhalt darunter nach unten) oder `overlay` (die Box **schwebt über dem nachfolgenden Inhalt**, nichts verschiebt sich). Bei `overlay` bleibt die eingeklappte Leiste unsichtbar im Seitenfluss (gleiche Höhe), die Box liegt oben an der Leiste, so breit wie der Platzhalter bzw. `data-inline-max-width`, Höhe wie `data-inline-height`. Klick außerhalb des Widgets oder Escape klappt ein (Fokus zurück auf die Leiste; ein Klick auf einen Link oder ein Feld der Seite wird normal ausgeführt). Kein Scroll-Lock, keine Abdunkelung, keine Styles an `body`/`html`. Stapelhöhe über `--allm-overlay-z` (Standard `1000`) — liegt der Platzhalter in einem eigenen Stapelkontext der Seite (z. B. Vorfahre mit `position` + `z-index`, `transform`), gilt die Höhe nur innerhalb davon. **Fallback:** schneidet ein Vorfahre des Platzhalters die Box ab (`overflow: hidden`/`clip` oder `contain: paint` und die Box ragt über seine Unterkante), klappt die Box im Seitenfluss auf (eine `console.warn`-Zeile). Mobil (<768px) gilt unabhängig davon immer das Vollbild. Ungültiger Wert → `flow` mit einer `console.warn`-Zeile. Design Center: `visual_config.inlineLayout`.
+
+- `data-inline-effect` - Aufklapp-Effekt der Box ab 768px: `expand` (Standard, „Nach unten aufklappen“: die Box rollt sich von oben aus, nur die Höhe), `grow` („Größer werden“: Skalierung 0,96 → 1 + Einblenden), `spring` („Federnd“: Skalierung 0,9 → 1 + Einblenden mit federnder Kurve `cubic-bezier(.34,1.56,.64,1)`), `float` („Schweben“: 8 px Versatz nach oben + Einblenden + Schatten, Kurve `cubic-bezier(.16,1,.3,1)`). Animiert werden nur `transform`/`opacity` (`float` zusätzlich der Schatten); der Platz der Box steht vom ersten Frame an fest. Gilt für `flow` und `overlay`, nicht für den Startzustand `expanded` beim Laden und nicht im mobilen Vollbild. Dauer `--allm-effect-duration` (Standard `320ms`), Kurve `--allm-effect-easing` (Standard je Effekt; `expand`/`grow` folgen `--allm-easing`); bei `prefers-reduced-motion: reduce` keine Bewegung. Ungültiger Wert → `expand` mit einer `console.warn`-Zeile. Design Center: `visual_config.inlineEffect`.
+
+  Signal für die Seite: Solange die Box aufgeklappt ist (ab 768px), trägt der Platzhalter das Attribut `data-allm-expanded="true"` (beim Einklappen entfernt; mobil im Vollbild nicht gesetzt). Damit kann die Seite z. B. die Fläche beim Aufklappen verbreitern: `.ask:has(#kufer-assistent[data-allm-expanded]) { max-width: 760px; }`. Weitere Eingriffe in die Seite gibt es nicht.
+
+```html
+<div id="kufer-assistent"></div>
+<script
+  data-embed-id="…"
+  data-base-api-url="https://ihre-instanz.ki.kufer.de/api/embed"
+  data-display-mode="inline"
+  data-inline-layout="overlay"
+  data-inline-effect="float"
+  src="https://ihre-instanz.ki.kufer.de/embed/anythingllm-chat-widget.min.js"
+></script>
+```
 
 - `data-inline-input` - `true`: die eingeklappte Inline-Leiste wird zum **Eingabefeld mit Absende-Knopf** (Standard `false` = Klickfläche wie bisher). Enter oder Klick auf den Knopf klappt auf **und** sendet die Frage sofort (gleicher Weg wie aus dem Chatfenster: Kontingent, Verlauf, Konversation); mobil (<768px) öffnet sich dabei wie gewohnt der Vollbild-Chat mit der bereits gesendeten Frage. Leeres Feld → nur aufklappen, Fokus im Chat-Eingabefeld. Klick in die Leiste neben das Feld → aufklappen, der getippte Text steht unversendet im Chat-Eingabefeld (an dort schon Getipptes mit Leerzeichen angehängt, nichts wird überschrieben). Wird der Chat zugeklappt, bevor die abgeschickte Frage gesendet werden konnte (Verlauf lädt noch bzw. eine vorherige Antwort läuft), wird sie verworfen und steht wieder im Leisten-Feld; ein erneutes Absenden ersetzt eine noch wartende Frage. Auf Touch-Geräten öffnet das Absenden aus der Leiste keine Bildschirmtastatur über der laufenden Antwort. Unter der Leiste erscheinen die `data-default-messages` als Chips (höchstens 6, umbrechen bei schmaler Breite); ein Klick sendet die Frage wie Enter — steht schon Text im Feld, wird der Chip-Text stattdessen angehängt (nicht gesendet). Im aufgeklappten Chat stehen die Vorschläge wie bisher (die Chips sind dann ausgeblendet). Auch im Design Center (`visual_config.inlineInput`, Boolean; Vorrang wie üblich). Nur im Inline-Modus: in der Chat-Blase wird das Attribut ignoriert (eine `console.warn`-Zeile). Farben/Rundung über die Leisten-Variablen (`--allm-bar-*`, `--allm-accent`, `--allm-radius`/`--allm-bar-radius`, Fokusring `--allm-focus-ring`), siehe [Styling per CSS-Variablen](#styling-per-css-variablen).
 
@@ -247,6 +267,9 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 | `--allm-font-size` | Text der Nachrichten (laufende Antwort, Verlauf und Vorschläge gleich) | `textSize` (`14px`; wie bisher nur 10–14 und 16 wirksam, sonst erbt die Schrift) | wie hell |
 | `--allm-transition` | Dauer der Übergänge (Button, Leiste, Header, Willkommensblasen ×1,5/×2) | `200ms` (`0ms` bei reduzierter Bewegung) | `200ms` |
 | `--allm-easing` * | Zeitfunktion der Übergänge | `cubic-bezier(0.4, 0, 0.2, 1)` | wie hell |
+| `--allm-effect-duration` | Dauer des Aufklapp-Effekts der Inline-Box (`data-inline-effect`) | `320ms` (`0ms` bei reduzierter Bewegung) | wie hell |
+| `--allm-effect-easing` | Kurve des Aufklapp-Effekts | — (je Effekt: `expand`/`grow` `--allm-easing`, `spring` `cubic-bezier(.34,1.56,.64,1)`, `float` `cubic-bezier(.16,1,.3,1)`) | wie hell |
+| `--allm-overlay-z` | Stapelhöhe (`z-index`) der schwebenden Inline-Box (`data-inline-layout="overlay"`); unter Cookie-Bannern/Modalen der Seite bleiben: kleiner als deren `z-index` setzen | `1000` | wie hell |
 | `--allm-hover-bg` | Hover-Fläche (Menü, Header-Buttons, ×-Button) | — (`#f3f4f6`) | `rgba(255,255,255,.08)` |
 | `--allm-focus-ring` | Tastatur-Fokus von Buttons/Links und der Eingabe-Leiste (`outline`-Kurzform, z. B. `2px solid #F3A04C`; ohne Wert: Leisten-Feld 2px Akzent) | — (Browser-Standard) | `2px solid` + Akzent |
 | `--allm-bar-bg` | eingeklappte Inline-Leiste, Chips (`data-inline-input`) | `#FFFFFF` (`inlineTheme: dark`: `rgba(17,24,39,.78)` + Weichzeichner) | `rgba(17,24,39,.78)` (`inlineTheme: light`: `#FFFFFF`) |
@@ -278,6 +301,8 @@ Zuordnung der Mockup-Tokens (`THEMES.light` / `THEMES.dark`) zu den Variablen:
 | `accentInk` (Links) | `--allm-link` |
 | Pille 999px / Panel 12px | `--allm-bar-radius` / `--allm-radius` |
 | Übergang 260 ms, `cubic-bezier(.16,1,.3,1)` | `--allm-transition` / `--allm-easing` |
+| Effekt „Schweben“ (Panel über dem Inhalt) | `data-inline-layout="overlay"` + `data-inline-effect="float"`, Dauer `--allm-effect-duration` |
+| Verbreiterung 600 → 760 px beim Öffnen | Seiten-CSS über `#kufer-assistent[data-allm-expanded]` |
 | Archivo | `--allm-font` (Schrift stellt die Seite bereit) |
 
 ```css
@@ -328,7 +353,7 @@ html.dark #anythingllm-embed-widget {
 
 Hinweise: Setzt die Seite nur einen Teil der Variablen, gelten für den Rest die Standardwerte des eingestellten Themes. Für eine dunkle Seite also entweder alle relevanten Variablen setzen oder zusätzlich `data-theme="dark"` (bzw. `auto`, wenn die Seite dem System folgt). Die Mockup-Linie `line` (`.07`) unterschreitet den 3:1-Rahmenkontrast — der eingebaute dunkle Satz nutzt deshalb `#787B82`.
 
-Bekannte Abweichungen zum Mockup: Nutzer-Blase als Verlauf (`linear-gradient`) ist nicht abbildbar (`--allm-user-bg` ist eine Hintergrundfarbe); die Zipfel-Ecke der Blasen ist höchstens 4px (Mockup 6px); das Panel schwebt nicht (eigenes Issue). Die Leiste als Suchfeld mit „Beliebt gerade“-Chips: `data-inline-input="true"` + `data-default-messages` (ohne die Beschriftung „Beliebt gerade“). Schrift auf Akzentflächen (Icon, Absende-Knopf) ist fest weiß.
+Bekannte Abweichungen zum Mockup: Nutzer-Blase als Verlauf (`linear-gradient`) ist nicht abbildbar (`--allm-user-bg` ist eine Hintergrundfarbe); die Zipfel-Ecke der Blasen ist höchstens 4px (Mockup 6px); die Effekte animieren nur `transform`/`opacity` (das Mockup animiert Breite/Höhe des Panels und hebt es beim Schweben um 18 px an). Die Leiste als Suchfeld mit „Beliebt gerade“-Chips: `data-inline-input="true"` + `data-default-messages` (ohne die Beschriftung „Beliebt gerade“). Schrift auf Akzentflächen (Icon, Absende-Knopf) ist fest weiß.
 
 ### `<iframe>` tag HTML embed
 
