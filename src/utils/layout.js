@@ -26,6 +26,8 @@ export const OFFSET_MAX_PX = 200;
 export const INLINE_TEXT_MAX_LEN = 120;
 export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
+// Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
+export const COURSE_CARDS_VALUES = ["off", "auto"];
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -101,6 +103,9 @@ export const layoutValidations = {
   // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme)
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
+  // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
+  // ungültig -> verworfen -> Standard "off"
+  courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {

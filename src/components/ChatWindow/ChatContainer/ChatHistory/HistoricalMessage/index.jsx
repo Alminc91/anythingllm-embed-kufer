@@ -15,6 +15,7 @@ import { v4 } from "uuid";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
+import CourseCards from "../CourseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -448,6 +449,8 @@ const HistoricalMessage = forwardRef(
       message,
       role,
       sources = [],
+      courseSources = null,
+      courseCards = "off",
       error = false,
       errorMsg = null,
       sentAt,
@@ -583,6 +586,20 @@ const HistoricalMessage = forwardRef(
             </div>
           </div>
         </div>
+
+        {/* Kurskarten (opt-in): nur unter Assistenten-Antworten mit
+            courseSources vom Server; ohne Option wird nichts gerendert. */}
+        {role === "assistant" &&
+          !error &&
+          courseCards === "auto" &&
+          Array.isArray(courseSources) &&
+          courseSources.length > 0 && (
+            <CourseCards
+              reply={responseContent || message}
+              courseSources={courseSources}
+              settings={{ courseCards }}
+            />
+          )}
 
         {sentAt && (
           <div

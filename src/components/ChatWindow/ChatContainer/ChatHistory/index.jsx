@@ -124,6 +124,8 @@ export default function ChatHistory({
               sentAt={props.sentAt}
               role={props.role}
               sources={props.sources}
+              courseSources={props.courseSources}
+              courseCards={settings?.courseCards}
               chatId={props.chatId}
               feedbackScore={props.feedbackScore}
               sessionId={sessionId}

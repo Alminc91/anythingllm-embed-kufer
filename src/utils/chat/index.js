@@ -15,7 +15,11 @@ export default function handleChat(
     close,
     chatId = null, // KIE-504: DB-id der Antwort für die 👍/👎-Bewertung
     errorMsg = null,
+    // Kurskarten: Kurs-Metadaten (nie Kontexttext), kommen mit dem
+    // Abschluss-Chunk; ohne Feld bleibt die Nachricht unverändert.
+    courseSources = null,
   } = chatResult;
+  const courseExtra = Array.isArray(courseSources) ? { courseSources } : {};
 
   // Preserve the sentAt from the last message in the chat history
   const lastMessage = _chatHistory[_chatHistory.length - 1];
@@ -65,6 +69,7 @@ export default function handleChat(
         animate: !close,
         pending: false,
         sentAt,
+        ...courseExtra,
       },
     ]);
     _chatHistory.push({
@@ -78,6 +83,7 @@ export default function handleChat(
       animate: !close,
       pending: false,
       sentAt,
+      ...courseExtra,
     });
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
@@ -93,6 +99,7 @@ export default function handleChat(
         animate: !close,
         pending: false,
         sentAt,
+        ...courseExtra,
       };
       _chatHistory[chatIdx] = updatedHistory;
     } else {
@@ -107,6 +114,7 @@ export default function handleChat(
         animate: !close,
         pending: false,
         sentAt,
+        ...courseExtra,
       });
     }
     setChatHistory([..._chatHistory]);
@@ -114,9 +122,15 @@ export default function handleChat(
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
     // 👍/👎 sofort (ohne History-Reload) zugeordnet werden kann. Rein additiv —
     // closed/animate bleiben unangetastet, daher keine Flicker-Regression.
+    // Kurskarten: courseSources reisen im selben Abschluss-Chunk mit; die
+    // Karten erscheinen damit erst nach Stream-Ende, genau einmal.
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     if (chatIdx !== -1) {
-      _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], chatId };
+      _chatHistory[chatIdx] = {
+        ..._chatHistory[chatIdx],
+        chatId,
+        ...courseExtra,
+      };
       setChatHistory([..._chatHistory]);
     }
   }
