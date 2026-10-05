@@ -41,9 +41,16 @@ export const DEFAULT_INLINE_LAYOUT = "flow";
 export const DEFAULT_INLINE_EFFECT = null;
 export const DEFAULT_OVERLAY_EFFECT = "expand";
 // Eingabe-Leiste (inlineInput): Öffnen schon beim Zeiger-Klick ins Feld
-// ("focus") statt erst beim Absenden ("submit", Standard).
+// ("focus") statt erst beim Absenden ("submit", Standard); Overlay-Box schließt
+// zusätzlich beim Verlassen mit dem Zeiger ("leave") statt nur bei Außenklick/
+// Escape ("outside", Standard).
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
+export const INLINE_CLOSE_ON_VALUES = ["outside", "leave"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
+export const DEFAULT_INLINE_CLOSE_ON = "outside";
+// Karenz bis zum Schließen beim Verlassen (--allm-leave-delay, utils/theme.js)
+export const DEFAULT_LEAVE_DELAY_MS = 600;
+const LEAVE_DELAY_MAX_MS = 10000;
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -129,9 +136,10 @@ export const layoutValidations = {
   // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
   inlineLayout: (v) => oneOf(v, INLINE_LAYOUT_VALUES),
   inlineEffect: (v) => oneOf(v, INLINE_EFFECT_VALUES),
-  // Öffnen bei Zeiger-Klick: ungültig -> verworfen, Warnung wie oben
-  // (warnInvalidInlineEnums)
+  // Öffnen bei Zeiger-Klick / Schließen beim Verlassen: ungültig -> verworfen,
+  // Warnung wie oben (warnInvalidInlineEnums)
   inlineOpenOn: (v) => oneOf(v, INLINE_OPEN_ON_VALUES),
+  inlineCloseOn: (v) => oneOf(v, INLINE_CLOSE_ON_VALUES),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -144,7 +152,7 @@ export const layoutValidations = {
   },
 };
 
-// Ungültige inlineLayout-/inlineEffect-Werte (ebenso inlineOpenOn):
+// Ungültige inlineLayout-/inlineEffect-Werte (ebenso inlineOpenOn/-CloseOn):
 // je Quelle eine console.warn-Zeile, die den tatsächlich geltenden Wert nennt
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
@@ -163,6 +171,7 @@ export function warnInvalidInlineEnums(
     ["inlineLayout", INLINE_LAYOUT_VALUES],
     ["inlineEffect", INLINE_EFFECT_VALUES],
     ["inlineOpenOn", INLINE_OPEN_ON_VALUES],
+    ["inlineCloseOn", INLINE_CLOSE_ON_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {
@@ -297,6 +306,22 @@ export function isInlineOverlay(settings = {}) {
 // Eingabe-Leiste: öffnet schon der Zeiger-Klick ins Feld (inlineOpenOn "focus")?
 export function opensOnPointer(settings = {}) {
   return settings.inlineInput === true && settings.inlineOpenOn === "focus";
+}
+
+// Schwebende Box: schließt beim Verlassen mit dem Zeiger (inlineCloseOn "leave")?
+// Nur bei inlineLayout "overlay"; Fallback im Seitenfluss/mobil prüft InlineChat.
+export function closesOnLeave(settings = {}) {
+  return isInlineOverlay(settings) && settings.inlineCloseOn === "leave";
+}
+
+// CSS-Zeitwert ("600ms", "0.6s", " 200ms ") -> Millisekunden, geklemmt
+// 0–10 s; ungültig/leer -> fallback.
+export function cssTimeMs(value, fallback = DEFAULT_LEAVE_DELAY_MS) {
+  if (typeof value !== "string") return fallback;
+  const m = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(value.trim().toLowerCase());
+  if (!m) return fallback;
+  const ms = m[2] === "s" ? Number(m[1]) * 1000 : Number(m[1]);
+  return Math.min(Math.round(ms), LEAVE_DELAY_MAX_MS);
 }
 
 // Inline: wirksamer Aufklapp-Effekt. Ausdrücklich gesetzt -> dieser; ohne

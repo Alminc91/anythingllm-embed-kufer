@@ -3,6 +3,7 @@ import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
 import ChatService from "@/models/chatService";
+import useEmbedMode from "@/hooks/useEmbedMode";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 
 export default function ChatContainer({
@@ -24,6 +25,13 @@ export default function ChatContainer({
   const streamControllerRef = useRef(null);
   // Zuletzt verbrauchtes Ticket der Inline-Leiste: jedes Ticket genau einmal.
   const lastConsumedTicketRef = useRef(null);
+  // Inline-Modus: Zustand an InlineChat melden (Schließen beim Verlassen
+  // sperrt, solange eine Antwort läuft; Hinweis „Unterhaltung fortsetzen“
+  // zählt die Nachrichten). Blase: Kontext-Standard ohne Wirkung.
+  const { reportChat } = useEmbedMode();
+  // Stream offen: von vor der Anfrage bis die Verbindung endet (nach dem
+  // Abschluss-Chunk finalizeResponseStream). Nur gemeldet, ändert keine Sperre.
+  const [streamOpen, setStreamOpen] = useState(false);
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -121,6 +129,7 @@ export default function ChatContainer({
       // ueberschreiben. Der Cleanup-Effect unten bricht ihn beim Unmount ab.
       const controller = new AbortController();
       streamControllerRef.current = controller;
+      setStreamOpen(true);
 
       try {
         await ChatService.streamChat(
@@ -143,6 +152,7 @@ export default function ChatContainer({
         // bzw. ohne Abschluss-Chunk (close) -> trotzdem freigeben.
         if (isStreaming(_chatHistory[_chatHistory.length - 1]))
           setLoadingResponse(false);
+        setStreamOpen(false);
       }
       return;
     }
@@ -181,6 +191,20 @@ export default function ChatContainer({
     if (pending.send) sendCommand(pending.text, [], []);
     else setMessage((current) => appendDraft(current, pending.text));
   }, [pendingFirstMessage, loadingResponse, replyStreaming]);
+
+  // Zustand melden (nur lesend): Antwort läuft = wartet/streamt/Verbindung
+  // offen; Anzahl + Zeitstempel der letzten Nachricht.
+  const replyRunning = loadingResponse || replyStreaming || streamOpen;
+  const messageCount = chatHistory.length;
+  const lastSentAt = chatHistory[messageCount - 1]?.sentAt ?? null;
+  useEffect(() => {
+    reportChat?.({
+      streaming: replyRunning,
+      count: messageCount,
+      lastAt: lastSentAt,
+    });
+  }, [replyRunning, messageCount, lastSentAt]);
+  useEffect(() => () => reportChat?.({ streaming: false }), []);
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;

@@ -7,6 +7,7 @@ import {
   DEFAULT_INLINE_HEIGHT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_LAYOUT,
+  DEFAULT_INLINE_CLOSE_ON,
   DEFAULT_INLINE_OPEN_ON,
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
@@ -87,6 +88,10 @@ export const DEFAULT_SETTINGS = {
   // Eingabe-Leiste: "submit" = öffnet erst beim Absenden (bisher) | "focus" =
   // schon beim Klick/Tippen ins Feld (nur Zeiger/Touch, nie per Tab-Fokus).
   inlineOpenOn: DEFAULT_INLINE_OPEN_ON,
+  // Schwebende Box (inlineLayout "overlay", ab 768px, feiner Zeiger):
+  // "outside" = Außenklick/Escape (bisher) | "leave" = zusätzlich nach
+  // --allm-leave-delay, wenn der Zeiger Box und Leiste verlässt.
+  inlineCloseOn: DEFAULT_INLINE_CLOSE_ON,
   // Stil der eingeklappten Leiste: "light" | "dark"; null = folgt dem
   // Fenster-Theme (theme). Ein explizit gesetzter Wert gewinnt.
   inlineTheme: null,

@@ -20,6 +20,8 @@ import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_SEND_TEXT,
+  closesOnLeave,
+  cssTimeMs,
   findClippingAncestor,
   inlineBoxHeightPx,
   inlineBoxStyle,
@@ -78,6 +80,12 @@ import {
 //                          (Entwurf wandert per Übergabe send: false mit). Nur
 //                          nach pointerdown mit mouse/touch/pen — Tab-Fokus
 //                          öffnet nie (Tastatur/Screenreader), Enter wie bisher.
+//   inlineCloseOn "leave"  schwebende Box (overlay, ab 768px, feiner Zeiger)
+//                          klappt ein, wenn der Zeiger Box und Leiste verlässt,
+//                          nach --allm-leave-delay; nie solange eine Antwort
+//                          läuft, ein Eingabefeld (oder per Tastatur ein
+//                          Element) im Widget fokussiert ist oder ein Menü /
+//                          „Frühere Chats“ offen ist ([data-allm-layer]).
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -90,6 +98,28 @@ const TAP_SLOP_PX = 10;
 // Touch: auf den click nach dem Tippen warten (ein Link soll ihn bekommen);
 // Safari schickt für nicht-interaktive Stellen keinen -> danach einklappen
 const TOUCH_CLICK_WAIT_MS = 350;
+// Offenes Menü/„Frühere Chats“ im Chat-Fenster (sperrt Schließen beim Verlassen)
+const LAYER_SELECTOR = "[data-allm-layer]";
+
+// Sperre „Fokus“ für das Schließen beim Verlassen: ein Eingabefeld im Widget
+// ist fokussiert — oder irgendein Element per Tastatur (:focus-visible), damit
+// Tastaturnutzer nicht aus dem Panel fallen. Ein per Maus geklickter Knopf
+// sperrt nicht.
+function focusInWidget(root) {
+  const a =
+    embedderSettings.shadowRoot?.activeElement || document.activeElement;
+  return a && root?.contains(a) ? a : null;
+}
+function focusLocksLeave(root) {
+  const a = focusInWidget(root);
+  if (!a) return false;
+  if (a.matches?.("input, textarea, select, [contenteditable]")) return true;
+  try {
+    return a.matches(":focus-visible");
+  } catch (e) {
+    return false;
+  }
+}
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
 // mitten im Inhalt (text-align:center, line-height:2, Großbuchstaben o. ä. würden
@@ -260,6 +290,11 @@ export default function InlineChat({
   const floating = wantOverlay && !overlayClipped;
   // Varianten der Eingabe-Leiste (siehe Kopfkommentar)
   const openOnPointer = opensOnPointer(settings);
+  const leaveEnabled = closesOnLeave(settings);
+  // Antwort läuft (vom ChatContainer gemeldet); Ref, kein Re-Render
+  const replyRunningRef = useRef(false);
+  // Schließen beim Verlassen: nach Antwort-Ende neu starten (Karenz ab Ende)
+  const leaveRestartRef = useRef(null);
 
   const view = overlay ? "overlay" : expanded && isDesktop ? "box" : "bar";
   if (view !== "bar") chatMountedRef.current = true;
@@ -486,8 +521,9 @@ export default function InlineChat({
   // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
   // Eine noch nicht verbrauchte Übergabe wird verworfen (nie unsichtbar
   // senden), ihr Text kommt zurück ins Leisten-Feld.
-  // focus "bar": auf die Leiste; "if-free" (Klick außerhalb, Escape auf der
-  // Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
+  // focus "bar": auf die Leiste; "none": Fokus nicht anfassen (Schließen beim
+  // Verlassen, Fokus lag nicht im Widget); "if-free" (Klick außerhalb, Escape
+  // auf der Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
   // Element der Seite (Link, Eingabefeld), bleibt er dort. Außenklicks kommen
   // erst nach dem click hier an, der Fokus des Klicks steht dann schon.
   const collapse = (focus = "bar") => {
@@ -498,6 +534,7 @@ export default function InlineChat({
       setOverlay(false);
       setExpanded(false);
     });
+    if (focus === "none") return;
     const a = document.activeElement;
     const free =
       !a || a === document.body || a === document.documentElement || a === host;
@@ -611,6 +648,14 @@ export default function InlineChat({
     };
   }, [floating, view]);
 
+  // Vom ChatContainer: { streaming, … }. Nur ein Ref (kein State, kein
+  // Re-Render -> Bestand unverändert).
+  const reportChat = useCallback(({ streaming }) => {
+    const was = replyRunningRef.current;
+    replyRunningRef.current = streaming === true;
+    if (was && !replyRunningRef.current) leaveRestartRef.current?.();
+  }, []);
+
   const embedMode = useMemo(
     () => ({
       inline: true,
@@ -620,9 +665,66 @@ export default function InlineChat({
         focusRequestRef.current = false;
         return wanted;
       },
+      reportChat,
     }),
-    [overlay],
+    [overlay, reportChat],
   );
+
+  // inlineCloseOn "leave": Zeiger verlässt Box + Leiste (beide liegen in der
+  // Inline-Fläche rootRef; pointerleave zählt Nachfahren mit, auch die über
+  // die Fläche hinausragende schwebende Box) -> nach --allm-leave-delay
+  // einklappen; Rückkehr innerhalb der Karenz bricht ab. Nur schwebende Box
+  // (nicht im Seitenfluss-Fallback, nicht mobil/Vollbild), nur feiner Zeiger;
+  // Touch-pointerleave (nach jedem Tippen) zählt nicht. Gesperrt (Antwort
+  // läuft, Fokus, Menü offen) -> nach einer weiteren Karenz erneut prüfen;
+  // Antwort-Ende startet die Karenz neu. Außenklick/Escape bleiben unberührt.
+  useEffect(() => {
+    if (!leaveEnabled || view !== "box" || !floating) return;
+    const el = rootRef.current;
+    if (!el || isCoarsePointer()) return;
+    let timer = 0;
+    let inside = true; // geöffnet per Klick: Zeiger steht auf der Leiste
+    const delay = () =>
+      cssTimeMs(getComputedStyle(el).getPropertyValue("--allmi-leave-delay"));
+    const locked = () =>
+      replyRunningRef.current ||
+      focusLocksLeave(el) ||
+      !!el.querySelector(LAYER_SELECTOR);
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(fire, delay());
+    };
+    const fire = () => {
+      timer = 0;
+      if (inside) return;
+      if (locked()) arm();
+      // Fokus nur zurück auf die Leiste, wenn er im Widget lag (sonst ginge
+      // er mit dem Einklappen verloren); sonst bleibt er, wo er ist
+      else collapseRef.current(focusInWidget(el) ? "bar" : "none");
+    };
+    const onEnter = (e) => {
+      if (e.pointerType === "touch") return;
+      inside = true;
+      clearTimeout(timer);
+      timer = 0;
+    };
+    const onLeave = (e) => {
+      if (e.pointerType === "touch") return;
+      inside = false;
+      arm();
+    };
+    leaveRestartRef.current = () => {
+      if (!inside) arm();
+    };
+    el.addEventListener("pointerenter", onEnter);
+    el.addEventListener("pointerleave", onLeave);
+    return () => {
+      clearTimeout(timer);
+      leaveRestartRef.current = null;
+      el.removeEventListener("pointerenter", onEnter);
+      el.removeEventListener("pointerleave", onLeave);
+    };
+  }, [leaveEnabled, view, floating]);
 
   const inheritFont = settings.inheritFont === true;
   const boxFloating = view === "box" && floating;
