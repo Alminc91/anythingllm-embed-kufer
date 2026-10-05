@@ -61,12 +61,16 @@ import {
 // Seitenfluss (unsichtbar, gleiche Höhe), die aufgeklappte Box liegt
 // position:absolute darüber (oben an der Leiste, Breite der Inline-Fläche =
 // Platzhalter bzw. inlineMaxWidth, Stapel --allm-overlay-z) und verschiebt den
-// Inhalt darunter nicht. Klick außerhalb des Widgets und Escape klappen ein.
-// Kein Scroll-Lock, keine Styles an body/html. Schneidet ein Vorfahre des
-// Platzhalters (overflow hidden/clip) die Box ab, bleibt es beim Aufklappen im
-// Seitenfluss (eine Warnung). inlineEffect: Klasse am Chat-Fenster
-// (inlineEffectClass), Animation in main.jsx. Solange die Box aufgeklappt ist,
-// trägt der Platzhalter data-allm-expanded="true" (Signal für Seiten-CSS).
+// Inhalt darunter nicht. Klick/Tippen außerhalb des Widgets (nur linke
+// Maustaste, Wischen zählt nicht) und Escape klappen ein — erst nach dem Klick,
+// damit ein Link der Seite ihn sicher bekommt. Kein Scroll-Lock, keine Styles
+// an body/html. Schneidet ein Vorfahre des Platzhalters (overflow hidden/clip)
+// die Box ab, bleibt es im Seitenfluss (eine Warnung); geprüft bei jedem
+// Aufklappen, auch beim Wiedereintritt (Drehen, Fenster wieder >=768px).
+// inlineEffect: Klasse am Chat-Fenster (inlineEffectClass; ohne Angabe im
+// Seitenfluss keine), Animation in main.jsx, nur beim Aufklappen durch den
+// Nutzer. Solange die Box aufgeklappt ist, trägt der Platzhalter
+// data-allm-expanded="true" (Signal für Seiten-CSS).
 
 const NARROW_CONTAINER_PX = 480; // Leiste kompakter in schmalen Spalten
 // Chat-Fenster (Box bzw. Overlay); Ziel von aria-controls der Eingabe-Leiste
@@ -74,6 +78,11 @@ const CHAT_WINDOW_ID = "anything-llm-chat";
 const DESKTOP_QUERY = "(min-width: 768px)"; // = Tailwind md
 // Signal am Platzhalter, solange die Box aufgeklappt ist (README)
 const EXPANDED_ATTR = "data-allm-expanded";
+// Tippen außerhalb der schwebenden Box: weiter als das bewegt = Wischen
+const TAP_SLOP_PX = 10;
+// Touch: auf den click nach dem Tippen warten (ein Link soll ihn bekommen);
+// Safari schickt für nicht-interaktive Stellen keinen -> danach einklappen
+const TOUCH_CLICK_WAIT_MS = 350;
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
 // mitten im Inhalt (text-align:center, line-height:2, Großbuchstaben o. ä. würden
@@ -439,9 +448,10 @@ export default function InlineChat({
   // Einklappen (Box) bzw. Schließen (Overlay); Fokus zurück auf die Leiste.
   // Eine noch nicht verbrauchte Übergabe wird verworfen (nie unsichtbar
   // senden), ihr Text kommt zurück ins Leisten-Feld.
-  // focus "bar": sofort auf die Leiste; "if-free" (Klick außerhalb): erst nach
-  // dem Klick und nur, wenn er den Fokus nicht auf ein Element der Seite
-  // gesetzt hat (Link, Eingabefeld).
+  // focus "bar": auf die Leiste; "if-free" (Klick außerhalb, Escape auf der
+  // Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
+  // Element der Seite (Link, Eingabefeld), bleibt er dort. Außenklicks kommen
+  // erst nach dem click hier an, der Fokus des Klicks steht dann schon.
   const collapse = (focus = "bar") => {
     const unsent = pendingFirstMessage?.text;
     flushSync(() => {
@@ -450,21 +460,10 @@ export default function InlineChat({
       setOverlay(false);
       setExpanded(false);
     });
-    if (focus !== "if-free") {
-      focusBar();
-      return;
-    }
-    // nach mousedown (gleicher Task wie pointerdown): hat der Klick ein
-    // Element der Seite fokussiert, bleibt der Fokus dort
-    setTimeout(() => {
-      const a = document.activeElement;
-      const free =
-        !a ||
-        a === document.body ||
-        a === document.documentElement ||
-        a === host;
-      if (free) focusBar();
-    }, 0);
+    const a = document.activeElement;
+    const free =
+      !a || a === document.body || a === document.documentElement || a === host;
+    if (focus !== "if-free" || free) focusBar();
   };
   // Für ChatWindow (Button "Schließen" o. ä.): ohne Argumente
   const closeChat = () => collapse("bar");
@@ -488,14 +487,30 @@ export default function InlineChat({
     return () => root.removeEventListener("keydown", onKeyDown);
   }, [view]);
 
-  // Schwebende Box: Klick außerhalb des Widgets und Escape (auch wenn der
-  // Fokus nicht im Widget liegt) klappen ein. pointerdown in der
-  // Capture-Phase, damit Seiten-Scripts (stopPropagation) es nicht
-  // verschlucken; nie preventDefault -> der Klick (Link) läuft normal weiter.
-  // Touch: erst beim Tippen (click), damit Wischen zum Scrollen nicht schließt.
+  // Schwebende Box: Klick/Tippen außerhalb des Widgets und Escape (auch wenn
+  // der Fokus nicht im Widget liegt) klappen ein. pointerdown/pointerup in der
+  // Capture-Phase am document, damit Seiten-Scripts (stopPropagation) sie
+  // nicht verschlucken; nie preventDefault. Nur primärer Zeiger mit linker
+  // Taste (Rechts-/Mittelklick: Kontextmenü, neuer Tab -> bleibt offen).
+  // Eingeklappt wird erst NACH dem click (Maus: setTimeout 0 nach pointerup,
+  // click läuft im selben Task; Touch: nach dem click bzw. spätestens nach
+  // TOUCH_CLICK_WAIT_MS, Safari feuert für Taps auf nicht-interaktive Stellen
+  // keinen click am document): verbreitert die Seite den Platzhalter per
+  // data-allm-expanded, verschiebt das Einklappen den Inhalt — vorher würde
+  // der Klick auf einen Link danebengehen. Touch: Bewegung > TAP_SLOP_PX bzw.
+  // pointercancel (Scrollen) = Wischen, schließt nicht.
   useEffect(() => {
     if (!floating || view !== "box") return;
-    let lastPointer = "";
+    let down = null; // { id, touch, x, y } des Außen-pointerdown
+    let timer = 0;
+    let awaitingClick = false;
+    const collapseSoon = (ms) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        awaitingClick = false;
+        collapseRef.current("if-free");
+      }, ms);
+    };
     const isOutside = (e) => {
       const path = e.composedPath?.() || [];
       if (host && path.includes(host)) return false;
@@ -509,25 +524,50 @@ export default function InlineChat({
       return true;
     };
     const onPointerDown = (e) => {
-      lastPointer = e.pointerType || "";
-      if (lastPointer === "touch") return;
-      if (isOutside(e)) collapseRef.current("if-free");
+      down = null;
+      if (e.isPrimary === false || e.button !== 0 || !isOutside(e)) return;
+      down = {
+        id: e.pointerId,
+        touch: !!e.pointerType && e.pointerType !== "mouse",
+        x: e.clientX,
+        y: e.clientY,
+      };
     };
-    const onClick = (e) => {
-      if (lastPointer === "touch" && isOutside(e))
-        collapseRef.current("if-free");
+    const onPointerUp = (e) => {
+      const d = down;
+      down = null;
+      if (!d || e.pointerId !== d.id) return;
+      if (!d.touch) {
+        collapseSoon(0);
+        return;
+      }
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP_PX) return;
+      awaitingClick = true;
+      collapseSoon(TOUCH_CLICK_WAIT_MS);
+    };
+    const onPointerCancel = () => {
+      down = null;
+    };
+    const onClick = () => {
+      if (awaitingClick) collapseSoon(0);
     };
     const onKeyDown = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       // aus dem Widget: Listener am Shadow Root (oben)
       if (host && e.composedPath?.().includes(host)) return;
-      collapseRef.current();
+      // Fokus in einem Feld der Seite bleibt dort
+      collapseRef.current("if-free");
     };
     document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("pointerup", onPointerUp, true);
+    document.addEventListener("pointercancel", onPointerCancel, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("pointercancel", onPointerCancel, true);
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKeyDown);
     };
