@@ -205,9 +205,6 @@ export const THEME_VARIABLES = [
   { name: "effect-duration", light: "320ms", dark: "320ms" },
   { name: "effect-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
-  // Karenz bis zum Schließen der schwebenden Box beim Verlassen mit dem
-  // Zeiger (inlineCloseOn "leave"); wird in InlineChat gelesen
-  { name: "leave-delay", light: "600ms", dark: "600ms" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
   {
     name: "focus-ring",

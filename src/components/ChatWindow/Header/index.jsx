@@ -270,7 +270,6 @@ function OptionsMenu({
   return (
     <div
       ref={menuRef}
-      data-allm-layer="menu"
       className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
     >
       {/* Reset bleibt oben (häufigste Aktion, gewohnte Position), "Frühere
