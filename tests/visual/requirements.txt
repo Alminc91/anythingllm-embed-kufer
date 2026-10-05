@@ -1,0 +1,5 @@
+# Abhängigkeiten der visuellen Tests (tests/visual/theme_visual.py).
+# Danach einmalig: playwright install chromium
+numpy>=1.26
+Pillow>=10.0
+playwright>=1.45

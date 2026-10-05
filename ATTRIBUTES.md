@@ -47,7 +47,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-window-width` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterbreite). |
 | `data-text-size` | `14` | Textgröße in px (nur Zahl) |
 | `data-no-header` | `null` | Header ausblenden wenn gesetzt |
-| `data-theme` | `light` | Theme des ganzen Chatfensters: `light`, `dark`, `auto` (folgt `prefers-color-scheme`). Auch per Design Center (`visual_config.theme`). Feinsteuerung per Seiten-CSS über `--allm-*`-Variablen, siehe README „Styling per CSS-Variablen“. |
+| `data-theme` | `light` | Theme des ganzen Chatfensters: `light`, `dark`, `auto` (folgt `prefers-color-scheme`). Auch per Design Center (`visual_config.theme`) — wirkt erst mit der Fork-Version, die diesen Schlüssel ausliefert (Image ≥ 7.9); bis dahin nur Script-Attribut bzw. Seiten-CSS. Feinsteuerung per Seiten-CSS über `--allm-*`-Variablen, siehe README „Styling per CSS-Variablen“. |
 
 ### Icon Style Optionen
 

@@ -31,6 +31,19 @@ While in development mode (`yarn dev`) the script will rebuild on any changes to
 
 `yarn build` will compile and minify your build of the script. You can then host and link your built script wherever you like.
 
+### Visuelle Tests ausführen
+
+Die Theme-/CSS-Variablen-Tests (`tests/visual/theme_visual.py`) laden den gebauten Widget-Build in Chromium (Playwright), vergleichen Screenshots mit `tests/visual/baseline/` und prüfen berechnete Styles. Einmalig einrichten und dann ausführen:
+
+```bash
+pip install -r tests/visual/requirements.txt   # numpy, Pillow, playwright
+playwright install chromium
+npm run build                                  # Tests prüfen dist/
+python3 tests/visual/theme_visual.py           # bzw. npm run test:visual
+```
+
+Ergebnisse (Screenshots, Diff-Bilder, `summary.json`) landen in `tests/visual/results/`. Die Unit-Tests laufen mit `npm test` (Vitest).
+
 ## Integrations & Embed Types
 
 ### `<script>` tag HTML embed
@@ -109,7 +122,7 @@ REQUIRED data attributes:
 
 - `data-inline-start-state` - `collapsed` (Standard) oder `expanded` (nur ab 768px; mobil wird immer die Leiste gezeigt).
 
-- `data-inline-theme` - Stil der eingeklappten Leiste: `light` (Standard) oder `dark`.
+- `data-inline-theme` - Stil der eingeklappten Leiste: `light` oder `dark`. Ohne Angabe folgt die Leiste dem Theme (`data-theme`, Standard hell); ein explizit gesetzter Wert gewinnt.
 
 - `data-inherit-font` - `true`: im Inline-Modus die Schrift der Webseite übernehmen.
 
@@ -159,10 +172,12 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 ### Theme: hell, dunkel, automatisch
 
 - Script-Attribut `data-theme="light" | "dark" | "auto"` oder im Design Center `visual_config.theme` (gleiche Werte, Vorrang wie oben). Standard `light`.
+- **Hinweis Server:** `visual_config.theme` wirkt erst mit der AnythingLLM-Fork-Version, deren Endpunkt `/embed/:embedId/config` diesen Schlüssel ausliefert (Image ≥ 7.9). Bis dahin lässt sich das Theme nur per Script-Attribut `data-theme` bzw. über Seiten-CSS (`--allm-*`) setzen; ein auf älteren Servern gespeichertes `theme` wird ignoriert (kein Fehler, das Script-Attribut gilt).
 - `dark` schaltet den vollständigen dunklen Satz für das **ganze** Chatfenster (Fenster, Header, Verlauf, Eingabefeld, Menü, „Frühere Chats“, Willkommensblasen) und die Inline-Leiste. Kontrast geprüft (WCAG AA): Text ≥ 4,5:1, Rahmen ≥ 3:1.
 - `auto` folgt `prefers-color-scheme` des Systems und wechselt **ohne Neuladen**.
 - Ungültige Werte (z. B. `data-theme="blau"`) → eine `console.warn`-Zeile, es gilt `light`.
-- `data-inline-theme="dark"` (Bestand) färbt weiterhin nur die eingeklappte Leiste; das geöffnete Fenster bleibt hell. Bei `theme: dark` ist die Leiste immer dunkel.
+- `data-inline-theme="dark"` (Bestand) färbt weiterhin nur die eingeklappte Leiste; das geöffnete Fenster bleibt hell. Ohne `inlineTheme` folgt die Leiste dem Theme (bei `theme: dark` also dunkel); ein explizites `inlineTheme` (`light` oder `dark`) gewinnt auch im dunklen Theme.
+- Marken-Header im dunklen Theme: `headerBgColor` ohne `headerTextColor` → Name im Header in `#F4F2EF` (im hellen Theme wie bisher `#1f2937`), Icons weiß.
 - Brand-Farben (`buttonColor`, `userBgColor`, `userTextColor`, `headerBgColor`/`headerTextColor`) gelten auch im dunklen Theme; `assistantBgColor` und `linkColor` sind auf eine weiße Antwortblase abgestimmt und werden im dunklen Theme durch den dunklen Satz ersetzt (per Seiten-CSS weiterhin überschreibbar).
 - `prefers-reduced-motion: reduce` setzt `--allm-transition` wirksam auf `0ms` (auch wenn das Seiten-CSS eine Dauer setzt).
 
@@ -176,7 +191,7 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 | `--allm-surface` | Fensterfläche (Blase, Inline-Box, Vollbild), Eingabezeile, Menü, Karten, Willkommensblasen | `#FFFFFF` | `#1D1D21` |
 | `--allm-text` | Grundtext (Fenster, Listentitel, Willkommensblasen) | — (`#222628` Inline, `#1f2937` Titel, `#2d3748` Willkommensblasen; Blase erbt die Seitenfarbe) | `#F4F2EF` |
 | `--allm-text-muted` | gedämpfter Text/Icons: Begrüßung, Name, Zeitstempel, Menüeinträge, Platzhalter, Senden-Icon, Bewertung | — (`#94a3b8`, `#9ca3af`, `#7A7D7E`, `#1e293b99`, `#22262899` …) | `#A6A8AD` |
-| `--allm-border` | Header-Linie, Rahmen der Inline-Box, Karten in „Frühere Chats“ | — (`#E9E9E9` Header, `#d1d5db` Box, `#e5e7eb` Karten) | `#787B82` |
+| `--allm-border` | Header-Linie (entfällt, sobald eine Header-Farbe wirkt: `headerBgColor` oder `--allm-header-bg`), Rahmen der Inline-Box, Karten in „Frühere Chats“ | — (`#E9E9E9` Header, `#d1d5db` Box, `#e5e7eb` Karten) | `#787B82` |
 | `--allm-accent` | Chat-Button, Icon der Leiste, Akzente („Frühere Chats“, Senden im Feedback) | `buttonColor` (`#01a5a9`) | `buttonColor` |
 | `--allm-user-bg` | Nutzer-Blase, Vorschlags-Buttons | `userBgColor` (`#01a5a9`) | `userBgColor` |
 | `--allm-user-text` | Text der Nutzer-Blase/Vorschläge | `userTextColor` (`#FFFFFF`) | `userTextColor` |
@@ -184,28 +199,28 @@ Technisch setzt das Widget die Standardwerte nicht unter dem öffentlichen Namen
 | `--allm-assistant-text` | Text der Antwortblase, folgt `--allm-text` | `#222628` | `#F4F2EF` |
 | `--allm-link` | Links in Antworten | `linkColor` (`#01a5a9`) | `#5CC8CB` |
 | `--allm-header-bg` | Header (Chat + „Frühere Chats“) | `headerBgColor`, sonst `transparent` | `headerBgColor`, sonst `#18181B` |
-| `--allm-header-text` | Name im Header, folgt `--allm-text` | `headerTextColor`, sonst `#1f2937` | `headerTextColor`; mit `headerBgColor` `#1f2937`; sonst `#F4F2EF` |
-| `--allm-header-icon` * | Menü-/Schließen-Icons im Header, folgt `--allm-text-muted` | `headerTextColor`; mit `headerBgColor` `#FFFFFF`; sonst — (`#1e293b99`, `#374151`) | wie hell, sonst `#A6A8AD` |
+| `--allm-header-text` | Name im Header, folgt `--allm-text` | `headerTextColor`, sonst `#1f2937` | `headerTextColor`, sonst `#F4F2EF` (auch mit `headerBgColor`) |
+| `--allm-header-icon` * | Menü-/Schließen-/Zurück-Icons im Header (Chat + „Frühere Chats“), folgt `--allm-text-muted` | `headerTextColor`; mit `headerBgColor` `#FFFFFF`; sonst — (`#1e293b99`) | wie hell, sonst `#A6A8AD` |
 | `--allm-input-bg` | Eingabefeld | `transparent` | `#26262B` |
 | `--allm-input-border` | Rahmen des Eingabefelds (1,5px), folgt `--allm-border` | `#22262833` | `#787B82` |
-| `--allm-input-text` | Eingabetext, Mikrofon/Senden-Spinner, folgt `--allm-text` | `#000000` | `#F4F2EF` |
+| `--allm-input-text` | Eingabetext, Mikrofon/Senden-Spinner, Mikrofon/Senden-Icon beim Hover; folgt `--allm-text` | `#000000` (Hover-Icon `#222628e6`) | `#F4F2EF` |
 | `--allm-radius` | Fenster (ab 768px), Inline-Box, Header oben, Eingabefeld, „Frühere Chats“ | `16px` | `16px` |
 | `--allm-radius-bubble` | Sprechblasen (drei Ecken; Zipfel-Ecke `min(4px, Wert/4,5)`) | `--allm-radius` × 1,125 = `18px` | wie hell |
 | `--allm-shadow` | Schatten von Fenster/Inline-Box | — (Blase `0 4px 14px rgba(0,0,0,.25)`, Inline-Box `…0.12`) | `0 4px 14px rgba(0,0,0,.5)` |
 | `--allm-bubble-shadow` * | Schatten der Sprechblasen | `0 4px 14px rgba(0,0,0,.25)` | `0 4px 14px rgba(0,0,0,.35)` |
 | `--allm-font` | Schrift (alle Widget-Texte) | Widget-Schrift (`plus-jakarta-sans, ui-sans-serif, system-ui, …`); mit `inheritFont` die Seitenschrift | wie hell |
-| `--allm-font-size` | Text der Nachrichten | `textSize` (`14px`; wie bisher nur 10–14 und 16 wirksam, sonst erbt die Schrift; laufende Antwort `14px`) | wie hell |
+| `--allm-font-size` | Text der Nachrichten (laufende Antwort, Verlauf und Vorschläge gleich) | `textSize` (`14px`; wie bisher nur 10–14 und 16 wirksam, sonst erbt die Schrift) | wie hell |
 | `--allm-transition` | Dauer der Übergänge (Button, Leiste, Header, Willkommensblasen ×1,5/×2) | `200ms` (`0ms` bei reduzierter Bewegung) | `200ms` |
 | `--allm-easing` * | Zeitfunktion der Übergänge | `cubic-bezier(0.4, 0, 0.2, 1)` | wie hell |
 | `--allm-hover-bg` | Hover-Fläche (Menü, Header-Buttons, ×-Button) | — (`#f3f4f6`) | `rgba(255,255,255,.08)` |
 | `--allm-focus-ring` | Tastatur-Fokus von Buttons/Links (`outline`-Kurzform, z. B. `2px solid #F3A04C`) | — (Browser-Standard) | `2px solid` + Akzent |
-| `--allm-bar-bg` | eingeklappte Inline-Leiste | `#FFFFFF` (`inlineTheme: dark`: `rgba(17,24,39,.78)` + Weichzeichner) | `rgba(17,24,39,.78)` |
+| `--allm-bar-bg` | eingeklappte Inline-Leiste | `#FFFFFF` (`inlineTheme: dark`: `rgba(17,24,39,.78)` + Weichzeichner) | `rgba(17,24,39,.78)` (`inlineTheme: light`: `#FFFFFF`) |
 | `--allm-bar-text` | Text der Leiste | `#1f2937` (dark: `#FFFFFF`) | `#FFFFFF` |
 | `--allm-bar-border` | Rahmen der Leiste (1px) | `#d1d5db` (dark: `rgba(255,255,255,.16)`) | `rgba(255,255,255,.16)` |
 | `--allm-bar-shadow` * | Schatten der Leiste | `0 1px 3px rgba(0,0,0,.06)` (dark: `0 4px 16px rgba(0,0,0,.18)`) | `0 4px 16px rgba(0,0,0,.18)` |
 | `--allm-bar-radius` * | Rundung der Leiste, folgt `--allm-radius` | `16px` | `16px` |
 
-Nicht über Variablen gesteuert (bewusst): Fehler-/Hinweisboxen (rot/amber), das Feedback-Kommentarfeld, Code-Blöcke (eigenes dunkles Schema), die Icon-Kachel im Marken-Header (`iconStyle`) und die Tönung der Icons in „Frühere Chats“ (folgt `buttonColor`).
+Nicht über Variablen gesteuert (bewusst): Fehler-/Hinweisboxen (rot/amber), das Feedback-Kommentarfeld, Code-Blöcke (eigenes dunkles Schema), die Icon-Kachel im Marken-Header (`iconStyle`). Die Tönung der Icons in „Frühere Chats“ folgt `--allm-accent` (10 %, per `color-mix()`; ältere Browser ohne `color-mix()`: wie bisher aus `buttonColor`).
 
 ### Beispiel hell/dunkel (Mockup „vhs Rhein Suchfeld“)
 
