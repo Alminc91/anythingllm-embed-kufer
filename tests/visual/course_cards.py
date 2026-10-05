@@ -28,6 +28,8 @@ cc-above-* (Karten über der Antwort; Server kündigt Kurse vorab per Chunk
 type "courseSources" an), AK-4b (Karten vor dem ersten Text-Token, genau eine
 Einfügung, keine Verschiebung), AK-4c (ganze Karte klickbar, Tab/Enter) und
 die Widget-Abwehr gegen einen durchgereichten Marker "[[KARTEN: …]]".
+Schlanke Fallback-Karte: Zustand cc-fallback (Kurslink ohne courseSources-
+Eintrag -> Karte nur mit Titel) + DOM-Prüfung below/above.
 
 Ergebnisse: tests/visual/results/course-cards-*.png, summary-course-cards.json.
 """
@@ -67,6 +69,16 @@ ANSWER_3 = (
 )
 ANSWER_8 = "Wir haben mehrere passende Yogakurse:\n\n" + "\n".join(f"- {md(c)}" for c in BY[:8])
 ANSWER_Q = "Meinen Sie Yoga für Anfänger oder eher Kurse für Fortgeschrittene?"
+# Fallback-Karte: zweiter Kurslink hat keinen courseSources-Eintrag (Server hat
+# den Kurs nicht gefunden) -> Karte nur mit Titel
+FALLBACK_URL = "https://www.vhs-bergisch-land.de/kurssuche/kurs/yin-yoga-am-abend/26266299"
+FALLBACK_TITLE = "Yin Yoga am Abend"
+ANSWER_FB = (
+    "Ja, am Abend gibt es zum Beispiel:\n\n"
+    f"- {md(BY[0])} donnerstags um 18:30 Uhr in Leichlingen\n"
+    f"- [**{FALLBACK_TITLE}**]({FALLBACK_URL}) dienstags in Burscheid\n"
+    f"- {md(BY[6])} mittwochs um 19:15 Uhr in Burscheid"
+)
 
 
 def stream_events(answer, course_sources=BY, uuid="u-1", parts=3):
@@ -234,6 +246,9 @@ def pixel_cases():
          assistant.replace(" a", ""), None, None, "same", "cc-question-light"),
         ("cc-below-explicit", {"attrs": BELOW}, tv.Mock(config={}, stream=stream_events(ANSWER_3)), "#message-input",
          "send", None, "same", "cc-cards-light"),
+        # Schlanke Fallback-Karte (Kurslink ohne Serverdaten)
+        ("cc-fallback", {"attrs": CARDS}, tv.Mock(config={}, stream=stream_events(ANSWER_FB)), "#message-input",
+         "send", None, "new"),
     ]
 
 
@@ -375,6 +390,69 @@ def check_ak2(browser, base_url):
                and f["href"] == CATEGORY_URL, f"{f}")
         no_undef = not any(("undefined" in c["text"] or "NaN" in c["text"]) for c in info["cards"])
         record("AK-7 kein undefined/NaN", no_undef, "ok" if no_undef else "gefunden")
+    finally:
+        m.release()
+        ctx.close()
+
+
+FALLBACK_INFO_JS = r"""
+() => {
+  const s = window.__allmShadow;
+  const reply = [...s.querySelectorAll(".allm-anything-llm-assistant-message")].pop();
+  const card = (c) => {
+    const r = c.getBoundingClientRect();
+    return {
+      title: c.querySelector(".allm-course-title")?.textContent ?? null,
+      text: c.innerText, href: c.getAttribute("href"), tag: c.tagName,
+      fallback: c.hasAttribute("data-course-fallback"), h: Math.round(r.height),
+      meta: c.querySelectorAll(".allm-course-schedule, .allm-course-details, .allm-course-status").length,
+      below: reply ? r.top >= reply.getBoundingClientRect().bottom : null,
+    };
+  };
+  const top = s.querySelector("[data-course-cards]");
+  const footer = s.querySelector("[data-course-cards-footer]");
+  return {
+    top: top ? [...top.querySelectorAll(".allm-course-card")].map(card) : [],
+    footer: footer ? [...footer.querySelectorAll(".allm-course-card")].map(card) : [],
+  };
+}
+"""
+
+
+def check_fallback(browser, base_url):
+    """Schlanke Fallback-Karte: Kurslink ohne courseSources-Eintrag."""
+    # below: Reihenfolge wie die übrigen Karten (datierte zuerst), nur Titel
+    m = tv.Mock(config={}, stream=stream_events(ANSWER_FB))
+    ctx, page = open_and_send(browser, base_url, CARDS, m)
+    try:
+        page.wait_for_function(f"() => !!window.__q('{CARD_SEL}')", timeout=10000)
+        page.wait_for_timeout(300)
+        info = page.evaluate(FALLBACK_INFO_JS)
+        cards = info["top"]
+        fb = [c for c in cards if c["fallback"]]
+        full = [c for c in cards if not c["fallback"]]
+        ok = (len(cards) == 3 and len(fb) == 1 and fb[0]["title"] == FALLBACK_TITLE
+              and fb[0]["text"].strip() == FALLBACK_TITLE and fb[0]["href"] == FALLBACK_URL
+              and fb[0]["tag"] == "A" and fb[0]["meta"] == 0 and cards[-1]["fallback"]
+              and all(c["meta"] >= 2 for c in full) and all(c["h"] > fb[0]["h"] for c in full))
+        record("Fallback-Karte (below): nur Titel + Link, ganze Karte klickbar, nach den datierten", ok,
+               " | ".join(f"{c['title']} (fallback {c['fallback']}, Zeilen {c['meta']}, {c['h']} px)" for c in cards))
+    finally:
+        m.release()
+        ctx.close()
+    # above mit Ankündigung: Fallback-Karte unter der Antwort, oben unverändert
+    events = announced_events(answer=ANSWER_FB)
+    m = tv.Mock(config={}, stream=events)
+    ctx, page = open_and_send(browser, base_url, ABOVE, m)
+    try:
+        page.wait_for_function("() => !!window.__q('[data-course-cards-footer]')", timeout=10000)
+        page.wait_for_timeout(300)
+        info = page.evaluate(FALLBACK_INFO_JS)
+        ok = (len(info["footer"]) == 1 and info["footer"][0]["fallback"] and info["footer"][0]["below"]
+              and info["footer"][0]["title"] == FALLBACK_TITLE and not any(c["fallback"] for c in info["top"])
+              and [c["title"] for c in info["top"]] == [BY[6]["title"], BY[0]["title"]])
+        record("Fallback-Karte (above): unter der Antwort, Karten oben unverändert", ok,
+               f"oben {[c['title'] for c in info['top']]}, unten {[c['title'] for c in info['footer']]}")
     finally:
         m.release()
         ctx.close()
@@ -772,6 +850,7 @@ def main():
                 check_ak4b(browser, base_url)
                 check_marker_passthrough(browser, base_url)
                 check_ak4c(browser, base_url)
+                check_fallback(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()

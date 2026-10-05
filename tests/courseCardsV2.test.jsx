@@ -860,3 +860,265 @@ describe("Kurskarten oben: Anker-Scroll einmal je Turn (Review-Fund 1)", () => {
     expect(scrollTo).toHaveBeenLastCalledWith({ top: 942, behavior: "auto" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Schlanke Fallback-Karte: Kursseiten-Links ohne courseSources-Eintrag
+// ---------------------------------------------------------------------------
+describe("Fallback-Karten: Auswahl", () => {
+  const FB = { ...DONAU, fallback: true };
+  const fb = (path, nr) => `${BASE}/${path}/${nr}`;
+  const BIKE = fb("radfahren-fuer-erwachsene", "262-9X01");
+  const COOK = fb("indisch-kochen", "262-7K03");
+
+  it("::fallback-card — Kurslink ohne Metadaten: Karte nur mit Titel (Linktext ohne Markdown) und Link", () => {
+    const reply = [
+      "Für Anfänger passen:",
+      `1. ${link(SPAN_15, `**${SPAN_15.title}**`)}`,
+      `2. [**Spanisch als Urlaubsvorbereitung**](${URLAUB})`,
+      `3. ${link(SPAN_14, `**${SPAN_14.title}**`)}`,
+    ].join("\n");
+    const sources = [clone(SPAN_14), clone(SPAN_15)];
+    // ohne Option fallback (Antwort streamt noch): wie bisher
+    expect(
+      selectCourseCards(reply, sources, AUTO, DONAU).cards.map((c) => c.url),
+    ).toEqual([SPAN_14.url, SPAN_15.url]);
+    const r = selectCourseCards(reply, sources, AUTO, FB);
+    expect(r.cards.map((c) => c.url)).toEqual([
+      SPAN_14.url,
+      SPAN_15.url,
+      URLAUB,
+    ]);
+    expect(r.categoryLink).toBeNull();
+    const card = r.cards[2];
+    expect(card).toMatchObject({
+      title: "Spanisch als Urlaubsvorbereitung",
+      url: URLAUB,
+      fallback: true,
+      schedule: null,
+      weekdays: null,
+      time: null,
+      start: null,
+      place: null,
+      price: null,
+      status: null,
+    });
+    expect(r.cards[0].fallback).toBeUndefined();
+  });
+
+  it("Reihenfolge der Links, Dedupe per URL (Schreibweise egal), Karten ohne Datum hinter datierten", () => {
+    const reply = [
+      `[Radfahren für Erwachsene](${BIKE})`,
+      link(SPAN_14),
+      `[Indisch kochen](${COOK})`,
+      `Nochmals: [Radfahren für Erwachsene](${BIKE.toUpperCase().replace("HTTPS://AW", "https://www.aw")}/)`,
+    ].join("\n");
+    const r = selectCourseCards(reply, [clone(SPAN_14)], AUTO, FB);
+    expect(r.cards.map((c) => c.title)).toEqual([
+      SPAN_14.title,
+      "Radfahren für Erwachsene",
+      "Indisch kochen",
+    ]);
+  });
+
+  it("keine Fallback-Karte: nackte URL, Linktext 'hier', fremde Domain, Kategorie-Seite, Option aus", () => {
+    const reply = [
+      link(SPAN_14),
+      `Mehr: ${BIKE}`,
+      `Details [hier](${COOK})`,
+      `[Yoga extern](https://www.andere-vhs.de/kurssuche/kurs/yoga/1)`,
+      `[Sprachen](https://aw.donau.kufer.de/programm/sprachen)`,
+    ].join("\n");
+    const r = selectCourseCards(reply, [clone(SPAN_14)], AUTO, FB);
+    expect(r.cards.map((c) => c.url)).toEqual([SPAN_14.url]);
+    expect(r.categoryLink.url).toBe(
+      "https://aw.donau.kufer.de/programm/sprachen",
+    );
+    expect(
+      selectCourseCards(`[Radfahren](${BIKE})`, [clone(SPAN_14)], {}, FB),
+    ).toEqual(selectCourseCards("", [], AUTO, FB));
+    expect(selectCourseCards(`[Radfahren](${BIKE})`, [], {}, FB).cards).toEqual(
+      [],
+    );
+  });
+
+  it("gleicher Kurs mit anderer URL (Titel-Treffer) ergibt keine zweite Karte", () => {
+    const wrong = `${BASE}/spanisch-fuer-anfaengerinnen/262-4M99`;
+    const r = selectCourseCards(
+      `[${SPAN_14.title}](${wrong})`,
+      [clone(SPAN_14)],
+      AUTO,
+      FB,
+    );
+    expect(r.cards.map((c) => c.url)).toEqual([SPAN_14.url]);
+  });
+
+  it("ohne courseSources: nur Links auf der Domain der Webseite (Wortliste /kurs/…)", () => {
+    const reply = `[Radfahren für Erwachsene](${BIKE})`;
+    expect(
+      selectCourseCards(reply, undefined, AUTO, FB).cards.map((c) => c.url),
+    ).toEqual([BIKE]);
+    expect(
+      selectCourseCards(reply, [], AUTO, {
+        pageHost: "www.vhs-x.de",
+        fallback: true,
+      }).cards,
+    ).toEqual([]);
+  });
+
+  it("Limit wie bei vollwertigen Karten: ab 6 Kompaktliste, höchstens 10 Zeilen, Rest = more", () => {
+    const many = (n) =>
+      Array.from(
+        { length: n },
+        (_, i) =>
+          `- [Kurs Nummer ${i + 1}](${fb(`kurs-${i + 1}`, `262-${i + 1}`)})`,
+      ).join("\n");
+    const five = selectCourseCards(many(5), [], AUTO, FB);
+    expect(five.compact).toBe(false);
+    expect(five.cards).toHaveLength(5);
+    const twelve = selectCourseCards(many(12), [], AUTO, FB);
+    expect(twelve.compact).toBe(true);
+    expect(twelve.cards).toHaveLength(10);
+    expect(twelve.more).toBe(2);
+    expect(twelve.cards[0].title).toBe("Kurs Nummer 1");
+  });
+
+  it("above mit Ankündigung: Karten oben unverändert, Fallback-Karten unter der Antwort (footerCards), zusammen höchstens 5", () => {
+    const sources = [clone(SPAN_14), clone(SPAN_15)];
+    const reply = `${link(SPAN_14)}, [Urlaub](${URLAUB}), [Radfahren für Erwachsene](${BIKE}) und [Indisch kochen](${COOK})`;
+    const opts = { ...DONAU, announced: 2 };
+    const plain = selectAnnouncedCourseCards(reply, sources, AUTO, opts);
+    expect(plain.footerCards).toBeUndefined();
+    const r = selectAnnouncedCourseCards(reply, sources, AUTO, {
+      ...opts,
+      fallback: true,
+    });
+    expect(r.cards).toEqual(plain.cards);
+    expect(r.more).toBe(0);
+    expect(r.footerCards.map((c) => c.title)).toEqual([
+      "Urlaub",
+      "Radfahren für Erwachsene",
+      "Indisch kochen",
+    ]);
+    expect(r.footerMore).toBe(0);
+    // 4 Karten oben -> nur noch ein Platz unten, Rest footerMore
+    const four = [
+      ...sources,
+      clone(course("a-kurs", "262-A1", "Kurs Alpha")),
+      clone(course("b-kurs", "262-B1", "Kurs Beta")),
+    ];
+    const r4 = selectAnnouncedCourseCards(reply, four, AUTO, {
+      ...DONAU,
+      announced: 4,
+      fallback: true,
+    });
+    expect(r4.cards).toHaveLength(4);
+    expect(r4.footerCards.map((c) => c.title)).toEqual(["Urlaub"]);
+    expect(r4.footerMore).toBe(2);
+  });
+});
+
+describe("Fallback-Karten: Darstellung", () => {
+  const reply = `Ja: ${link(BY[0])} und [**Yoga am Morgen**](https://www.vhs-bergisch-land.de/kurssuche/kurs/yoga-am-morgen/27160001).`;
+  const user = { role: "user", content: "Yoga?", sentAt: 1759651200 };
+  const answer = {
+    role: "assistant",
+    content: reply,
+    sentAt: 1759651205,
+    chatId: 3,
+    sources: [],
+    courseSources: [clone(BY[0])],
+  };
+
+  it("Karte nur mit Titel, ganze Karte ein Link, sonst gleiche Karte", () => {
+    const el = mount(
+      h(HistoricalMessage, {
+        role: "assistant",
+        message: reply,
+        courseSources: [clone(BY[0])],
+        courseCards: "auto",
+        courseCardsFinal: true,
+      }),
+    );
+    const cards = el.querySelectorAll(".allm-course-card");
+    expect(cards).toHaveLength(2);
+    const fbCard = cards[1];
+    expect(fbCard.hasAttribute("data-course-fallback")).toBe(true);
+    expect(cards[0].hasAttribute("data-course-fallback")).toBe(false);
+    expect(fbCard.tagName).toBe("A");
+    expect(fbCard.getAttribute("href")).toBe(
+      "https://www.vhs-bergisch-land.de/kurssuche/kurs/yoga-am-morgen/27160001",
+    );
+    expect(fbCard.getAttribute("target")).toBe("_blank");
+    expect(fbCard.getAttribute("aria-label")).toBe("Yoga am Morgen");
+    expect(fbCard.hasAttribute("aria-describedby")).toBe(false);
+    expect(fbCard.textContent).toBe("Yoga am Morgen");
+    expect(fbCard.querySelector(".allm-course-schedule")).toBeNull();
+    expect(fbCard.querySelector(".allm-course-details")).toBeNull();
+    expect(fbCard.querySelector(".allm-course-status")).toBeNull();
+    expect(fbCard.className).toBe(cards[0].className);
+    expect(fbCard.getAttribute("style")).toBe(cards[0].getAttribute("style"));
+  });
+
+  it("Antwort noch nicht fertig (ohne chatId) bzw. Option aus: keine Fallback-Karte", () => {
+    for (const props of [
+      { courseCards: "auto", courseCardsFinal: false },
+      { courseCards: "off", courseCardsFinal: true },
+    ]) {
+      const el = mount(
+        h(HistoricalMessage, {
+          role: "assistant",
+          message: reply,
+          courseSources: [clone(BY[0])],
+          ...props,
+        }),
+      );
+      expect(el.querySelector("[data-course-fallback]")).toBeNull();
+      act(() => root.unmount());
+      container.remove();
+    }
+    // Verlauf ohne chatId (Abschluss-Chunk fehlt noch)
+    const el = mount(
+      h(ChatHistory, {
+        settings: { courseCards: "auto" },
+        history: [user, { ...answer, chatId: undefined }],
+      }),
+    );
+    expect(el.querySelectorAll(".allm-course-card")).toHaveLength(1);
+  });
+
+  it("below: Fallback-Karte in der Kartenfläche unter der Antwort", () => {
+    const el = mount(
+      h(ChatHistory, {
+        settings: { courseCards: "auto" },
+        history: [user, answer],
+      }),
+    );
+    const sec = cardsSection(el);
+    expect(sec.querySelectorAll(".allm-course-card")).toHaveLength(2);
+    expect(sec.querySelector("[data-course-fallback]")).not.toBeNull();
+    expect(follows(assistantText(el), sec)).toBe(true);
+  });
+
+  it("above mit Ankündigung: Fallback-Karte unter der Antwort, Karten oben unverändert", () => {
+    const settings = { courseCards: "auto", courseCardsPosition: "above" };
+    const announced = { ...answer, courseCardsAnnounced: 1 };
+    const el = mount(h(ChatHistory, { settings, history: [user, announced] }));
+    const top = cardsSection(el);
+    expect(top.querySelectorAll(".allm-course-card")).toHaveLength(1);
+    expect(top.querySelector("[data-course-fallback]")).toBeNull();
+    const footer = el.querySelector("[data-course-cards-footer]");
+    expect(footer.querySelectorAll("[data-course-fallback]")).toHaveLength(1);
+    expect(follows(assistantText(el), footer)).toBe(true);
+    act(() => root.unmount());
+    container.remove();
+    // vor dem Abschluss-Chunk (ohne chatId): kein Fallback unten
+    const early = mount(
+      h(ChatHistory, {
+        settings,
+        history: [user, { ...announced, chatId: undefined }],
+      }),
+    );
+    expect(early.querySelector("[data-course-cards-footer]")).toBeNull();
+    expect(early.querySelectorAll(".allm-course-card")).toHaveLength(1);
+  });
+});

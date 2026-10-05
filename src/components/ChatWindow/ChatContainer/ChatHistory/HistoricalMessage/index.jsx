@@ -455,6 +455,9 @@ const HistoricalMessage = forwardRef(
       // Kurskarten v2 ("above"): Auswahl des umgebenden Blocks (ChatHistory,
       // Karten über der Antwort) -> hier nur noch der Abschlusslink
       courseCardsSelection = null,
+      // Antwort fertig (chatId da) -> Fallback-Karten für Kursseiten ohne
+      // Serverdaten
+      courseCardsFinal = false,
       // Name steht schon im umgebenden Block (Kurskarten "above")
       nameInWrapper = false,
       error = false,
@@ -591,15 +594,19 @@ const HistoricalMessage = forwardRef(
             courseSources vom Server; ob die Option an ist, prüft allein
             selectCourseCards (ohne Option rendert CourseCards nichts).
             responseContent ist bereits ohne <think>-Blöcke. Mit Auswahl von
-            oben (Position "above") nur der Abschlusslink. */}
+            oben (Position "above") nur der Abschlusslink bzw. Fallback-
+            Karten. Fertige Antwort: auch ohne courseSources (Fallback-Karten
+            für verlinkte Kursseiten). */}
         {role === "assistant" &&
           !error &&
           (courseCardsSelection ||
-            (Array.isArray(courseSources) && courseSources.length > 0)) && (
+            (Array.isArray(courseSources) && courseSources.length > 0) ||
+            (courseCardsFinal && courseCards === "auto")) && (
             <CourseCards
               reply={responseContent}
               courseSources={courseSources}
               courseCards={courseCards}
+              fallback={courseCardsFinal}
               selection={courseCardsSelection}
               part={courseCardsSelection ? "footer" : "all"}
             />

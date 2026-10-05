@@ -59,7 +59,9 @@ function joinParts(parts) {
   return parts.filter(Boolean).join(" · ");
 }
 
-// card.url ist immer gesetzt (selectCourseCards nimmt nur http(s)-Kurs-URLs)
+// card.url ist immer gesetzt (selectCourseCards nimmt nur http(s)-Kurs-URLs).
+// Fallback-Karte (card.fallback, Kurs ohne Serverdaten): nur der Titel —
+// die Metadaten-Zeilen fehlen einfach, sonst gleiche Karte.
 function Card({ card }) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
@@ -80,6 +82,7 @@ function Card({ card }) {
         aria-label={card.title}
         aria-describedby={describedBy || undefined}
         data-course-link=""
+        data-course-fallback={card.fallback ? "" : undefined}
         className="allm-course-card"
         style={{
           ...boxStyle,
@@ -182,6 +185,36 @@ function CompactRow({ card, first }) {
   );
 }
 
+// Karten als Raster (einspaltig bei schmaler Breite)
+function CardList({ cards }) {
+  return (
+    <ul
+      className="allm-course-list"
+      style={{
+        ...listReset,
+        display: "grid",
+        gap: "8px",
+        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
+      }}
+    >
+      {cards.map((card) => (
+        <Card key={card.key} card={card} />
+      ))}
+    </ul>
+  );
+}
+
+function MoreLine() {
+  return (
+    <p
+      className="allm-course-more"
+      style={{ ...mutedStyle, margin: "6px 0 0" }}
+    >
+      {MORE_COURSES_TEXT}
+    </p>
+  );
+}
+
 function CategoryLink({ categoryLink }) {
   return (
     <a
@@ -204,14 +237,17 @@ function CategoryLink({ categoryLink }) {
 // courseCards als String-Prop (kein Objekt pro Render) -> memo greift;
 // die Aktivierung prüft allein selectCourseCards.
 //   Standard (position "below", part "all"): Auswahl aus reply +
-//     courseSources, Karten + Abschlusslink unter der Antwort
+//     courseSources, Karten + Abschlusslink unter der Antwort; fallback
+//     (Antwort fertig): auch schlanke Karten für Kursseiten ohne Serverdaten
 //   selection: fertige Auswahl (Position "above", einmal berechnet im
 //     umgebenden Block, selectAnnouncedCourseCards) — part "cards": Karten
-//     über der Antwort, part "footer": nur der Abschlusslink darunter
+//     über der Antwort, part "footer": Abschlusslink darunter bzw. die
+//     Fallback-Karten (footerCards) samt Abschlusslink
 function CourseCards({
   reply,
   courseSources,
   courseCards,
+  fallback = false,
   selection: given = null,
   position = "below",
   part = "all",
@@ -219,10 +255,42 @@ function CourseCards({
   const above = position === "above";
   const computed = useMemo(
     () =>
-      given ? null : selectCourseCards(reply, courseSources, { courseCards }),
-    [given, reply, courseSources, courseCards],
+      given
+        ? null
+        : selectCourseCards(
+            reply,
+            courseSources,
+            { courseCards },
+            { fallback },
+          ),
+    [given, reply, courseSources, courseCards, fallback],
   );
-  const { cards, compact, categoryLink, more } = given || computed;
+  const {
+    cards,
+    compact,
+    categoryLink,
+    more,
+    footerCards = [],
+    footerMore = 0,
+  } = given || computed;
+
+  if (part === "footer" && footerCards.length > 0) {
+    return (
+      <section
+        aria-label="Weitere genannte Kurse"
+        data-course-cards-footer=""
+        className="allm-course-cards-footer allm-font-sans allm-mt-2 allm-ml-[54px] allm-mr-6"
+        style={{ color: TEXT }}
+      >
+        <CardList cards={footerCards} />
+        {categoryLink ? (
+          <CategoryLink categoryLink={categoryLink} />
+        ) : (
+          footerMore > 0 && !more && <MoreLine />
+        )}
+      </section>
+    );
+  }
   if (!cards || cards.length === 0) return null;
 
   if (part === "footer") {
@@ -257,32 +325,12 @@ function CourseCards({
           ))}
         </ul>
       ) : (
-        <ul
-          className="allm-course-list"
-          style={{
-            ...listReset,
-            display: "grid",
-            gap: "8px",
-            gridTemplateColumns:
-              "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
-          }}
-        >
-          {cards.map((card) => (
-            <Card key={card.key} card={card} />
-          ))}
-        </ul>
+        <CardList cards={cards} />
       )}
       {showFooter && categoryLink ? (
         <CategoryLink categoryLink={categoryLink} />
       ) : (
-        more > 0 && (
-          <p
-            className="allm-course-more"
-            style={{ ...mutedStyle, margin: "6px 0 0" }}
-          >
-            {MORE_COURSES_TEXT}
-          </p>
-        )
+        more > 0 && <MoreLine />
       )}
     </section>
   );

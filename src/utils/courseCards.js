@@ -17,7 +17,12 @@
 // eine Programmkategorie derselben Domain wird zum Abschlusslink; Links unter
 // dem Kurs-Pfadpräfix der courseSources (gemeinsamer Pfadanfang der Kurs-URLs
 // ohne ihre letzten zwei Segmente, z. B. /kurssuche/kurs/) sind Kursseiten
-// und nie Abschlusslink — auch ohne Metadaten (dann keine Karte).
+// und nie Abschlusslink — auch ohne Metadaten.
+// Schlanke Fallback-Karte: Kursseiten-Links der Antwort ohne courseSources-
+// Eintrag (Server hat den Kurs nicht gefunden) ergeben eine Karte nur mit
+// Titel (= Linktext ohne Markdown) und Link, ohne Zeit/Preis/Ort — erst, wenn
+// die Antwort fertig ist (Option fallback), nur auf Kundendomains, nur mit
+// sprechendem Linktext; Sortierung wie Karten ohne Datum.
 // Linktexte (Karten, Kompaktliste, Abschlusslink) ohne Markdown-Zeichen.
 // Fehlende Felder werden weggelassen, nie geschätzt oder aus anderen Quellen
 // ergänzt. Der Antworttext selbst wird nicht verändert.
@@ -88,6 +93,11 @@ const CATEGORY_PATH_RX =
 // (siehe coursePathPrefixes)
 const COURSE_PATH_RX =
   /\/(kurs|course|veranstaltung|event)\/[^/]+\/[^/]+|\/(kurs|course)\/[^/]*\d|[?&](kursnr|knr|kursid|courseid)=/i;
+
+// Linktexte, die keinen Kurstitel tragen ("hier", "Zur Anmeldung") -> keine
+// Fallback-Karte (verglichen nach normalizeText)
+const GENERIC_LINK_TEXT_RX =
+  /^(hier|link|mehr|details|kursdetails|infos?|informationen|weitere (infos?|informationen)|mehr (infos?|informationen|erfahren)|zum kurs|zur kursseite|kursseite|anmeldung|zur anmeldung|anmelden|jetzt anmelden|buchen|jetzt buchen|zur buchung)$/;
 
 // Karten-Marker des Servers ("[[KARTEN: 0, 2]]" in der ersten Antwortzeile)
 const CARDS_MARKER_TAG = "[[KARTEN:";
@@ -522,18 +532,20 @@ function isCoursePage(u, prefixes) {
 // Gültige Kursquellen (Dedupe über die URL, erster gewinnt; index = Position
 // in courseSources) und die Kundendomain(s): Domain der Webseite + häufigste
 // Domain der Kursquellen. Quellen anderer Domains werden weggelassen.
+// Ohne gültige Quelle: own leer, Kundendomain = Domain der Webseite (für
+// Fallback-Karten).
 function ownCourseSources(courseSources, pageHostOption) {
-  if (!Array.isArray(courseSources) || courseSources.length === 0) return null;
   const sources = [];
   const seen = new Set();
-  courseSources.forEach((entry, index) => {
-    if (!isCourseSource(entry)) return;
-    const key = normalizeUrl(entry.url);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    sources.push({ entry, key, index, domain: domainOfUrl(entry.url) });
-  });
-  if (sources.length === 0) return null;
+  (Array.isArray(courseSources) ? courseSources : []).forEach(
+    (entry, index) => {
+      if (!isCourseSource(entry)) return;
+      const key = normalizeUrl(entry.url);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      sources.push({ entry, key, index, domain: domainOfUrl(entry.url) });
+    },
+  );
 
   const pageHost =
     pageHostOption ??
@@ -546,7 +558,7 @@ function ownCourseSources(courseSources, pageHostOption) {
     if (!majority || count > counts.get(majority)) majority = domain;
   const allowed = new Set([siteDomain(pageHost), majority].filter(Boolean));
   const own = sources.filter((s) => allowed.has(s.domain));
-  return own.length > 0 ? { sources, own, allowed } : null;
+  return { sources, own, allowed };
 }
 
 // Abschlusslink: erster Link der Antwort auf einer Kundendomain, der keine
@@ -569,6 +581,44 @@ function findCategoryLink(links, { sources, allowed }) {
   return null;
 }
 
+// Fallback-Karten: Links der Antwort (Reihenfolge des Vorkommens) auf eine
+// Kursseite einer Kundendomain ohne courseSources-Eintrag. Dedupe per URL;
+// ohne sprechenden Linktext (leer, selbst eine URL, "hier" …) keine Karte;
+// entspricht der Linktext einer schon gewählten Karte (gleicher Kurs, andere
+// URL), auch nicht.
+function fallbackCourseLinks(links, { sources, allowed }, chosen) {
+  const known = new Set(sources.map((s) => s.key));
+  const prefixes = coursePathPrefixes(sources);
+  const chosenTitles = chosen.map((m) => normalizeText(m.entry.title));
+  const out = [];
+  for (const l of links) {
+    const key = normalizeUrl(l.url);
+    const u = httpUrl(l.url);
+    if (!key || !u || known.has(key)) continue;
+    if (!allowed.has(siteDomain(u.hostname)) || !isCoursePage(u, prefixes))
+      continue;
+    const title = stripMarkdown(l.text);
+    const norm = normalizeText(title);
+    if (!norm || httpUrl(title) || GENERIC_LINK_TEXT_RX.test(norm)) continue;
+    if (chosenTitles.some((t) => similarity(t, norm) >= TITLE_MATCH_MIN))
+      continue;
+    known.add(key);
+    out.push({
+      entry: { url: u.toString(), title },
+      key,
+      pos: l.index,
+      fallback: true,
+    });
+  }
+  return out;
+}
+
+// Karte aus einem Auswahl-Eintrag (Fallback-Karten markiert)
+function cardOf(m) {
+  const card = formatCourse(m.entry);
+  return m.fallback ? { ...card, fallback: true } : card;
+}
+
 // normalisierte URL -> erste Position im Text
 function linkPositions(links) {
   const pos = new Map();
@@ -585,7 +635,7 @@ function layoutCards(matched, links, ctx, noCompact = false) {
   if (matched.length === 0) return EMPTY;
   const compact = !noCompact && matched.length > COURSE_CARDS_MAX;
   const limit = compact ? COURSE_COMPACT_MAX : COURSE_CARDS_MAX;
-  const shown = matched.slice(0, limit).map((m) => formatCourse(m.entry));
+  const shown = matched.slice(0, limit).map(cardOf);
   const more = Math.max(0, matched.length - limit);
   return {
     cards: shown,
@@ -603,7 +653,9 @@ function layoutCards(matched, links, ctx, noCompact = false) {
  * @param {string} replyText - Antwort (Markdown) — wird nicht verändert
  * @param {object[]} courseSources - Kurs-Metadaten vom Server
  * @param {object} settings - Widget-Settings (courseCards)
- * @param {{pageHost?: string}} [options] - Host der Webseite (Standard: window.location)
+ * @param {{pageHost?: string, fallback?: boolean}} [options] - Host der
+ *   Webseite (Standard: window.location); fallback: Antwort ist fertig ->
+ *   Kursseiten-Links ohne courseSources-Eintrag als schlanke Karte
  * @returns {{cards: object[], compact: boolean, categoryLink: ({url: string, text: string}|null), more: number}}
  */
 export function selectCourseCards(
@@ -618,8 +670,8 @@ export function selectCourseCards(
 
   // 1) + 2) gültige Kursquellen der Kundendomain
   const ctx = ownCourseSources(courseSources, options.pageHost);
-  if (!ctx) return EMPTY;
   const { own } = ctx;
+  if (own.length === 0 && !options.fallback) return EMPTY;
 
   // 3) Zuordnung zur Antwort
   const links = extractLinks(replyText);
@@ -676,6 +728,11 @@ export function selectCourseCards(
     if (linkedTitles.some((lt) => similarity(lt, t) >= TITLE_MATCH_MIN)) return;
     matched.push({ ...s, order, pos: titlePos.get(t) });
   });
+  // Fallback-Karten (ohne Datum -> hinter die datierten, nach Link-Position)
+  if (options.fallback)
+    fallbackCourseLinks(links, ctx, matched).forEach((f, i) =>
+      matched.push({ ...f, order: own.length + i }),
+    );
   if (matched.length === 0) return EMPTY;
 
   // 4) Sortierung nach Beginn (ohne Datum ans Ende); bei gleichem Beginn nach
@@ -702,10 +759,14 @@ export function selectCourseCards(
  * Titelsuche, keine Umsortierung, keine Kompaktliste (höchstens 5 Karten,
  * Rest = "weitere Kurse"): Karten springen nicht, wenn Text oder die
  * Ergänzung am Stream-Ende ankommen. Ohne Ankündigung: selectCourseCards.
+ * Fallback-Karten (options.fallback, Antwort fertig) stehen bei Ankündigung
+ * nicht oben, sondern unter der Antwort (footerCards, Link-Reihenfolge;
+ * zusammen mit den Karten oben höchstens 5, Rest footerMore) — so springt
+ * die Antwort am Ende nicht nach unten.
  * @param {string} replyText - bisheriger Antworttext (darf leer sein)
  * @param {object[]} courseSources
  * @param {object} settings
- * @param {{announced?: number, pageHost?: string}} [options]
+ * @param {{announced?: number, pageHost?: string, fallback?: boolean}} [options]
  */
 export function selectAnnouncedCourseCards(
   replyText,
@@ -718,7 +779,7 @@ export function selectAnnouncedCourseCards(
     return selectCourseCards(replyText, courseSources, settings, options);
   if (!courseCardsEnabled(settings)) return EMPTY;
   const ctx = ownCourseSources(courseSources, options.pageHost);
-  if (!ctx) return EMPTY;
+  if (ctx.own.length === 0 && !options.fallback) return EMPTY;
 
   const links = extractLinks(replyText);
   const linkPos = linkPositions(links);
@@ -726,5 +787,17 @@ export function selectAnnouncedCourseCards(
   const rest = ctx.own
     .filter((s) => s.index >= announced && linkPos.has(s.key))
     .sort((a, b) => linkPos.get(a.key) - linkPos.get(b.key));
-  return layoutCards([...head, ...rest], links, ctx, true);
+  const chosen = [...head, ...rest];
+  const layout = layoutCards(chosen, links, ctx, true);
+  if (!options.fallback) return layout;
+
+  const extra = fallbackCourseLinks(links, ctx, chosen);
+  if (extra.length === 0) return layout;
+  const slots = Math.max(0, COURSE_CARDS_MAX - layout.cards.length);
+  return {
+    ...layout,
+    categoryLink: layout.categoryLink || findCategoryLink(links, ctx),
+    footerCards: extra.slice(0, slots).map(cardOf),
+    footerMore: extra.length - Math.min(slots, extra.length),
+  };
 }

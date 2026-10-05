@@ -4,6 +4,7 @@ import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
 import {
   courseCardsAbove,
+  courseCardsEnabled,
   selectAnnouncedCourseCards,
 } from "@/utils/courseCards";
 import { stripThink } from "@/utils/chat/think";
@@ -200,6 +201,7 @@ export default function ChatHistory({
                 sources={props.sources}
                 courseSources={above ? null : props.courseSources}
                 courseCards={settings?.courseCards}
+                courseCardsFinal={!above && replyFinal(props)}
                 courseCardsSelection={selection}
                 chatId={props.chatId}
                 feedbackScore={props.feedbackScore}
@@ -227,6 +229,13 @@ export default function ChatHistory({
   );
 }
 
+// Antwort fertig (Abschluss-Chunk mit chatId verarbeitet bzw. aus dem
+// Verlauf geladen): erst dann sind die courseSources vollständig ->
+// Fallback-Karten für Kursseiten ohne Serverdaten.
+function replyFinal(message) {
+  return message?.role === "assistant" && message.chatId !== undefined;
+}
+
 // Assistenten-Antwort mit Kurskarten oben (courseCardsPosition "above"):
 // [Name] [Karten] [Antwortblase]. Ohne Karten pixelgleich zur normalen
 // Antwort (Name + 5px Polsterung wandern nur in den umgebenden Block).
@@ -234,11 +243,16 @@ export default function ChatHistory({
 // "courseSources", vor dem ersten Text-Token); bis zum ersten Token zeigt
 // PromptReply den Tipp-Indikator. Ergänzungen am Stream-Ende werden angehängt.
 // Die Auswahl wird hier einmal berechnet; die Antwort darunter bekommt sie
-// für den Abschlusslink (renderBody).
+// für den Abschlusslink (renderBody). Fallback-Karten (Kursseiten ohne
+// Serverdaten) erst bei fertiger Antwort: mit Ankündigung unter der Antwort
+// (footerCards), ohne Ankündigung zusammen mit den übrigen Karten oben.
 function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
   const { content, courseSources, courseCardsAnnounced, error } = props;
+  const final = replyFinal(props);
   const hasCards =
-    !error && Array.isArray(courseSources) && courseSources.length > 0;
+    !error &&
+    ((Array.isArray(courseSources) && courseSources.length > 0) ||
+      (final && courseCardsEnabled({ courseCards })));
   const selection = useMemo(
     () =>
       hasCards
@@ -246,10 +260,17 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
             stripThink(content),
             courseSources,
             { courseCards },
-            { announced: courseCardsAnnounced },
+            { announced: courseCardsAnnounced, fallback: final },
           )
         : null,
-    [hasCards, content, courseSources, courseCards, courseCardsAnnounced],
+    [
+      hasCards,
+      content,
+      courseSources,
+      courseCards,
+      courseCardsAnnounced,
+      final,
+    ],
   );
   return (
     <div className="allm-pt-[5px]" data-assistant-turn="">
