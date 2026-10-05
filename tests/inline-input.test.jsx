@@ -344,20 +344,29 @@ describe("ChatContainer verbraucht pendingFirstMessage (Ticket)", () => {
   });
 });
 
-describe("ChatContainer: Eingabe gesperrt bis Stream-Ende (Kurskarten v2, Review-Fund 2)", () => {
+describe("ChatContainer: Eingabesperre (Kurskarten v2, Review-Fund 2)", () => {
   const props = {
     sessionId: "s-1",
     conversationId: "c-1",
     settings: { ...BASE, enableStt: false },
     knownHistory: [],
   };
-
-  it("früher courseSources-Chunk entsperrt nicht; zweite Übergabe wartet bis finalizeResponseStream", () => {
-    let push = null;
+  const locked = () =>
+    container.querySelector("#message-input").disabled === true;
+  // Stream bleibt offen; push liefert Chunks wie der Server
+  function openStream() {
+    const stream = { push: null, end: null };
     chatService.streamChat.mockImplementation((_s, _settings, _msg, handle) => {
-      push = handle;
-      return new Promise(() => {}); // Stream bleibt offen
+      stream.push = handle;
+      return new Promise((resolve) => (stream.end = resolve));
     });
+    stream.chunk = (c) =>
+      act(() => stream.push({ uuid: "u", sources: [], ...c }));
+    return stream;
+  }
+
+  it("früher courseSources-Chunk entsperrt nicht; erster Text-Chunk gibt frei; zweite Übergabe wartet bis close", () => {
+    const stream = openStream();
     const consumed = vi.fn();
     const send = (ticket, text) =>
       render(
@@ -367,42 +376,66 @@ describe("ChatContainer: Eingabe gesperrt bis Stream-Ende (Kurskarten v2, Review
           onPendingFirstMessageConsumed={consumed}
         />,
       );
-    const locked = () =>
-      container.querySelector("#message-input").disabled === true;
-    const chunk = (c) => act(() => push({ uuid: "u", sources: [], ...c }));
 
     send(1, "Yoga am Abend?");
     expect(chatService.streamChat).toHaveBeenCalledTimes(1);
     expect(locked()).toBe(true);
-    chunk({
+    stream.chunk({
       type: "courseSources",
       courseSources: [{ url: "https://x.de/kurs/yoga/1", title: "Yoga" }],
       close: false,
     });
+    // nur Karten angekündigt, noch kein Text -> gesperrt
     expect(locked()).toBe(true);
-    chunk({ type: "textResponseChunk", textResponse: "Ja, ", close: false });
-    expect(locked()).toBe(true);
-    // Übergabe aus der Leiste während des Streams: wartet
+    stream.chunk({
+      type: "textResponseChunk",
+      textResponse: "Ja, ",
+      close: false,
+    });
+    // erster Text: Freigabe wie bisher
+    expect(locked()).toBe(false);
+    // Übergabe aus der Leiste während des Streams: wartet bis close
     send(2, "Und am Morgen?");
     expect(chatService.streamChat).toHaveBeenCalledTimes(1);
     expect(consumed).toHaveBeenCalledTimes(1);
-    chunk({ type: "textResponseChunk", textResponse: "gern.", close: false });
-    expect(locked()).toBe(true);
-    chunk({ type: "textResponseChunk", textResponse: "", close: true });
-    chunk({ type: "finalizeResponseStream", close: true, chatId: 9 });
-    // Stream zu Ende: freigegeben, jetzt erst die zweite Anfrage
+    stream.chunk({
+      type: "textResponseChunk",
+      textResponse: "gern.",
+      close: false,
+    });
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    stream.chunk({ type: "textResponseChunk", textResponse: "", close: true });
+    stream.chunk({ type: "finalizeResponseStream", close: true, chatId: 9 });
+    // Stream zu Ende: jetzt erst die zweite Anfrage
     expect(chatService.streamChat).toHaveBeenCalledTimes(2);
     expect(consumed).toHaveBeenCalledTimes(2);
     expect(chatService.streamChat.mock.calls[1][2]).toBe("Und am Morgen?");
   });
 
-  it("Stream endet ohne Abschluss-Chunk: Eingabe wird trotzdem frei", async () => {
-    let push = null;
-    let end = null;
-    chatService.streamChat.mockImplementation((_s, _settings, _msg, handle) => {
-      push = handle;
-      return new Promise((resolve) => (end = resolve));
+  it("Standardmodus ohne courseSources: Eingabe frei nach erstem Text-Chunk, vor finalizeResponseStream", () => {
+    const stream = openStream();
+    render(<ChatContainer {...props} />);
+    typeInto(container.querySelector("#message-input"), "Yoga am Abend?");
+    submit(container.querySelector("form"));
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(locked()).toBe(true);
+    stream.chunk({
+      type: "textResponseChunk",
+      textResponse: "Ja, ",
+      close: false,
     });
+    // Bestandsverhalten: frei nach dem ersten Wort, Stream läuft noch
+    expect(locked()).toBe(false);
+    stream.chunk({
+      type: "textResponseChunk",
+      textResponse: "gern.",
+      close: false,
+    });
+    expect(locked()).toBe(false);
+  });
+
+  it("Stream endet nach dem courseSources-Chunk ohne Text: Eingabe wird trotzdem frei", async () => {
+    const stream = openStream();
     render(
       <ChatContainer
         {...props}
@@ -410,18 +443,14 @@ describe("ChatContainer: Eingabe gesperrt bis Stream-Ende (Kurskarten v2, Review
         onPendingFirstMessageConsumed={vi.fn()}
       />,
     );
-    act(() =>
-      push({
-        uuid: "u",
-        type: "textResponseChunk",
-        textResponse: "Ja",
-        close: false,
-        sources: [],
-      }),
-    );
-    expect(container.querySelector("#message-input").disabled).toBe(true);
-    await act(async () => end());
-    expect(container.querySelector("#message-input").disabled).toBe(false);
+    stream.chunk({
+      type: "courseSources",
+      courseSources: [{ url: "https://x.de/kurs/yoga/1", title: "Yoga" }],
+      close: false,
+    });
+    expect(locked()).toBe(true);
+    await act(async () => stream.end());
+    expect(locked()).toBe(false);
   });
 });
 

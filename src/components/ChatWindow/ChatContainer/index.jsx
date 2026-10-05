@@ -108,10 +108,11 @@ export default function ChatContainer({
       var _chatHistory = [...remHistory];
 
       if (!promptMessage || !promptMessage?.userMessage) {
-        // Antwort streamt noch (früher courseSources-Chunk, Text ohne close):
-        // Eingabe gesperrt lassen — sonst startet z. B. eine Übergabe aus der
-        // Inline-Leiste (pendingFirstMessage) parallel eine zweite Anfrage.
-        if (!isStreaming(promptMessage)) setLoadingResponse(false);
+        // Freigabe wie bisher, sobald die Antwort im Verlauf liegt (erster
+        // Text-Chunk). Ausnahme Kurskarten v2: Die Antwort entstand nur durch
+        // den frühen courseSources-Chunk und hat noch keinen Text -> gesperrt
+        // lassen, bis Text kommt.
+        if (!awaitsFirstText(promptMessage)) setLoadingResponse(false);
         return false;
       }
 
@@ -138,8 +139,8 @@ export default function ChatContainer({
           controller.signal,
         );
       } finally {
-        // Rückfallebene: Stream zu Ende ohne Abschluss-Chunk (close) ->
-        // trotzdem freigeben. Mit Abschluss gibt der Effekt oben frei.
+        // Rückfallebene: Stream zu Ende ohne Text nach dem courseSources-Chunk
+        // bzw. ohne Abschluss-Chunk (close) -> trotzdem freigeben.
         if (isStreaming(_chatHistory[_chatHistory.length - 1]))
           setLoadingResponse(false);
       }
@@ -165,18 +166,21 @@ export default function ChatContainer({
   // keine Doppelsendung; danach gibt die Leiste die Übergabe frei.
   // send: über denselben Pfad wie ein Vorschlag/Senden (sendCommand ->
   // fetchReply -> ChatService.streamChat, inkl. conversationId); läuft gerade
-  // noch eine Antwort, wird gewartet. Entwurf (send false): ins Eingabefeld —
-  // ein dort schon getippter Text bleibt stehen, der Entwurf wird angehängt.
+  // noch eine Antwort (bis zum Abschluss-Chunk close, nicht nur bis zum
+  // ersten Wort), wird gewartet — sonst liefen zwei Anfragen parallel.
+  // Entwurf (send false): ins Eingabefeld — ein dort schon getippter Text
+  // bleibt stehen, der Entwurf wird angehängt.
+  const replyStreaming = isStreaming(chatHistory[chatHistory.length - 1]);
   useEffect(() => {
     const pending = pendingFirstMessage;
     if (!pending?.text || !onPendingFirstMessageConsumed) return;
     if (pending.ticket === lastConsumedTicketRef.current) return;
-    if (pending.send && loadingResponse) return;
+    if (pending.send && (loadingResponse || replyStreaming)) return;
     lastConsumedTicketRef.current = pending.ticket;
     onPendingFirstMessageConsumed(pending);
     if (pending.send) sendCommand(pending.text, [], []);
     else setMessage((current) => appendDraft(current, pending.text));
-  }, [pendingFirstMessage, loadingResponse]);
+  }, [pendingFirstMessage, loadingResponse, replyStreaming]);
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;
@@ -218,6 +222,18 @@ export default function ChatContainer({
 function isStreaming(message) {
   return (
     message?.role === "assistant" && message.animate === true && !message.closed
+  );
+}
+
+// Kurskarten v2: Antwort nur aus dem frühen courseSources-Chunk angelegt —
+// wartend, noch kein Text (auch kein gepufferter Karten-Marker)
+function awaitsFirstText(message) {
+  return (
+    isStreaming(message) &&
+    message.pending === true &&
+    !message.content &&
+    message.markerBuffer === undefined &&
+    Array.isArray(message.courseSources)
   );
 }
 
