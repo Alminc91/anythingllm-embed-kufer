@@ -283,9 +283,9 @@ def click_collapse(page):
 
 
 def bar_center_left(page):
-    """Koordinaten im Icon-Kreis der Leiste (links neben dem Feld)."""
+    """Koordinaten im linken Innenabstand der Leiste (links neben dem Feld)."""
     return page.evaluate(
-        "() => { const r = window.__q('#anything-llm-inline-bar > span').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        "() => { const b = window.__q('#anything-llm-inline-bar').getBoundingClientRect(); const f = window.__q('#anything-llm-inline-input').getBoundingClientRect(); return [b.x + (f.x - b.x) / 2, b.y + b.height / 2]; }")
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +451,7 @@ def check_theme_vars(browser, base_url):
             barText: s('#anything-llm-inline-input', 'color'),
             buttonBg: s('#anything-llm-inline-send', 'background-color'),
             buttonRadius: s('#anything-llm-inline-send', 'border-top-left-radius'),
-            iconBg: getComputedStyle(window.__q('#anything-llm-inline-bar > span')).backgroundColor,
+            hasIcon: !!window.__q('#anything-llm-inline-bar svg'),
             chipBg: s('.allm-inline-chip', 'background-color'),
             chipRadius: s('.allm-inline-chip', 'border-top-left-radius'),
             chipBorder: s('.allm-inline-chip', 'border-top-color'),
@@ -459,7 +459,7 @@ def check_theme_vars(browser, base_url):
           };
         }""")
         ok = (st["barBg"] == "rgb(1, 2, 3)" and st["barRadius"] == "7px" and st["buttonBg"] == "rgb(200, 100, 50)"
-              and st["buttonRadius"] == "1px" and st["iconBg"] == "rgb(200, 100, 50)"
+              and st["buttonRadius"] == "1px" and st["hasIcon"] is False
               and st["chipBg"] == "rgb(1, 2, 3)" and st["chipRadius"] == "7px"
               and st["chipBorder"] == "rgb(9, 9, 9)" and st["chipText"] == "rgb(250, 250, 250)"
               and st["barText"] == "rgb(250, 250, 250)")
