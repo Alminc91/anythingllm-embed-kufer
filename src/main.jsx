@@ -189,6 +189,52 @@ const customCss = `
   .allm-inline-chip:hover {
     border-color: var(--allmi-accent);
   }
+
+  /* Inline-Box: Aufklapp-Effekte (inlineEffect, utils/layout.js
+     inlineEffectClass; nur bei ausdrücklich gewähltem Effekt bzw. overlay).
+     Nur transform/opacity (float zusätzlich der Schatten), keine
+     Layout-Eigenschaft: der Seiteninhalt springt sofort an seinen Platz (flow)
+     bzw. bleibt stehen (overlay). Läuft nur beim Aufklappen durch den Nutzer
+     (die Box war display:none). Dauer --allm-effect-duration, Kurve
+     --allm-effect-easing, sonst die des Effekts. Reduzierte Bewegung: einzige
+     Stelle ist die Media Query unten (animation: none, Endzustand sofort).
+     Hier statt in index.css: steht ohne Tailwind-Ladezeit bereit. */
+  .allm-effect {
+    animation-duration: var(--allmi-effect-duration, 320ms);
+    animation-timing-function: var(--allmi-effect-easing, var(--allmi-fx-ease));
+    transform-origin: 50% 0;
+  }
+  .allm-effect-expand {
+    --allmi-fx-ease: var(--allmi-easing, cubic-bezier(0.4, 0, 0.2, 1));
+    animation-name: allm-fx-expand;
+  }
+  .allm-effect-grow {
+    --allmi-fx-ease: var(--allmi-easing, cubic-bezier(0.4, 0, 0.2, 1));
+    animation-name: allm-fx-grow;
+  }
+  .allm-effect-spring {
+    --allmi-fx-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation-name: allm-fx-spring;
+  }
+  .allm-effect-float {
+    --allmi-fx-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-name: allm-fx-float;
+  }
+  @keyframes allm-fx-expand {
+    from { transform: scaleY(0); }
+  }
+  @keyframes allm-fx-grow {
+    from { transform: scale(0.96); opacity: 0; }
+  }
+  @keyframes allm-fx-spring {
+    from { transform: scale(0.9); opacity: 0; }
+  }
+  @keyframes allm-fx-float {
+    from { transform: translateY(8px); opacity: 0; box-shadow: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .allm-effect { animation: none; }
+  }
 `;
 
 // Script-Settings vor Shadow DOM Erstellung lesen

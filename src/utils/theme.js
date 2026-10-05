@@ -198,6 +198,13 @@ export const THEME_VARIABLES = [
     light: "cubic-bezier(0.4, 0, 0.2, 1)",
     dark: "cubic-bezier(0.4, 0, 0.2, 1)",
   },
+  // Inline-Box: Aufklapp-Effekt (inlineEffect) und Stapelhöhe des Overlays
+  // (inlineLayout "overlay"). effect-easing ohne Standard: dann gilt die
+  // Kurve des Effekts (main.jsx, .allm-effect-*). Reduzierte Bewegung schaltet
+  // den Effekt dort per animation: none ab (die Dauer bleibt unverändert).
+  { name: "effect-duration", light: "320ms", dark: "320ms" },
+  { name: "effect-easing", light: null, dark: null },
+  { name: "overlay-z", light: "1000", dark: "1000" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
   {
     name: "focus-ring",
@@ -297,6 +304,8 @@ export function buildThemeCss(settings = {}, mode = "light") {
   return (
     `:host { ${decls.join(" ")} }\n` +
     // Reduzierte Bewegung schlägt auch eine per Seiten-CSS gesetzte Dauer.
+    // Aufklapp-Effekt der Inline-Box: bewusst NICHT hier über die Dauer,
+    // sondern an genau einer Stelle per animation: none (main.jsx, .allm-effect).
     `@media (prefers-reduced-motion: reduce) { :host { --allmi-transition: 0ms; } }`
   );
 }

@@ -28,6 +28,15 @@ export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
 // Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
 export const COURSE_CARDS_VALUES = ["off", "auto"];
+// Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
+// nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
+// Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
+// wie bisher, schwebend gilt expand (resolveInlineEffect).
+export const INLINE_LAYOUT_VALUES = ["flow", "overlay"];
+export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
+export const DEFAULT_INLINE_LAYOUT = "flow";
+export const DEFAULT_INLINE_EFFECT = null;
+export const DEFAULT_OVERLAY_EFFECT = "expand";
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -106,6 +115,11 @@ export const layoutValidations = {
   // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
   // ungültig -> verworfen -> Standard "off"
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
+  // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> verworfen,
+  // die Warnung (mit dem tatsächlich geltenden Wert) schreibt
+  // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
+  inlineLayout: (v) => oneOf(v, INLINE_LAYOUT_VALUES),
+  inlineEffect: (v) => oneOf(v, INLINE_EFFECT_VALUES),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -117,6 +131,47 @@ export const layoutValidations = {
     return t;
   },
 };
+
+// Ungültige inlineLayout-/inlineEffect-Werte: je Quelle eine console.warn-Zeile,
+// die den tatsächlich geltenden Wert nennt (gültiger Wert der anderen Quelle
+// bzw. Standard). script/server = Rohwerte (Script-Attribute bzw. nicht leere
+// visual_config-Werte), settings = fertig zusammengeführte Settings.
+const ENUM_SOURCES = [
+  ["script", "Script-Attribut"],
+  ["server", "Design Center"],
+];
+export function warnInvalidInlineEnums(
+  script = {},
+  server = {},
+  settings = {},
+) {
+  const raw = { script, server };
+  for (const [key, allowed] of [
+    ["inlineLayout", INLINE_LAYOUT_VALUES],
+    ["inlineEffect", INLINE_EFFECT_VALUES],
+  ]) {
+    const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
+    for (const [src, label] of ENUM_SOURCES) {
+      const value = raw[src][key];
+      if (value === undefined || value === null || value === "" || valid(src))
+        continue;
+      const origin = valid("server")
+        ? "Design Center"
+        : valid("script")
+          ? "Script-Attribut"
+          : "Standard";
+      const effective =
+        key === "inlineLayout"
+          ? `"${settings.inlineLayout}"`
+          : resolveInlineEffect(settings)
+            ? `"${resolveInlineEffect(settings)}"`
+            : "keine Animation";
+      console.warn(
+        `[AnythingLLM Embed] Ungültiger ${key}-Wert ${JSON.stringify(value)} (${label}) — erlaubt: ${allowed.join(", ")}. Wert wird verworfen, es gilt ${effective} (${origin}).`,
+      );
+    }
+  }
+}
 
 // inlineInput gilt nur im Inline-Modus. Wird das Widget als Blase gezeigt
 // (displayMode "bubble" oder Platzhalter fehlt), bleibt die Blase unverändert;
@@ -187,16 +242,81 @@ export function bubbleButtonStyle(settings = {}, position = "bottom-right") {
   return style;
 }
 
+// Inline: eingestellte Höhe der Box (validiert, px oder vh), sonst Standard.
+// Gemeinsame Quelle für inlineBoxStyle (CSS) und inlineBoxHeightPx (Messung).
+export function resolveInlineHeight(settings = {}) {
+  return (
+    layoutValidations.inlineHeight(settings.inlineHeight) ||
+    DEFAULT_INLINE_HEIGHT
+  );
+}
+
 // Inline: Höhe der aufgeklappten Box (fest, wächst NICHT mit dem Inhalt).
 // Nur Tablet/Desktop (>=768px) — mobil gibt es keine Box, nur das Vollbild.
 export function inlineBoxStyle(settings = {}) {
-  const h =
-    layoutValidations.inlineHeight(settings.inlineHeight) ||
-    DEFAULT_INLINE_HEIGHT;
+  const h = resolveInlineHeight(settings);
   return {
     height: `clamp(${INLINE_MIN_HEIGHT_PX}px, ${h}, ${INLINE_MAX_HEIGHT_PX}px)`,
     maxHeight: "calc(100vh - 32px)", // nie höher als der sichtbare Bereich
   };
+}
+
+// Inline: Höhe der Box in px (wie inlineBoxStyle, für die Überlauf-Prüfung
+// des Overlays vor dem Aufklappen).
+export function inlineBoxHeightPx(settings = {}, viewportHeight = 0) {
+  const h = resolveInlineHeight(settings);
+  const n = parseFloat(h);
+  const px = h.endsWith("vh") ? (n * viewportHeight) / 100 : n;
+  const clamped = Math.min(
+    Math.max(px, INLINE_MIN_HEIGHT_PX),
+    INLINE_MAX_HEIGHT_PX,
+  );
+  return viewportHeight > 0 ? Math.min(clamped, viewportHeight - 32) : clamped;
+}
+
+// Inline: schwebt die aufgeklappte Box (inlineLayout "overlay")? Werte
+// kommen validiert aus loadEmbedSettings; alles andere = flow.
+export function isInlineOverlay(settings = {}) {
+  return settings.inlineLayout === "overlay";
+}
+
+// Inline: wirksamer Aufklapp-Effekt. Ausdrücklich gesetzt -> dieser; ohne
+// (gültige) Angabe: schwebend (overlay) "expand", im Seitenfluss null = keine
+// Animation (verhaltensgleich zu vorher).
+export function resolveInlineEffect(settings = {}) {
+  if (INLINE_EFFECT_VALUES.includes(settings.inlineEffect))
+    return settings.inlineEffect;
+  return isInlineOverlay(settings) ? DEFAULT_OVERLAY_EFFECT : null;
+}
+
+// Inline: Klassen des Aufklapp-Effekts (Animation in main.jsx, customCss);
+// "" = keine Animation.
+export function inlineEffectClass(settings = {}) {
+  const effect = resolveInlineEffect(settings);
+  return effect ? `allm-effect allm-effect-${effect}` : "";
+}
+
+// Overlay-Fallback: schneidet ein Vorfahre des Platzhalters (overflow
+// hidden/clip, contain: paint) die schwebende Box unten ab, bleibt die Box im
+// Seitenfluss. boxBottom = Unterkante der Box im Viewport (px). Rückgabe: das
+// beschneidende Element oder null. body/html zählen nicht (deren overflow
+// wirkt auf den Viewport, der scrollt).
+export function findClippingAncestor(mount, boxBottom) {
+  for (
+    let el = mount;
+    el &&
+    el.nodeType === 1 &&
+    el !== document.body &&
+    el !== document.documentElement;
+    el = el.parentElement
+  ) {
+    const cs = getComputedStyle(el);
+    const clips =
+      /hidden|clip/.test(`${cs.overflow} ${cs.overflowX} ${cs.overflowY}`) ||
+      /paint|strict|content/.test(cs.contain || "");
+    if (clips && el.getBoundingClientRect().bottom < boxBottom - 1) return el;
+  }
+  return null;
 }
 
 // Inline: optionale Maximalbreite (zentriert), sonst volle Container-Breite.
