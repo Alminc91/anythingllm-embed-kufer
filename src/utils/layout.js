@@ -34,9 +34,16 @@ export const DEFAULT_COURSE_CARDS_POSITION = "below";
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
 // nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
 // Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
-// wie bisher, schwebend gilt expand (resolveInlineEffect).
+// wie bisher, schwebend gilt expand (resolveInlineEffect). "morph": die
+// Leiste wächst zum Panel (Maße/Rundung per CSS-Transition, InlineChat).
 export const INLINE_LAYOUT_VALUES = ["flow", "overlay"];
-export const INLINE_EFFECT_VALUES = ["expand", "grow", "spring", "float"];
+export const INLINE_EFFECT_VALUES = [
+  "expand",
+  "grow",
+  "spring",
+  "float",
+  "morph",
+];
 export const DEFAULT_INLINE_LAYOUT = "flow";
 export const DEFAULT_INLINE_EFFECT = null;
 export const DEFAULT_OVERLAY_EFFECT = "expand";

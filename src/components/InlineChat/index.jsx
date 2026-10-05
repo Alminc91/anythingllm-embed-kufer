@@ -28,6 +28,7 @@ import {
   inlineMaxWidth,
   isInlineOverlay,
   opensOnPointer,
+  resolveInlineEffect,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -72,6 +73,10 @@ import {
 // Seitenfluss keine), Animation in main.jsx, nur beim Aufklappen durch den
 // Nutzer. Solange die Box aufgeklappt ist, trägt der Platzhalter
 // data-allm-expanded="true" (Signal für Seiten-CSS).
+// inlineEffect "morph" (ab 768px, nicht bei reduzierter Bewegung): die Leiste
+// wächst zum Panel und beim Einklappen zurück (runMorph) — die Leistenform
+// wird beim Aufklappen einmal gemessen, das Panel im ersten Commit (vor dem
+// Paint), dann laufen CSS-Transitionen; Einklappen erst nach dem Rückweg.
 //
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
@@ -90,6 +95,80 @@ const TAP_SLOP_PX = 10;
 // Touch: auf den click nach dem Tippen warten (ein Link soll ihn bekommen);
 // Safari schickt für nicht-interaktive Stellen keinen -> danach einklappen
 const TOUCH_CLICK_WAIT_MS = 350;
+// Leiste (Klick-Leiste bzw. Pille der Eingabe-Leiste): Startform von "morph"
+const BAR_SELECTOR = "#anything-llm-inline-bar";
+const MORPH_WIN_VARS = ["mw", "mh", "mt", "mr", "cw", "ch"];
+const MORPH_CLASSES = ["allm-morph", "allm-morph-from", "allm-morph-close"];
+const MORPH_FLOW_CLASSES = ["allm-morph-flow", "allm-morph-flow-from"];
+
+function prefersReducedMotion() {
+  try {
+    return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {
+    return false;
+  }
+}
+const px = (n) => `${Math.round(n * 100) / 100}px`;
+
+// Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
+// deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
+// Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
+// zeigen, dann Transition zum Panel; Zuklappen: Transition vom aktuellen
+// Stand zur Leistenform. Ende per transitionend (width) bzw. Sicherheits-Timer;
+// onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein Rücksprung).
+// Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
+function runMorph(win, box, geom, { opening, flow, onEnd }) {
+  const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
+  set(win, "mw", px(geom.w));
+  set(win, "mh", px(geom.h));
+  set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
+  set(win, "mr", px(geom.r));
+  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte)
+  if (!win.style.getPropertyValue("--allmi-cw")) {
+    set(win, "cw", px(win.clientWidth));
+    set(win, "ch", px(win.clientHeight));
+  }
+  if (flow) set(box, "bh", px(geom.rootH));
+  let raf = 0;
+  let timer = 0;
+  const onTransitionEnd = (e) => {
+    if (e.target === win && e.propertyName === "width") finish();
+  };
+  const stop = (keep = false) => {
+    cancelAnimationFrame(raf);
+    clearTimeout(timer);
+    win.removeEventListener("transitionend", onTransitionEnd);
+    if (keep) return;
+    win.classList.remove(...MORPH_CLASSES);
+    box.classList.remove(...MORPH_FLOW_CLASSES);
+    MORPH_WIN_VARS.forEach((k) => win.style.removeProperty(`--allmi-${k}`));
+    box.style.removeProperty("--allmi-bh");
+  };
+  function finish() {
+    stop(true);
+    onEnd?.();
+    stop();
+  }
+  const run = () => {
+    win.classList.add("allm-morph");
+    if (flow) box.classList.add("allm-morph-flow");
+    win.classList.toggle("allm-morph-from", !opening);
+    win.classList.toggle("allm-morph-close", !opening);
+    if (flow) box.classList.toggle("allm-morph-flow-from", !opening);
+    const d = getComputedStyle(win).transitionDuration.split(",")[0];
+    const ms = parseFloat(d) * (d.trim().endsWith("ms") ? 1 : 1000) || 0;
+    win.addEventListener("transitionend", onTransitionEnd);
+    timer = setTimeout(finish, ms + 100);
+  };
+  if (opening) {
+    win.classList.add("allm-morph-from");
+    if (flow) box.classList.add("allm-morph-flow-from");
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(run);
+    });
+  } else run();
+  return stop;
+}
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
 // mitten im Inhalt (text-align:center, line-height:2, Großbuchstaben o. ä. würden
@@ -157,6 +236,9 @@ const OVERLAY_BOX_STYLE = {
   right: 0,
   zIndex: "var(--allmi-overlay-z, 1000)",
 };
+
+// Inhalt des Chat-Fensters (füllt es wie bisher das ChatWindow selbst)
+const CONTENT_STYLE = { height: "100%", minHeight: 0 };
 
 const chatClasses = {
   box: "allm-relative allm-w-full allm-h-full allm-border allm-border-solid allm-overflow-hidden allm-flex allm-flex-col allm-box-border",
@@ -231,6 +313,9 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
+  // "morph": { geom, stop, closing, scroll } des laufenden bzw. letzten Laufs;
+  // geom.open = Panel im nächsten Commit messen und Lauf starten
+  const morphRef = useRef(null);
   const chatMountedRef = useRef(false);
   // Übergabe Frage/Entwurf aus der Leiste (inlineInput), einzige Quelle der
   // Wahrheit: { ticket, text, send, suppressAutoFocus } | null. ticket ist eine
@@ -351,6 +436,42 @@ export default function InlineChat({
     return () => mountTarget.removeAttribute(EXPANDED_ATTR);
   }, [view, mountTarget]);
 
+  // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
+  // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
+  // (auch für den Rückweg) und den Lauf starten. Box verlassen (Einklappen,
+  // Vollbild, Unmount) bricht einen Lauf ab.
+  useLayoutEffect(() => {
+    const m = morphRef.current;
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    if (view !== "box" || !m?.geom.open || !win || !box) return;
+    const g = m.geom;
+    g.open = false;
+    const f = win.getBoundingClientRect();
+    g.dx = g.x - f.left;
+    g.dy = g.y - f.top;
+    m.stop = runMorph(win, box, g, {
+      opening: true,
+      flow: !floating,
+      onEnd: () => {
+        m.stop = null;
+        if (m.scroll) scrollBoxIntoView();
+        m.scroll = false;
+      },
+    });
+  }, [view]);
+  useLayoutEffect(() => {
+    if (view !== "box") return;
+    return () => {
+      const m = morphRef.current;
+      m?.stop?.();
+      if (m) {
+        m.stop = null;
+        m.closing = false;
+      }
+    };
+  }, [view]);
+
   // Drehen/Vergrößern auf >=768px bei offenem Overlay -> zurück in die Seite,
   // aufgeklappt (Chat bleibt gemountet, laufende Antwort läuft weiter). Ohne
   // Effekt; schwebend: Leiste in natürlicher Höhe (die Leiste war im Vollbild
@@ -382,17 +503,22 @@ export default function InlineChat({
   // Box eingeblendet: Verlauf ans Ende; nach Klick genau EINMAL scrollen — und
   // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
   // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
-  useEffect(() => {
-    if (view !== "box") return;
-    scrollChatToBottom();
-    if (!scrollOnExpandRef.current) return;
-    scrollOnExpandRef.current = false;
+  // "morph": erst nach dem Lauf (die Box hat dann ihre volle Höhe).
+  const scrollBoxIntoView = () => {
     const el = boxRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
     if (rect.top < 0 || rect.bottom > vh)
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (view !== "box") return;
+    scrollChatToBottom();
+    if (!scrollOnExpandRef.current) return;
+    scrollOnExpandRef.current = false;
+    if (morphRef.current?.stop) morphRef.current.scroll = true;
+    else scrollBoxIntoView();
   }, [view]);
 
   // Fokus direkt in der Klick-Geste setzen; existiert das Eingabefeld noch
@@ -449,6 +575,30 @@ export default function InlineChat({
     animateRef.current = true;
     flowHeightRef.current =
       rootRef.current?.getBoundingClientRect().height || null;
+    // "morph": Leistenform einmal messen (Panel misst der Effekt oben)
+    morphRef.current = null;
+    const pill = rootRef.current?.querySelector(BAR_SELECTOR);
+    if (
+      pill &&
+      resolveInlineEffect(settings) === "morph" &&
+      !prefersReducedMotion()
+    ) {
+      const r = pill.getBoundingClientRect();
+      const radius =
+        parseFloat(getComputedStyle(pill).borderTopLeftRadius) || 0;
+      morphRef.current = {
+        geom: {
+          open: true,
+          x: r.left,
+          y: r.top,
+          w: r.width,
+          h: r.height,
+          // Leistenform: Rundung höchstens halbe Höhe (999px = Pille)
+          r: Math.min(radius, r.height / 2),
+          rootH: flowHeightRef.current || r.height,
+        },
+      };
+    }
     const clipped = isOverlayClipped();
     flushSync(() => {
       queue();
@@ -490,7 +640,7 @@ export default function InlineChat({
   // Seite): nur, wenn der Fokus frei ist (body/Host) — liegt er auf einem
   // Element der Seite (Link, Eingabefeld), bleibt er dort. Außenklicks kommen
   // erst nach dem click hier an, der Fokus des Klicks steht dann schon.
-  const collapse = (focus = "bar") => {
+  const collapseNow = (focus = "bar") => {
     const unsent = pendingFirstMessage?.text;
     flushSync(() => {
       setPendingFirstMessage(null);
@@ -503,13 +653,38 @@ export default function InlineChat({
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
   };
+  // "morph": erst zur Leistenform zurück, dann einklappen (aktuelle Übergabe/
+  // Fokus beim Ende); weitere Aufrufe während des Rückwegs zählen nicht.
+  const collapse = (focus = "bar") => {
+    const m = morphRef.current;
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
+      if (m.closing) return;
+      m.closing = true;
+      m.stop?.(true);
+      m.stop = runMorph(win, box, m.geom, {
+        opening: false,
+        flow: !floating,
+        onEnd: () => {
+          m.stop = null;
+          m.closing = false;
+          collapseNowRef.current(focus);
+        },
+      });
+      return;
+    }
+    collapseNow(focus);
+  };
   // Für ChatWindow (Button "Schließen" o. ä.): ohne Argumente
   const closeChat = () => collapse("bar");
   // Escape-/Außenklick-Listener rufen immer das aktuelle collapse (sieht die
   // aktuelle Übergabe), ohne bei jedem Render neu angehängt zu werden.
   const collapseRef = useRef(collapse);
+  const collapseNowRef = useRef(collapseNow);
   useLayoutEffect(() => {
     collapseRef.current = collapse;
+    collapseNowRef.current = collapseNow;
   });
 
   // Escape schließt das Overlay bzw. klappt die Box ein — nur wenn der Fokus
@@ -713,18 +888,22 @@ export default function InlineChat({
                   style={FOCUS_PROXY_STYLE}
                 />
               )}
-              <ChatWindow
-                closeChat={closeChat}
-                settings={settings}
-                sessionId={sessionId}
-                conversationId={conversationId}
-                newConversation={newConversation}
-                switchConversation={switchConversation}
-                justCreatedRef={justCreatedRef}
-                compactHeader={isKeyboardOpen}
-                pendingFirstMessage={pendingFirstMessage}
-                onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
-              />
+              {/* fester Inhalts-Container: "morph" blendet ihn ein (der
+                  Inhalt darin wechselt beim Laden das Element) */}
+              <div className="allm-inline-content" style={CONTENT_STYLE}>
+                <ChatWindow
+                  closeChat={closeChat}
+                  settings={settings}
+                  sessionId={sessionId}
+                  conversationId={conversationId}
+                  newConversation={newConversation}
+                  switchConversation={switchConversation}
+                  justCreatedRef={justCreatedRef}
+                  compactHeader={isKeyboardOpen}
+                  pendingFirstMessage={pendingFirstMessage}
+                  onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
+                />
+              </div>
             </div>
           </div>
         )}
