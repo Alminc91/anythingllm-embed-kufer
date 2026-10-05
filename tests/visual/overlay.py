@@ -259,6 +259,32 @@ def check_ak2(browser, base_url):
                    f"Box {after['chat']['w']:.0f} px, Platzhalter {after['mount']['w']:.0f} px")
         finally:
             ctx.close()
+    # Seite verbreitert den Platzhalter beim Aufklappen (Signal data-allm-expanded,
+    # wie demo.ki.kufer.de 600 -> 760 px): Chips brechen anders um, die
+    # unsichtbare Leiste hält trotzdem ihre Höhe -> nichts rückt nach
+    widen = ("#kufer-assistent { width: 420px; } "
+             "#kufer-assistent[data-allm-expanded] { width: 680px; }")
+    attrs = {**FLOAT, **INPUT, "default-messages": "Welche Sprachkurse gibt es am Abend?,"
+             "Voraussetzungen für einen Integrationskurs?,Yoga für Anfänger"}
+    ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": widen},
+                             tv.Mock(config=CFG_NO_MSGS))
+    try:
+        ready(page, "#anything-llm-inline-input")
+        before = geom(page)
+        open_settled(page, "#anything-llm-inline-send")
+        after = geom(page)
+        dy = after["below"]["dy"] - before["below"]["dy"]
+        bar_h = page.evaluate(
+            "() => { const w = window.__q('#anything-llm-inline-input-bar'); return w ? w.parentElement.getBoundingClientRect().height : null; }")
+        chips_h = page.evaluate(
+            "() => window.__q('#anything-llm-inline-chips').getBoundingClientRect().height")
+        record("AK-2 Platzhalter verbreitert sich beim Aufklappen (Seiten-CSS)",
+               abs(dy) <= 1 and after["mount"]["w"] == 680 and abs(after["chat"]["w"] - 680) <= 1,
+               f"Platzhalter {before['mount']['w']:.0f} -> {after['mount']['w']:.0f} px, Höhe "
+               f"{before['mount']['h']:.0f} -> {after['mount']['h']:.0f} px (unsichtbare Leiste {bar_h:.0f} px, "
+               f"Chips jetzt {chips_h:.0f} px hoch), #below Δ {dy:+.1f} px")
+    finally:
+        ctx.close()
     # inlineMaxWidth: Breite = inlineMaxWidth, zentriert
     ctx, page = tv.open_page(browser, base_url,
                              {"attrs": {**FLOAT, "inline-max-width": "520"}, "inline": True}, tv.Mock())
