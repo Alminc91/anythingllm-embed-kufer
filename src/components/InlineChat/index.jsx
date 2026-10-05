@@ -23,7 +23,6 @@ import {
   inlineBoxStyle,
   inlineChips,
   inlineMaxWidth,
-  layoutValidations,
 } from "@/utils/layout";
 
 // Kufer Inline-Modus: Chat mitten in der Webseite (im Platzhalter
@@ -471,12 +470,9 @@ const InlineBar = forwardRef(function InlineBar(
 ) {
   const accent = barAccent(settings);
   const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
-  // Immer als Text rendern (React escaped), nie als HTML.
-  const text =
-    typeof settings.inlineCollapsedText === "string" &&
-    settings.inlineCollapsedText.trim()
-      ? settings.inlineCollapsedText.trim()
-      : DEFAULT_INLINE_COLLAPSED_TEXT;
+  // Immer als Text rendern (React escaped), nie als HTML. Wert kommt
+  // validiert (getrimmt, max. 120 Zeichen) aus loadEmbedSettings.
+  const text = settings.inlineCollapsedText || DEFAULT_INLINE_COLLAPSED_TEXT;
   const iconSize = narrow ? 36 : 42;
 
   return (
@@ -537,12 +533,10 @@ const InlineInputBar = forwardRef(function InlineInputBar(
 ) {
   const accent = barAccent(settings);
   const Icon = resolveChatIcon(settings?.chatIcon, ChatCircleDots);
+  // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
   const placeholder =
-    layoutValidations.inlineInputPlaceholder(settings.inlineInputPlaceholder) ||
-    DEFAULT_INLINE_INPUT_PLACEHOLDER;
-  const sendText =
-    layoutValidations.inlineSendText(settings.inlineSendText) ||
-    DEFAULT_INLINE_SEND_TEXT;
+    settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
+  const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
   const chips = inlineChips(settings);
 
   // Enter oder Knopf: mit Text aufklappen + senden, leer nur aufklappen.
