@@ -196,18 +196,114 @@ describe("Stream-Verarbeitung: Chunk type courseTeasers", () => {
     expect(hist).toHaveLength(0);
     expect(set).not.toHaveBeenCalled();
   });
+
+  it("courseSources -> courseTeasers -> textResponse -> finalize: genau eine Blase mit Karten, Teasern und Text", () => {
+    const set = vi.fn();
+    const loading = vi.fn();
+    const rem = [{ role: "user", content: "Yoga?" }];
+    const hist = [...rem];
+    const chunk = (c) => handleChat(c, loading, set, rem, hist);
+    chunk({
+      uuid: "u",
+      type: "courseSources",
+      courseSources: clone([YOGA, ENGLISH]),
+      close: false,
+    });
+    chunk({ uuid: "u", type: "courseTeasers", teasers: clone(TEASERS) });
+    chunk({
+      uuid: "u",
+      type: "textResponse",
+      textResponse: "Ja, zwei Kurse.",
+      sources: [],
+      close: true,
+    });
+    chunk({
+      uuid: "u",
+      type: "finalizeResponseStream",
+      close: true,
+      chatId: 7,
+    });
+    const shown = set.mock.calls.at(-1)[0];
+    for (const list of [hist, shown]) {
+      const answers = list.filter((m) => m.role === "assistant");
+      expect(answers).toHaveLength(1);
+      expect(answers[0]).toMatchObject({
+        uuid: "u",
+        content: "Ja, zwei Kurse.",
+        pending: false,
+        closed: true,
+        chatId: 7,
+        courseCardsAnnounced: 2,
+        courseTeasers: TEASERS,
+      });
+      expect(answers[0].courseSources).toHaveLength(2);
+    }
+    expect(loading).toHaveBeenCalledWith(false);
+  });
+
+  it("textResponse ohne vorherige Antwort: neu angehängt; courseTeasers im Payload übernommen", () => {
+    const set = vi.fn();
+    const hist = [];
+    handleChat(
+      {
+        uuid: "n",
+        type: "textResponse",
+        textResponse: "[[KARTEN: 0]]\n[[TEASER 0: A.]]\nJa.",
+        courseSources: clone([YOGA]),
+        courseTeasers: { [YOGA.url]: TEASER_YOGA },
+        close: true,
+      },
+      vi.fn(),
+      set,
+      [],
+      hist,
+    );
+    expect(hist).toHaveLength(1);
+    expect(hist[0]).toMatchObject({
+      content: "Ja.",
+      courseTeasers: { [YOGA.url]: TEASER_YOGA },
+    });
+    expect(set.mock.calls.at(-1)[0]).toHaveLength(1);
+  });
 });
 
 describe("Teaserzeilen nie als Text (Abwehr in der Tiefe, ältere Server)", () => {
   it.each([
-    ["[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa, zwei.", "Ja, zwei."],
+    // ohne Marker: unverändert (wie der Server)
+    [
+      "[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa, zwei.",
+      "[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa, zwei.",
+    ],
+    [
+      "[[TEASER 0: Sanft starten.]]\nJa, gern.",
+      "[[TEASER 0: Sanft starten.]]\nJa, gern.",
+    ],
     ["[[KARTEN: 0, 2]]\n[[TEASER 0: A.]]\n\nJa.", "Ja."],
+    ["[[KARTEN: 0, 2]]\n[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa.", "Ja."],
+    ["[[KARTEN: 0]]\n[[TEASER 0: kaputt\nText", "[[TEASER 0: kaputt\nText"],
     ["Ja. [[TEASER 0: A.]]", "Ja. [[TEASER 0: A.]]"],
     ["[[TEASER 0: kaputt\nText", "[[TEASER 0: kaputt\nText"],
     ["[[TEASER x: A.]]\nText", "[[TEASER x: A.]]\nText"],
     ["[Yoga](https://x.de/k/1) passt.", "[Yoga](https://x.de/k/1) passt."],
   ])("%p -> %p", (input, output) => {
     expect(stripCardsMarker(input)).toBe(output);
+  });
+
+  it("afterMarker (Server hat den Marker schon verarbeitet): Teaserzeilen entfernt", () => {
+    const text = "[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa, zwei.";
+    expect(stripCardsMarker(text, { afterMarker: true })).toBe("Ja, zwei.");
+    // appendReplyText: Zustand aus dem Eintrag (Karten angekündigt)
+    let entry = { content: "", courseCardsAnnounced: 2 };
+    for (const p of ["[[TEASER 0: A.]]", "\n", "Ja, zwei."]) {
+      entry = { ...entry, ...appendReplyText(entry, p, false) };
+    }
+    expect(entry.content).toBe("Ja, zwei.");
+    // ohne Ankündigung: Text vollständig
+    let plain = null;
+    for (const p of ["[[TEASER 0: A.]]", "\n", "Ja, zwei."]) {
+      plain = appendReplyText(plain, p, false);
+    }
+    expect(plain.content).toBe("[[TEASER 0: A.]]\nJa, zwei.");
   });
 
   it("Stream: offene Teaserzeile = weiter puffern (Tipp-Indikator), danach nur Text", () => {

@@ -40,8 +40,9 @@
 // 16 Abende", Metazeile "ab 14.09.2026 · Realschule · 60 €" (ein Ort ersetzt
 // "vor Ort"; "online" bleibt). Dazu KI-Teaser je Karte (Chunk type
 // "courseTeasers", { url: text }, nach den angekündigten Karten), als
-// Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]" am
-// Antwortanfang entfernt das Widget zusätzlich selbst (ältere Server).
+// Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]"
+// direkt hinter einem Marker entfernt das Widget zusätzlich selbst
+// (Übergangs-Abwehr für ältere Server, stripTeaserLines).
 
 export const COURSE_CARDS_MAX = 5;
 export const COURSE_COMPACT_MAX = 10;
@@ -141,12 +142,21 @@ export function courseCardsAbove(settings = {}) {
  * Gültige oder kaputte Markerzeile -> entfernt (inkl. Leerraum dahinter).
  * partial (Antwort streamt noch): ein begonnener, noch offener Marker
  * (höchstens 120 Zeichen, wie der Server-Filter) ergibt "" statt Rohtext.
+ * Teaserzeilen (Kurskarten v3) werden nur direkt hinter einem Marker
+ * entfernt: hinter dem hier entfernten oder — afterMarker — hinter einem,
+ * den der Server schon verarbeitet hat (Antwort mit angekündigten Karten).
+ * Ohne Marker bleibt der Text unverändert, wie im Server.
  * @param {string} text
- * @param {{partial?: boolean}} [options]
+ * @param {{partial?: boolean, afterMarker?: boolean}} [options]
  * @returns {string}
  */
-export function stripCardsMarker(text, { partial = false } = {}) {
+export function stripCardsMarker(
+  text,
+  { partial = false, afterMarker = false } = {},
+) {
   const rest = stripMarkerLine(text, { partial });
+  // rest !== text <=> Markerzeile entfernt bzw. noch offen (partial -> "")
+  if (rest === text && !afterMarker) return text;
   if (typeof rest !== "string" || rest.length === 0) return rest;
   return stripTeaserLines(rest, { partial });
 }
@@ -211,7 +221,10 @@ export function stripTeaserLines(text, { partial = false } = {}) {
  * ein (offener oder gerade geschlossener) Marker angekommen ist, bleibt der
  * Rohtext im Puffer (markerBuffer, Antwort gilt als wartend); sobald Text
  * folgt, die Grenze überschritten ist oder der Stream endet, wird er Inhalt.
- * @param {{content?: string, markerBuffer?: string}|null} prev - bisheriger Eintrag
+ * Hat der Server den Marker schon verarbeitet (Karten angekündigt,
+ * courseCardsAnnounced), gelten folgende Teaserzeilen als "hinter dem
+ * Marker" (afterMarker).
+ * @param {{content?: string, markerBuffer?: string, courseCardsAnnounced?: number}|null} prev - bisheriger Eintrag
  * @param {string} chunk - neuer Text
  * @param {boolean} done - Stream beendet (close)
  * @returns {{content: string, markerBuffer?: string}}
@@ -221,10 +234,20 @@ export function appendReplyText(prev, chunk, done = false) {
   const visible = prev?.content || "";
   if (visible.trim()) return { content: visible + add };
   const raw = (prev?.markerBuffer ?? visible) + add;
-  const content = stripCardsMarker(raw, { partial: !done });
+  const content = stripCardsMarker(raw, {
+    partial: !done,
+    afterMarker: cardsAnnounced(prev),
+  });
   return !done && raw && !content
     ? { content, markerBuffer: raw }
     : { content };
+}
+
+// Hat der Server zu dieser Antwort Karten vorab angekündigt (Marker
+// verarbeitet)?
+export function cardsAnnounced(entry) {
+  const n = entry?.courseCardsAnnounced;
+  return Number.isInteger(n) && n > 0;
 }
 
 /**
