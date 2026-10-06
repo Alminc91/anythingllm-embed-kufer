@@ -33,15 +33,22 @@ import {
   DEFAULT_GREETING_BUBBLE_TEXT,
   DEFAULT_PRIVACY_POINTS,
   DEFAULT_PRIVACY_TITLE,
-  PANEL_PILLS_MAX,
+  INLINE_CHIPS_MAX,
   PANEL_TEXTS,
   layoutValidations,
   panelLanguage,
   panelPills,
 } from "../src/utils/layout.js";
+import * as layout from "../src/utils/layout.js";
 import { _resetPrivacyMemory, privacyAckKey } from "../src/utils/privacy.js";
+import {
+  THEME_VARIABLES,
+  buildThemeCss,
+  resolveThemeVars,
+} from "../src/utils/theme.js";
 import ChatContainer, {
   SEND_TEXT_EVENT,
+  sendSuggestion,
 } from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
@@ -171,6 +178,27 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     });
   });
 
+  it("privacyNotice bubble setzt greetingStyle bubble (einmal beim Laden normalisiert)", async () => {
+    const s = await loadEmbedSettings(
+      { ...BASE, privacyNotice: "bubble", greetingStyle: "text" },
+      fetchConfig({}),
+    );
+    expect(s.privacyNotice).toBe("bubble");
+    expect(s.greetingStyle).toBe("bubble");
+    const t = await loadEmbedSettings(
+      { ...BASE, greetingStyle: "text" },
+      fetchConfig({ privacyNotice: "bubble" }),
+    );
+    expect(t.greetingStyle).toBe("bubble");
+    const u = await loadEmbedSettings(
+      { ...BASE, privacyNotice: "modal" },
+      fetchConfig({}),
+    );
+    expect(u.greetingStyle).toBe("text");
+    // keine Auflösung zur Renderzeit mehr
+    expect(layout.greetingAsBubble).toBeUndefined();
+  });
+
   it("ungültige Enums -> Standard + je eine console.warn", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const s = await loadEmbedSettings(
@@ -287,7 +315,9 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const pills = $$("#anything-llm-suggestion-pills button");
     expect(pills.map((b) => b.textContent)).toEqual(MSGS);
     expect($$(".msg-suggestion")).toHaveLength(0);
-    expect(pills[0].style.border).toContain("1px solid");
+    expect(pills[0].style.border).toBe(
+      "1px solid var(--allmi-pill-border, #d1d5db)",
+    );
     expect(pills[0].style.borderRadius).toBe("var(--allmi-bar-radius, 999px)");
     expect($("#anything-llm-suggestion-pills").style.flexWrap).toBe("wrap");
     act(() => pills[1].click());
@@ -295,11 +325,97 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(sent).toEqual(["Yoga"]);
   });
 
+  it("--allm-pill-border: eigene Variable, Standard = --allm-bar-border (hell/dunkel)", () => {
+    expect(THEME_VARIABLES.some((v) => v.name === "pill-border")).toBe(true);
+    for (const mode of ["light", "dark"]) {
+      expect(buildThemeCss({}, mode)).toContain(
+        "--allmi-pill-border: var(--allm-pill-border, var(--allmi-bar-border));",
+      );
+      const vars = resolveThemeVars({}, mode);
+      expect(vars["--allm-pill-border"]).toBe(vars["--allm-bar-border"]);
+    }
+  });
+
+  it("sendSuggestion: ein Helfer für Balken und Pillen (SEND_TEXT_EVENT)", () => {
+    const sent = [];
+    const onSend = (e) => sent.push(e.detail.command);
+    window.addEventListener(SEND_TEXT_EVENT, onSend);
+    sendSuggestion("Direkt");
+    render(<ChatHistory settings={{ defaultMessages: MSGS }} history={[]} />);
+    act(() => $$(".msg-suggestion")[2].click());
+    window.removeEventListener(SEND_TEXT_EVENT, onSend);
+    expect(sent).toEqual(["Direkt", "KI-Basics"]);
+  });
+
+  it("bubble: lange Begrüßung -> beim Öffnen ans Ende gescrollt (Pillen sichtbar), ohne Animation", () => {
+    const proto = HTMLElement.prototype;
+    const sets = [];
+    const scrollTo = vi.fn();
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get: () => 900,
+    });
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get: () => 300,
+    });
+    Object.defineProperty(proto, "scrollTop", {
+      configurable: true,
+      get: () => 0,
+      set(v) {
+        sets.push([this, v]);
+      },
+    });
+    const origScrollTo = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = scrollTo;
+    try {
+      render(
+        <ChatHistory
+          settings={{
+            defaultMessages: MSGS,
+            suggestionStyle: "pills",
+            greetingStyle: "bubble",
+            privacyNotice: "bubble",
+          }}
+          history={[]}
+        />,
+      );
+      const scroller = $("#anything-llm-panel-welcome").parentElement;
+      expect(sets).toEqual([[scroller, 900]]);
+      expect(scrollTo).not.toHaveBeenCalled(); // kein smooth-Scrollen
+    } finally {
+      delete proto.scrollHeight;
+      delete proto.clientHeight;
+      delete proto.scrollTop;
+      Element.prototype.scrollTo = origScrollTo;
+    }
+  });
+
+  it("bubble ohne Überlauf: Scrollposition bleibt", () => {
+    const sets = [];
+    Object.defineProperty(HTMLElement.prototype, "scrollTop", {
+      configurable: true,
+      get: () => 0,
+      set: (v) => sets.push(v),
+    });
+    try {
+      render(
+        <ChatHistory settings={{ greetingStyle: "bubble" }} history={[]} />,
+      );
+      expect(sets).toEqual([]);
+    } finally {
+      delete HTMLElement.prototype.scrollTop;
+    }
+  });
+
   it("pills: höchstens 6, Text über 60 Zeichen mit … gekürzt, gesendet wird der volle Text", () => {
     const long = `Gibt es ${"sehr ".repeat(15)}lange Kurse?`;
     const list = [long, ...Array.from({ length: 8 }, (_, i) => `F${i}`)];
     const pills = panelPills({ defaultMessages: list });
-    expect(pills).toHaveLength(PANEL_PILLS_MAX);
+    // eine Kappung: dieselbe wie die Chips unter der Leiste
+    expect(pills).toHaveLength(INLINE_CHIPS_MAX);
+    expect(INLINE_CHIPS_MAX).toBe(6);
+    expect(layout.PANEL_PILLS_MAX).toBeUndefined();
     expect(pills[0].text).toBe(long);
     expect(pills[0].label.length).toBeLessThanOrEqual(60);
     expect(pills[0].label.endsWith("…")).toBe(true);
@@ -415,6 +531,10 @@ describe("Kopfzeile: Untertitel, Online-Punkt, Icon (AK-4)", () => {
     expect(dot.getAttribute("title")).toBe("online");
     expect(dot.style.width).toBe("8px");
     expect(dot.style.backgroundColor).toBe("rgb(59, 178, 115)");
+    // Ring in der Kopfzeilen-Farbe (über der Fensterfläche), nicht --allmi-surface allein
+    expect(dot.style.boxShadow).toBe(
+      "0 0 0 2px var(--allmi-header-bg, transparent), 0 0 0 2px var(--allmi-surface, #FFFFFF)",
+    );
     expect($("#anything-llm-header img").getAttribute("src")).toBe(
       "https://x.test/kursberater.svg",
     );
@@ -439,6 +559,41 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
       (b) => b.textContent === "Start",
     );
 
+  it("Standardtexte neutral (alle Kundenarten), ohne Speicherdauer, Standard ohne Link", async () => {
+    expect(PANEL_TEXTS.de.greetingBubble).toBe(
+      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, ich finde passende Angebote.",
+    );
+    expect(PANEL_TEXTS.en.greetingBubble).toBe(
+      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
+    );
+    expect(DEFAULT_PRIVACY_POINTS).toEqual([
+      "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
+      "Unser Team kann Gespräche zur Qualitätssicherung einsehen.",
+      "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
+    ]);
+    expect(PANEL_TEXTS.en.privacyPoints).toHaveLength(3);
+    expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
+    const all = JSON.stringify(PANEL_TEXTS);
+    for (const word of [
+      "Volkshochschule",
+      "Kursberater",
+      "Kurs",
+      "Wichtig",
+      "adult education",
+      "course",
+    ])
+      expect(all).not.toContain(word);
+    const s = await loadEmbedSettings(BASE, fetchConfig({}));
+    expect(s.privacyUrl).toBe(null);
+    render(
+      <ChatContainer
+        {...props}
+        settings={{ ...BASE, enableStt: false, privacyNotice: "modal" }}
+      />,
+    );
+    expect($("#anything-llm-privacy-notice a")).toBe(null);
+  });
+
   it("Standard (none): kein Hinweis, Eingabe frei", () => {
     render(
       <ChatContainer {...props} settings={{ ...BASE, enableStt: false }} />,
@@ -456,7 +611,7 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     expect([...dlg.querySelectorAll("li")].map((li) => li.textContent)).toEqual(
       DEFAULT_PRIVACY_POINTS,
     );
-    expect(dlg.textContent).toContain("eigener Infrastruktur in Deutschland");
+    expect(dlg.textContent).toContain("auf Servern in Deutschland");
     const link = dlg.querySelector("a");
     expect(link.textContent).toBe("Erklärung zum Datenschutz");
     expect(link.parentElement.textContent).toBe(
@@ -778,13 +933,13 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     ...BASE,
     enableStt: false,
     privacyNotice: "bubble",
+    greetingStyle: "bubble", // wie von loadEmbedSettings normalisiert
     privacyUrl: "/datenschutz",
     greeting: GREETING,
   };
 
-  it("Punkte als Absätze in der Blase, letzter mit fettem „Wichtig:“, Link; kein Popup, Eingabe frei, kein localStorage", () => {
+  it("Punkte als Absätze in der Blase (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", () => {
     render(<ChatContainer {...props} settings={settings} />);
-    // greetingStyle nicht gesetzt -> Blase trotzdem
     const bubble = $("#anything-llm-greeting-bubble");
     expect(bubble.textContent.startsWith(DEFAULT_GREETING_BUBBLE_TEXT)).toBe(
       true,
@@ -793,11 +948,10 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     expect(paras.map((p) => p.textContent)).toEqual([
       DEFAULT_PRIVACY_POINTS[0],
       DEFAULT_PRIVACY_POINTS[1],
-      `Wichtig: ${DEFAULT_PRIVACY_POINTS[2]}`,
+      DEFAULT_PRIVACY_POINTS[2],
       "Datenschutz",
     ]);
-    expect(paras[2].querySelector("strong").textContent).toBe("Wichtig:");
-    expect(paras[0].querySelector("strong")).toBe(null);
+    expect($("#anything-llm-bubble-privacy strong")).toBe(null);
     expect(paras[3].querySelector("a").getAttribute("href")).toBe(
       "/datenschutz",
     );
@@ -820,10 +974,7 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
       />,
     );
     const paras = $$("#anything-llm-bubble-privacy p");
-    expect(paras.map((p) => p.textContent)).toEqual([
-      "<b>Eins</b>",
-      "Wichtig: Zwei",
-    ]);
+    expect(paras.map((p) => p.textContent)).toEqual(["<b>Eins</b>", "Zwei"]);
     expect($("#anything-llm-bubble-privacy a")).toBe(null);
     expect($("#anything-llm-bubble-privacy b")).toBe(null);
   });

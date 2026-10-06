@@ -250,7 +250,11 @@ export default function ChatWindowHeader({
 }
 
 // Online-Punkt (onlineDot): rein dekorativ, kein Status-Abruf; für
-// Screenreader verborgen, Tooltip „online“ für Maus-Nutzer.
+// Screenreader verborgen, Tooltip „online“ für Maus-Nutzer. Der Ring trennt
+// den Punkt vom Icon in der Farbe der Kopfzeile: --allmi-header-bg über
+// --allmi-surface (erster Schatten liegt oben) — ohne Header-Farbe
+// (transparent) also die Fensterfläche, mit Header-Farbe bzw. dunklem Theme
+// deren Farbe.
 function OnlineDot({ label }) {
   return (
     <span
@@ -265,7 +269,8 @@ function OnlineDot({ label }) {
         height: "8px",
         borderRadius: "999px",
         backgroundColor: "#3BB273",
-        boxShadow: "0 0 0 2px var(--allmi-surface, #FFFFFF)",
+        boxShadow:
+          "0 0 0 2px var(--allmi-header-bg, transparent), 0 0 0 2px var(--allmi-surface, #FFFFFF)",
       }}
     />
   );

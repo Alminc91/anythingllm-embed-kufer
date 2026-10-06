@@ -7,6 +7,13 @@ import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
+// Vorschlag (Balken bzw. Pille im leeren Chat) senden: ChatContainer hört auf
+// SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
+export function sendSuggestion(text) {
+  window.dispatchEvent(
+    new CustomEvent(SEND_TEXT_EVENT, { detail: { command: text } }),
+  );
+}
 
 export default function ChatContainer({
   sessionId,

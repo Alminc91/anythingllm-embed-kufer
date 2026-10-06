@@ -13,7 +13,8 @@ export const DEFAULT_INLINE_HEIGHT = "600px";
 // Inline-Leiste als Eingabefeld (inlineInput): Platzhalter + Text des Knopfs
 export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …";
 export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
-// Wunschfragen-Chips unter der Leiste (aus defaultMessages): höchstens so viele
+// Wunschfragen-Chips unter der Leiste und Pillen im Panel (aus
+// defaultMessages): höchstens so viele
 export const INLINE_CHIPS_MAX = 6;
 
 // Grenzen (Widget-seitig geklemmt, unabhängig davon was gespeichert ist)
@@ -62,7 +63,6 @@ export const GREETING_STYLE_VALUES = ["text", "bubble"];
 // ("bubble", ohne Bestätigung) oder einmalig als Karte beim ersten Öffnen
 // ("modal", Bestätigung per Knopf, gespeichert in localStorage).
 export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
-export const PANEL_PILLS_MAX = 6;
 export const PANEL_PILL_TEXT_MAX = 60; // längere Wunschfragen: gekürzt mit …
 export const GREETING_BUBBLE_TEXT_MAX_LEN = 300;
 export const ASSISTANT_SUBTITLE_MAX_LEN = 60;
@@ -85,41 +85,41 @@ export const URL_MAX_LEN = 512;
 // Sprache ohne eigene Texte wie "fr") -> deutsch. Absichtlich nicht über
 // i18next: ohne data-language stünde dort Englisch, und Sprachen ohne diese
 // Texte fielen auf Englisch zurück (gemischte Sprachen im Panel).
-// Datenschutz-Punkte sachlich, keine Rechtsberatung; Kunden ersetzen sie
-// über privacyText.
+// Neutral für alle Kundenarten (VHS, Bildungsträger, …), kurz, ohne
+// Speicherdauer, sachlich, keine Rechtsberatung; Kunden ersetzen die Punkte
+// über privacyText und tragen ihre Erklärung als privacyUrl ein (Standard:
+// kein Link).
 export const PANEL_TEXTS = {
   de: {
     greetingBubble:
-      "Hallo! Ich bin Ihr KI-Kursberater. Beschreiben Sie, was Sie suchen, ich finde den passenden Kurs.",
+      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, ich finde passende Angebote.",
     privacyTitle: "Datenschutz:",
     privacyPoints: [
-      "Der KI-Kursberater läuft auf eigener Infrastruktur in Deutschland. Ihre Daten bleiben bei der Volkshochschule und werden nach DSGVO verarbeitet.",
-      "Der Chatverlauf wird für die Qualitätssicherung gespeichert und kann von unserem Team eingesehen werden.",
-      "Dies ist eine Maschine (KI). Bitte geben Sie keine personenbezogenen Daten ein.",
+      "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
+      "Unser Team kann Gespräche zur Qualitätssicherung einsehen.",
+      "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
     privacyButton: "Start",
     privacyMoreLead: "Weitere Informationen in der ",
     privacyMoreLink: "Erklärung zum Datenschutz",
     privacyBubbleLink: "Datenschutz",
-    important: "Wichtig:",
     online: "online",
     aiDisclaimer:
       "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
   },
   en: {
     greetingBubble:
-      "Hello! I am your AI course advisor. Describe what you are looking for and I will find the right course.",
+      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
     privacyTitle: "Privacy:",
     privacyPoints: [
-      "The AI course advisor runs on its own infrastructure in Germany. Your data stays with the adult education centre and is processed in accordance with the GDPR.",
-      "The chat history is stored for quality assurance and can be viewed by our team.",
-      "This is a machine (AI). Please do not enter any personal data.",
+      "Your requests stay on servers in Germany and are not passed on to third parties.",
+      "Our team may view conversations for quality assurance.",
+      "Please only share information that is necessary for your request.",
     ],
     privacyButton: "Start",
     privacyMoreLead: "More information in our ",
     privacyMoreLink: "privacy statement",
     privacyBubbleLink: "Privacy",
-    important: "Important:",
     online: "online",
     aiDisclaimer:
       "I am an AI and can make mistakes. Please double-check my answers.",
@@ -156,12 +156,16 @@ export function privacyPoints(settings = {}) {
   return own.length > 0 ? own : panelTexts(settings).privacyPoints;
 }
 
-// Begrüßung als Blase: greetingStyle "bubble" oder Datenschutz in der Blase
-// (privacyNotice "bubble" setzt die Blase voraus).
-export function greetingAsBubble(settings = {}) {
-  return (
-    settings.greetingStyle === "bubble" || settings.privacyNotice === "bubble"
-  );
+// Datenschutz in der Blase (privacyNotice "bubble") setzt die Begrüßungsblase
+// voraus: einmal beim Laden normalisiert (loadEmbedSettings), danach gilt
+// überall nur greetingStyle.
+export function normalizePanelSettings(settings = {}) {
+  if (
+    settings.privacyNotice === "bubble" &&
+    settings.greetingStyle !== "bubble"
+  )
+    return { ...settings, greetingStyle: "bubble" };
+  return settings;
 }
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
@@ -380,19 +384,17 @@ export function inlineChips(settings = {}) {
     .slice(0, INLINE_CHIPS_MAX);
 }
 
-// Pillen im Panel (suggestionStyle "pills"): wie die Chips, höchstens
-// PANEL_PILLS_MAX; { text: vollständige Frage (wird gesendet), label: Anzeige,
-// ab PANEL_PILL_TEXT_MAX Zeichen mit … gekürzt }.
+// Pillen im Panel (suggestionStyle "pills"): dieselbe Liste wie die Chips
+// (inlineChips, höchstens INLINE_CHIPS_MAX); { text: vollständige Frage (wird
+// gesendet), label: Anzeige, ab PANEL_PILL_TEXT_MAX Zeichen mit … gekürzt }.
 export function panelPills(settings = {}) {
-  return inlineChips(settings)
-    .slice(0, PANEL_PILLS_MAX)
-    .map((text) => ({
-      text,
-      label:
-        text.length > PANEL_PILL_TEXT_MAX
-          ? `${text.slice(0, PANEL_PILL_TEXT_MAX - 1).trimEnd()}…`
-          : text,
-    }));
+  return inlineChips(settings).map((text) => ({
+    text,
+    label:
+      text.length > PANEL_PILL_TEXT_MAX
+        ? `${text.slice(0, PANEL_PILL_TEXT_MAX - 1).trimEnd()}…`
+        : text,
+  }));
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
+import { useLayoutEffect, useRef } from "react";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { embedderSettings } from "@/main";
 import { BUBBLE_RADIUS, BUBBLE_SHADOW } from "@/utils/theme";
 import { panelPills, panelTexts, privacyPoints } from "@/utils/layout";
-import { SEND_TEXT_EVENT } from "../..";
+import { sendSuggestion } from "../..";
 
 // Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B), nur im leeren
 // Chat und nur auf Wunsch (suggestionStyle "pills" / greetingStyle "bubble").
@@ -12,14 +13,9 @@ import { SEND_TEXT_EVENT } from "../..";
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
 
-function sendSuggestion(text) {
-  window.dispatchEvent(
-    new CustomEvent(SEND_TEXT_EVENT, { detail: { command: text } }),
-  );
-}
-
 // Wunschfragen als kleine Pillen (Form/Farben wie die Chips unter der
-// Leiste: --allmi-bar-*), umbrechend, höchstens 6, lange Texte gekürzt.
+// Leiste: --allmi-bar-*; Rand eigens über --allmi-pill-border, Standard =
+// --allmi-bar-border), umbrechend, höchstens 6, lange Texte gekürzt.
 export function SuggestedPills({ settings, align = "center" }) {
   const pills = panelPills(settings);
   if (pills.length === 0) return null;
@@ -45,7 +41,7 @@ export function SuggestedPills({ settings, align = "center" }) {
             maxWidth: "100%",
             margin: 0,
             padding: "6px 14px",
-            border: "1px solid var(--allmi-bar-border, #d1d5db)",
+            border: "1px solid var(--allmi-pill-border, #d1d5db)",
             borderRadius: "var(--allmi-bar-radius, 999px)",
             backgroundColor: "var(--allmi-bar-bg, #FFFFFF)",
             color: "var(--allmi-bar-text, #1f2937)",
@@ -66,10 +62,18 @@ export function SuggestedPills({ settings, align = "center" }) {
 // greetingStyle "bubble": Begrüßung als Assistenten-Blase mit Avatar, darunter
 // die Vorschläge (Pillen links eingerückt, Balken wie bisher mittig) und der
 // greeting-Text (Datenschutzsatz) klein. privacyNotice "bubble": die
-// Datenschutz-Punkte stehen als Absätze in der Blase (letzter Punkt mit
-// „Wichtig:“, darunter der Link „Datenschutz“), der kleine greeting-Text
-// entfällt dann (sonst doppelt).
+// Datenschutz-Punkte stehen als Absätze in der Blase (darunter der Link
+// „Datenschutz“, nur mit privacyUrl), der kleine greeting-Text entfällt dann
+// (sonst doppelt).
+// Beim Öffnen ans Ende gescrollt (ohne Animation): eine lange Blase (z. B.
+// mit Datenschutz-Punkten im kleinen Blasenfenster) schöbe die Vorschläge
+// sonst unter den sichtbaren Bereich. Ohne Überlauf bleibt alles stehen.
 export default function PanelWelcome({ settings = {}, suggestions = null }) {
+  const scrollRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
+  }, []);
   const pills = settings.suggestionStyle === "pills";
   const texts = panelTexts(settings);
   const privacyInBubble = settings.privacyNotice === "bubble";
@@ -78,7 +82,10 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
     embedderSettings.settings.brandImageUrl ||
     AnythingLLMIcon;
   return (
-    <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-no-scroll">
+    <div
+      ref={scrollRef}
+      className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-no-scroll"
+    >
       <div
         id="anything-llm-panel-welcome"
         style={{ display: "flex", flexDirection: "column", gap: "14px" }}
@@ -158,21 +165,13 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
 }
 
 // Datenschutz in der Begrüßungsblase (privacyNotice "bubble"): ein Absatz je
-// Punkt, der letzte mit fettem „Wichtig:“, darunter der Link (privacyUrl).
+// Punkt (neutral, ohne Hervorhebung), darunter der Link (privacyUrl).
 function BubblePrivacy({ settings, texts }) {
-  const points = privacyPoints(settings);
-  const last = points.length - 1;
   return (
     <div id="anything-llm-bubble-privacy">
-      {points.map((point, i) => (
+      {privacyPoints(settings).map((point, i) => (
         <p key={i} style={{ margin: "8px 0 0" }}>
-          {i === last && !point.startsWith(texts.important) ? (
-            <>
-              <strong>{texts.important}</strong> {point}
-            </>
-          ) : (
-            point
-          )}
+          {point}
         </p>
       ))}
       {settings.privacyUrl && (

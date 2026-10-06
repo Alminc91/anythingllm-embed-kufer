@@ -3,7 +3,6 @@ import PromptReply from "./PromptReply";
 import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
 import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
-import { greetingAsBubble } from "@/utils/layout";
 import {
   courseCardsAbove,
   courseCardsEnabled,
@@ -23,7 +22,7 @@ import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
 import debounce from "lodash.debounce";
-import { SEND_TEXT_EVENT } from "..";
+import { sendSuggestion } from "..";
 
 // DOM-Knoten, in den der Scroll-nach-unten-Pfeil gerendert wird (von ChatWindow
 // bereitgestellt): ein Kind der relativen Fenster-Wurzel AUSSERHALB der Scroll-
@@ -147,16 +146,19 @@ export default function ChatHistory({
 
   if (history.length === 0) {
     // Panel-Optik (opt-in): Pillen statt Balken, Begrüßung als Blase
+    // (privacyNotice "bubble" ist in loadEmbedSettings schon auf
+    // greetingStyle "bubble" normalisiert)
+    const bubble = settings?.greetingStyle === "bubble";
     const suggestions =
       settings?.suggestionStyle === "pills" ? (
         <SuggestedPills
           settings={settings}
-          align={greetingAsBubble(settings) ? "start" : "center"}
+          align={bubble ? "start" : "center"}
         />
       ) : (
         <SuggestedMessages settings={settings} />
       );
-    if (greetingAsBubble(settings))
+    if (bubble)
       return <PanelWelcome settings={settings} suggestions={suggestions} />;
     return (
       <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
@@ -328,13 +330,7 @@ function SuggestedMessages({ settings }) {
             fontSize: suggestionFontSize(settings.textSize),
           }}
           type="button"
-          onClick={() => {
-            window.dispatchEvent(
-              new CustomEvent(SEND_TEXT_EVENT, {
-                detail: { command: content },
-              }),
-            );
-          }}
+          onClick={() => sendSuggestion(content)}
           className={`msg-suggestion allm-font-sans allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
         >
           {content}

@@ -11,6 +11,7 @@ import {
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
+  normalizePanelSettings,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
 import { applyTheme } from "@/utils/theme";
@@ -112,7 +113,8 @@ export const DEFAULT_SETTINGS = {
   assistantSubtitle: null, // max. 60 Zeichen
   onlineDot: false,
   // Datenschutz-Hinweis: "none" | "bubble" (Absätze in der Begrüßungsblase,
-  // ohne Bestätigung) | "modal" (einmalige Karte beim ersten Öffnen,
+  // ohne Bestätigung; setzt greetingStyle "bubble", normalisiert in
+  // loadEmbedSettings) | "modal" (einmalige Karte beim ersten Öffnen,
   // Bestätigung in localStorage allm-privacy-ack-<embedId>). Texte null =
   // Standard der Sprache (utils/layout.js PANEL_TEXTS).
   privacyNotice: "none",
@@ -177,12 +179,12 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
       mergedServerConfig[key] = value;
   }
 
-  const resolved = {
+  const resolved = normalizePanelSettings({
     ...DEFAULT_SETTINGS,
     ...scriptSettings,
     ...parseAndValidateEmbedSettings(mergedServerConfig),
     loaded: true,
-  };
+  });
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
   warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
   return resolved;

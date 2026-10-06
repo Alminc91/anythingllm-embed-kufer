@@ -209,7 +209,7 @@ def check_bubble_header(browser, base_url):
           };
         }""")
         record("AK-3 Begrüßungsblase mit Avatar, greeting klein darunter",
-               st["bubble"].startswith("Hallo! Ich bin Ihr KI-Kursberater") and st["avatar"] == 28
+               st["bubble"].startswith("Hallo! Ich bin Ihr digitaler Berater") and st["avatar"] == 28
                and st["smallSize"] == "11.5px" and st["order"],
                json.dumps({k: st[k] for k in ("bubble", "avatar", "small", "smallSize", "order", "pillsLeft")},
                           ensure_ascii=False))
@@ -245,7 +245,7 @@ def check_privacy(browser, base_url):
         tv.settle(page, 800)
         st = page.evaluate(PRIV_PROBE)
         ok = (st["shown"] and st["text"].startswith("Datenschutz:")
-              and "eigener Infrastruktur in Deutschland" in st["text"] and "DSGVO" in st["text"]
+              and "auf Servern in Deutschland" in st["text"] and "Qualitätssicherung" in st["text"]
               and "Weitere Informationen in der Erklärung zum Datenschutz" in st["text"]
               and st["link"] == "https://example.org/datenschutz" and st["focus"] == "Start"
               and st["inputDisabled"] is True and st["ls"] is None)
@@ -414,6 +414,43 @@ def check_arrow_under_notice(browser, base_url):
         ctx.close()
 
 
+def check_bubble_scrolled_to_pills(browser, base_url):
+    """Review 10: lange Datenschutz-Blase im Blasenfenster -> beim Öffnen ans
+    Ende gescrollt, die Pillen liegen vollständig im sichtbaren Bereich."""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, mock())
+    try:
+        tv.wait_shadow(page, "#anything-llm-suggestion-pills")
+        tv.settle(page, 500)
+        st = page.evaluate("""() => {
+          const sc = window.__q('#anything-llm-panel-welcome').parentElement, r = sc.getBoundingClientRect();
+          const p = window.__q('#anything-llm-suggestion-pills').getBoundingClientRect();
+          return { overflow: sc.scrollHeight > sc.clientHeight, top: Math.round(sc.scrollTop),
+                   atEnd: Math.abs(sc.scrollHeight - sc.clientHeight - sc.scrollTop) <= 1,
+                   pillsVisible: p.top >= r.top - 0.5 && p.bottom <= r.bottom + 0.5 };
+        }""")
+        record("Review 10 lange Blase: beim Öffnen ans Ende gescrollt, Pillen sichtbar",
+               st["overflow"] and st["atEnd"] and st["pillsVisible"], json.dumps(st))
+    finally:
+        ctx.close()
+
+
+def check_dot_ring_dark_header(browser, base_url):
+    """Review 5: Ring des Online-Punkts in der Kopfzeilen-Farbe (dunkler Header
+    per headerBgColor), nicht in --allmi-surface."""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PILLS}, mock(config={**CFG, "headerBgColor": "#123456"}))
+    try:
+        tv.wait_shadow(page, "[data-online-dot]")
+        tv.settle(page, 400)
+        st = page.evaluate("""() => {
+          const dot = window.__q('[data-online-dot]'), head = window.__q('#anything-llm-header');
+          return { ring: getComputedStyle(dot).boxShadow, header: getComputedStyle(head).backgroundColor };
+        }""")
+        ok = st["header"] == "rgb(18, 52, 86)" and st["ring"].startswith("rgb(18, 52, 86) 0px 0px 0px 2px")
+        record("Review 5 Online-Punkt-Ring in der Kopfzeilen-Farbe (dunkler Header)", ok, json.dumps(st))
+    finally:
+        ctx.close()
+
+
 def check_privacy_bubble(browser, base_url):
     m = mock()
     ctx, page = tv.open_page(browser, base_url, {"attrs": {**OPEN, "privacy-notice": "bubble",
@@ -428,10 +465,10 @@ def check_privacy_bubble(browser, base_url):
           popup: !!window.__q('#anything-llm-privacy-notice'), disabled: window.__q('#message-input').disabled,
           small: !!window.__q('#anything-llm-greeting-small'),
           ls: Object.keys(localStorage).filter(k => k.startsWith('allm-privacy-ack-')) })""")
-        ok = (len(st["paras"]) == 4 and st["paras"][2].startswith("Wichtig: Dies ist eine Maschine")
-              and st["strong"] == ["Wichtig:"] and st["paras"][3] == "Datenschutz" and st["link"] == "/datenschutz"
+        ok = (len(st["paras"]) == 4 and st["paras"][2].startswith("Bitte teilen Sie nur Angaben")
+              and st["strong"] == [] and st["paras"][3] == "Datenschutz" and st["link"] == "/datenschutz"
               and not st["popup"] and st["disabled"] is False and not st["small"] and st["ls"] == [])
-        record("Datenschutz in der Blase: Punkte, „Wichtig:“, Link; kein Popup, Eingabe frei, kein localStorage", ok,
+        record("Datenschutz in der Blase: Punkte (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
                json.dumps(st, ensure_ascii=False)[:400])
     finally:
         ctx.close()
@@ -508,6 +545,8 @@ def main():
                 check_privacy_mobile(browser, base_url)
                 check_bar_ticket(browser, base_url)
                 check_arrow_under_notice(browser, base_url)
+                check_bubble_scrolled_to_pills(browser, base_url)
+                check_dot_ring_dark_header(browser, base_url)
                 check_privacy_bubble(browser, base_url)
                 check_disclaimer(browser, base_url)
             browser.close()
