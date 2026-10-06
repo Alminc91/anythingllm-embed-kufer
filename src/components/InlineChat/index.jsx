@@ -77,8 +77,9 @@ import {
 // wächst zum Panel und beim Einklappen zurück (runMorph) — die Leistenform
 // wird beim Aufklappen einmal gemessen, das Panel im ersten Commit (vor dem
 // Paint), dann laufen CSS-Transitionen; Einklappen erst nach dem Rückweg.
-// Ein nötiger Scroll zur Box passiert vor dem Lauf (ohne Animation), nie
-// währenddessen; Chips unter der Leiste blenden weich aus bzw. wieder ein.
+// Schwebend scrollt die Seite nie; im Seitenfluss passiert ein nötiger Scroll
+// zur Box vor dem Lauf (ohne Animation), nie währenddessen; Chips unter der
+// Leiste blenden weich aus bzw. wieder ein.
 //
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
@@ -170,8 +171,8 @@ const cssMs = (v) => {
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
 // Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
 // zeigen, dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
-// dann (gleiche Dauer und Kurve wie beim Aufklappen, Verzögerung per CSS)
-// Transition vom aktuellen Stand zur Leistenform — steht die Leistenform noch
+// dann (eigene Dauer/Kurve, Verzögerung per CSS) Transition vom aktuellen
+// Stand zur Leistenform — steht die Leistenform noch
 // an (Zuklappen vor dem ersten Frame des Aufklappens), endet der Lauf sofort.
 // chips (schwebend: Chips unter der unsichtbaren Leiste) blenden beim
 // Aufklappen aus, beim Zuklappen wieder ein. Ende per transitionend
@@ -519,11 +520,12 @@ export default function InlineChat({
 
   // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
   // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
-  // (auch für den Rückweg) und den Lauf starten. Nach Klick: liegt die Box
-  // nicht ganz im Viewport, scrollt die Seite JETZT (vor dem Paint, ohne
-  // Animation) — während des Laufs scrollt nichts. Die Leistenform ist
-  // relativ zum Panel abgelegt, der Scroll ändert daran nichts. Box verlassen
-  // (Einklappen, Vollbild, Unmount) bricht einen Lauf ab.
+  // (auch für den Rückweg) und den Lauf starten. Scroll nach Klick:
+  // schwebend nie (wie das Mockup; die Box darf unten herausragen), im
+  // Seitenfluss JETZT, falls die Box nicht ganz im Viewport liegt (vor dem
+  // Paint, ohne Animation) — während des Laufs scrollt nichts. Die
+  // Leistenform ist relativ zum Panel abgelegt, der Scroll ändert daran
+  // nichts. Box verlassen (Einklappen, Vollbild, Unmount) bricht einen Lauf ab.
   useLayoutEffect(() => {
     const m = morphRef.current;
     const win = chatWindowRef.current;
@@ -536,7 +538,7 @@ export default function InlineChat({
     g.dy = g.y - f.top;
     if (scrollOnExpandRef.current) {
       scrollOnExpandRef.current = false;
-      scrollBoxIntoView(true);
+      if (!floating) scrollBoxIntoView(true);
     }
     m.stop = runMorph(win, box, g, {
       opening: true,
@@ -595,7 +597,8 @@ export default function InlineChat({
   // Box eingeblendet: Verlauf ans Ende; nach Klick genau EINMAL scrollen — und
   // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
   // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
-  // "morph": vor dem Lauf ohne Animation (instant, Effekt oben).
+  // "morph": schwebend nie, im Seitenfluss vor dem Lauf ohne Animation
+  // (instant, Effekt oben).
   const scrollBoxIntoView = (instant = false) => {
     const el = boxRef.current;
     if (!el) return;

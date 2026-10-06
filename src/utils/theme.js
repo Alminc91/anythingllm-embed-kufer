@@ -209,10 +209,14 @@ export const THEME_VARIABLES = [
   // (inlineLayout "overlay"). effect-duration und effect-easing ohne
   // Standard: ohne Seiten-CSS ist --allmi-* ungültig und es gilt der Standard
   // des Effekts an der Verwendungsstelle (main.jsx: .allm-effect 320ms,
-  // "morph" 460ms; Kurve je Effekt). Reduzierte Bewegung schaltet den Effekt
-  // dort per animation/transition: none ab (die Dauer bleibt unverändert).
+  // "morph" 720ms; Kurve je Effekt). effect-close-duration/-easing: nur
+  // "morph", Zuklappen (Standard 480ms, cubic-bezier(.65,0,.35,1) wie das
+  // Mockup). Reduzierte Bewegung schaltet den Effekt dort per
+  // animation/transition: none ab (die Dauer bleibt unverändert).
   { name: "effect-duration", light: null, dark: null },
   { name: "effect-easing", light: null, dark: null },
+  { name: "effect-close-duration", light: null, dark: null },
+  { name: "effect-close-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
   {

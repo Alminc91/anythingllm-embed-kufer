@@ -139,12 +139,14 @@ beforeEach(() => {
     if (el.id === "anything-llm-chat")
       return {
         ...cs,
-        transitionDuration: el.classList.contains("allm-morph")
-          ? "0.46s, 0.46s"
-          : "0s",
-        // Zuklappen: Box schrumpft erst nach dem Ausblenden (35 %)
+        // wie main.jsx: Aufklappen 720ms; Zuklappen 480ms, Box erst nach 80ms
+        transitionDuration: el.classList.contains("allm-morph-close")
+          ? "0.48s, 0.48s"
+          : el.classList.contains("allm-morph")
+            ? "0.72s, 0.72s"
+            : "0s",
         transitionDelay: el.classList.contains("allm-morph-close")
-          ? "161ms, 161ms"
+          ? "80ms, 80ms"
           : "0s",
       };
     return cs;
@@ -294,7 +296,9 @@ describe("AK-2: Start- und Endgeometrie", () => {
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
     nextFrames();
-    act(() => vi.advanceTimersByTime(600));
+    act(() => vi.advanceTimersByTime(700)); // 720 + 100
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
+    act(() => vi.advanceTimersByTime(200));
     expect(ui.chat().classList.contains("allm-morph")).toBe(false);
     expect(visible(ui)).toBe(true);
   });
@@ -578,9 +582,18 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
     Element.prototype.scrollIntoView = protoBefore;
   });
 
-  it("NAK-1: Box ragt aus dem Viewport -> genau ein Scroll vor dem ersten Frame, ohne Animation", () => {
+  it("overlay: Box ragt aus dem Viewport -> trotzdem kein Scroll (wie das Mockup)", () => {
     panelRect = { left: 20, top: 600, width: 760, height: 520 };
     const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    transitionEnd(ui.chat());
+    expect(scrollCalls).toHaveLength(0);
+  });
+
+  it("NAK-1 flow: Box ragt aus dem Viewport -> genau ein Scroll vor dem ersten Frame, ohne Animation", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    const ui = setup({ inlineLayout: "flow" });
     ui.open();
     expect(scrollCalls).toEqual([
       { opts: { block: "nearest", behavior: "instant" }, running: false },
@@ -592,11 +605,16 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
   });
 
   it("AK-1: Box im Viewport -> kein Scroll (weder vorher noch nachher)", () => {
-    const ui = setup({ inlineLayout: "overlay" });
-    ui.open();
-    nextFrames();
-    transitionEnd(ui.chat());
-    expect(scrollCalls).toHaveLength(0);
+    for (const inlineLayout of ["overlay", "flow"]) {
+      const ui = setup({ inlineLayout });
+      ui.open();
+      nextFrames();
+      transitionEnd(ui.chat());
+      expect(scrollCalls).toHaveLength(0);
+      act(() => chatWindowProps.current.closeChat());
+      transitionEnd(ui.chat());
+      expect(scrollCalls).toHaveLength(0);
+    }
   });
 
   it("andere Effekte scrollen wie bisher sanft", () => {
@@ -615,9 +633,9 @@ describe("Morph flüssiger: Schließen", () => {
     const ui = setup({ inlineLayout: "overlay" });
     openAndSettle(ui);
     act(() => chatWindowProps.current.closeChat());
-    act(() => vi.advanceTimersByTime(600)); // 460 + 100, ohne Verzögerung
+    act(() => vi.advanceTimersByTime(600)); // 480 + 100, ohne Verzögerung
     expect(visible(ui)).toBe(true);
-    act(() => vi.advanceTimersByTime(200)); // + 161 ms Verzögerung
+    act(() => vi.advanceTimersByTime(100)); // + 80 ms Verzögerung
     expect(visible(ui)).toBe(false);
   });
 
@@ -632,17 +650,27 @@ describe("Morph flüssiger: Schließen", () => {
     expect(box.classList.contains("allm-morph-flow-close")).toBe(false);
   });
 
-  it("AK-2 (CSS): gleiche Dauer/Kurve, Rückweg nur verzögert; Inhalt vor 50 % aus; will-change nur im Lauf; Schatten +100 ms", () => {
+  it("AK-2 (CSS): Timing wie das Mockup (720 / 480 + 80 ms), Inhalt vor 50 % aus; will-change nur im Lauf; Schatten +100 ms", () => {
     const src = readFileSync(resolve(process.cwd(), "src/main.jsx"), "utf8");
     const rule = (sel) => {
       const i = src.indexOf(`\n  ${sel}{`);
       expect(i).toBeGreaterThan(-1);
       return src.slice(src.indexOf("{", i) + 1, src.indexOf("}", i));
     };
-    // Schließen ändert an der Box nur die Verzögerung, nicht Dauer/Kurve
+    // Aufklappen 720ms expo; Zuklappen eigene Dauer/Kurve (480ms,
+    // cubic-bezier(.65,0,.35,1)), Box erst nach 1/6 (80 ms)
+    expect(
+      rule(
+        ".allm-morph,.allm-morph-flow,.allm-morph-chips-out,.allm-morph-chips-in",
+      ),
+    ).toBe(
+      "--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s",
+    );
     expect(
       rule(".allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in"),
-    ).toBe("--allmi-fx-w:calc(var(--allmi-fx-d)*.35)");
+    ).toBe(
+      "--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1));--allmi-fx-w:calc(var(--allmi-fx-d)/6)",
+    );
     const tr = rule(".allm-morph");
     for (const p of ["width", "height", "transform", "border-radius"])
       expect(tr).toContain(
@@ -651,9 +679,9 @@ describe("Morph flüssiger: Schließen", () => {
     expect(tr).toContain(
       "box-shadow calc(var(--allmi-fx-d) + 100ms) ease var(--allmi-fx-w)",
     );
-    // Inhalt beim Schließen: 35 % der Dauer, ohne Verzögerung (< 50 %)
+    // Inhalt beim Schließen: 1/3 der Dauer (160 ms), ohne Verzögerung (< 50 %)
     expect(rule(".allm-morph-close>*")).toBe(
-      "transition:opacity calc(var(--allmi-fx-d)*.35) ease",
+      "transition:opacity calc(var(--allmi-fx-d)/3) ease",
     );
     // will-change nur an den Lauf-Klassen
     expect(src.match(/will-change:[^;}]*/g)).toEqual([
