@@ -30,6 +30,7 @@ vi.mock("react-i18next", () => ({
 
 import {
   extractLinks,
+  formatCourse,
   followUpsList,
   followUpText,
   selectAnnouncedCourseCards,
@@ -141,10 +142,74 @@ describe("1 · ReDoS/Client-DoS: Karten oben, viele „[“ bzw. „<a href“ i
       $$(".allm-course-card .allm-course-title").map((t) => t.textContent),
     ).toEqual(["Yoga Aufbaukurs", "Englisch 1"]);
   });
+
+  it("Verlauf ohne chatId (nicht am Streamen): verlinkte Kurse als Karten oben", () => {
+    // /history-Einträge ohne chatId, closed und animate (z. B. ältere
+    // Server): fertig, solange nicht animate/pending
+    const user = { role: "user", content: "Yoga?", sentAt: 1 };
+    const msg = {
+      role: "assistant",
+      content: `Siehe [Yoga](${YOGA.url}) und [Englisch 1](${ENGLISH.url}).`,
+      courseSources: clone([YOGA, ENGLISH]),
+      sentAt: 2,
+      close: false,
+    };
+    act(() =>
+      root.render(<ChatHistory settings={ABOVE} history={[user, msg]} />),
+    );
+    expect(
+      $$(".allm-course-card .allm-course-title").map((t) => t.textContent),
+    ).toEqual(["Yoga Aufbaukurs", "Englisch 1"]);
+    // wartend (pending) bzw. streamend: noch keine Karten aus dem Text
+    for (const extra of [
+      { animate: true, pending: true, content: "" },
+      { animate: true, pending: false },
+    ]) {
+      act(() =>
+        root.render(
+          <ChatHistory
+            settings={ABOVE}
+            history={[user, { ...msg, ...extra }]}
+          />,
+        ),
+      );
+      expect($$(".allm-course-card")).toHaveLength(0);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
 describe("2 · Rohlängen vor dem Bereinigen gekappt", () => {
+  it("Kappung erst nach dem Bereinigen: Tag/Link an der Schnittstelle hinterlässt keine Reste", () => {
+    // Tag bzw. Link über die alte Rohgrenze (240 / 300 Zeichen) hinweg
+    const pad = "Kräftigend am Abend. ";
+    const tag = `<span class="${"x".repeat(260)}">`;
+    const tagged = `${pad}${tag}Für Einsteiger.</span>`;
+    const teaser = teaserMap({ [YOGA.url]: tagged }).get(
+      "aw.donau.kufer.de/kurssuche/kurs/yoga-aufbaukurs/262-3103",
+    );
+    expect(teaser).toBe("Kräftigend am Abend. Für Einsteiger.");
+    expect(teaser).not.toMatch(/[<>"=]|xxx/);
+    // Markdown-Link mit langer URL: Linktext bleibt, keine URL-Reste
+    const linked = `Gibt es [B1](https://vhs.de/${"k".repeat(300)})?`;
+    expect(followUpText(linked)).toBe("Gibt es B1?");
+    expect(followUpsList([linked])).toEqual(["Gibt es B1?"]);
+    // fachliche Grenze auf dem bereinigten Text: Teaser 200 (Wortgrenze),
+    // Ort 60
+    const long = teaserMap({
+      [YOGA.url]: `${tag}${"Wort ".repeat(80)}`,
+    }).get("aw.donau.kufer.de/kurssuche/kurs/yoga-aufbaukurs/262-3103");
+    expect(long.length).toBeLessThanOrEqual(200);
+    expect(long.startsWith("Wort Wort")).toBe(true);
+    expect(long.endsWith("…")).toBe(true);
+    const venue = formatCourse({
+      ...YOGA,
+      format: "onsite",
+      venue: `<b class="${"y".repeat(300)}">Realschule</b>`,
+    }).place;
+    expect(venue).toBe("Realschule");
+  });
+
   it("100k-Werte: followUpText, followUpsList, teaserMap je < 50 ms", () => {
     const big = [
       "<".repeat(100000),
@@ -245,6 +310,66 @@ describe("3 · Sende-Ereignis nur an das eigene Widget", () => {
     }
   });
 
+  it("Ereignis der Webseite auf document (bubbles) bzw. einem Seitenelement sendet; aus einem fremden Widget nicht", async () => {
+    act(() =>
+      root.render(
+        <ChatContainer
+          sessionId="s-A"
+          knownHistory={[]}
+          settings={settings("a")}
+        />,
+      ),
+    );
+    const send = (target, init = {}) =>
+      act(async () =>
+        target.dispatchEvent(
+          new CustomEvent("anythingllm-embed-send-prompt", {
+            detail: { command: "Yoga" },
+            bubbles: true,
+            ...init,
+          }),
+        ),
+      );
+    await send(document);
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(chatService.streamChat.mock.calls[0][0]).toBe("s-A");
+    // fremdes Widget (eigener Shadow-Host): auch composed kommt es auf
+    // window nur als dessen Host an -> verworfen
+    const foreign = document.createElement("div");
+    foreign.id = "anythingllm-embed-widget";
+    document.body.appendChild(foreign);
+    try {
+      const shadow = foreign.attachShadow({ mode: "closed" });
+      const pill = document.createElement("button");
+      shadow.appendChild(pill);
+      chatService.streamChat.mockClear();
+      await send(pill, { composed: true });
+      await send(pill);
+      expect(chatService.streamChat).not.toHaveBeenCalled();
+      // Seitenelement (außerhalb jedes Widgets) wirkt
+      const button = document.createElement("button");
+      document.body.appendChild(button);
+      await act(async () => {}); // Antwort-Zustand (lädt) zurücksetzen
+      chatService.streamChat.mockClear();
+      act(() =>
+        root.render(
+          <ChatContainer
+            sessionId="s-A3"
+            conversationId="c-3"
+            knownHistory={[]}
+            settings={settings("a")}
+          />,
+        ),
+      );
+      await send(button);
+      button.remove();
+      expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+      expect(chatService.streamChat.mock.calls[0][0]).toBe("s-A3");
+    } finally {
+      foreign.remove();
+    }
+  });
+
   it("Ereignis direkt auf window (von außen) wirkt weiterhin", async () => {
     act(() =>
       root.render(
@@ -300,8 +425,53 @@ describe("4 · Datenschutz-Karte: Escape ohne Tastaturfalle", () => {
     expect($("#message-input").disabled).toBe(true);
   });
 
-  it("Inline-Modus: Escape bleibt beim Bestehenden (kein onClose, nicht verhindert)", () => {
+  it("Blasen-Modus: Escape mit Fokus auf der Webseite schließt das Fenster; nach Bestätigung nicht mehr", () => {
     const onClose = vi.fn();
+    act(() =>
+      root.render(
+        <ChatContainer
+          sessionId="s"
+          knownHistory={[]}
+          settings={settings}
+          onClose={onClose}
+        />,
+      ),
+    );
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    try {
+      field.focus();
+      expect(document.activeElement).toBe(field);
+      const pageEscape = () => {
+        const e = new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        });
+        act(() => field.dispatchEvent(e));
+        return e;
+      };
+      expect(pageEscape().defaultPrevented).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(window.localStorage.getItem(privacyAckKey("e-1"))).toBe(null);
+      // andere Tasten nicht
+      act(() =>
+        field.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        ),
+      );
+      expect(onClose).toHaveBeenCalledTimes(1);
+      // bestätigt -> Escape gehört wieder der Seite
+      act(() => $("#anything-llm-privacy-notice button").click());
+      expect($("#anything-llm-privacy-notice")).toBe(null);
+      expect(pageEscape().defaultPrevented).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      field.remove();
+    }
+  });
+
+  it("Inline-Modus: Escape bleibt beim Bestehenden (ChatWindow gibt kein onClose, nicht verhindert)", () => {
     const seen = [];
     const spy = (e) => seen.push(e.defaultPrevented);
     window.addEventListener("keydown", spy);
@@ -319,7 +489,7 @@ describe("4 · Datenschutz-Karte: Escape ohne Tastaturfalle", () => {
               sessionId="s"
               knownHistory={[]}
               settings={settings}
-              onClose={onClose}
+              onClose={null}
             />
           </EmbedModeContext.Provider>,
         ),
@@ -328,7 +498,6 @@ describe("4 · Datenschutz-Karte: Escape ohne Tastaturfalle", () => {
     } finally {
       window.removeEventListener("keydown", spy);
     }
-    expect(onClose).not.toHaveBeenCalled();
     // das Ereignis erreicht den Escape-Listener der Leiste (InlineChat)
     expect(seen).toEqual([false]);
     expect(window.localStorage.getItem(privacyAckKey("e-1"))).toBe(null);

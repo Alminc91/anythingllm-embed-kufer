@@ -100,10 +100,11 @@ const MD_LINK_RX =
 const ANCHOR_RX =
   /<a\s[^<>\n]{0,500}href=["'](https?:\/\/[^"'\n]{1,1000})["'][^<>\n]{0,500}>([\s\S]{0,500}?)<\/a>/gi;
 export const REPLY_SCAN_LEN = 20000;
-// Rohwerte vor dem Bereinigen kappen (Defense in Depth): Folgefrage wie die
-// Endzeile im Fork (300), Teaser/Kurzfelder wie eine Teaserzeile (240)
-const FOLLOW_UP_RAW_MAX = 300;
-const SHORT_TEXT_RAW_MAX = 240;
+// Rohwerte (Folgefrage, Teaser, Kurzfelder) vor dem Bereinigen nur grob
+// gegen Client-DoS kappen; die fachliche Grenze (Folgefrage 60, Teaser 200,
+// Kurzfelder) gilt erst auf dem bereinigten Text — so schneidet die Kappung
+// nie mitten in einen Tag oder Link (dessen Reste sonst stehen blieben).
+const RAW_TEXT_MAX = 2000;
 // höchstens so viele Einträge der Folgefragen-Liste werden geprüft
 const FOLLOW_UPS_SCAN_MAX = 20;
 const BARE_URL_RX = /<?(https?:\/\/[^\s<>"'\]]+)>?/g;
@@ -293,7 +294,7 @@ const EMPHASIS_RX = /(^|[\s(])([*_])(\S|\S[^*_]*?\S)\2(?=[\s.,;:!?)]|$)/g;
 export function followUpText(value) {
   if (typeof value !== "string") return "";
   const text = value
-    .slice(0, FOLLOW_UP_RAW_MAX)
+    .slice(0, RAW_TEXT_MAX)
     .replace(HTML_TAG_RX, " ")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/https?:\/\/\S+/g, " ")
@@ -685,13 +686,13 @@ export function truncateAtWord(value, max) {
   return `${head.trimEnd()}…`;
 }
 
-// Kurzer Klartext (Dauer, Ort, Teaser): Tags raus, Leerraum zusammengezogen,
-// höchstens max Zeichen (Wortgrenze); leer -> null
-function shortText(value, max) {
+// Kurzer Klartext (Dauer, Ort, Teaser): grob gekappt (RAW_TEXT_MAX), Tags
+// raus, mit markdown auch Markdown-Zeichen (stripMarkdown), Leerraum
+// zusammengezogen, erst dann höchstens max Zeichen (Wortgrenze); leer -> null
+function shortText(value, max, { markdown = false } = {}) {
   if (typeof value !== "string") return null;
-  const v = value
-    .slice(0, SHORT_TEXT_RAW_MAX)
-    .replace(HTML_TAG_RX, " ")
+  const raw = value.slice(0, RAW_TEXT_MAX).replace(HTML_TAG_RX, " ");
+  const v = (markdown ? stripMarkdown(raw) : raw)
     .replace(/\s+/g, " ")
     .replace(/ ([.,;:!?])/g, "$1")
     .trim();
@@ -771,10 +772,7 @@ export function teaserMap(courseTeasers) {
   for (const [url, value] of Object.entries(courseTeasers)) {
     const key = normalizeUrl(url);
     if (!key || out.has(key) || typeof value !== "string") continue;
-    const text = shortText(
-      stripMarkdown(value.slice(0, SHORT_TEXT_RAW_MAX)),
-      TEASER_MAX_LEN,
-    );
+    const text = shortText(value, TEASER_MAX_LEN, { markdown: true });
     if (text) out.set(key, text);
   }
   return out;
@@ -1124,6 +1122,9 @@ export function selectAnnouncedCourseCards(
 // ab 14. September 2026, Realschule, 60 Euro, buchbar. <Teaser>" — nur aus
 // den Kartendaten (formatCourse) und dem Teaser, fehlende Felder entfallen.
 // Kompaktliste und Fallback-Karten ohne Teaser (wie in der Anzeige).
+// Der Server kürzt den Vorlesen-Text auf 1.500 Zeichen: zuerst kommt immer
+// der Antworttext, die Karten danach und nur bis SPEECH_MAX_LEN insgesamt.
+export const SPEECH_MAX_LEN = 1400;
 const WEEKDAY_SPEECH = {
   Mo: "montags",
   Di: "dienstags",
@@ -1211,36 +1212,63 @@ export function courseCardSpeech(card, teaser = null) {
   return text.replace(HTML_TAG_RX, "").replace(SPEECH_STRIP_RX, "").trim();
 }
 
+// "Und 3 weitere Kurse." / "Und ein weiterer Kurs."
+function moreCoursesSpeech(n) {
+  return n === 1 ? "Und ein weiterer Kurs." : `Und ${n} weitere Kurse.`;
+}
+
 /**
- * Vorlesen-Text einer Antwort samt Karten: Karten über der Antwort
- * (position "above") vor dem Text, Fallback-Karten darunter (footerCards)
- * danach; Karten unter der Antwort ("below") nach dem Text. Nummerierung
- * durchgehend. Folgefragen gehören nicht dazu. Ohne Karten: text unverändert.
+ * Vorlesen-Text einer Antwort samt Karten: immer zuerst der Antworttext,
+ * danach die Karten (oben bzw. unten angezeigt, Fallback-Karten unter der
+ * Antwort zuletzt), Nummerierung durchgehend. Folgefragen gehören nicht
+ * dazu. Ohne Karten: text unverändert. Text + Karten bleiben unter
+ * SPEECH_MAX_LEN Zeichen (der Server kürzt auf 1.500): Teaser nur, solange
+ * Platz ist (in Kartenreihenfolge); reicht er nicht für alle Karten ohne
+ * Teaser, entfallen die letzten mit "Und n weitere Kurse.".
  * @param {string} text - bereinigter Antworttext
  * @param {{cards?: object[], footerCards?: object[], compact?: boolean}|null} selection
- * @param {object|null} [courseTeasers] - URL -> Teaser (Kurskarten v3)
- * @param {"above"|"below"} [position]
+ * @param {Map<string, string>|null} [teasers] - teaserMap der Antwort
+ * @param {number} [maxLen]
  * @returns {string}
  */
 export function replySpeechText(
   text,
   selection,
-  courseTeasers = null,
-  position = "below",
+  teasers = null,
+  maxLen = SPEECH_MAX_LEN,
 ) {
-  const cards = selection?.cards || [];
-  const extra = selection?.footerCards || [];
-  if (cards.length === 0 && extra.length === 0) return text;
-  const teasers = selection.compact ? new Map() : teaserMap(courseTeasers);
-  const say = (list, offset) =>
-    list
-      .map(
-        (card, i) =>
-          `Kurs ${offset + i + 1}: ${courseCardSpeech(card, teasers.get(card.key))}`,
-      )
-      .join(" ");
-  const above = position === "above";
-  const before = above ? say(cards, 0) : "";
-  const after = above ? say(extra, cards.length) : say([...cards, ...extra], 0);
-  return [before, text, after].filter((s) => s && s.trim()).join("\n\n");
+  const all = [...(selection?.cards || []), ...(selection?.footerCards || [])];
+  if (all.length === 0) return text;
+  const head = typeof text === "string" ? text.trim() : "";
+  // Platz für die Karten (samt Absatz "\n\n" nach dem Text)
+  const budget = maxLen - (head ? head.length + 2 : 0);
+  const base = all.map((card, i) => `Kurs ${i + 1}: ${courseCardSpeech(card)}`);
+  const joined = (list) => list.join(" ");
+  // 1) so viele Karten (ohne Teaser) wie passen, Rest als "Und n weitere"
+  let count = all.length;
+  const fits = (n) => {
+    const parts = base.slice(0, n);
+    if (n < all.length) parts.push(moreCoursesSpeech(all.length - n));
+    return joined(parts).length <= budget;
+  };
+  while (count > 0 && !fits(count)) count -= 1;
+  if (count === 0) return head;
+  // 2) Teaser in Kartenreihenfolge, solange Platz ist (nur wenn alle Karten
+  //    passen; Kompaktliste und Fallback-Karten ohne Teaser)
+  const sentences = base.slice(0, count);
+  const rest = all.length - count;
+  if (rest === 0 && teasers instanceof Map && !selection.compact) {
+    let used = joined(sentences).length;
+    for (let i = 0; i < count; i++) {
+      const teaser = teasers.get(all[i].key);
+      if (!teaser || all[i].fallback) continue;
+      const withTeaser = `Kurs ${i + 1}: ${courseCardSpeech(all[i], teaser)}`;
+      const grow = withTeaser.length - sentences[i].length;
+      if (used + grow > budget) break;
+      sentences[i] = withTeaser;
+      used += grow;
+    }
+  }
+  if (rest > 0) sentences.push(moreCoursesSpeech(rest));
+  return [head, joined(sentences)].filter(Boolean).join("\n\n");
 }

@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement as h, act } from "react";
 import { createRoot } from "react-dom/client";
 
-// Sprachausgabe (Vorlesen-Knopf) einer Antwort mit Kurskarten: die Karten
-// als Sätze vor dem Text (Karten oben) bzw. danach (Karten unten), ohne
-// Folgefragen, Marker oder Teaserzeilen; ohne Karten unverändert.
+// Sprachausgabe (Vorlesen-Knopf) einer Antwort mit Kurskarten: immer erst
+// der Antworttext, danach die Karten als Sätze (auch bei Karten oben), ohne
+// Folgefragen, Marker oder Teaserzeilen; ohne Karten unverändert. Text +
+// Karten höchstens 1.400 Zeichen (Server kürzt auf 1.500).
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
@@ -29,6 +30,8 @@ import {
   formatCourse,
   replySpeechText,
   selectCourseCards,
+  SPEECH_MAX_LEN,
+  teaserMap,
 } from "../src/utils/courseCards.js";
 import handleChat from "../src/utils/chat/index.js";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
@@ -59,6 +62,7 @@ const ENGLISH = {
 const TEASER_YOGA = "Hatha-Yoga am Abend mit kräftigenden Haltungen";
 const TEASER_EN = "Online-Einstieg in Englisch mit viel Sprechpraxis.";
 const TEASERS = { [YOGA.url]: TEASER_YOGA, [ENGLISH.url]: TEASER_EN };
+const TEASER_MAP = teaserMap(TEASERS);
 const FU = ["Gibt es auch B1-Kurse?", "Gibt es Yoga am Wochenende?"];
 const SAY_YOGA =
   "Kurs 1: Yoga Aufbaukurs, montags 18 Uhr, 16 Abende, ab 14. September 2026, Realschule, 60 Euro, buchbar. Hatha-Yoga am Abend mit kräftigenden Haltungen.";
@@ -101,17 +105,14 @@ describe("Karten als Sätze (courseCardSpeech, replySpeechText)", () => {
     );
   });
 
-  it("AK-7: below — Text, danach beide Karten; above — Karten vor dem Text", () => {
+  it("AK-7: Text, danach beide Karten (unabhängig von der Kartenposition)", () => {
     const sel = selectCourseCards(REPLY, clone([YOGA, ENGLISH]), {
       courseCards: "auto",
     });
     expect(sel.cards).toHaveLength(2);
     const text = clean(REPLY);
-    expect(replySpeechText(text, sel, TEASERS, "below")).toBe(
+    expect(replySpeechText(text, sel, TEASER_MAP)).toBe(
       `${text}\n\n${SAY_YOGA} ${SAY_EN}`,
-    );
-    expect(replySpeechText(text, sel, TEASERS, "above")).toBe(
-      `${SAY_YOGA} ${SAY_EN}\n\n${text}`,
     );
   });
 
@@ -121,21 +122,72 @@ describe("Karten als Sätze (courseCardSpeech, replySpeechText)", () => {
     expect(replySpeechText(text, { cards: [], footerCards: [] })).toBe(text);
   });
 
-  it("Kompaktliste ohne Teaser; Fallback-Karten (above) nach dem Text, Nummerierung durchgehend", () => {
+  it("Kompaktliste ohne Teaser; Fallback-Karten (above) zuletzt, Nummerierung durchgehend", () => {
     const compact = {
       cards: [formatCourse(YOGA)],
       compact: true,
     };
-    expect(replySpeechText("T", compact, TEASERS)).toBe(
+    expect(replySpeechText("T", compact, TEASER_MAP)).toBe(
       "T\n\nKurs 1: Yoga Aufbaukurs, montags 18 Uhr, 16 Abende, ab 14. September 2026, Realschule, 60 Euro, buchbar.",
     );
     const above = {
       cards: [formatCourse(YOGA)],
       footerCards: [{ title: "Aerobic", fallback: true, key: "x" }],
     };
-    expect(replySpeechText("T", above, TEASERS, "above")).toBe(
-      `${SAY_YOGA}\n\nT\n\nKurs 2: Aerobic.`,
+    expect(replySpeechText("T", above, TEASER_MAP)).toBe(
+      `T\n\n${SAY_YOGA} Kurs 2: Aerobic.`,
     );
+  });
+
+  // Fünf Karten mit Teasern: je Karte ≈ 107 Zeichen + Teaser ≈ 80
+  const five = Array.from({ length: 5 }, (_, i) =>
+    formatCourse({ ...YOGA, url: `${BASE}/kurs-${i + 1}/262-${i + 1}` }),
+  );
+  const fiveTeasers = new Map(
+    five.map((c, i) => [c.key, `${"Teaser ".repeat(10)}Nummer ${i + 1}`]),
+  );
+  const cardOnly = (i) => `Kurs ${i}: ${courseCardSpeech(five[0])}`;
+
+  it("Länge: Text zuerst und vollständig, Text + Karten ≤ 1.400 Zeichen", () => {
+    expect(SPEECH_MAX_LEN).toBe(1400);
+    const text = "Antwort. ".repeat(80).trim(); // 719 Zeichen
+    const sel = { cards: five, footerCards: [] };
+    const out = replySpeechText(text, sel, fiveTeasers);
+    expect(out.length).toBeLessThanOrEqual(1400);
+    expect(out.startsWith(`${text}\n\n`)).toBe(true);
+    // alle Karten ohne Teaser passen (5 × ≈ 107), Teaser nur solange Platz
+    for (let i = 1; i <= 5; i++) expect(out).toContain(`Kurs ${i}: Yoga`);
+    expect(out).toContain("Nummer 1.");
+    expect(out).not.toContain("Nummer 5");
+    expect(out).not.toContain("weitere Kurs");
+    // Teaser in Kartenreihenfolge: nach dem ersten fehlenden keiner mehr
+    const n = [1, 2, 3, 4, 5].filter((i) => out.includes(`Nummer ${i}.`));
+    expect(n).toEqual([1, 2, 3, 4, 5].slice(0, n.length));
+    // kurzer Text: alle Teaser passen
+    const short = replySpeechText(
+      "Kurz.",
+      { cards: five.slice(0, 2) },
+      fiveTeasers,
+    );
+    expect(short).toContain("Nummer 2.");
+  });
+
+  it("Länge: reicht der Platz nicht für alle Karten ohne Teaser, entfallen die letzten mit „Und n weitere Kurse.“", () => {
+    const text = "x".repeat(1100);
+    const out = replySpeechText(text, { cards: five }, fiveTeasers);
+    expect(out.length).toBeLessThanOrEqual(1400);
+    expect(out.startsWith(text)).toBe(true);
+    expect(out).not.toContain("Nummer");
+    expect(out).toBe(
+      `${text}\n\n${cardOnly(1)} ${cardOnly(2)} Und 3 weitere Kurse.`,
+    );
+    // nur eine Karte zu viel: Einzahl
+    const out4 = replySpeechText("y".repeat(890), { cards: five }, null);
+    expect(out4.length).toBeLessThanOrEqual(1400);
+    expect(out4.endsWith("Und ein weiterer Kurs.")).toBe(true);
+    // Antworttext allein schon zu lang: nur der Text (nie gekürzt)
+    const long = "z".repeat(1500);
+    expect(replySpeechText(long, { cards: five }, fiveTeasers)).toBe(long);
   });
 });
 
@@ -187,7 +239,7 @@ const answer = (extra = {}) => ({
 });
 
 describe("Vorlesen-Knopf mit Karten (AK-7, NAK-2, NAK-3)", () => {
-  it("AK-7 above: beide Karten in Satzform vor dem Text, keine Folgefragen", async () => {
+  it("AK-7 above: Text, danach beide Karten in Satzform, keine Folgefragen", async () => {
     const el = await mount(
       h(ChatHistory, {
         settings: {
@@ -204,7 +256,7 @@ describe("Vorlesen-Knopf mit Karten (AK-7, NAK-2, NAK-3)", () => {
       2,
     );
     const text = await speak(el);
-    expect(text).toBe(`${SAY_YOGA} ${SAY_EN}\n\n${clean(REPLY)}`);
+    expect(text).toBe(`${clean(REPLY)}\n\n${SAY_YOGA} ${SAY_EN}`);
     for (const f of FU) expect(text).not.toContain(f);
   });
 
@@ -276,7 +328,7 @@ describe("Vorlesen-Knopf mit Karten (AK-7, NAK-2, NAK-3)", () => {
       }),
     );
     const text = await speak(el);
-    expect(text).toBe(`${SAY_YOGA} ${SAY_EN}\n\n${clean(REPLY)}`);
+    expect(text).toBe(`${clean(REPLY)}\n\n${SAY_YOGA} ${SAY_EN}`);
     expect(text).not.toMatch(/\[\[|\]\]|KARTEN|TEASER|FRAGEN|roh/);
     for (const f of FU) expect(text).not.toContain(f);
   });

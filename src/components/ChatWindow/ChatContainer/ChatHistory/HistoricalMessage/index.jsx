@@ -26,7 +26,11 @@ import CourseCards from "../CourseCards";
 import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
-import { replySpeechText, selectCourseCards } from "@/utils/courseCards";
+import {
+  replySpeechText,
+  selectCourseCards,
+  teaserMap,
+} from "@/utils/courseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -530,21 +534,20 @@ const HistoricalMessage = forwardRef(
         courseCardsFinal,
       ],
     );
-    // Vorlesen: die Karten als Sätze (Titel, Zeit, Dauer, Beginn, Ort, Preis,
-    // Status, Teaser) — vor dem Text bei Karten oben, danach bei Karten
-    // unten; ohne Karten unverändert. Folgefragen nicht. Screenreader lesen
-    // die Karten wie bisher aus dem DOM.
+    // Vorlesen: erst der Antworttext, danach die Karten als Sätze (Titel,
+    // Zeit, Dauer, Beginn, Ort, Preis, Status, Teaser; Länge begrenzt, s.
+    // replySpeechText); ohne Karten unverändert. Folgefragen nicht.
+    // Screenreader lesen die Karten wie bisher aus dem DOM.
     const plainTextForTTS = useMemo(
       () =>
         replyTextForTTS
           ? replySpeechText(
               replyTextForTTS,
               cardSelection,
-              courseTeasers,
-              courseCardsSelection ? "above" : "below",
+              teaserMap(courseTeasers),
             )
           : replyTextForTTS,
-      [replyTextForTTS, cardSelection, courseTeasers, courseCardsSelection],
+      [replyTextForTTS, cardSelection, courseTeasers],
     );
 
     const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";

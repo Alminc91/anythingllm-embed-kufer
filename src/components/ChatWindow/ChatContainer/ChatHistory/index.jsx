@@ -328,10 +328,12 @@ function replyFinal(message) {
 function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
   const { content, courseSources, courseCardsAnnounced, error } = props;
   const final = replyFinal(props);
-  // Security (Client-DoS): während des Streamings nur die angekündigten
-  // Karten (Text ""), Links/Titel der Antwort erst bei fertiger Antwort
-  // (close bzw. chatId) — nicht pro Chunk die ganze Antwort durchsuchen.
-  const done = final || props.closed === true;
+  // Security (Client-DoS): während des Streamings (animate bzw. pending) nur
+  // die angekündigten Karten (Text ""), Links/Titel der Antwort erst, wenn
+  // sie nicht mehr streamt — nicht pro Chunk die ganze Antwort durchsuchen.
+  // Verlauf-Einträge (ohne animate, auch ohne chatId) gelten als fertig.
+  const streaming = props.animate === true || props.pending === true;
+  const done = final || !streaming;
   const replyText = done ? stripThink(content) : "";
   const hasCards =
     !error &&
