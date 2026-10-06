@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
 import { embedderSettings } from "@/main";
+import useEmbedMode from "@/hooks/useEmbedMode";
 import { ON_ACCENT_TEXT } from "@/utils/theme";
 import { panelTexts, privacyPoints } from "@/utils/layout";
+import { isTouchDevice } from "@/utils/platform";
+import { focusIsElsewhereOnPage } from "../ChatContainer/PromptInput";
 
 // Einmaliger Datenschutz-Hinweis (privacyNotice "modal"): Karte über dem Chat
 // IM Panel (Shadow DOM), kein Overlay über der Webseite, kein Scroll-Lock.
@@ -9,11 +12,20 @@ import { panelTexts, privacyPoints } from "@/utils/layout";
 // ein Punkt), optional „Weitere Informationen in der Erklärung zum
 // Datenschutz“ (privacyUrl), mittig der Knopf („Start“, privacyButtonText).
 // ChatContainer zeigt sie, solange nicht bestätigt (utils/privacy.js), und
-// sperrt bis dahin die Eingabe. Tastatur: Fokus auf den Knopf, Tab bleibt in
-// der Karte; Escape bestätigt nicht (klappt im Inline-Modus wie gewohnt das
-// Panel ein -> keine Tastaturfalle, der Hinweis kommt beim nächsten Öffnen
-// wieder). Alle Texte als Text (nie HTML); Farben über --allmi-*.
-export default function PrivacyNotice({ settings = {}, onAcknowledge }) {
+// sperrt bis dahin die Eingabe. Tastatur: Fokus auf den Knopf (Regel wie
+// PromptInput, s. u.), Tab bleibt in der Karte; Escape bestätigt nicht (klappt
+// im Inline-Modus wie gewohnt das Panel ein -> keine Tastaturfalle, der
+// Hinweis kommt beim nächsten Öffnen wieder). z-index 60 wie das Overlay
+// „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50). Alle Texte als
+// Text (nie HTML); Farben über --allmi-*.
+export default function PrivacyNotice({
+  settings = {},
+  onAcknowledge,
+  // wie PromptInput: Frage per Touch aus der Leiste abgeschickt -> kein
+  // Auto-Fokus (keine Bildschirmtastatur/kein Fokus-Sprung)
+  suppressAutoFocus = false,
+}) {
+  const embedMode = useEmbedMode();
   const cardRef = useRef(null);
   const buttonRef = useRef(null);
   const texts = panelTexts(settings);
@@ -22,20 +34,15 @@ export default function PrivacyNotice({ settings = {}, onAcknowledge }) {
   const buttonText = settings.privacyButtonText || texts.privacyButton;
   const url = settings.privacyUrl || null;
 
-  // Fokus auf den Knopf — auch wenn das Panel erst nach dem Mount sichtbar
-  // wird (Aufklappen/Morph): kurz nachfassen, solange er nicht in der Karte liegt.
+  // Fokus auf den Knopf, einmalig beim Mount und nur wenn erlaubt — dieselbe
+  // Regel wie das Eingabefeld (PromptInput): nie einem Element der Webseite
+  // den Fokus wegnehmen; im Inline-Seitenfluss auf Touch kein Auto-Fokus
+  // (Seitensprung); nicht bei suppressAutoFocus (Frage per Touch aus der Leiste).
   useEffect(() => {
-    const focus = () => {
-      const btn = buttonRef.current;
-      if (!btn) return;
-      const root = embedderSettings.shadowRoot;
-      const active = root ? root.activeElement : document.activeElement;
-      if (active && cardRef.current?.contains(active)) return;
-      btn.focus({ preventScroll: true });
-    };
-    focus();
-    const timers = [60, 250, 600].map((ms) => setTimeout(focus, ms));
-    return () => timers.forEach(clearTimeout);
+    const inlineFlow = embedMode.inline && !embedMode.overlay;
+    if (suppressAutoFocus || (inlineFlow && isTouchDevice())) return;
+    if (focusIsElsewhereOnPage()) return;
+    buttonRef.current?.focus({ preventScroll: true });
   }, []);
 
   const trapTab = (e) => {
@@ -59,7 +66,7 @@ export default function PrivacyNotice({ settings = {}, onAcknowledge }) {
       style={{
         position: "absolute",
         inset: 0,
-        zIndex: 40,
+        zIndex: 60,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

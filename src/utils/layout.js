@@ -74,14 +74,17 @@ export const PRIVACY_POINT_MAX_LEN = 160;
 export const PRIVACY_TEXT_MAX_LEN = 1000;
 export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
-// erzeugt; Text disclaimerText (max. 160 Zeichen) bzw. i18n chat.ai-disclaimer.
+// erzeugt; Text disclaimerText (max. 160 Zeichen) bzw. PANEL_TEXTS.aiDisclaimer.
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
 
-// Standardtexte je Sprache des Widgets (settings.language, Standard "de";
-// "en" englisch, alle anderen deutsch wie die übrigen Text-Standards).
-// Absichtlich nicht über i18next: ohne data-language stünde dort Englisch.
+// Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises —
+// EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
+// (settings.language) "en" -> englisch, alles andere (fehlend, ungültig, eine
+// Sprache ohne eigene Texte wie "fr") -> deutsch. Absichtlich nicht über
+// i18next: ohne data-language stünde dort Englisch, und Sprachen ohne diese
+// Texte fielen auf Englisch zurück (gemischte Sprachen im Panel).
 // Datenschutz-Punkte sachlich, keine Rechtsberatung; Kunden ersetzen sie
 // über privacyText.
 export const PANEL_TEXTS = {
@@ -100,6 +103,8 @@ export const PANEL_TEXTS = {
     privacyBubbleLink: "Datenschutz",
     important: "Wichtig:",
     online: "online",
+    aiDisclaimer:
+      "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
   },
   en: {
     greetingBubble:
@@ -116,14 +121,20 @@ export const PANEL_TEXTS = {
     privacyBubbleLink: "Privacy",
     important: "Important:",
     online: "online",
+    aiDisclaimer:
+      "I am an AI and can make mistakes. Please double-check my answers.",
   },
 };
+// Sprache der Panel-Texte: Sprachcode (2 Buchstaben, optional Region wie
+// "en-GB"/"en_US"), nur Sprachen mit eigenen Texten; sonst "de".
+export function panelLanguage(settings = {}) {
+  const raw = typeof settings?.language === "string" ? settings.language : "";
+  const m = /^([a-z]{2})(?:[-_][a-z0-9]{1,8})?$/i.exec(raw.trim());
+  const lang = m ? m[1].toLowerCase() : "de";
+  return Object.prototype.hasOwnProperty.call(PANEL_TEXTS, lang) ? lang : "de";
+}
 export function panelTexts(settings = {}) {
-  const lang = String(settings?.language || "de")
-    .trim()
-    .toLowerCase()
-    .slice(0, 2);
-  return lang === "en" ? PANEL_TEXTS.en : PANEL_TEXTS.de;
+  return PANEL_TEXTS[panelLanguage(settings)];
 }
 export const DEFAULT_GREETING_BUBBLE_TEXT = PANEL_TEXTS.de.greetingBubble;
 export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
@@ -219,13 +230,15 @@ function privacyTextValue(value) {
 }
 
 // Link (Datenschutz): absolute https-URL oder Pfad der eigenen Seite ("/…",
-// nicht "//…"), ohne Leer-/Steuerzeichen, höchstens URL_MAX_LEN Zeichen.
+// nicht "//…" und nicht "/\…": Browser lesen den Backslash wie "/", das wäre
+// ein fremder Host), ohne Leer-/Steuerzeichen und ohne Backslash (überall),
+// höchstens URL_MAX_LEN Zeichen.
 function safeUrl(value) {
   if (typeof value !== "string") return undefined;
   const v = value.trim();
-  if (!v || v.length > URL_MAX_LEN || /[\s\u0000-\u001f\u007f]/.test(v))
+  if (!v || v.length > URL_MAX_LEN || /[\s\u0000-\u001f\u007f\\]/.test(v))
     return undefined;
-  if (/^\/(?!\/)/.test(v)) return v;
+  if (/^\/(?![\/\\])/.test(v)) return v;
   try {
     return new URL(v).protocol === "https:" ? v : undefined;
   } catch (e) {

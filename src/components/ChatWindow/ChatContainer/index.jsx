@@ -4,8 +4,8 @@ import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
 import ChatService from "@/models/chatService";
 import PrivacyNotice from "../PrivacyNotice";
-import { useTranslation } from "react-i18next";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
+import { panelTexts } from "@/utils/layout";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 
 export default function ChatContainer({
@@ -226,7 +226,11 @@ export default function ChatContainer({
       style={privacyLocked ? { position: "relative" } : undefined}
     >
       {privacyLocked && (
-        <PrivacyNotice settings={settings} onAcknowledge={acknowledge} />
+        <PrivacyNotice
+          settings={settings}
+          onAcknowledge={acknowledge}
+          suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
+        />
       )}
       <div className="allm-flex-1 allm-min-h-0 allm-mb-8">
         <ChatHistory
@@ -280,14 +284,11 @@ export function appendDraft(current, draft) {
 }
 
 // Fester KI-Hinweis unter dem Eingabefeld (disclaimer "footer"), in allen
-// Modi. Text: disclaimerText, sonst i18n chat.ai-disclaimer in der Sprache des
-// Widgets (settings.language, Standard "de" — nicht die i18n-Erkennung, die
-// ohne data-language englisch wäre). Nur Text, nicht anklickbar.
+// Modi. Text: disclaimerText, sonst der Standard der Panel-Texte
+// (utils/layout.js panelTexts: "en" englisch, sonst deutsch — dieselbe Regel
+// wie Begrüßungsblase und Datenschutz-Hinweis). Nur Text, nicht anklickbar.
 function AiDisclaimer({ settings }) {
-  const { t } = useTranslation();
-  const text =
-    settings.disclaimerText ||
-    t("chat.ai-disclaimer", { lng: settings.language || "de" });
+  const text = settings.disclaimerText || panelTexts(settings).aiDisclaimer;
   return (
     <p
       id="anything-llm-ai-disclaimer"

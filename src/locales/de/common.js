@@ -5,8 +5,6 @@ const TRANSLATIONS = {
     "reset-chat": "Chat zurücksetzen",
     "start-recording": "Aufnahme starten",
     "stop-recording": "Aufnahme stoppen",
-    "ai-disclaimer":
-      "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
   },
 };
 

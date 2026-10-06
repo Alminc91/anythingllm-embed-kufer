@@ -378,6 +378,42 @@ def check_bar_ticket(browser, base_url):
         ctx.close()
 
 
+def check_arrow_under_notice(browser, base_url):
+    """Review 3: bei geladenem Verlauf (Hinweis noch nicht bestätigt) liegt der
+    Scroll-nach-unten-Pfeil (z-50) UNTER dem Hinweis (z-index 60) und ist nicht
+    klickbar (elementFromPoint trifft den Hinweis, Klick scrollt nicht)."""
+    hist = []
+    for i in range(10):
+        hist.append({"role": "user", "content": f"Frage {i + 1}: Gibt es Kurse am Abend?", "sentAt": tv.SENT_AT + i * 60})
+        hist.append({"role": "assistant", "content": "Ja. " + "Ein längerer Absatz zur Antwort. " * 6,
+                     "sentAt": tv.SENT_AT + i * 60 + 5, "chatId": i + 1})
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY}, mock(history=hist))
+    try:
+        tv.wait_shadow(page, "#anything-llm-privacy-notice")
+        tv.wait_shadow(page, "#chat-history")
+        tv.settle(page, 500)
+        page.evaluate("() => { const h = window.__q('#chat-history'); h.scrollTop = 0; h.dispatchEvent(new Event('scroll')); }")
+        tv.wait_shadow(page, "#scroll-to-bottom-button")
+        page.wait_for_timeout(300)
+        st = page.evaluate("""() => {
+          const btn = window.__q('#scroll-to-bottom-button'), r = btn.getBoundingClientRect();
+          const x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2;
+          const hit = window.__allmShadow.elementFromPoint(x, y);
+          return { x, y, hitNotice: !!(hit && hit.closest('#anything-llm-privacy-notice')),
+                   hitArrow: !!(hit && hit.closest('#scroll-to-bottom-button')),
+                   z: getComputedStyle(window.__q('#anything-llm-privacy-notice')).zIndex,
+                   top: window.__q('#chat-history').scrollTop };
+        }""")
+        page.mouse.click(st["x"], st["y"])
+        page.wait_for_timeout(400)
+        top_after = page.evaluate("() => window.__q('#chat-history').scrollTop")
+        ok = st["hitNotice"] and not st["hitArrow"] and st["z"] == "60" and top_after == st["top"]
+        record("Review 3 Scroll-Pfeil liegt unter dem Hinweis (nicht klickbar)", ok,
+               json.dumps({**st, "topNachKlick": top_after}))
+    finally:
+        ctx.close()
+
+
 def check_privacy_bubble(browser, base_url):
     m = mock()
     ctx, page = tv.open_page(browser, base_url, {"attrs": {**OPEN, "privacy-notice": "bubble",
@@ -471,6 +507,7 @@ def main():
                 check_no_page_block(browser, base_url)
                 check_privacy_mobile(browser, base_url)
                 check_bar_ticket(browser, base_url)
+                check_arrow_under_notice(browser, base_url)
                 check_privacy_bubble(browser, base_url)
                 check_disclaimer(browser, base_url)
             browser.close()

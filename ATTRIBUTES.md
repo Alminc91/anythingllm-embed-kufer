@@ -95,7 +95,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-assistant-subtitle` | – | Untertitel unter dem Namen in der Kopfzeile (max. 60 Zeichen) |
 | `data-online-dot` | `false` | `true`: dekorativer grüner Online-Punkt am Kopfzeilen-Icon |
 | `data-privacy-notice` | `none` | `bubble`: Datenschutz-Punkte in der Begrüßungsblase (ohne Bestätigung); `modal`: einmalige Karte beim ersten Öffnen (Knopf „Start“, Bestätigung in `localStorage`). Texte: `data-privacy-text` (Punkte je Zeile bzw. `\|`, ≤ 5 × 160 Zeichen), `data-privacy-title`, `data-privacy-button-text`, `data-privacy-url` |
-| `data-disclaimer` | `none` | `footer`: fester KI-Hinweis unter dem Eingabefeld (`data-disclaimer-text`, ≤ 160 Zeichen; Standard i18n `chat.ai-disclaimer`) |
+| `data-disclaimer` | `none` | `footer`: fester KI-Hinweis unter dem Eingabefeld (`data-disclaimer-text`, ≤ 160 Zeichen; Standard je Sprache: `en` englisch, sonst deutsch) |
 
 ---
 

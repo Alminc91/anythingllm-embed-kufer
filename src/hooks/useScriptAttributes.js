@@ -121,7 +121,8 @@ export const DEFAULT_SETTINGS = {
   privacyButtonText: null, // max. 40 Zeichen, Standard „Start“
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
   // Fester KI-Hinweis unter dem Eingabefeld: "none" | "footer";
-  // disclaimerText max. 160 Zeichen, null = i18n chat.ai-disclaimer
+  // disclaimerText max. 160 Zeichen, null = Standard der Sprache
+  // (utils/layout.js PANEL_TEXTS.aiDisclaimer)
   disclaimer: "none",
   disclaimerText: null,
   textSize: 14, // text size in px (number only)

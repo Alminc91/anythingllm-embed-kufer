@@ -36,6 +36,7 @@ import {
   PANEL_PILLS_MAX,
   PANEL_TEXTS,
   layoutValidations,
+  panelLanguage,
   panelPills,
 } from "../src/utils/layout.js";
 import { _resetPrivacyMemory, privacyAckKey } from "../src/utils/privacy.js";
@@ -44,6 +45,7 @@ import ChatContainer, {
 } from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
+import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
 const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
@@ -229,6 +231,9 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       "http://vhs.de/datenschutz",
       "javascript:alert(1)",
       "//evil.example/x",
+      "/\\evil.example/x", // Browser lesen "\\" wie "/" -> fremder Host
+      "/datenschutz\\x",
+      "https://vhs.de\\@evil.example/",
       "data:text/html,<b>x</b>",
       "https://vhs.de/a b",
       `https://vhs.de/${"x".repeat(520)}`,
@@ -237,6 +242,14 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     for (const u of ok) expect(layoutValidations.privacyUrl(u)).toBe(u);
     for (const u of bad)
       expect(layoutValidations.privacyUrl(u)).toBe(undefined);
+  });
+
+  it("Sprache der Panel-Texte: en (auch Region) englisch, alles andere deutsch", () => {
+    for (const l of ["en", "EN", " en-GB ", "en_US"])
+      expect(panelLanguage({ language: l })).toBe("en");
+    for (const l of ["de", "fr", "fr-FR", "english", "e", "", null, 42, {}])
+      expect(panelLanguage({ language: l })).toBe("de");
+    expect(panelLanguage({})).toBe("de");
   });
 
   it("onlineDot: Boolean-Strings wie inlineInput", () => {
@@ -455,6 +468,99 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     expect(document.activeElement).toBe(ackButton());
     expect($("#message-input").disabled).toBe(true);
     expect($("#send-message-button").disabled).toBe(true);
+  });
+
+  it("Fokus liegt auf der Seite: Hinweis zieht ihn nicht weg (auch nicht später)", () => {
+    vi.useFakeTimers();
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    try {
+      field.focus();
+      render(<ChatContainer {...props} settings={settings} />);
+      expect($("#anything-llm-privacy-notice")).toBeTruthy();
+      expect(document.activeElement).toBe(field);
+      // keine Wiederholungen mehr (früher 60/250/600 ms)
+      act(() => vi.advanceTimersByTime(1000));
+      expect(document.activeElement).toBe(field);
+    } finally {
+      vi.useRealTimers();
+      field.remove();
+    }
+  });
+
+  it("Fokus im Widget (Shadow-Host): „Start“ wird fokussiert", () => {
+    const host = document.createElement("div");
+    host.tabIndex = -1;
+    document.body.appendChild(host);
+    embedderSettings.hostElement = host;
+    try {
+      host.focus();
+      expect(document.activeElement).toBe(host);
+      render(<ChatContainer {...props} settings={settings} />);
+      expect(document.activeElement).toBe(ackButton());
+    } finally {
+      embedderSettings.hostElement = null;
+      host.remove();
+    }
+  });
+
+  it("kein Auto-Fokus bei suppressAutoFocus (Frage per Touch aus der Leiste)", () => {
+    render(
+      <ChatContainer
+        {...props}
+        settings={settings}
+        pendingFirstMessage={{
+          ticket: 9,
+          text: "Yoga",
+          send: true,
+          suppressAutoFocus: true,
+        }}
+        onPendingFirstMessageConsumed={() => {}}
+      />,
+    );
+    expect($("#anything-llm-privacy-notice")).toBeTruthy();
+    expect(document.activeElement).not.toBe(ackButton());
+  });
+
+  it("Inline im Seitenfluss auf Touch: kein Auto-Fokus; Vollbild-Overlay: Fokus", () => {
+    const width = window.innerWidth;
+    window.innerWidth = 390; // isTouchDevice: schmaler Viewport
+    try {
+      render(
+        <EmbedModeContext.Provider
+          value={{
+            inline: true,
+            overlay: false,
+            consumeFocusRequest: () => false,
+          }}
+        >
+          <ChatContainer {...props} settings={settings} />
+        </EmbedModeContext.Provider>,
+      );
+      expect($("#anything-llm-privacy-notice")).toBeTruthy();
+      expect(document.activeElement).not.toBe(ackButton());
+      act(() => root.unmount());
+      root = createRoot(container);
+      render(
+        <EmbedModeContext.Provider
+          value={{
+            inline: true,
+            overlay: true,
+            consumeFocusRequest: () => false,
+          }}
+        >
+          <ChatContainer {...props} settings={settings} />
+        </EmbedModeContext.Provider>,
+      );
+      expect(document.activeElement).toBe(ackButton());
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it("liegt über dem Scroll-Pfeil (z-index 60 > z-50, wie „Frühere Chats“)", () => {
+    render(<ChatContainer {...props} settings={settings} />);
+    expect($("#anything-llm-privacy-notice").style.zIndex).toBe("60");
   });
 
   it("Knopftext, Titel und Punkte aus den Settings; englisch mit language en", () => {
@@ -744,13 +850,13 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     expect($("[role=note]")).toBe(null);
   });
 
-  it("footer: Zeile unter dem Eingabefeld (role note, 11,5 px, gedämpft, mittig), i18n-Schlüssel", () => {
+  it("footer: Zeile unter dem Eingabefeld (role note, 11,5 px, gedämpft, mittig), Standardtext deutsch", () => {
     render(
       <ChatContainer {...props} settings={{ ...base, disclaimer: "footer" }} />,
     );
     const note = $("#anything-llm-ai-disclaimer");
     expect(note.getAttribute("role")).toBe("note");
-    expect(note.textContent).toBe("chat.ai-disclaimer"); // t ist gemockt
+    expect(note.textContent).toBe(PANEL_TEXTS.de.aiDisclaimer);
     expect(note.style.fontSize).toBe("11.5px");
     expect(note.style.textAlign).toBe("center");
     expect(note.style.color).toContain("--allmi-text-muted");
@@ -777,14 +883,50 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     expect(note.querySelector("b")).toBe(null);
   });
 
-  it("Standardtexte de/en in den Locales", async () => {
-    const de = (await import("../src/locales/de/common.js")).default;
-    const en = (await import("../src/locales/en/common.js")).default;
-    expect(de.chat["ai-disclaimer"]).toBe(
+  it("Standardtexte de/en in PANEL_TEXTS (ein Mechanismus, kein i18n-Schlüssel)", async () => {
+    expect(PANEL_TEXTS.de.aiDisclaimer).toBe(
       "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
     );
-    expect(en.chat["ai-disclaimer"]).toBe(
+    expect(PANEL_TEXTS.en.aiDisclaimer).toBe(
       "I am an AI and can make mistakes. Please double-check my answers.",
     );
+    const de = (await import("../src/locales/de/common.js")).default;
+    const en = (await import("../src/locales/en/common.js")).default;
+    expect(de.chat["ai-disclaimer"]).toBeUndefined();
+    expect(en.chat["ai-disclaimer"]).toBeUndefined();
+    render(
+      <ChatContainer
+        {...props}
+        settings={{ ...base, disclaimer: "footer", language: "en" }}
+      />,
+    );
+    expect($("#anything-llm-ai-disclaimer").textContent).toBe(
+      PANEL_TEXTS.en.aiDisclaimer,
+    );
+  });
+
+  it("language fr: Blase, Datenschutz-Hinweis und KI-Hinweis einheitlich deutsch", () => {
+    render(
+      <ChatContainer
+        {...props}
+        settings={{
+          ...base,
+          language: "fr",
+          greetingStyle: "bubble",
+          privacyNotice: "modal",
+          disclaimer: "footer",
+        }}
+      />,
+    );
+    const de = PANEL_TEXTS.de;
+    expect($("#anything-llm-greeting-bubble").textContent).toBe(
+      de.greetingBubble,
+    );
+    expect($("[role=dialog] h2").textContent).toBe(de.privacyTitle);
+    expect($$("[role=dialog] li").map((li) => li.textContent)).toEqual(
+      de.privacyPoints,
+    );
+    expect($("[role=dialog] button").textContent).toBe(de.privacyButton);
+    expect($("#anything-llm-ai-disclaimer").textContent).toBe(de.aiDisclaimer);
   });
 });
