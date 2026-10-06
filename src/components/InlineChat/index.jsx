@@ -77,6 +77,8 @@ import {
 // wächst zum Panel und beim Einklappen zurück (runMorph) — die Leistenform
 // wird beim Aufklappen einmal gemessen, das Panel im ersten Commit (vor dem
 // Paint), dann laufen CSS-Transitionen; Einklappen erst nach dem Rückweg.
+// Ein nötiger Scroll zur Box passiert vor dem Lauf (ohne Animation), nie
+// währenddessen; Chips unter der Leiste blenden weich aus bzw. wieder ein.
 //
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
@@ -99,7 +101,14 @@ const TOUCH_CLICK_WAIT_MS = 350;
 const BAR_SELECTOR = "#anything-llm-inline-bar";
 const MORPH_WIN_VARS = ["mw", "mh", "mt", "mr", "cw", "ch"];
 const MORPH_CLASSES = ["allm-morph", "allm-morph-from", "allm-morph-close"];
-const MORPH_FLOW_CLASSES = ["allm-morph-flow", "allm-morph-flow-from"];
+const MORPH_FLOW_CLASSES = [
+  "allm-morph-flow",
+  "allm-morph-flow-from",
+  "allm-morph-flow-close",
+];
+// Chips unter der (schwebend unsichtbaren) Leiste: Aus-/Einblenden im Lauf
+const MORPH_CHIP_CLASSES = ["allm-morph-chips-out", "allm-morph-chips-in"];
+const CHIPS_SELECTOR = "#anything-llm-inline-chips";
 
 function prefersReducedMotion() {
   try {
@@ -149,16 +158,27 @@ const isMorphProperty = (p) =>
   p === "transform" ||
   /^border-(.+-)?radius$/.test(p);
 
+// Sekunden/Millisekunden-Angabe (erster Wert einer Liste) in ms
+const cssMs = (v) => {
+  const d = String(v || "")
+    .split(",")[0]
+    .trim();
+  return parseFloat(d) * (d.endsWith("ms") ? 1 : 1000) || 0;
+};
+
 // Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
 // Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
-// zeigen, dann Transition zum Panel; Zuklappen: Transition vom aktuellen
-// Stand zur Leistenform — steht die Leistenform noch an (Zuklappen vor dem
-// ersten Frame des Aufklappens), endet der Lauf sofort. Ende per
-// transitionend (isMorphProperty) bzw. Sicherheits-Timer; onEnd läuft vor dem
-// Aufräumen (Zuklappen: erst einklappen, kein Rücksprung).
+// zeigen, dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
+// dann (gleiche Dauer und Kurve wie beim Aufklappen, Verzögerung per CSS)
+// Transition vom aktuellen Stand zur Leistenform — steht die Leistenform noch
+// an (Zuklappen vor dem ersten Frame des Aufklappens), endet der Lauf sofort.
+// chips (schwebend: Chips unter der unsichtbaren Leiste) blenden beim
+// Aufklappen aus, beim Zuklappen wieder ein. Ende per transitionend
+// (isMorphProperty) bzw. Sicherheits-Timer; onEnd läuft vor dem Aufräumen
+// (Zuklappen: erst einklappen, kein Rücksprung).
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
-function runMorph(win, box, geom, { opening, flow, onEnd }) {
+function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
   set(win, "mw", px(geom.w));
   set(win, "mh", px(geom.h));
@@ -182,6 +202,7 @@ function runMorph(win, box, geom, { opening, flow, onEnd }) {
     if (keep) return;
     win.classList.remove(...MORPH_CLASSES);
     box.classList.remove(...MORPH_FLOW_CLASSES);
+    chips?.classList.remove(...MORPH_CHIP_CLASSES);
     MORPH_WIN_VARS.forEach((k) => win.style.removeProperty(`--allmi-${k}`));
     box.style.removeProperty("--allmi-bh");
   };
@@ -195,15 +216,23 @@ function runMorph(win, box, geom, { opening, flow, onEnd }) {
     if (flow) box.classList.add("allm-morph-flow");
     win.classList.toggle("allm-morph-from", !opening);
     win.classList.toggle("allm-morph-close", !opening);
-    if (flow) box.classList.toggle("allm-morph-flow-from", !opening);
-    const d = getComputedStyle(win).transitionDuration.split(",")[0];
-    const ms = parseFloat(d) * (d.trim().endsWith("ms") ? 1 : 1000) || 0;
+    if (flow) {
+      box.classList.toggle("allm-morph-flow-from", !opening);
+      box.classList.toggle("allm-morph-flow-close", !opening);
+    }
+    if (!opening && chips) {
+      chips.classList.remove("allm-morph-chips-out");
+      chips.classList.add("allm-morph-chips-in");
+    }
+    const cs = getComputedStyle(win);
+    const ms = cssMs(cs.transitionDuration) + cssMs(cs.transitionDelay);
     win.addEventListener("transitionend", onTransitionEnd);
     timer = setTimeout(finish, ms + 100);
   };
   if (opening) {
     win.classList.add("allm-morph-from");
     if (flow) box.classList.add("allm-morph-flow-from");
+    chips?.classList.add("allm-morph-chips-out");
     raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(run);
     });
@@ -359,7 +388,7 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
-  // "morph": { geom, stop, closing, scroll } des laufenden bzw. letzten Laufs;
+  // "morph": { geom, stop, closing } des laufenden bzw. letzten Laufs;
   // geom.open = Panel im nächsten Commit messen und Lauf starten
   const morphRef = useRef(null);
   // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
@@ -490,8 +519,11 @@ export default function InlineChat({
 
   // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
   // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
-  // (auch für den Rückweg) und den Lauf starten. Box verlassen (Einklappen,
-  // Vollbild, Unmount) bricht einen Lauf ab.
+  // (auch für den Rückweg) und den Lauf starten. Nach Klick: liegt die Box
+  // nicht ganz im Viewport, scrollt die Seite JETZT (vor dem Paint, ohne
+  // Animation) — während des Laufs scrollt nichts. Die Leistenform ist
+  // relativ zum Panel abgelegt, der Scroll ändert daran nichts. Box verlassen
+  // (Einklappen, Vollbild, Unmount) bricht einen Lauf ab.
   useLayoutEffect(() => {
     const m = morphRef.current;
     const win = chatWindowRef.current;
@@ -502,13 +534,16 @@ export default function InlineChat({
     const f = win.getBoundingClientRect();
     g.dx = g.x - f.left;
     g.dy = g.y - f.top;
+    if (scrollOnExpandRef.current) {
+      scrollOnExpandRef.current = false;
+      scrollBoxIntoView(true);
+    }
     m.stop = runMorph(win, box, g, {
       opening: true,
       flow: !floating,
+      chips: morphChips(),
       onEnd: () => {
         m.stop = null;
-        if (m.scroll) scrollBoxIntoView();
-        m.scroll = false;
       },
     });
   }, [view]);
@@ -560,23 +595,34 @@ export default function InlineChat({
   // Box eingeblendet: Verlauf ans Ende; nach Klick genau EINMAL scrollen — und
   // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
   // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
-  // "morph": erst nach dem Lauf (die Box hat dann ihre volle Höhe).
-  const scrollBoxIntoView = () => {
+  // "morph": vor dem Lauf ohne Animation (instant, Effekt oben).
+  const scrollBoxIntoView = (instant = false) => {
     const el = boxRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (rect.top < 0 || rect.bottom > vh)
+    if (rect.top >= 0 && rect.bottom <= vh) return;
+    if (!instant) {
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+    try {
+      el.scrollIntoView({ block: "nearest", behavior: "instant" });
+    } catch (e) {
+      el.scrollIntoView({ block: "nearest" }); // ältere Browser ohne "instant"
+    }
   };
   useEffect(() => {
     if (view !== "box") return;
     scrollChatToBottom();
     if (!scrollOnExpandRef.current) return;
     scrollOnExpandRef.current = false;
-    if (morphRef.current?.stop) morphRef.current.scroll = true;
-    else scrollBoxIntoView();
+    scrollBoxIntoView();
   }, [view]);
+  // "morph", schwebend: Chips unter der unsichtbaren Leiste (blenden im Lauf
+  // aus bzw. wieder ein); im Seitenfluss ist die Leiste nicht gerendert
+  const morphChips = () =>
+    (floating && rootRef.current?.querySelector(CHIPS_SELECTOR)) || null;
 
   // Fokus direkt in der Klick-Geste setzen; existiert das Eingabefeld noch
   // nicht (Chat lädt), übernimmt PromptInput beim Mount (consumeFocusRequest).
@@ -746,6 +792,7 @@ export default function InlineChat({
       const stop = runMorph(win, box, m.geom, {
         opening: false,
         flow: !floating,
+        chips: morphChips(),
         onEnd: () => {
           m.stop = null;
           m.closing = false;
