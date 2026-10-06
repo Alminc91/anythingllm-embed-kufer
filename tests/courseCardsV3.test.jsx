@@ -946,10 +946,21 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
       expect(ph[0].previousElementSibling.className).toContain(
         layout === "rows" ? "allm-course-details" : "allm-course-title",
       );
-      // nicht Teil der Beschreibung der Karte
-      expect(before[0].getAttribute("aria-describedby") || "").not.toContain(
-        "pending",
-      );
+      // nicht Teil der Beschreibung der Karte: jede ID aus aria-describedby
+      // zeigt auf ein vorhandenes Element, keines ist (oder enthält) den
+      // Platzhalter
+      for (const card of before) {
+        const ids = (card.getAttribute("aria-describedby") || "")
+          .split(/\s+/)
+          .filter(Boolean);
+        expect(ids.length).toBeGreaterThan(0);
+        for (const ref of ids) {
+          const target = document.getElementById(ref);
+          expect(target).not.toBeNull();
+          expect(target.closest("[data-teaser-pending]")).toBeNull();
+          expect(target.querySelector("[data-teaser-pending]")).toBeNull();
+        }
+      }
       act(() =>
         root.render(
           h(ChatHistory, {

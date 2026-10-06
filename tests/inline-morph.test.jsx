@@ -538,6 +538,12 @@ describe("Zuklappen wie das Original: Leistenform vom Aufklappen, Box festgehalt
     expect(box.style.width).toBe("");
     expect(box.style.right).toBe("");
     expect(box.style.left).toBe("");
+    // kein Nachführ-Frame mehr: auch nach weiteren Frames bleibt die Box
+    // frei, die Frame-Warteschlange ist leer
+    nextFrames();
+    expect(box.style.left).toBe("");
+    expect(box.style.top).toBe("");
+    expect(frames).toHaveLength(0);
   });
 
   it("flow: Leistenform vom Aufklappen, Box festgehalten", () => {
@@ -1196,9 +1202,11 @@ describe("Morph flüssiger: Schließen", () => {
     expect(src.match(/will-change:[^;}]*/g)).toEqual([
       "will-change:width,height,transform",
     ]);
-    // Tastenübergabe: im Lauf overflow: clip (kein Scroll-Container)
-    expect(src).toContain(
-      ".allm-morph,.allm-morph-from{will-change:width,height,transform;overflow:clip!important}",
+    // Tastenübergabe: im Lauf overflow: clip (kein Scroll-Container) —
+    // nur, dass die Eigenschaft an den Lauf-Klassen steht; ob dabei nichts
+    // scrollt, misst inline_input.py (check_type_during_morph) je Frame
+    expect(rule(".allm-morph,.allm-morph-from")).toMatch(
+      /(^|;)overflow:clip(!important)?(;|$)/,
     );
   });
 });
