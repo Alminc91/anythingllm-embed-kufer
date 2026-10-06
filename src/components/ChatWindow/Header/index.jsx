@@ -17,6 +17,7 @@ import {
   HEADER_STYLE,
   headerButtonClass,
 } from "@/utils/theme";
+import { panelTexts } from "@/utils/layout";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -175,7 +176,11 @@ export default function ChatWindowHeader({
       >
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
-          style={getIconContainerStyle()}
+          style={
+            settings.onlineDot === true
+              ? { ...getIconContainerStyle(), position: "relative" }
+              : getIconContainerStyle()
+          }
         >
           <img
             src={iconUrl ?? AnythingLLMIcon}
@@ -188,14 +193,21 @@ export default function ChatWindowHeader({
                 "max-width var(--allmi-transition, 200ms), max-height var(--allmi-transition, 200ms)",
             }}
           />
+          {settings.onlineDot === true && (
+            <OnlineDot label={panelTexts(settings).online} />
+          )}
         </div>
-        {settings.brandText && (
-          <span
-            className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
-            style={{ color: "var(--allmi-header-text, #1f2937)" }}
-          >
-            {settings.brandText}
-          </span>
+        {settings.assistantSubtitle ? (
+          <BrandWithSubtitle settings={settings} compact={compact} />
+        ) : (
+          settings.brandText && (
+            <span
+              className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
+              style={{ color: "var(--allmi-header-text, #1f2937)" }}
+            >
+              {settings.brandText}
+            </span>
+          )
         )}
       </div>
       <div className="allm-absolute allm-right-0 allm-flex allm-gap-x-1 allm-items-center allm-px-[22px]">
@@ -233,6 +245,61 @@ export default function ChatWindowHeader({
             : null
         }
       />
+    </div>
+  );
+}
+
+// Online-Punkt (onlineDot): rein dekorativ, kein Status-Abruf; für
+// Screenreader verborgen, Tooltip „online“ für Maus-Nutzer.
+function OnlineDot({ label }) {
+  return (
+    <span
+      aria-hidden="true"
+      title={label}
+      data-online-dot=""
+      style={{
+        position: "absolute",
+        right: "0px",
+        bottom: "0px",
+        width: "8px",
+        height: "8px",
+        borderRadius: "999px",
+        backgroundColor: "#3BB273",
+        boxShadow: "0 0 0 2px var(--allmi-surface, #FFFFFF)",
+      }}
+    />
+  );
+}
+
+// Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
+// ohne Untertitel bleibt die bisherige einzeilige Darstellung.
+function BrandWithSubtitle({ settings, compact }) {
+  return (
+    <div
+      className="allm-ml-3 allm-flex allm-flex-col allm-font-sans"
+      style={{ minWidth: 0 }}
+    >
+      {settings.brandText && (
+        <span
+          className="allm-font-semibold allm-text-sm allm-truncate"
+          style={{ color: "var(--allmi-header-text, #1f2937)" }}
+        >
+          {settings.brandText}
+        </span>
+      )}
+      {!compact && (
+        <span
+          id="anything-llm-header-subtitle"
+          className="allm-truncate"
+          style={{
+            fontSize: "11.5px",
+            lineHeight: 1.35,
+            color: "var(--allmi-text-muted, #6b7280)",
+          }}
+        >
+          {settings.assistantSubtitle}
+        </span>
+      )}
     </div>
   );
 }
