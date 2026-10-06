@@ -464,35 +464,114 @@ describe("Review 1: abgebrochener Rückweg klappt trotzdem ein", () => {
   });
 });
 
-describe("Review 2: Leistenform vor jedem Rückweg frisch gemessen", () => {
-  it("overlay: unsichtbare Leiste ohne Signal gemessen, Panel-Ecke frisch", () => {
+describe("Zuklappen wie das Original: Leistenform vom Aufklappen, Box festgehalten, Signal beim Start", () => {
+  it("overlay: Fenster unverändert -> Leistenform vom Aufklappen (in Seitenkoordinaten) relativ zur festgehaltenen Box", () => {
     const ui = setup({ inlineLayout: "overlay" });
     openAndSettle(ui);
     const win = ui.chat();
-    // Fenster/Seite geändert: Leiste schmaler und tiefer, Panel verschoben
+    // Seite seit dem Aufklappen verändert (Panel verschoben, Leiste wäre im
+    // aufgeklappten Zustand breiter) -> zählt nicht, nichts wird neu gemessen
     barRect = { left: 150, top: 80, width: 500, height: 60 };
     panelRect = { left: 40, top: 80, width: 700, height: 520 };
     barSignals = [];
     act(() => chatWindowProps.current.closeChat());
-    expect(v(win, "mw")).toBe("500px");
-    expect(v(win, "mh")).toBe("60px");
-    expect(v(win, "mt")).toBe("translate(110px, 0px)");
-    expect(v(win, "mr")).toBe("30px");
-    // eingeklappter Stand der Seite (Signal kurz weg), danach wieder gesetzt
-    expect(barSignals).toEqual([null]);
-    expect(mountTarget.getAttribute("data-allm-expanded")).toBe("true");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    expect(v(win, "mr")).toBe("28px");
+    // Leiste beim Aufklappen bei (100, 50); Box jetzt bei (40, 80)
+    expect(v(win, "mt")).toBe("translate(60px, -30px)");
+    expect(barSignals).toEqual([]);
+    // Box festgehalten: feste Breite, kein right
+    expect(ui.box().style.width).toBe("700px");
+    expect(ui.box().style.right).toBe("auto");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
   });
 
-  it("flow: Lage/Breite der Inline-Fläche, Höhe der Leiste vom Aufklappen", () => {
+  it("::expanded-attr-removed-on-close-start — Signal fällt beim Start, vor der ersten Lauf-Klasse, und kommt nicht wieder (AK-9)", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    expect(mountTarget.getAttribute("data-allm-expanded")).toBe("true");
+    const mo = new MutationObserver(() => {});
+    mo.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["data-allm-expanded", "class"],
+    });
+    act(() => chatWindowProps.current.closeChat());
+    const recs = mo.takeRecords();
+    mo.disconnect();
+    const removed = recs.findIndex(
+      (r) =>
+        r.attributeName === "data-allm-expanded" && r.target === mountTarget,
+    );
+    const closeClass = recs.findIndex(
+      (r) => r.target === win && win.classList.contains("allm-morph-close"),
+    );
+    expect(removed).toBeGreaterThanOrEqual(0);
+    expect(closeClass).toBeGreaterThan(removed);
+    // während des ganzen Laufs weg (Seite baut parallel zurück)
+    expect(visible(ui)).toBe(true);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    nextFrames();
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    transitionEnd(win);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+  });
+
+  it("Box folgt der Seite nicht: verschiebt die Seite die Inline-Fläche im Lauf, gleicht die Box je Frame aus; am Ende gelöst", () => {
+    rootOpenRect = { left: 0, top: 0, width: 760, height: 68 };
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const box = ui.box();
+    expect(box.style.left).toBe("0px"); // OVERLAY_BOX_STYLE
+    act(() => chatWindowProps.current.closeChat());
+    // Seite zieht die Fläche zusammen (80 px nach rechts, wie .ask der Demo)
+    rootOpenRect = { left: 80, top: 0, width: 600, height: 68 };
+    nextFrames();
+    expect(box.style.left).toBe("-80px");
+    expect(box.style.top).toBe("0px");
+    transitionEnd(ui.chat());
+    expect(visible(ui)).toBe(false);
+    // gelöst und eingeklappt: keine festen Maße bleiben an der Box
+    expect(box.style.width).toBe("");
+    expect(box.style.right).toBe("");
+    expect(box.style.left).toBe("");
+  });
+
+  it("flow: Leistenform vom Aufklappen, Box festgehalten", () => {
     const ui = setup({ inlineLayout: "flow" });
     openAndSettle(ui);
     const win = ui.chat();
     rootRect = { left: 30, top: 90, width: 640, height: 520 };
     panelRect = { left: 30, top: 90, width: 640, height: 520 };
     act(() => chatWindowProps.current.closeChat());
-    expect(v(win, "mw")).toBe("640px");
+    expect(v(win, "mw")).toBe("600px");
     expect(v(win, "mh")).toBe("56px");
-    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    expect(v(win, "mt")).toBe("translate(70px, -40px)");
+    expect(ui.box().style.width).toBe("640px");
+  });
+
+  it("Fenstergröße geändert (1024 -> 900, weiter Desktop): Ziel = Leiste in der Inline-Fläche, Breite 100 % der mitlaufenden Box (AK-10)", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    resizeTo(900);
+    expect(visible(ui)).toBe(true);
+    barRect = { left: 100, top: 50, width: 500, height: 60 };
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    expect(v(win, "mw")).toBe("100%");
+    expect(v(win, "mh")).toBe("60px");
+    expect(v(win, "mr")).toBe("30px");
+    // Lage der Leiste in der Inline-Fläche vom Aufklappen (BAR - Fläche)
+    expect(v(win, "mt")).toBe("translate(100px, 50px)");
+    // nicht festgehalten
+    expect(ui.box().style.width).toBe("");
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
   });
 
   it("Viewport-Wechsel verwirft die Leistenform: Zuklappen danach ohne Morph", () => {

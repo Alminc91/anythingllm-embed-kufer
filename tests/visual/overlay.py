@@ -1563,6 +1563,162 @@ def check_morph_chips_reverse(browser, base_url):
         ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Zuklappen wie das Original (Issue embed-zeilenkarten-tasten-morph-
+# datenschutz, AK-8, AK-10): Seite wie die Demo — Fläche zentriert, 600 px
+# eingeklappt / 760 px aufgeklappt, umgeschaltet per MutationObserver
+# (asynchron, wie demo app.js) mit Seiten-Transition max-width 500 ms; bei
+# schmalem Fenster schrumpfen beide (60 vw / 80 vw).
+# ---------------------------------------------------------------------------
+DEMO_CLOSE_CSS = ("main { max-width: none; } #slot { max-width: min(600px, 60vw); margin: 0 auto; "
+                  "transition: max-width 500ms cubic-bezier(.16,1,.3,1); } "
+                  "#slot.is-open { max-width: min(760px, 80vw); } "
+                  "#anythingllm-embed-widget { --allm-bar-radius: 999px; --allm-radius: 40px; }")
+DEMO_CLOSE_JS = r"""
+(() => {
+  const hook = () => {
+    const ph = document.getElementById('kufer-assistent');
+    if (!ph) return requestAnimationFrame(hook);
+    new MutationObserver(() => document.getElementById('slot').classList.toggle('is-open',
+      ph.getAttribute('data-allm-expanded') === 'true')).observe(ph, { attributes: true,
+      attributeFilter: ['data-allm-expanded'] });
+  };
+  hook();
+  // Zeitpunkt der Nutzeraktion (Klick/Escape), Bezug für den Rekorder
+  const mark = () => { window.__t0 = performance.now(); };
+  document.addEventListener('pointerdown', mark, true);
+  document.addEventListener('keydown', mark, true);
+})();
+"""
+# Rechteck des Chat-Fensters + Breite des Hosts je Frame, nicht-blockierend
+# (Ergebnis in window.__rec; evaluate wartet sonst ein Promise ab). Gemessen
+# wird im Task NACH dem Frame (rAF -> setTimeout 0): das ist der gemalte
+# Stand. Direkt im rAF-Callback sähe der Rekorder die Seiten-Transition
+# schon im neuen Frame, die Box-Nachführung des Widgets (eigener rAF-
+# Callback, läuft danach, vor dem Malen) aber noch im alten.
+CLOSE_REC_JS = r"""(ms) => { const out = []; window.__rec = null; window.__t0 = null;
+  const host = document.getElementById('anythingllm-embed-widget');
+  const start = performance.now();
+  const step = () => setTimeout(sample, 0);
+  const sample = () => { const w = window.__q('#anything-llm-chat'); const r = w ? w.getBoundingClientRect() : null;
+    const h = host.getBoundingClientRect();
+    out.push({ t: performance.now(), x: r ? r.x : null, w: r ? r.width : 0, h: r ? r.height : 0,
+      hostW: h.width, hostX: h.x, cls: w ? /allm-morph/.test(w.className) : false,
+      close: w ? w.classList.contains('allm-morph-close') : false });
+    if (performance.now() - start < ms) requestAnimationFrame(step);
+    else window.__rec = { frames: out, t0: window.__t0 }; };
+  requestAnimationFrame(step); return true; }"""
+
+
+def demo_close_page(browser, base_url, viewport):
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**MORPH, **INPUT}, "inline": True, "css": DEMO_CLOSE_CSS},
+                             tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=viewport,
+                             before_goto=lambda c, p: c.add_init_script(DEMO_CLOSE_JS))
+    ready(page, "#anything-llm-inline-input")
+    tv.settle(page, 600)
+    return ctx, page
+
+
+def demo_open(page):
+    morph_click(page)
+    wait_open(page)
+    wait_morph_done(page)
+    tv.settle(page, 700)  # Seiten-Transition (500 ms) vorbei
+
+
+def analyse_close(rec):
+    fr, t0 = rec["frames"], rec["t0"]
+    for f in fr:
+        f["t"] = f["t"] - t0
+    run = [f for f in fr if f["cls"] and f["t"] >= 0]
+    last = run[-1] if run else None
+    end_t = last["t"] if last else None
+    at350 = min(fr, key=lambda f: abs(f["t"] - 350))
+    after = [f for f in fr if end_t is not None and end_t < f["t"] <= end_t + 600]
+    host_span = (max(f["hostW"] for f in after) - min(f["hostW"] for f in after)) if after else None
+    return run, last, at350, after, host_span
+
+
+def check_morph_close_geometry(browser, base_url):
+    """::morph-close-geometry (AK-8) — Einklappen-Knopf, Klick außerhalb,
+    Escape: bei t ≈ 350 ms läuft die Breite (610 < w < 740), der letzte Frame
+    des Laufs = Leistenform (± 1 px, auch x), nach dem Lauf bewegt sich der
+    Host nicht mehr (< 1 px bis +600 ms). Seite schaltet asynchron mit eigener
+    Transition um (wie die Demo)."""
+    vp = {"width": 1280, "height": 1400}
+    ctx, page = demo_close_page(browser, base_url, vp)
+    try:
+        bar = pill_rect(page)
+        for how in ("Knopf", "Außenklick", "Escape"):
+            demo_open(page)
+            panel = morph_state(page)
+            page.evaluate(CLOSE_REC_JS, 1500)
+            page.wait_for_timeout(40)
+            if how == "Knopf":
+                page.mouse.click(*page.evaluate(
+                    "() => { const r = window.__q('button[aria-label=\"Einklappen\"]').getBoundingClientRect();"
+                    " return [r.x + r.width / 2, r.y + r.height / 2]; }"))
+            elif how == "Außenklick":
+                page.mouse.click(40, 1300)
+            else:
+                page.evaluate("() => window.__q('#message-input').focus()")
+                page.keyboard.press("Escape")
+            page.wait_for_function("() => window.__rec !== null", timeout=5000)
+            rec = page.evaluate("() => window.__rec")
+            run, last, at350, after, host_span = analyse_close(rec)
+            ok = (bool(run) and 610 < at350["w"] < 740
+                  and abs(last["w"] - bar["w"]) <= 1 and abs(last["h"] - bar["h"]) <= 1
+                  and abs(last["x"] - bar["x"]) <= 1 and host_span is not None and host_span < 1)
+            record(f"AK-8 morph-close-geometry ({how}): Breite+Höhe in einem Lauf, danach Ruhe", ok,
+                   f"Panel {panel['w']:.0f}×{panel['h']:.0f} @ {panel['x']:.0f}; t≈{at350['t']:.0f} ms: "
+                   f"{at350['w']:.1f}×{at350['h']:.1f} @ {at350['x']:.1f}; letzter Lauf-Frame t={last['t'] if last else None:.0f} ms "
+                   f"{last['w']:.1f}×{last['h']:.1f} @ {last['x']:.1f} (Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f}); "
+                   f"Host-Breite bis +600 ms nach Laufende: Spanne {host_span:.2f} px ({len(after)} Frames)"
+                   if last else f"kein Lauf: {len(rec['frames'])} Frames")
+            # Breite fällt monoton (kein Ausbeulen nach rechts/links)
+            rights = [f["x"] + f["w"] for f in run]
+            lefts = [f["x"] for f in run]
+            mono = all(b <= a + 0.5 for a, b in zip(rights, rights[1:])) and all(
+                b >= a - 0.5 for a, b in zip(lefts, lefts[1:]))
+            record(f"AK-8 morph-close: linke Kante nur nach rechts, rechte nur nach links ({how})", mono,
+                   f"links {lefts[0]:.0f}->{lefts[-1]:.0f}, rechts {rights[0]:.0f}->{rights[-1]:.0f}" if run else "-")
+            wait_bar_back(page)
+            tv.settle(page, 300)
+            page.mouse.move(1200, 1350)
+    finally:
+        ctx.close()
+
+
+def check_morph_close_after_resize(browser, base_url):
+    """::morph-close-after-resize (AK-10) — Panel offen, Fenster 1280 -> 900
+    (Leiste jetzt 540 statt 600 px): der Lauf endet auf der neuen Leiste,
+    kein Sprung danach."""
+    ctx, page = demo_close_page(browser, base_url, {"width": 1280, "height": 1400})
+    try:
+        demo_open(page)
+        page.set_viewport_size({"width": 900, "height": 1400})
+        page.wait_for_timeout(800)
+        page.evaluate(CLOSE_REC_JS, 1500)
+        page.wait_for_timeout(40)
+        page.mouse.click(*page.evaluate(
+            "() => { const r = window.__q('button[aria-label=\"Einklappen\"]').getBoundingClientRect();"
+            " return [r.x + r.width / 2, r.y + r.height / 2]; }"))
+        page.wait_for_function("() => window.__rec !== null", timeout=5000)
+        rec = page.evaluate("() => window.__rec")
+        wait_bar_back(page)
+        tv.settle(page, 300)
+        bar = pill_rect(page)
+        run, last, at350, after, host_span = analyse_close(rec)
+        ok = (bool(run) and abs(last["w"] - bar["w"]) <= 1 and abs(last["h"] - bar["h"]) <= 1
+              and abs(last["x"] - bar["x"]) <= 1 and host_span is not None and host_span < 1 and bar["w"] < 590)
+        record("AK-10 morph-close-after-resize: Lauf endet auf der neuen Leiste, kein Sprung danach", ok,
+               f"neue Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f}; letzter Lauf-Frame "
+               f"{last['w']:.1f}×{last['h']:.1f} @ {last['x']:.1f}; Host-Spanne danach {host_span:.2f} px"
+               if last else "kein Lauf")
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
@@ -1603,6 +1759,8 @@ def main():
                 check_morph_nak2(browser, base_url)
                 check_morph_flow(browser, base_url)
                 check_morph_close_timing(browser, base_url)
+                check_morph_close_geometry(browser, base_url)
+                check_morph_close_after_resize(browser, base_url)
                 check_morph_chips(browser, base_url)
                 check_morph_chips_reverse(browser, base_url)
                 check_morph_scroll_before(browser, base_url)
