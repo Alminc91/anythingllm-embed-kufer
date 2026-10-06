@@ -43,6 +43,11 @@
 // Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]"
 // direkt hinter einem Marker entfernt das Widget zusätzlich selbst
 // (Übergangs-Abwehr für ältere Server, stripTeaserLines).
+//
+// Folgefragen (Fork >= 7.14): Die Endzeile "[[FRAGEN: a? | b?]]" entfernt der
+// Server und schickt die Vorschläge als Chunk "followUps" (followUpsList
+// prüft sie). Ältere Server reichen die Zeile durch: splitFollowUpsLine
+// entfernt sie am Antwortende nach denselben Regeln (Übergangs-Abwehr).
 
 export const COURSE_CARDS_MAX = 5;
 export const COURSE_COMPACT_MAX = 10;
@@ -121,6 +126,12 @@ const TEASER_LINE_MAX = 240;
 const TEASER_LINES_MAX = 12;
 const TEASER_LINE_RX = /^\[\[TEASER[ \t]*\d{1,3}[ \t]*:[^\n]*\]\]$/i;
 export const TEASER_MAX_LEN = 200;
+// Folgefragen: Grenzen spiegeln embedCardsMarker.js im Fork (Zeile höchstens
+// 300 Zeichen, 1–3 Einträge à höchstens 60 Zeichen nach dem Bereinigen)
+const FOLLOW_UPS_TAG = "[[FRAGEN:";
+const FOLLOW_UPS_LINE_MAX = 300;
+export const FOLLOW_UPS_MAX = 3;
+export const FOLLOW_UP_MAX_LEN = 60;
 // Einblenden nur, wenn der Teaser gerade eben (nach der Karte) angekommen ist
 export const TEASER_FADE_WINDOW_MS = 1000;
 
@@ -255,6 +266,111 @@ export function appendReplyText(prev, chunk, done = false) {
   return !done && raw && !content
     ? { content, markerBuffer: raw }
     : { content };
+}
+
+// Folgefrage bereinigen — dieselben Regeln wie cleanTeaserText im Fork:
+// HTML-Tags raus, Markdown-Links -> Linktext, nackte URLs raus, "[["/"]]" ->
+// "["/"]", Markdown nur an Delimitern ("**", "__", Backticks, gepaartes
+// "*x*"/"_x_" am Wortrand — nicht "snake_case" oder "2*3"; "#"/">" am
+// Anfang), kein Leerraum vor Satzzeichen, führende "- – • : >" raus,
+// Leerraum zusammengezogen. Nur Satzzeichen/Leerraum = "" (kein Text).
+// Länger als FOLLOW_UP_MAX_LEN wird verworfen, nie gekürzt (Aufrufer).
+const EMPHASIS_RX = /(^|[\s(])([*_])(\S|\S[^*_]*?\S)\2(?=[\s.,;:!?)]|$)/g;
+export function followUpText(value) {
+  if (typeof value !== "string") return "";
+  const text = value
+    .replace(HTML_TAG_RX, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\[{2,}/g, "[")
+    .replace(/\]{2,}/g, "]")
+    .replace(/\*\*|__|`+/g, "")
+    .replace(EMPHASIS_RX, "$1$3")
+    .replace(/^[ \t]*#+[ \t]+/gm, "")
+    .replace(/^[ \t]*>[ \t]+/gm, "")
+    .replace(/[\s\p{Cc}]+([.,;:!?])/gu, "$1")
+    .replace(/^[\s\p{Cc}\-–•:>]+/u, "")
+    .replace(/[\s\p{Cc}]+/gu, " ")
+    .trim();
+  return /^[\p{P}\s]*$/u.test(text) ? "" : text;
+}
+
+/**
+ * Folgefragen prüfen (Chunk "followUps", Verlauf, Endzeile): nur Strings,
+ * bereinigt (followUpText), leere und zu lange (> 60 Zeichen) verworfen,
+ * ohne Dubletten, die ersten FOLLOW_UPS_MAX gültigen.
+ * @param {any} value
+ * @returns {string[]}
+ */
+export function followUpsList(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (out.length >= FOLLOW_UPS_MAX) break;
+    const text = followUpText(item);
+    if (!text || text.length > FOLLOW_UP_MAX_LEN) continue;
+    if (!out.some((t) => t.toLowerCase() === text.toLowerCase()))
+      out.push(text);
+  }
+  return out;
+}
+
+// Folgefragen-Endzeile: Beginn (Index) der letzten Zeile von text, wenn sie
+// (nach Einrückung) mit "[[FRAGEN:" beginnt — partial: auch ein Präfix
+// davon —, höchstens 300 Zeichen lang ist und hinter ihrem ERSTEN "]]" nur
+// Leerraum steht (ohne "]]" nur partial: noch offen). Sonst -1.
+function followUpsLineStart(text, partial) {
+  const content = text.trimEnd();
+  const start = content.lastIndexOf("\n") + 1;
+  const line = content.slice(start).trimStart();
+  const head = line.slice(0, FOLLOW_UPS_TAG.length).toUpperCase();
+  if (!line || line.length > FOLLOW_UPS_LINE_MAX) return -1;
+  if (!(partial ? FOLLOW_UPS_TAG.startsWith(head) : head === FOLLOW_UPS_TAG))
+    return -1;
+  const close = line.indexOf("]]");
+  if (close === -1) return partial ? start : -1;
+  return close + 2 === line.length ? start : -1;
+}
+
+/**
+ * Übergangs-Abwehr (Server < 7.14): Folgefragen-Endzeile einer fertigen
+ * Antwort abtrennen — Regeln wie im Fork: die letzte Zeile vor dem
+ * abschließenden Leerraum, beginnt mit "[[FRAGEN:", Schluss am ersten "]]"
+ * (danach nur Leerraum), höchstens 300 Zeichen. Solch eine Zeile wird IMMER
+ * entfernt; Einträge durch "|" getrennt, gesammelt die ersten 3 gültigen
+ * (followUpsList; 0 gültige -> [] = keine Pillen). Sonst bleibt der Text
+ * unverändert (followUps null).
+ * @param {string} text
+ * @returns {{text: string, followUps: string[]|null}}
+ */
+export function splitFollowUpsLine(text) {
+  if (typeof text !== "string") return { text, followUps: null };
+  const start = followUpsLineStart(text, false);
+  if (start === -1) return { text, followUps: null };
+  const line = text.slice(start).trim();
+  return {
+    text: text.slice(0, start).trimEnd(),
+    followUps: followUpsList(
+      line.slice(FOLLOW_UPS_TAG.length, line.indexOf("]]")).split("|"),
+    ),
+  };
+}
+
+/**
+ * Streamende Antwort (ältere Server): eine begonnene Folgefragen-Endzeile
+ * ("[[F…" am Zeilenanfang, noch ohne "]]" bzw. mit "]]" am Ende) samt
+ * Leerraum davor zurückhalten, bis das Antwortende (splitFollowUpsLine),
+ * weiterer Text oder die 300-Zeichen-Grenze entscheidet — so ist die
+ * Rohzeile nie zu sehen.
+ * @param {string} text - bisher empfangener Text (ohne Karten-Marker)
+ * @returns {{text: string, hold?: string}}
+ */
+export function holdFollowUpsLine(text) {
+  const start =
+    typeof text === "string" && text ? followUpsLineStart(text, true) : -1;
+  if (start === -1) return { text };
+  const end = text.slice(0, start).trimEnd().length;
+  return { text: text.slice(0, end), hold: text.slice(end) };
 }
 
 // Hat der Server zu dieser Antwort Karten vorab angekündigt (Marker

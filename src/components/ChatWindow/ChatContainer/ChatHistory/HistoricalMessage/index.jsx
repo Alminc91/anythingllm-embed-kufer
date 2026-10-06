@@ -17,6 +17,7 @@ import { formatDate } from "@/utils/date";
 import ChatService from "@/models/chatService";
 import CourseCards from "../CourseCards";
 import AssistantName from "../AssistantName";
+import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import {
   BUBBLE_RADIUS,
@@ -468,6 +469,9 @@ const HistoricalMessage = forwardRef(
       chatId = null,
       feedbackScore = null,
       sessionId = null,
+      // Folgefragen-Pillen (nur letzte, fertige Antwort; ChatHistory)
+      followUps = null,
+      settings,
     },
     ref,
   ) => {
@@ -614,6 +618,10 @@ const HistoricalMessage = forwardRef(
               part={courseCardsSelection ? "footer" : "all"}
             />
           )}
+
+        {role === "assistant" && !error && followUps && (
+          <FollowUps items={followUps} settings={settings} />
+        )}
 
         {sentAt && (
           <div

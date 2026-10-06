@@ -1,6 +1,8 @@
 import {
   appendReplyText,
   cardsAnnounced,
+  holdFollowUpsLine,
+  splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
 
@@ -32,6 +34,8 @@ export default function handleChat(
     teasers = null,
     // Kurskarten v3: KI-Teaser in einer vollständigen Antwort (textResponse)
     courseTeasers = null,
+    // Folgefragen: Vorschläge für die nächste Frage (Chunk type "followUps")
+    followUps = null,
   } = chatResult;
   const courseExtra = Array.isArray(courseSources)
     ? {
@@ -82,11 +86,14 @@ export default function handleChat(
     // angehängt. Nie zwei Blasen für eine Antwort.
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
-    const content = stripCardsMarker(textResponse, {
-      afterMarker: cardsAnnounced(existing),
-    });
+    const { text: content, followUps: lineFollowUps } = splitFollowUpsLine(
+      stripCardsMarker(textResponse, {
+        afterMarker: cardsAnnounced(existing),
+      }),
+    );
     const entry = {
       ...(existing || {}),
+      ...followUpsExtra(lineFollowUps),
       uuid,
       content,
       role: "assistant",
@@ -108,6 +115,7 @@ export default function handleChat(
         : {}),
     };
     delete entry.markerBuffer;
+    delete entry.followUpsHold;
     setLoadingResponse(false);
     if (existing) {
       _chatHistory[chatIdx] = entry;
@@ -119,22 +127,39 @@ export default function handleChat(
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
-    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend
-    const { content, markerBuffer } = appendReplyText(
-      existing,
+    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend.
+    // Zurückgehaltene Folgefragen-Endzeile (followUpsHold) gehört zum Text.
+    const reply = appendReplyText(
+      existing && {
+        ...existing,
+        content: (existing.content || "") + (existing.followUpsHold || ""),
+      },
       textResponse,
       close,
     );
+    const { markerBuffer } = reply;
+    // Folgefragen-Endzeile älterer Server: im Stream zurückgehalten (nie
+    // sichtbar), am Antwortende abgetrennt
+    const {
+      text: content,
+      hold: followUpsHold,
+      followUps: lineFollowUps,
+    } = close
+      ? splitFollowUpsLine(reply.content)
+      : holdFollowUpsLine(reply.content);
     const entry = {
       ...(existing || { uuid, role: "assistant" }),
+      ...followUpsExtra(lineFollowUps),
       content,
       markerBuffer,
+      followUpsHold,
       sources,
       error,
       errorMsg,
       closed: close,
       animate: !close,
-      pending: markerBuffer !== undefined,
+      pending:
+        markerBuffer !== undefined || (!content.trim() && !!followUpsHold),
       sentAt,
       ...courseExtra,
     };
@@ -183,6 +208,15 @@ export default function handleChat(
       ...(cardsAnnounced(existing) ? { teaserArrivedAt: Date.now() } : {}),
     };
     setChatHistory([..._chatHistory]);
+  } else if (type === "followUps") {
+    // Folgefragen (Fork >= 7.14): kommen nach dem letzten Textchunk und vor
+    // finalizeResponseStream. Nur an die bestehende Antwort; ändert weder
+    // Text noch Stream-Zustand. Geprüft wird beim Anzeigen (ChatHistory).
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    const extra = followUpsExtra(followUps);
+    if (!extra.followUps || chatIdx === -1) return;
+    _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], ...extra };
+    setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
     // 👍/👎 sofort (ohne History-Reload) zugeordnet werden kann. Rein additiv —
@@ -199,6 +233,15 @@ export default function handleChat(
       setChatHistory([..._chatHistory]);
     }
   }
+}
+
+// Folgefragen (nicht leere Liste) an die Antwort, die gerade im Gespräch
+// ankommt (followUpsArrivedAt: bei Kurskarten oben scrollt ChatHistory die
+// Pillen ins Bild — nie beim Verlauf-Laden)
+function followUpsExtra(list) {
+  return Array.isArray(list) && list.length > 0
+    ? { followUps: list, followUpsArrivedAt: Date.now() }
+    : {};
 }
 
 // courseTeasers/teasers: Objekt URL -> Text (Prüfung der Einträge in

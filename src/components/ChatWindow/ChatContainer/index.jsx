@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
@@ -219,11 +219,19 @@ export default function ChatContainer({
     if (privacyLockedRef.current) return;
     sendCommand(event.detail.command, [], []);
   };
+  // Der Listener ruft immer den aktuellen Handler (Folgefragen kommen mitten
+  // im Gespräch: sendCommand braucht den aktuellen Verlauf, nicht den beim
+  // Einhängen).
+  const autofillRef = useRef(handleAutofillEvent);
+  useLayoutEffect(() => {
+    autofillRef.current = handleAutofillEvent;
+  });
 
   useEffect(() => {
-    window.addEventListener(SEND_TEXT_EVENT, handleAutofillEvent);
+    const listener = (event) => autofillRef.current(event);
+    window.addEventListener(SEND_TEXT_EVENT, listener);
     return () => {
-      window.removeEventListener(SEND_TEXT_EVENT, handleAutofillEvent);
+      window.removeEventListener(SEND_TEXT_EVENT, listener);
     };
   }, []);
 
@@ -244,6 +252,7 @@ export default function ChatContainer({
           settings={settings}
           history={chatHistory}
           sessionId={sessionId}
+          canSend={!loadingResponse && !privacyLocked}
         />
       </div>
       <div className="allm-flex-shrink-0 allm-mt-auto">
@@ -279,6 +288,7 @@ function awaitsFirstText(message) {
     message.pending === true &&
     !message.content &&
     message.markerBuffer === undefined &&
+    !message.followUpsHold &&
     Array.isArray(message.courseSources)
   );
 }

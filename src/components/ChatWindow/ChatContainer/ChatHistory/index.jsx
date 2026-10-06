@@ -6,6 +6,7 @@ import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
 import {
   courseCardsAbove,
   courseCardsEnabled,
+  followUpsList,
   selectAnnouncedCourseCards,
 } from "@/utils/courseCards";
 import { stripThink } from "@/utils/chat/think";
@@ -35,6 +36,8 @@ export default function ChatHistory({
   settings = {},
   history = [],
   sessionId = null,
+  // Folgefragen: Eingabe frei (keine Antwort lädt, kein Datenschutz-Hinweis)
+  canSend = true,
 }) {
   const replyRef = useRef(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -42,8 +45,30 @@ export default function ChatHistory({
   const arrowSlot = useContext(ScrollArrowSlotContext);
   const cardsAbove = courseCardsAbove(settings);
   // Kurskarten oben: Nachführen zum Anker je Turn (length = Verlaufslänge des
-  // Turns, follow = noch nachführen, top = zuletzt selbst gesetzte Position)
-  const anchorRef = useRef({ length: -1, follow: false, top: null });
+  // Turns, follow = noch nachführen, top = zuletzt selbst gesetzte Position,
+  // scrolled = Nutzer hat in diesem Turn selbst gescrollt, pillsAt = schon ins
+  // Bild geholte Folgefragen)
+  const anchorRef = useRef({
+    length: -1,
+    follow: false,
+    top: null,
+    scrolled: false,
+    pillsAt: null,
+  });
+  // Folgefragen-Pillen (followUps "pills"): nur unter der letzten, fertigen
+  // Antwort und nur, wenn ein Klick sofort senden kann; hier einmal geprüft
+  // (followUpsList), FollowUps bekommt die fertige Liste
+  const last = history[history.length - 1];
+  const followUps =
+    settings.followUps === "pills" &&
+    canSend &&
+    last?.role === "assistant" &&
+    !last.animate &&
+    !last.error
+      ? followUpsList(last.followUps)
+      : [];
+  // Gerade angekommene Folgefragen (nicht beim Verlauf-Laden)
+  const pillsAt = followUps.length > 0 ? last.followUpsArrivedAt : undefined;
 
   useEffect(() => {
     if (!cardsAbove) {
@@ -56,19 +81,40 @@ export default function ChatHistory({
     if (history.length !== a.length) {
       a.length = history.length;
       a.follow = true;
+      a.scrolled = false;
     }
     if (a.follow) a.follow = scrollToLatestTurn();
   }, [history]);
+
+  // Kurskarten oben: Folgefragen kommen nach der (oft langen) Antwort und
+  // lägen unter dem sichtbaren Bereich -> sanft ans Ende scrollen, aber nur,
+  // wenn der Nutzer seit Beginn der Antwort nicht selbst gescrollt hat.
+  useEffect(() => {
+    const a = anchorRef.current;
+    const el = chatHistoryRef.current;
+    if (!cardsAbove || !pillsAt || !el || a.scrolled || a.pillsAt === pillsAt)
+      return;
+    a.pillsAt = pillsAt;
+    a.follow = false;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  }, [pillsAt, cardsAbove]);
 
   // Eigenes Scrollen des Nutzers (Rad, Wischen, Tastatur, Pfeil) beendet das
   // Nachführen für diesen Turn — kein Zurückspringen mehr.
   const stopFollow = () => {
     anchorRef.current.follow = false;
+    anchorRef.current.scrolled = true;
   };
   const handleUserScroll = () => {
     const a = anchorRef.current;
     const el = chatHistoryRef.current;
-    if (a.follow && el && Math.abs(el.scrollTop - a.top) > 1) a.follow = false;
+    if (a.top !== null && el && Math.abs(el.scrollTop - a.top) > 1)
+      stopFollow();
   };
 
   const handleScroll = () => {
@@ -226,6 +272,10 @@ export default function ChatHistory({
                 error={props.error}
                 errorMsg={props.errorMsg}
                 nameInWrapper={above}
+                followUps={
+                  isLastMessage && followUps.length > 0 ? followUps : null
+                }
+                settings={settings}
               />
             );
 

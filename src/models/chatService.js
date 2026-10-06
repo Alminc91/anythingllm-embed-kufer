@@ -1,6 +1,10 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
-import { cardsAnnounced, stripCardsMarker } from "@/utils/courseCards";
+import {
+  cardsAnnounced,
+  splitFollowUpsLine,
+  stripCardsMarker,
+} from "@/utils/courseCards";
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -36,14 +40,29 @@ const ChatService = {
           // Karten-Marker (ältere Server) schon beim Laden entfernen;
           // Teaserzeilen nur hinter einem Marker (auch einem, den der
           // Server schon entfernt hat: Antwort mit angekündigten Karten)
-          const content =
+          // Folgefragen: vom Server (followUps) bzw. aus der Endzeile älterer
+          // Server (Übergangs-Abwehr, Zeile immer entfernt); übernommen nur
+          // bei followUps "pills" (/history liefert sie unabhängig vom Modus),
+          // geprüft und angezeigt in ChatHistory (nur letzte Antwort)
+          const split =
             msg.role === "assistant"
-              ? stripCardsMarker(msg.content, {
-                  afterMarker: cardsAnnounced(msg),
-                })
-              : msg.content;
+              ? splitFollowUpsLine(
+                  stripCardsMarker(msg.content, {
+                    afterMarker: cardsAnnounced(msg),
+                  }),
+                )
+              : { text: msg.content, followUps: null };
+          const content = split.text;
+          const followUps =
+            embedSettings.followUps === "pills"
+              ? (msg.followUps ?? split.followUps)
+              : null;
+          const { followUps: _raw, ...rest } = msg;
           return {
-            ...msg,
+            ...rest,
+            ...(Array.isArray(followUps) && followUps.length > 0
+              ? { followUps }
+              : {}),
             content,
             id: v4(),
             sender: msg.role === "user" ? "user" : "system",
