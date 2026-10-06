@@ -30,6 +30,8 @@ vi.mock("@/components/ChatWindow", () => ({
   },
 }));
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { embedderSettings } from "../src/main.jsx";
 import {
   DEFAULT_SETTINGS,
@@ -139,6 +141,10 @@ beforeEach(() => {
         ...cs,
         transitionDuration: el.classList.contains("allm-morph")
           ? "0.46s, 0.46s"
+          : "0s",
+        // Zuklappen: Box schrumpft erst nach dem Ausblenden (35 %)
+        transitionDelay: el.classList.contains("allm-morph-close")
+          ? "161ms, 161ms"
           : "0s",
       };
     return cs;
@@ -548,5 +554,151 @@ describe("Review 6: Startrundung in px oder %", () => {
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
     expect(v(ui.chat(), "mr")).toBe("28px");
+  });
+});
+
+// Issue „Morph flüssiger“: kein Scroll im Lauf, Schließen mit gleicher
+// Dauer/Kurve (Inhalt zuerst aus), Chips blenden aus/ein, will-change nur im
+// Lauf. Verlauf im Browser: tests/visual/overlay.py (ov-morph-frames u. a.).
+describe("Morph flüssiger: Scroll vor dem Lauf", () => {
+  let scrollCalls;
+  let protoBefore;
+  beforeEach(() => {
+    scrollCalls = [];
+    protoBefore = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (opts) {
+      scrollCalls.push({
+        opts,
+        // Lauf noch nicht gestartet: nur die Startform (allm-morph-from) steht an
+        running: !!this.querySelector(".allm-morph"),
+      });
+    };
+  });
+  afterEach(() => {
+    Element.prototype.scrollIntoView = protoBefore;
+  });
+
+  it("NAK-1: Box ragt aus dem Viewport -> genau ein Scroll vor dem ersten Frame, ohne Animation", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    expect(scrollCalls).toEqual([
+      { opts: { block: "nearest", behavior: "instant" }, running: false },
+    ]);
+    nextFrames();
+    transitionEnd(ui.chat());
+    // nach dem Lauf scrollt nichts mehr nach
+    expect(scrollCalls).toHaveLength(1);
+  });
+
+  it("AK-1: Box im Viewport -> kein Scroll (weder vorher noch nachher)", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    transitionEnd(ui.chat());
+    expect(scrollCalls).toHaveLength(0);
+  });
+
+  it("andere Effekte scrollen wie bisher sanft", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    const ui = setup({ inlineLayout: "overlay", inlineEffect: "float" });
+    ui.open();
+    expect(scrollCalls.map((c) => c.opts)).toEqual([
+      { block: "nearest", behavior: "smooth" },
+    ]);
+  });
+});
+
+describe("Morph flüssiger: Schließen", () => {
+  it("Sicherheits-Timer rechnet die Verzögerung des Rückwegs mit", () => {
+    vi.useFakeTimers();
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    act(() => chatWindowProps.current.closeChat());
+    act(() => vi.advanceTimersByTime(600)); // 460 + 100, ohne Verzögerung
+    expect(visible(ui)).toBe(true);
+    act(() => vi.advanceTimersByTime(200)); // + 161 ms Verzögerung
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("flow: äußere Box bekommt beim Rückweg die Verzögerung (allm-morph-flow-close)", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    openAndSettle(ui);
+    const box = ui.box();
+    act(() => chatWindowProps.current.closeChat());
+    expect(box.classList.contains("allm-morph-flow-close")).toBe(true);
+    expect(box.classList.contains("allm-morph-flow-from")).toBe(true);
+    transitionEnd(ui.chat());
+    expect(box.classList.contains("allm-morph-flow-close")).toBe(false);
+  });
+
+  it("AK-2 (CSS): gleiche Dauer/Kurve, Rückweg nur verzögert; Inhalt vor 50 % aus; will-change nur im Lauf; Schatten +100 ms", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/main.jsx"), "utf8");
+    const rule = (sel) => {
+      const i = src.indexOf(`\n  ${sel}{`);
+      expect(i).toBeGreaterThan(-1);
+      return src.slice(src.indexOf("{", i) + 1, src.indexOf("}", i));
+    };
+    // Schließen ändert an der Box nur die Verzögerung, nicht Dauer/Kurve
+    expect(
+      rule(".allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in"),
+    ).toBe("--allmi-fx-w:calc(var(--allmi-fx-d)*.35)");
+    const tr = rule(".allm-morph");
+    for (const p of ["width", "height", "transform", "border-radius"])
+      expect(tr).toContain(
+        `${p} var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w)`,
+      );
+    expect(tr).toContain(
+      "box-shadow calc(var(--allmi-fx-d) + 100ms) ease var(--allmi-fx-w)",
+    );
+    // Inhalt beim Schließen: 35 % der Dauer, ohne Verzögerung (< 50 %)
+    expect(rule(".allm-morph-close>*")).toBe(
+      "transition:opacity calc(var(--allmi-fx-d)*.35) ease",
+    );
+    // will-change nur an den Lauf-Klassen
+    expect(src.match(/will-change:[^;}]*/g)).toEqual([
+      "will-change:width,height,transform",
+    ]);
+    expect(src).toContain(
+      ".allm-morph,.allm-morph-from{will-change:width,height,transform}",
+    );
+  });
+});
+
+describe("Morph flüssiger: Chips unter der Leiste (AK-4)", () => {
+  const chips = () => container.querySelector("#anything-llm-inline-chips");
+  const SETTINGS = {
+    inlineLayout: "overlay",
+    inlineInput: true,
+    defaultMessages: ["Spanisch A1", "Yoga"],
+  };
+
+  it("Öffnen: Chips blenden aus (Klasse am Chip-Container), danach aufgeräumt", () => {
+    const ui = setup(SETTINGS);
+    ui.open();
+    // schwebend: Leiste samt Chips unsichtbar im Seitenfluss, Chips blenden aus
+    expect(chips().closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(chips().classList.contains("allm-morph-chips-out")).toBe(true);
+    nextFrames();
+    transitionEnd(ui.chat());
+    expect(chips().className).not.toContain("allm-morph-chips");
+  });
+
+  it("Schließen: Chips blenden wieder ein, danach normale Leiste mit Chips", () => {
+    const ui = setup(SETTINGS);
+    openAndSettle(ui);
+    act(() => chatWindowProps.current.closeChat());
+    expect(chips().classList.contains("allm-morph-chips-in")).toBe(true);
+    expect(chips().classList.contains("allm-morph-chips-out")).toBe(false);
+    transitionEnd(ui.chat());
+    expect(visible(ui)).toBe(false);
+    expect(chips().closest('[aria-hidden="true"]')).toBeNull();
+    expect(chips().className).not.toContain("allm-morph-chips");
+  });
+
+  it("andere Effekte: Chips ohne Morph-Klassen", () => {
+    const ui = setup({ ...SETTINGS, inlineEffect: "float" });
+    ui.open();
+    expect(chips().className).not.toContain("allm-morph-chips");
   });
 });

@@ -24,6 +24,7 @@ Scrollen. Ergebnisse: tests/visual/results/overlay-*.png, summary-overlay.json.
 
 import argparse
 import json
+import re
 import pathlib
 import sys
 
@@ -1160,7 +1161,7 @@ def check_morph(browser, base_url):
         # AK-3: Escape -> rückwärts, danach Leiste wie vorher, Fokus auf der Leiste
         page.evaluate("() => window.__q('#message-input').focus()")
         page.keyboard.press("Escape")
-        page.wait_for_timeout(int(MORPH_MS * 0.3))
+        page.wait_for_timeout(int(MORPH_MS * (0.35 + 0.3)))
         during = morph_state(page)
         wait_bar_back(page)
         page.wait_for_timeout(100)
@@ -1171,18 +1172,18 @@ def check_morph(browser, base_url):
               and abs(after["h"] - bar["h"]) <= 1 and focus == "anything-llm-inline-input" and g["expandedAttr"] is None
               and not tv.errors_of(page))
         record("AK-3 morph Zuklappen rückwärts (Escape)", ok,
-               f"nach 30 % {during['w']:.0f}×{during['h']:.0f} px, danach Leiste {after['w']:.0f}×{after['h']:.0f} "
+               f"nach 35 % + 30 % {during['w']:.0f}×{during['h']:.0f} px, danach Leiste {after['w']:.0f}×{after['h']:.0f} "
                f"(vorher {bar['w']:.0f}×{bar['h']:.0f}), Fokus {focus}, data-allm-expanded={g['expandedAttr']}")
         # Außenklick ebenfalls rückwärts
         morph_click(page)
         wait_open(page)
         wait_morph_done(page)
         page.mouse.click(930, 120)
-        page.wait_for_timeout(int(MORPH_MS * 0.3) + 20)
+        page.wait_for_timeout(int(MORPH_MS * (0.35 + 0.3)) + 20)
         during = morph_state(page)
         wait_bar_back(page)
         record("AK-3 morph Zuklappen rückwärts (Außenklick)", during["morph"] and during["w"] < 760 - 1,
-               f"nach 30 % {during['w']:.0f}×{during['h']:.0f} px, Leiste zurück")
+               f"nach 35 % + 30 % {during['w']:.0f}×{during['h']:.0f} px, Leiste zurück")
     finally:
         ctx.close()
 
@@ -1267,6 +1268,198 @@ def check_morph_flow(browser, base_url):
            f"#below Δ morph {shifts['morph']:+.1f} px, expand {shifts['expand']:+.1f} px")
 
 
+# ---------------------------------------------------------------------------
+# Issue „Morph flüssiger“: Frames, kein Scroll im Lauf, Schließen, Chips
+# ---------------------------------------------------------------------------
+# Jeden Frame (rAF) bis 1500 ms aufzeichnen: Zeitstempel, scrollY, Morph-Klassen,
+# Chips (Opacity/Sichtbarkeit), Long Tasks (PerformanceObserver). Start direkt
+# vor der Aktion (Klick bzw. Escape); ausgewertet wird das Fenster, in dem die
+# Morph-Klassen am Fenster stehen (Lauf), plus der Frame davor.
+MORPH_REC_JS = r"""
+() => {
+  const R = window.__mr = { f: [], lt: [], pre: scrollY, t0: performance.now() };
+  try {
+    const po = new PerformanceObserver((l) => l.getEntries().forEach((e) => R.lt.push({ s: e.startTime, d: e.duration })));
+    po.observe({ type: 'longtask' });
+    R.po = po;
+  } catch (e) { R.noLongtask = true; }
+  const tick = (ts) => {
+    const w = window.__q('#anything-llm-chat');
+    const c = window.__q('#anything-llm-inline-chips');
+    const cs = c && getComputedStyle(c);
+    R.f.push({ t: ts, sy: scrollY,
+      morph: !!w && (w.classList.contains('allm-morph') || w.classList.contains('allm-morph-from')),
+      w: w ? w.getBoundingClientRect().width : 0,
+      chipOp: cs ? parseFloat(cs.opacity) : null, chipVis: cs ? cs.visibility : null,
+      chipHidden: c ? !!c.closest('[aria-hidden="true"]') : null });
+    if (performance.now() - R.t0 < 1500) requestAnimationFrame(tick);
+    else { R.done = true; R.po && R.po.disconnect(); }
+  };
+  requestAnimationFrame(tick);
+}
+"""
+
+
+def morph_record(page, action):
+    """Aufzeichnen, Aktion ausführen, Ende der Aufzeichnung abwarten."""
+    page.evaluate(MORPH_REC_JS)
+    action()
+    page.wait_for_function("() => window.__mr && window.__mr.done", timeout=5000)
+    return page.evaluate("() => { const R = window.__mr; return { f: R.f, lt: R.lt, pre: R.pre, noLongtask: !!R.noLongtask }; }")
+
+
+def morph_window(rec):
+    """Frames des Laufs: vom Frame vor dem ersten Morph-Frame bis zum ersten
+    Frame danach ohne Morph-Klassen (Ende)."""
+    f = rec["f"]
+    idx = [i for i, x in enumerate(f) if x["morph"]]
+    if not idx:
+        return []
+    a, b = max(idx[0] - 1, 0), min(idx[-1] + 1, len(f) - 1)
+    return f[a:b + 1]
+
+
+def frame_stats(win, lt):
+    ts = [x["t"] for x in win]
+    iv = [b - a for a, b in zip(ts, ts[1:])]
+    ok = sum(1 for d in iv if d <= 20)
+    t_a, t_b = (ts[0], ts[-1]) if ts else (0, 0)
+    longs = [x for x in lt if x["d"] > 50 and x["s"] + x["d"] >= t_a - 50 and x["s"] <= t_b]
+    return {"n": len(iv), "share": ok / len(iv) if iv else 0.0, "max": max(iv) if iv else 0,
+            "dur": t_b - t_a, "long": len(longs)}
+
+
+def morph_escape(page):
+    page.evaluate("() => window.__q('#message-input').focus()")
+    page.keyboard.press("Escape")
+
+
+def check_morph_frames(browser, base_url):
+    """ov-morph-frames (AK-3): rAF-Intervalle über Öffnen und Schließen, 3 Läufe,
+    Median; Ziel ≥ 90 % ≤ 20 ms, keine Long Tasks > 50 ms im Lauf.
+    AK-1: scrollY konstant zwischen Klick und Ende (Box im Viewport)."""
+    import statistics
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        runs = {"open": [], "close": []}
+        scroll = []
+        longtask_api = True
+        for _ in range(3):
+            rec = morph_record(page, lambda: morph_click(page))
+            win = morph_window(rec)
+            runs["open"].append(frame_stats(win, rec["lt"]))
+            scroll.append(("open", rec["pre"], sorted({round(x["sy"], 1) for x in win})))
+            longtask_api = longtask_api and not rec["noLongtask"]
+            tv.settle(page, 300)
+            page.mouse.move(990, 690)
+            rec = morph_record(page, lambda: morph_escape(page))
+            win = morph_window(rec)
+            runs["close"].append(frame_stats(win, rec["lt"]))
+            scroll.append(("close", rec["pre"], sorted({round(x["sy"], 1) for x in win})))
+            wait_bar_back(page)
+            tv.settle(page, 300)
+            page.mouse.move(990, 690)
+        g = geom(page)
+        vh = page.evaluate("() => innerHeight")
+        for phase in ("open", "close"):
+            st = runs[phase]
+            med = statistics.median(s["share"] for s in st)
+            longs = sum(s["long"] for s in st)
+            record(f"AK-3 ov-morph-frames {phase}: Median ≥ 90 % der rAF-Intervalle ≤ 20 ms", med >= 0.9 and longs == 0,
+                   f"Median {med * 100:.1f} % (Läufe: " + ", ".join(
+                       f"{s['share'] * 100:.1f} %/{s['n']} Int./max {s['max']:.1f} ms/{s['dur']:.0f} ms" for s in st)
+                   + f"); Long Tasks > 50 ms im Lauf: {longs}" + ("" if longtask_api else " (Long-Task-API fehlt)"))
+        ok = all(len(v) == 1 and abs(v[0] - pre) < 0.5 for _, pre, v in scroll) and g["mount"]["y"] >= 0
+        record("AK-1 morph kein Scroll während Öffnen/Schließen (Box im Viewport)", ok,
+               "; ".join(f"{ph}: vorher {pre:.0f}, im Lauf {v}" for ph, pre, v in scroll) + f"; Viewport {vh} px")
+    finally:
+        ctx.close()
+
+
+def check_morph_scroll_before(browser, base_url):
+    """NAK-1: Box weit unten -> die Seite scrollt VOR dem ersten Morph-Frame
+    (ohne Animation, auch bei scroll-behavior: smooth der Seite), im Lauf nicht."""
+    vp = {"width": 1280, "height": 900}
+    css = MORPH_CSS + " html { scroll-behavior: smooth; }"
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**MORPH, **INPUT}, "inline": True, "css": css},
+                             tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=vp)
+    try:
+        ready(page, "#anything-llm-inline-input")
+        page.evaluate("() => { const s = document.createElement('div'); s.style.height = '560px'; s.textContent = 'Abstand';"
+                      " document.getElementById('slot').before(s); }")
+        tv.settle(page, 300)
+        rec = morph_record(page, lambda: morph_click(page))
+        win = morph_window(rec)
+        sys_ = [round(x["sy"], 1) for x in win[1:]]
+        box = page.evaluate("() => { const b = window.__q('#anything-llm-chat').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, vh: innerHeight }; }")
+        ok = (len(win) > 3 and len(set(sys_)) == 1 and sys_[0] > rec["pre"] + 1 and box["top"] >= -0.5
+              and box["bottom"] <= box["vh"] + 0.5 and not tv.errors_of(page))
+        record("NAK-1 morph Box außerhalb: Scroll vor dem Lauf, nicht währenddessen", ok,
+               f"scrollY vorher {rec['pre']:.0f}, im Lauf {sorted(set(sys_))} ({len(win)} Frames, erster Morph-Frame schon "
+               f"gescrollt), Box danach {box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px), Seite smooth")
+    finally:
+        ctx.close()
+
+
+def check_morph_close_timing(browser, base_url):
+    """AK-2: Schließen mit gleicher Dauer/Kurve wie Öffnen (460 ms); Inhalt bei
+    50 % der Dauer schon ausgeblendet, Box schrumpft erst danach."""
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        morph_click(page)
+        wait_morph_running(page)
+        st_open = page.evaluate("() => { const cs = getComputedStyle(window.__q('#anything-llm-chat')); return { dur: cs.transitionDuration, ease: cs.transitionTimingFunction, delay: cs.transitionDelay }; }")
+        wait_morph_done(page)
+        tv.settle(page, 300)
+        morph_escape(page)
+        st_close = page.evaluate("() => { const cs = getComputedStyle(window.__q('#anything-llm-chat')); return { dur: cs.transitionDuration, ease: cs.transitionTimingFunction, delay: cs.transitionDelay }; }")
+        page.evaluate(MORPH_SEEK_JS, MORPH_MS * 0.5)
+        half = morph_state(page)
+        page.evaluate(MORPH_SEEK_JS, MORPH_MS * 0.3)
+        early = morph_state(page)
+        page.evaluate(MORPH_PLAY_JS)
+        wait_bar_back(page)
+        def first(v):  # erster Wert einer Liste (Kommas in cubic-bezier überspringen)
+            return re.split(r",\s*(?![^()]*\))", v)[0].strip()
+        size_same = st_open["dur"] == st_close["dur"] and st_open["ease"] == st_close["ease"]
+        ok = size_same and first(st_close["dur"]) == "0.46s" and half["op"] == 0 and abs(early["w"] - 760) <= 1
+        record("AK-2 morph Schließen: gleiche Dauer/Kurve, Inhalt zuerst aus", ok,
+               f"Öffnen {st_open['dur']} / {first(st_open['ease'])} / Verzögerung {first(st_open['delay'])}; "
+               f"Schließen {st_close['dur']} / {first(st_close['ease'])} / Verzögerung {first(st_close['delay'])}; "
+               f"Inhalt-Opacity bei 50 %: {half['op']}, Box bei 30 % noch {early['w']:.0f} px breit")
+    finally:
+        ctx.close()
+
+
+def check_morph_chips(browser, base_url):
+    """AK-4: Chips unter der Leiste blenden beim Öffnen weich aus (1 -> 0) und
+    beim Schließen wieder ein, statt sofort zu verschwinden."""
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        n_chips = page.evaluate("() => window.__allmShadow.querySelectorAll('.allm-inline-chip').length")
+        rec = morph_record(page, lambda: morph_click(page))
+        win = morph_window(rec)
+        ops = [x["chipOp"] for x in win if x["chipVis"] == "visible" and x["chipHidden"]]
+        mid_open = [o for o in ops if 0.02 < o < 0.98]
+        end_open = win[-1]["chipVis"] if win else None
+        tv.settle(page, 300)
+        page.mouse.move(990, 690)
+        rec = morph_record(page, lambda: morph_escape(page))
+        winc = morph_window(rec)
+        opsc = [x["chipOp"] for x in winc if x["chipVis"] == "visible" and x["chipHidden"]]
+        mid_close = [o for o in opsc if 0.02 < o < 0.98]
+        wait_bar_back(page)
+        after = page.evaluate("() => { const c = window.__q('#anything-llm-inline-chips'); const cs = getComputedStyle(c); return { op: parseFloat(cs.opacity), vis: cs.visibility, cls: c.className }; }")
+        ok = (n_chips > 0 and len(mid_open) >= 3 and ops and ops[0] > 0.9 and end_open == "hidden"
+              and len(mid_close) >= 3 and after["op"] == 1 and after["vis"] == "visible"
+              and "allm-morph-chips" not in after["cls"])
+        record("AK-4 morph Chips blenden aus (Öffnen) und wieder ein (Schließen)", ok,
+               f"{n_chips} Chips; Öffnen: {len(mid_open)} Frames mit 0<Opacity<1 (Start {ops[0] if ops else '-'}, "
+               f"Ende {end_open}); Schließen: {len(mid_close)} Zwischenframes; danach Opacity {after['op']}, {after['vis']}")
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
@@ -1306,6 +1499,10 @@ def main():
                 check_morph_reduced_mobile(browser, base_url)
                 check_morph_nak2(browser, base_url)
                 check_morph_flow(browser, base_url)
+                check_morph_close_timing(browser, base_url)
+                check_morph_chips(browser, base_url)
+                check_morph_scroll_before(browser, base_url)
+                check_morph_frames(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()
