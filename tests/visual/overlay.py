@@ -1382,17 +1382,26 @@ def check_morph_frames(browser, base_url):
 def check_morph_scroll_before(browser, base_url):
     """Box weit unten (ragt aus dem Viewport), Seite mit scroll-behavior: smooth.
     AK-1 overlay: scrollY bleibt ab dem Klick in jedem Frame gleich (wie das
-    Mockup, die Box ragt unten heraus). NAK-1 flow: die Seite scrollt VOR dem
-    ersten Morph-Frame ohne Animation, im Lauf nicht."""
+    Mockup, die Box ragt unten heraus), kein Fokus ins unsichtbare
+    Eingabefeld (Befund 2). NAK-1 flow: die Seite scrollt VOR dem ersten
+    Morph-Frame ohne Animation, im Lauf nicht. Befund 1 flow-short: nur 100 px
+    Inhalt unter dem Widget — Scroll gegen die Endgröße, kein Klemmen, kein
+    Sprung bis nach dem Lauf, Box am Ende ganz sichtbar."""
     vp = {"width": 1280, "height": 900}
     css = MORPH_CSS + " html { scroll-behavior: smooth; }"
-    for layout, attrs in (("overlay", {**MORPH, **INPUT}), ("flow", {**MORPH_FLOW, **INPUT})):
+    for layout, attrs in (("overlay", {**MORPH, **INPUT}), ("flow", {**MORPH_FLOW, **INPUT}),
+                          ("flow-short", {**MORPH_FLOW, **INPUT})):
         ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True, "css": css},
                                  tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=vp)
         try:
             ready(page, "#anything-llm-inline-input")
             page.evaluate("() => { const s = document.createElement('div'); s.style.height = '560px'; s.textContent = 'Abstand';"
                           " document.getElementById('slot').before(s); }")
+            if layout == "flow-short":
+                # Inhalt unter dem Platzhalter (PAGE_JS) durch 100 px ersetzen
+                page.evaluate("() => { const slot = document.getElementById('slot'); slot.nextElementSibling.remove();"
+                              " const d = document.createElement('div'); d.style.height = '100px'; d.textContent = 'Fuß';"
+                              " slot.after(d); }")
             tv.settle(page, 300)
             rec = morph_record(page, lambda: morph_click(page))
             win = morph_window(rec)
@@ -1400,11 +1409,24 @@ def check_morph_scroll_before(browser, base_url):
             box = page.evaluate("() => { const b = window.__q('#anything-llm-chat').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, vh: innerHeight }; }")
             errs = tv.errors_of(page)
             if layout == "overlay":
+                focus = active_id(page)
                 ok = (len(win) > 3 and set(sys_) == {round(rec["pre"], 1)} and box["bottom"] > box["vh"]
-                      and not errs)
-                record("AK-1 morph overlay: Box ragt heraus, trotzdem kein Scroll (Klick bis Ende)", ok,
+                      and focus != "message-input" and not errs)
+                record("AK-1 morph overlay: Box ragt heraus, trotzdem kein Scroll, kein Fokus ins unsichtbare Feld", ok,
                        f"scrollY vorher {rec['pre']:.0f}, im Lauf {sorted(set(sys_))} ({len(win)} Frames), "
-                       f"Box danach {box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px), Seite smooth")
+                       f"Box danach {box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px), Seite smooth, "
+                       f"Fokus im Widget: {focus}")
+            elif layout == "flow-short":
+                i0 = next((i for i, x in enumerate(rec["f"]) if x["morph"]), None)
+                after = sorted({round(x["sy"], 1) for x in rec["f"][i0:]}) if i0 is not None else []
+                doc = page.evaluate("() => ({ sh: document.documentElement.scrollHeight, sy: scrollY,"
+                                    " mh: window.__q('#anything-llm-embed-inline').style.minHeight })")
+                ok = (len(win) > 3 and len(after) == 1 and after[0] > rec["pre"] + 1 and box["top"] >= -0.5
+                      and box["bottom"] <= box["vh"] + 0.5 and doc["mh"] == "" and not errs)
+                record("Befund 1 morph flow, 100 px Inhalt darunter: Scroll gegen Endgröße, kein Sprung, Box ganz sichtbar", ok,
+                       f"scrollY vorher {rec['pre']:.0f}, ab erstem Morph-Frame bis 1,5 s {after}; Box danach "
+                       f"{box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px); Dokument {doc['sh']} px, "
+                       f"Reserve danach '{doc['mh']}'")
             else:
                 ok = (len(win) > 3 and len(set(sys_)) == 1 and sys_[0] > rec["pre"] + 1 and box["top"] >= -0.5
                       and box["bottom"] <= box["vh"] + 0.5 and not errs)
@@ -1484,6 +1506,40 @@ def check_morph_chips(browser, base_url):
         ctx.close()
 
 
+MORPH_CHIPS_REVERSE_JS = r"""
+() => new Promise((res) => {
+  const c = window.__q('#anything-llm-inline-chips');
+  const op = () => parseFloat(getComputedStyle(c).opacity);
+  const o1 = op();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const o2 = op();
+  const v = c.style.getPropertyValue('--allmi-chips-o');
+  requestAnimationFrame(() => requestAnimationFrame(() => res({ o1, o2, o3: op(), v, cls: c.className })));
+})
+"""
+
+
+def check_morph_chips_reverse(browser, base_url):
+    """Befund 4: Schließen, während die Chips noch ausblenden -> Einblenden
+    ab der aktuellen Opacity (kein Sprung auf 0)."""
+    ctx, page = morph_prepared(browser, base_url)
+    try:
+        morph_click(page)
+        page.wait_for_function(
+            "() => { const c = window.__q('#anything-llm-inline-chips'); const o = c && parseFloat(getComputedStyle(c).opacity);"
+            " return c && c.classList.contains('allm-morph-chips-out') && o > 0.25 && o < 0.75; }",
+            polling="raf", timeout=3000)
+        r = page.evaluate(MORPH_CHIPS_REVERSE_JS)
+        wait_bar_back(page)
+        ok = (abs(r["o2"] - r["o1"]) < 0.05 and abs(r["o3"] - r["o1"]) < 0.1 and "allm-morph-chips-in" in r["cls"]
+              and r["v"] != "" and not tv.errors_of(page))
+        record("Befund 4 morph Chips: Umkehr beim Ausblenden ohne Opacity-Sprung", ok,
+               f"Opacity vor Escape {r['o1']:.3f}, direkt danach {r['o2']:.3f}, 2 Frames später {r['o3']:.3f} "
+               f"(--allmi-chips-o={r['v']})")
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
@@ -1525,6 +1581,7 @@ def main():
                 check_morph_flow(browser, base_url)
                 check_morph_close_timing(browser, base_url)
                 check_morph_chips(browser, base_url)
+                check_morph_chips_reverse(browser, base_url)
                 check_morph_scroll_before(browser, base_url)
                 check_morph_frames(browser, base_url)
             browser.close()

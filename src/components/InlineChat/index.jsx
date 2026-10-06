@@ -159,13 +159,41 @@ const isMorphProperty = (p) =>
   p === "transform" ||
   /^border-(.+-)?radius$/.test(p);
 
-// Sekunden/Millisekunden-Angabe (erster Wert einer Liste) in ms
-const cssMs = (v) => {
-  const d = String(v || "")
-    .split(",")[0]
-    .trim();
-  return parseFloat(d) * (d.endsWith("ms") ? 1 : 1000) || 0;
-};
+// Liste von Zeitangaben (computed transition-duration/-delay) in ms
+const cssTimesMs = (v) =>
+  String(v || "")
+    .split(",")
+    .map((d) => {
+      const t = d.trim();
+      return parseFloat(t) * (t.endsWith("ms") ? 1 : 1000) || 0;
+    });
+// Ende der längsten Transition (Dauer + Verzögerung) — beim Morph der
+// Schatten (Dauer + 100 ms); Dauer-/Verzögerungslisten wiederholen sich bis
+// zur Zahl der Eigenschaften
+function longestTransitionMs(cs) {
+  const dur = cssTimesMs(cs.transitionDuration);
+  const delay = cssTimesMs(cs.transitionDelay);
+  const n = Math.max(
+    String(cs.transitionProperty || "").split(",").length,
+    dur.length,
+    delay.length,
+  );
+  let max = 0;
+  for (let i = 0; i < n; i++)
+    max = Math.max(max, dur[i % dur.length] + delay[i % delay.length]);
+  return max;
+}
+// Läuft am Element selbst noch eine Transition (z. B. der längere Schatten)?
+// Ohne getAnimations (ältere Browser, jsdom): nein.
+function hasRunningTransition(el) {
+  try {
+    return (el.getAnimations?.() || []).some(
+      (a) => a.transitionProperty != null && a.playState === "running",
+    );
+  } catch (e) {
+    return false;
+  }
+}
 
 // Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
@@ -176,8 +204,12 @@ const cssMs = (v) => {
 // an (Zuklappen vor dem ersten Frame des Aufklappens), endet der Lauf sofort.
 // chips (schwebend: Chips unter der unsichtbaren Leiste) blenden beim
 // Aufklappen aus, beim Zuklappen wieder ein. Ende per transitionend
-// (isMorphProperty) bzw. Sicherheits-Timer; onEnd läuft vor dem Aufräumen
-// (Zuklappen: erst einklappen, kein Rücksprung).
+// einer Form-Eigenschaft (isMorphProperty) bzw. des Schattens, sobald am
+// Fenster keine Transition mehr läuft (der Schatten läuft 100 ms länger und
+// wird nicht abgeschnitten), sonst Sicherheits-Timer (längste Transition +
+// 100 ms); onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein
+// Rücksprung). Schließen, während die Chips noch ausblenden: Einblenden ab
+// der aktuellen Opacity (--allmi-chips-o), kein Sprung.
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
 function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
@@ -194,7 +226,10 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
   let raf = 0;
   let timer = 0;
   const onTransitionEnd = (e) => {
-    if (e.target === win && isMorphProperty(e.propertyName)) finish();
+    if (e.target !== win) return;
+    if (!isMorphProperty(e.propertyName) && e.propertyName !== "box-shadow")
+      return;
+    if (!hasRunningTransition(win)) finish();
   };
   const stop = (keep = false) => {
     cancelAnimationFrame(raf);
@@ -204,6 +239,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
     win.classList.remove(...MORPH_CLASSES);
     box.classList.remove(...MORPH_FLOW_CLASSES);
     chips?.classList.remove(...MORPH_CHIP_CLASSES);
+    chips?.style.removeProperty("--allmi-chips-o");
     MORPH_WIN_VARS.forEach((k) => win.style.removeProperty(`--allmi-${k}`));
     box.style.removeProperty("--allmi-bh");
   };
@@ -222,11 +258,17 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
       box.classList.toggle("allm-morph-flow-close", !opening);
     }
     if (!opening && chips) {
+      // Ausblenden läuft noch bzw. steht (forwards): Einblenden ab dem
+      // aktuellen Wert; nach einem beendeten Aufklappen ab 0 (CSS-Standard)
+      if (chips.classList.contains("allm-morph-chips-out")) {
+        const o = parseFloat(getComputedStyle(chips).opacity);
+        if (Number.isFinite(o))
+          chips.style.setProperty("--allmi-chips-o", String(o));
+      }
       chips.classList.remove("allm-morph-chips-out");
       chips.classList.add("allm-morph-chips-in");
     }
-    const cs = getComputedStyle(win);
-    const ms = cssMs(cs.transitionDuration) + cssMs(cs.transitionDelay);
+    const ms = longestTransitionMs(getComputedStyle(win));
     win.addEventListener("transitionend", onTransitionEnd);
     timer = setTimeout(finish, ms + 100);
   };
@@ -244,6 +286,32 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
     finish(); // nichts transitioniert (Leistenform liegt schon an)
   else run();
   return stop;
+}
+
+// Fenster sofort (nie animiert, auch bei scroll-behavior: smooth der Seite)
+// auf y scrollen. Ältere Browser kennen behavior "instant" nicht (TypeError):
+// dann "auto" mit kurzzeitig scroll-behavior: auto am Scroll-Element
+// (danach wie vorher).
+function scrollWindowInstant(y) {
+  const left = window.scrollX || window.pageXOffset || 0;
+  try {
+    window.scrollTo({ left, top: y, behavior: "instant" });
+    return;
+  } catch (e) {
+    // weiter mit "auto"
+  }
+  const se = document.scrollingElement || document.documentElement;
+  const prev = se.style.getPropertyValue("scroll-behavior");
+  const prio = se.style.getPropertyPriority("scroll-behavior");
+  se.style.setProperty("scroll-behavior", "auto", "important");
+  try {
+    window.scrollTo({ left, top: y, behavior: "auto" });
+  } catch (e) {
+    window.scrollTo(left, y);
+  } finally {
+    if (prev) se.style.setProperty("scroll-behavior", prev, prio);
+    else se.style.removeProperty("scroll-behavior");
+  }
 }
 
 // Geerbte Text-Eigenschaften der Webseite neutralisieren: der Host sitzt jetzt
@@ -389,8 +457,9 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
-  // "morph": { geom, stop, closing } des laufenden bzw. letzten Laufs;
-  // geom.open = Panel im nächsten Commit messen und Lauf starten
+  // "morph": { geom, stop, closing, focusOnEnd } des laufenden bzw. letzten
+  // Laufs; geom.open = Panel im nächsten Commit messen und Lauf starten;
+  // focusOnEnd = schwebend nach dem Aufklappen ins Eingabefeld (falls sichtbar)
   const morphRef = useRef(null);
   // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
   // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
@@ -522,10 +591,12 @@ export default function InlineChat({
   // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
   // (auch für den Rückweg) und den Lauf starten. Scroll nach Klick:
   // schwebend nie (wie das Mockup; die Box darf unten herausragen), im
-  // Seitenfluss JETZT, falls die Box nicht ganz im Viewport liegt (vor dem
-  // Paint, ohne Animation) — während des Laufs scrollt nichts. Die
-  // Leistenform ist relativ zum Panel abgelegt, der Scroll ändert daran
-  // nichts. Box verlassen (Einklappen, Vollbild, Unmount) bricht einen Lauf ab.
+  // Seitenfluss JETZT (vor dem Paint, ohne Animation), falls die Box in
+  // ihrer Endgröße nicht ganz im Viewport läge: Endgeometrie messen, dann
+  // Startform anlegen, dann scrollen (planFlowScroll/applyFlowScroll) —
+  // während des Laufs scrollt nichts. Die Leistenform ist relativ zum Panel
+  // abgelegt, der Scroll ändert daran nichts. Box verlassen (Einklappen,
+  // Vollbild, Unmount) bricht einen Lauf ab.
   useLayoutEffect(() => {
     const m = morphRef.current;
     const win = chatWindowRef.current;
@@ -536,9 +607,10 @@ export default function InlineChat({
     const f = win.getBoundingClientRect();
     g.dx = g.x - f.left;
     g.dy = g.y - f.top;
+    let scrollPlan = null;
     if (scrollOnExpandRef.current) {
       scrollOnExpandRef.current = false;
-      if (!floating) scrollBoxIntoView(true);
+      if (!floating) scrollPlan = planFlowScroll();
     }
     m.stop = runMorph(win, box, g, {
       opening: true,
@@ -546,8 +618,14 @@ export default function InlineChat({
       chips: morphChips(),
       onEnd: () => {
         m.stop = null;
+        releaseScrollReserve();
+        if (m.focusOnEnd) {
+          m.focusOnEnd = false;
+          focusInputIfVisible();
+        }
       },
     });
+    if (scrollPlan) applyFlowScroll(scrollPlan);
   }, [view]);
   // Abgebrochener Rückweg (Fenster <768px, Unmount): trotzdem einklappen wie
   // am Ende des Laufs (Übergabe/Text wie beim Zuklappen, Fokus bleibt) —
@@ -555,6 +633,7 @@ export default function InlineChat({
   useLayoutEffect(() => {
     if (view !== "box") return;
     return () => {
+      releaseScrollReserve();
       const m = morphRef.current;
       if (!m) return;
       const wasClosing = m.closing;
@@ -598,23 +677,50 @@ export default function InlineChat({
   // nur, wenn die Box nicht vollständig sichtbar ist (block: "nearest").
   // Startzustand "expanded" scrollt nie (scrollOnExpandRef nur beim Klick).
   // "morph": schwebend nie, im Seitenfluss vor dem Lauf ohne Animation
-  // (instant, Effekt oben).
-  const scrollBoxIntoView = (instant = false) => {
+  // (planFlowScroll, Effekt oben).
+  const scrollBoxIntoView = () => {
     const el = boxRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (rect.top >= 0 && rect.bottom <= vh) return;
-    if (!instant) {
+    if (rect.top < 0 || rect.bottom > vh)
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      return;
-    }
-    try {
-      el.scrollIntoView({ block: "nearest", behavior: "instant" });
-    } catch (e) {
-      el.scrollIntoView({ block: "nearest" }); // ältere Browser ohne "instant"
-    }
   };
+  // "morph" im Seitenfluss, VOR dem Anlegen der Startform: Box und Seite
+  // stehen noch in Endgröße. Ziel-scrollY wie block "nearest" (Oberkante,
+  // wenn die Box höher als der Viewport ist), begrenzt auf die endgültige
+  // Dokumenthöhe; rootH = Endhöhe der Inline-Fläche. null = Box ganz sichtbar.
+  const planFlowScroll = () => {
+    const box = boxRef.current;
+    const root = rootRef.current;
+    if (!box || !root) return null;
+    const r = box.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (r.top >= 0 && r.bottom <= vh) return null;
+    const delta = r.top < 0 || r.height > vh ? r.top : r.bottom - vh;
+    const se = document.scrollingElement || document.documentElement;
+    const y0 = window.scrollY || window.pageYOffset || 0;
+    const max = Math.max(0, se.scrollHeight - se.clientHeight);
+    return {
+      y: Math.min(Math.max(0, y0 + delta), max),
+      rootH: root.getBoundingClientRect().height,
+    };
+  };
+  // NACH dem Anlegen der Startform (Box in Leistenhöhe, Seite kürzer): reicht
+  // die Dokumenthöhe für das Ziel nicht mehr (wenig Inhalt unter dem
+  // Widget), hält die Inline-Fläche bis zum Ende des Laufs ihre Endhöhe
+  // (min-height) — sonst klemmt der Browser scrollY. Dann sofort scrollen.
+  const applyFlowScroll = ({ y, rootH }) => {
+    const root = rootRef.current;
+    const se = document.scrollingElement || document.documentElement;
+    if (root && y > se.scrollHeight - se.clientHeight)
+      root.style.minHeight = px(rootH);
+    scrollWindowInstant(y);
+  };
+  // Reservierte Endhöhe (applyFlowScroll) freigeben: Ende des Aufklappens,
+  // Beginn des Zuklappens, Box verlassen
+  const releaseScrollReserve = () =>
+    rootRef.current?.style.removeProperty("min-height");
   useEffect(() => {
     if (view !== "box") return;
     scrollChatToBottom();
@@ -637,6 +743,28 @@ export default function InlineChat({
     }
     focusRequestRef.current = true;
     if (inOverlay) proxyRef.current?.focus({ preventScroll: true });
+  };
+  // "morph" schwebend (kein Scroll): nach dem Aufklappen nur dann ins
+  // Eingabefeld (bzw. ohne Feld: das Chat-Fenster als Maß), wenn es ganz im
+  // Viewport liegt — nie Tippen in ein unsichtbares Feld — und der Fokus
+  // nicht inzwischen auf einem Element der Seite liegt.
+  const focusInputIfVisible = () => {
+    const el =
+      embedderSettings.shadowRoot?.getElementById("message-input") ||
+      chatWindowRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (r.top < 0 || r.bottom > vh) return;
+    const a = document.activeElement;
+    if (
+      a &&
+      a !== document.body &&
+      a !== document.documentElement &&
+      a !== host
+    )
+      return;
+    focusInput(false);
   };
 
   // first (nur inlineInput): { text, send } aus der Leiste, sonst null.
@@ -707,7 +835,13 @@ export default function InlineChat({
     // Vorfahren (auch <html>) wieder her und bricht damit das sanfte Scrollen
     // zur Box ab. Nach der Antwort kommt der Fokus wie gewohnt ins Feld
     // (onPendingFirstMessageConsumed).
-    if (!sending && !isTouchDevice()) focusInput(false);
+    // "morph" schwebend: Fokus erst nach dem Lauf, nur wenn das Feld dann
+    // sichtbar ist (focusInputIfVisible) — die Seite scrollt dort nicht.
+    if (!sending && !isTouchDevice()) {
+      const m = morphRef.current;
+      if (m?.stop && wantOverlay && !clipped) m.focusOnEnd = true;
+      else focusInput(false);
+    }
   };
 
   // Vom ChatContainer aufgerufen, sobald er ein Ticket verbraucht hat.
@@ -787,7 +921,9 @@ export default function InlineChat({
     if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
       if (m.closing) return;
       m.closing = true;
+      m.focusOnEnd = false;
       m.stop?.(true);
+      releaseScrollReserve();
       // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
       // (runMorph endet dann sofort): nichts zu messen
       if (!win.classList.contains("allm-morph-from"))

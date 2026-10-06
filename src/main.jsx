@@ -265,7 +265,10 @@ const customCss = `
      die äußere Box wächst in der Höhe mit (allm-morph-flow). Chips unter der
      schwebenden Leiste blenden in der halben Dauer aus bzw. beim Zuklappen
      wieder ein (die Leiste darüber ist visibility:hidden, die Animation
-     macht sie solange sichtbar). Ohne Seiten-CSS sind die --allmi-* ungültig
+     macht sie solange sichtbar; Ausblenden bleibt bis zum Ende des Laufs
+     stehen, Einblenden startet bei --allmi-chips-o = Opacity beim
+     Umkehren, sonst 0). Ende des Laufs erst nach der längsten Transition
+     (Schatten, runMorph). Ohne Seiten-CSS sind die --allmi-* ungültig
      (utils/theme.js) -> Standardwerte hier. */
   .allm-morph,.allm-morph-flow,.allm-morph-chips-out,.allm-morph-chips-in{--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s}
   .allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in{--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1));--allmi-fx-w:calc(var(--allmi-fx-d)/6)}
@@ -278,8 +281,8 @@ const customCss = `
   .allm-morph-flow{transition:height var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w)}
   .allm-morph-flow-from{height:var(--allmi-bh)!important}
   @keyframes allm-chips-out{from{opacity:1;visibility:visible}to{opacity:0;visibility:visible}}
-  @keyframes allm-chips-in{from{opacity:0;visibility:visible}to{opacity:1;visibility:visible}}
-  .allm-morph-chips-out,.allm-morph-chips-in{pointer-events:none;animation:allm-chips-out calc(var(--allmi-fx-d)*.5) ease}
+  @keyframes allm-chips-in{from{opacity:var(--allmi-chips-o,0);visibility:visible}to{opacity:1;visibility:visible}}
+  .allm-morph-chips-out,.allm-morph-chips-in{pointer-events:none;animation:allm-chips-out calc(var(--allmi-fx-d)*.5) ease forwards}
   .allm-morph-chips-in{animation:allm-chips-in calc(var(--allmi-fx-d)*.5) ease var(--allmi-fx-w) both}
   @media (prefers-reduced-motion: reduce) {
     .allm-morph,.allm-morph-flow,.allm-morph>*{transition:none!important}
