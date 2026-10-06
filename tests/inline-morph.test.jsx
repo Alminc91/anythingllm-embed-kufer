@@ -873,11 +873,7 @@ describe("Morph flüssiger: Schließen", () => {
     };
     // Aufklappen 720ms expo; Zuklappen eigene Dauer/Kurve (480ms,
     // cubic-bezier(.65,0,.35,1)), Box erst nach 1/6 (80 ms)
-    expect(
-      rule(
-        ".allm-morph,.allm-morph-flow,.allm-morph-chips-out,.allm-morph-chips-in",
-      ),
-    ).toBe(
+    expect(rule(".allm-morph,.allm-morph-flow,.allm-morph-chips-out")).toBe(
       "--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s",
     );
     expect(
@@ -897,6 +893,11 @@ describe("Morph flüssiger: Schließen", () => {
     expect(rule(".allm-morph-close>*")).toBe(
       "transition:opacity calc(var(--allmi-fx-d)/3) ease",
     );
+    // Befund 6: Chips-Einblenden nur in der Gruppe des Zuklappens (die
+    // erste Gruppe wäre für .allm-morph-chips-in ohnehin überschrieben)
+    expect(
+      src.match(/\n  [^{\n]*\.allm-morph-chips-in[,{][^\n]*--allmi-fx-d:/g),
+    ).toHaveLength(1);
     // Befund 4/5: Ausblenden bleibt stehen (forwards), Einblenden ab
     // --allmi-chips-o
     expect(src).toContain(

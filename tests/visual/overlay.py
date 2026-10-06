@@ -1274,27 +1274,44 @@ def check_morph_flow(browser, base_url):
 # ---------------------------------------------------------------------------
 # Issue „Morph flüssiger“: Frames, kein Scroll im Lauf, Schließen, Chips
 # ---------------------------------------------------------------------------
-# Jeden Frame (rAF) bis 1500 ms aufzeichnen: Zeitstempel, scrollY, Morph-Klassen,
-# Chips (Opacity/Sichtbarkeit), Long Tasks (PerformanceObserver). Start direkt
-# vor der Aktion (Klick bzw. Escape); ausgewertet wird das Fenster, in dem die
-# Morph-Klassen am Fenster stehen (Lauf), plus der Frame davor.
+# Jeden Frame (rAF) bis 1500 ms aufzeichnen — pro Frame nur, was kein Layout
+# erzwingt: Zeitstempel, scrollY, Morph-Klassen am Fenster (die Messung soll
+# den Lauf nicht selbst verlangsamen). Geometrie und Chips (Opacity,
+# Sichtbarkeit) nur an festen Messpunkten: im ersten Frame mit Morph-Klasse
+# und danach am ersten Frame ab jeder Marke (ms seit diesem Frame), plus im
+# ersten Frame nach dem Lauf ("end"). Long Tasks per PerformanceObserver.
+# Start direkt vor der Aktion (Klick bzw. Escape); ausgewertet wird das
+# Fenster, in dem die Morph-Klassen am Fenster stehen (Lauf), plus der Frame
+# davor.
+MORPH_SAMPLES = [0, MORPH_MS * 0.5]
 MORPH_REC_JS = r"""
-() => {
-  const R = window.__mr = { f: [], lt: [], pre: scrollY, t0: performance.now() };
+(marks) => {
+  const R = window.__mr = { f: [], s: [], end: null, lt: [], pre: scrollY, t0: performance.now() };
   try {
     const po = new PerformanceObserver((l) => l.getEntries().forEach((e) => R.lt.push({ s: e.startTime, d: e.duration })));
     po.observe({ type: 'longtask' });
     R.po = po;
   } catch (e) { R.noLongtask = true; }
-  const tick = (ts) => {
-    const w = window.__q('#anything-llm-chat');
+  let w = null;
+  const win = () => (w && w.isConnected ? w : (w = window.__q('#anything-llm-chat')));
+  const measure = (at, ts) => {
     const c = window.__q('#anything-llm-inline-chips');
     const cs = c && getComputedStyle(c);
-    R.f.push({ t: ts, sy: scrollY,
-      morph: !!w && (w.classList.contains('allm-morph') || w.classList.contains('allm-morph-from')),
-      w: w ? w.getBoundingClientRect().width : 0,
+    const ww = win();
+    return { at, t: ts, w: ww ? ww.getBoundingClientRect().width : 0,
       chipOp: cs ? parseFloat(cs.opacity) : null, chipVis: cs ? cs.visibility : null,
-      chipHidden: c ? !!c.closest('[aria-hidden="true"]') : null });
+      chipHidden: c ? !!c.closest('[aria-hidden="true"]') : null };
+  };
+  const todo = [...marks].sort((a, b) => a - b);
+  let tm = null;
+  const tick = (ts) => {
+    const ww = win();
+    const cl = ww && ww.classList;
+    const morph = !!cl && (cl.contains('allm-morph') || cl.contains('allm-morph-from'));
+    R.f.push({ t: ts, sy: scrollY, morph });
+    if (morph && tm === null) tm = ts;
+    if (tm !== null && morph) while (todo.length && ts - tm >= todo[0]) R.s.push(measure(todo.shift(), ts));
+    if (tm !== null && !morph && !R.end) R.end = measure('end', ts);
     if (performance.now() - R.t0 < 1500) requestAnimationFrame(tick);
     else { R.done = true; R.po && R.po.disconnect(); }
   };
@@ -1303,12 +1320,14 @@ MORPH_REC_JS = r"""
 """
 
 
-def morph_record(page, action):
-    """Aufzeichnen, Aktion ausführen, Ende der Aufzeichnung abwarten."""
-    page.evaluate(MORPH_REC_JS)
+def morph_record(page, action, marks=None):
+    """Aufzeichnen (Messpunkte marks in ms ab dem ersten Morph-Frame), Aktion
+    ausführen, Ende der Aufzeichnung abwarten."""
+    page.evaluate(MORPH_REC_JS, MORPH_SAMPLES if marks is None else marks)
     action()
     page.wait_for_function("() => window.__mr && window.__mr.done", timeout=5000)
-    return page.evaluate("() => { const R = window.__mr; return { f: R.f, lt: R.lt, pre: R.pre, noLongtask: !!R.noLongtask }; }")
+    return page.evaluate("() => { const R = window.__mr; return { f: R.f, s: R.s, end: R.end, lt: R.lt, pre: R.pre,"
+                         " noLongtask: !!R.noLongtask }; }")
 
 
 def morph_window(rec):
@@ -1345,12 +1364,14 @@ def check_morph_frames(browser, base_url):
     ctx, page = morph_prepared(browser, base_url)
     try:
         runs = {"open": [], "close": []}
+        widths = {"open": [], "close": []}
         scroll = []
         longtask_api = True
         for _ in range(3):
             rec = morph_record(page, lambda: morph_click(page))
             win = morph_window(rec)
             runs["open"].append(frame_stats(win, rec["lt"]))
+            widths["open"].append([round(x["w"]) for x in rec["s"]] + ([round(rec["end"]["w"])] if rec["end"] else []))
             scroll.append(("open", rec["pre"], sorted({round(x["sy"], 1) for x in win})))
             longtask_api = longtask_api and not rec["noLongtask"]
             tv.settle(page, 300)
@@ -1358,6 +1379,7 @@ def check_morph_frames(browser, base_url):
             rec = morph_record(page, lambda: morph_escape(page))
             win = morph_window(rec)
             runs["close"].append(frame_stats(win, rec["lt"]))
+            widths["close"].append([round(x["w"]) for x in rec["s"]] + ([round(rec["end"]["w"])] if rec["end"] else []))
             scroll.append(("close", rec["pre"], sorted({round(x["sy"], 1) for x in win})))
             wait_bar_back(page)
             tv.settle(page, 300)
@@ -1371,7 +1393,8 @@ def check_morph_frames(browser, base_url):
             record(f"AK-3 ov-morph-frames {phase}: Median ≥ 90 % der rAF-Intervalle ≤ 20 ms", med >= 0.9 and longs == 0,
                    f"Median {med * 100:.1f} % (Läufe: " + ", ".join(
                        f"{s['share'] * 100:.1f} %/{s['n']} Int./max {s['max']:.1f} ms/{s['dur']:.0f} ms" for s in st)
-                   + f"); Long Tasks > 50 ms im Lauf: {longs}" + ("" if longtask_api else " (Long-Task-API fehlt)"))
+                   + f"); Long Tasks > 50 ms im Lauf: {longs}" + ("" if longtask_api else " (Long-Task-API fehlt)")
+                   + f"; Breite an den Messpunkten 0 %/50 %/Ende (nur dort Layout gelesen): {widths[phase]}")
         ok = all(len(v) == 1 and abs(v[0] - pre) < 0.5 for _, pre, v in scroll) and g["mount"]["y"] >= 0
         record("AK-1 morph overlay: kein Scroll während Öffnen/Schließen (Box im Viewport)", ok,
                "; ".join(f"{ph}: vorher {pre:.0f}, im Lauf {v}" for ph, pre, v in scroll) + f"; Viewport {vh} px")
@@ -1483,16 +1506,15 @@ def check_morph_chips(browser, base_url):
     ctx, page = morph_prepared(browser, base_url)
     try:
         n_chips = page.evaluate("() => window.__allmShadow.querySelectorAll('.allm-inline-chip').length")
-        rec = morph_record(page, lambda: morph_click(page))
-        win = morph_window(rec)
-        ops = [x["chipOp"] for x in win if x["chipVis"] == "visible" and x["chipHidden"]]
+        # Messpunkte: Ausblenden 360 ms ab Lauf-Beginn, Einblenden 240 ms nach 80 ms
+        rec = morph_record(page, lambda: morph_click(page), [0, 60, 120, 180, 240, 300])
+        ops = [x["chipOp"] for x in rec["s"] if x["chipVis"] == "visible" and x["chipHidden"]]
         mid_open = [o for o in ops if 0.02 < o < 0.98]
-        end_open = win[-1]["chipVis"] if win else None
+        end_open = rec["end"]["chipVis"] if rec["end"] else None
         tv.settle(page, 300)
         page.mouse.move(990, 690)
-        rec = morph_record(page, lambda: morph_escape(page))
-        winc = morph_window(rec)
-        opsc = [x["chipOp"] for x in winc if x["chipVis"] == "visible" and x["chipHidden"]]
+        rec = morph_record(page, lambda: morph_escape(page), [0, 100, 150, 200, 250, 300])
+        opsc = [x["chipOp"] for x in rec["s"] if x["chipVis"] == "visible" and x["chipHidden"]]
         mid_close = [o for o in opsc if 0.02 < o < 0.98]
         wait_bar_back(page)
         after = page.evaluate("() => { const c = window.__q('#anything-llm-inline-chips'); const cs = getComputedStyle(c); return { op: parseFloat(cs.opacity), vis: cs.visibility, cls: c.className }; }")
@@ -1500,8 +1522,9 @@ def check_morph_chips(browser, base_url):
               and len(mid_close) >= 3 and after["op"] == 1 and after["vis"] == "visible"
               and "allm-morph-chips" not in after["cls"])
         record("AK-4 morph Chips blenden aus (Öffnen) und wieder ein (Schließen)", ok,
-               f"{n_chips} Chips; Öffnen: {len(mid_open)} Frames mit 0<Opacity<1 (Start {ops[0] if ops else '-'}, "
-               f"Ende {end_open}); Schließen: {len(mid_close)} Zwischenframes; danach Opacity {after['op']}, {after['vis']}")
+               f"{n_chips} Chips; Öffnen: {len(mid_open)}/6 Messpunkte mit 0<Opacity<1 (Start {ops[0] if ops else '-'}, "
+               f"Ende {end_open}); Schließen: {len(mid_close)}/6 Messpunkte dazwischen "
+               f"({', '.join(f'{o:.2f}' for o in opsc)}); danach Opacity {after['op']}, {after['vis']}")
     finally:
         ctx.close()
 
