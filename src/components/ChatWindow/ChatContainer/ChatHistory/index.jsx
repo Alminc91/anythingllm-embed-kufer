@@ -2,7 +2,7 @@ import HistoricalMessage from "./HistoricalMessage";
 import PromptReply from "./PromptReply";
 import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
-import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
+import PanelWelcome, { PanelGreeting, SuggestedPills } from "./PanelWelcome";
 import {
   courseCardsAbove,
   courseCardsEnabled,
@@ -230,6 +230,13 @@ export default function ChatHistory({
       })}
     >
       <div className="allm-flex allm-flex-col allm-gap-y-4">
+        {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
+            Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
+            darunter gibt es nur im leeren Chat. Mit greetingStyle "text"
+            unverändert. */}
+        {settings?.greetingStyle === "bubble" && (
+          <PanelGreeting settings={settings} />
+        )}
         {history.map((props, index) => {
           const isLastMessage = index === history.length - 1;
           const live =

@@ -460,7 +460,7 @@ const answer = (extra = {}) => ({
 const cards = (el) => [...el.querySelectorAll(".allm-course-card")];
 
 describe("Teaser als Untertext (AK-5)", () => {
-  it("::v3-teaser — unter dem Titel, 13 px, Textfarbe, max. 2 Zeilen, in der Beschreibung", () => {
+  it("::v3-teaser — unter dem Titel, 13 px, Textfarbe, bis zu 3 Zeilen, in der Beschreibung", () => {
     const el = mount(
       h(ChatHistory, {
         settings: ABOVE,
@@ -478,9 +478,13 @@ describe("Teaser als Untertext (AK-5)", () => {
     );
     expect(teaser.style.fontSize).toBe("13px");
     expect(teaser.style.color).toContain("--allmi-text");
+    // AK-3 (Feinschliff): bis zu 3 Zeilen statt 2 — 15–20 Wörter ohne
+    // Ellipse; die Klammer bleibt nur als letzter Ausweg
     expect(teaser.style.webkitLineClamp || teaser.style.WebkitLineClamp).toBe(
-      "2",
+      "3",
     );
+    expect(teaser.style.overflow).toBe("hidden");
+    expect(teaser.style.textOverflow).toBe("");
     expect(first.getAttribute("aria-describedby")).toContain(teaser.id);
     expect(first.querySelector(".allm-course-schedule").textContent).toBe(
       "Mo · 18:00 Uhr · 16 Abende",

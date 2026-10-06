@@ -554,6 +554,95 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
 });
 
 // ---------------------------------------------------------------------------
+describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
+  const HIST = [
+    { role: "user", content: "Gibt es Yoga?", sentAt: 1 },
+    { role: "assistant", content: "Ja, montags.", sentAt: 2, chatId: 1 },
+  ];
+  const BUBBLE = {
+    ...BASE,
+    enableStt: false,
+    defaultMessages: MSGS,
+    suggestionStyle: "pills",
+    greetingStyle: "bubble",
+    privacyNotice: "bubble",
+    privacyUrl: "/datenschutz",
+  };
+  const list = () => $("#chat-history").firstElementChild;
+
+  it("AK-2: nach der ersten Frage bleibt die Blase (mit Datenschutz) erste Nachricht, Pillen weg", () => {
+    render(
+      <ChatContainer
+        sessionId="s-1"
+        conversationId="c-1"
+        knownHistory={[]}
+        settings={BUBBLE}
+      />,
+    );
+    expect($("#anything-llm-suggestion-pills")).not.toBe(null);
+    act(() => sendSuggestion("Yoga"));
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect($("#anything-llm-suggestion-pills")).toBe(null);
+    expect($$("#anything-llm-greeting-bubble")).toHaveLength(1);
+    const first = list().firstElementChild;
+    expect(first.id).toBe("anything-llm-panel-welcome");
+    expect(first.hasAttribute("data-persistent")).toBe(true);
+    expect(first.querySelector("#anything-llm-bubble-privacy a")).not.toBe(
+      null,
+    );
+    // danach die Frage
+    expect(first.nextElementSibling.textContent).toContain("Yoga");
+  });
+
+  it("AK-2: geladener Verlauf (Reload) -> Blase genau einmal an erster Stelle, keine Pillen", () => {
+    render(
+      <ChatContainer
+        sessionId="s-1"
+        conversationId="c-1"
+        knownHistory={HIST}
+        settings={BUBBLE}
+      />,
+    );
+    expect($$("#anything-llm-greeting-bubble")).toHaveLength(1);
+    expect(list().firstElementChild.id).toBe("anything-llm-panel-welcome");
+    expect(list().children).toHaveLength(3); // Blase + 2 Nachrichten
+    expect($("#anything-llm-suggestion-pills")).toBe(null);
+    expect($$(".msg-suggestion")).toHaveLength(0);
+    // Blase ist kein Chat-Eintrag: nichts gesendet
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+
+  it("ohne Datenschutz in der Blase: kleiner greeting-Text bleibt unter der Blase", () => {
+    render(
+      <ChatHistory
+        settings={{ greetingStyle: "bubble", greeting: GREETING }}
+        history={HIST}
+      />,
+    );
+    const welcome = list().firstElementChild;
+    expect(welcome.querySelector("#anything-llm-greeting-bubble")).not.toBe(
+      null,
+    );
+    expect(
+      welcome.querySelector("#anything-llm-greeting-small").textContent,
+    ).toBe(GREETING);
+  });
+
+  it("NAK-1: greetingStyle text (Bestandskunden) -> Verlauf unverändert, keine Blase, kein greeting", () => {
+    render(
+      <ChatHistory
+        settings={{ greeting: GREETING, defaultMessages: MSGS }}
+        history={HIST}
+      />,
+    );
+    expect($("#anything-llm-greeting-bubble")).toBe(null);
+    expect($("#anything-llm-panel-welcome")).toBe(null);
+    expect(container.textContent).not.toContain(GREETING);
+    expect(list().children).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe("Kopfzeile: Untertitel, Online-Punkt, Icon (AK-4)", () => {
   const props = {
     sessionId: "s-1",

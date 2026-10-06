@@ -61,7 +61,8 @@ const blockLinkStyle = {
 const mutedStyle = { color: MUTED, fontSize: "12px", lineHeight: "17px" };
 
 // Kurskarten v3: KI-Teaser als Untertext unter dem Titel — 13 px, Textfarbe,
-// höchstens 2 Zeilen (Zeilenklammer). Blendet nur ein, wenn er nach der
+// bis zu 3 Zeilen (15–20 Wörter passen auch in eine schmale Karte ohne
+// Ellipse; die Zeilenklammer kürzt nur als letzter Ausweg). Blendet nur ein, wenn er nach der
 // schon sichtbaren Karte ankommt (Teaser, teaserFadeIn; Keyframes
 // allm-course-teaser-in in main.jsx, ohne Bewegung bei
 // prefers-reduced-motion).
@@ -71,7 +72,7 @@ const teaserStyle = {
   lineHeight: "18px",
   display: "-webkit-box",
   WebkitBoxOrient: "vertical",
-  WebkitLineClamp: 2,
+  WebkitLineClamp: 3,
   overflow: "hidden",
   overflowWrap: "anywhere",
 };

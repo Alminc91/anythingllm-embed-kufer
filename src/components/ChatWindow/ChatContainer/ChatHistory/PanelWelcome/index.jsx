@@ -6,8 +6,9 @@ import { panelPills, panelTexts, privacyPoints } from "@/utils/layout";
 import { sendSuggestion } from "../..";
 import Pill from "../Pill";
 
-// Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B), nur im leeren
-// Chat und nur auf Wunsch (suggestionStyle "pills" / greetingStyle "bubble").
+// Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B), nur auf Wunsch
+// (suggestionStyle "pills" / greetingStyle "bubble"); Vorschläge nur im
+// leeren Chat, die Begrüßungsblase bleibt auch im Verlauf (PanelGreeting).
 // Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
 // Theme); Texte immer als Text, nie als HTML.
 
@@ -80,9 +81,18 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
   );
 }
 
+// Begrüßung bleibt im Verlauf (greetingStyle "bubble"): nach der ersten
+// Frage und nach dem Laden eines Verlaufs steht sie als festes erstes
+// Element über den Nachrichten (kein Chat-Eintrag, wird nie gesendet oder
+// gespeichert; ChatHistory) — Blase mit Datenschutz-Absatz bzw. kleinem
+// greeting-Text, ohne die Vorschläge.
+export function PanelGreeting({ settings = {} }) {
+  return <WelcomeBlock settings={settings} persistent />;
+}
+
 // Blase (Avatar + Text) samt kleinem greeting-Text; children = Vorschläge
 // zwischen Blase und greeting-Text (nur im leeren Chat).
-function WelcomeBlock({ settings, children = null }) {
+function WelcomeBlock({ settings, persistent = false, children = null }) {
   const texts = panelTexts(settings);
   const privacyInBubble = settings.privacyNotice === "bubble";
   const avatar =
@@ -92,6 +102,7 @@ function WelcomeBlock({ settings, children = null }) {
   return (
     <div
       id="anything-llm-panel-welcome"
+      data-persistent={persistent ? "" : undefined}
       style={{ display: "flex", flexDirection: "column", gap: "14px" }}
     >
       <div

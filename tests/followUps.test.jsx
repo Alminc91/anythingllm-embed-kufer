@@ -480,6 +480,39 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     expect(p.style.whiteSpace).toBe("nowrap");
   });
 
+  it("AK-1: Hover/Fokus füllt im Akzent, Text weiß — Klasse nur an Folgefragen-Pillen, Regel im Widget-CSS", async () => {
+    render(<ChatHistory settings={PILLS} history={HISTORY} />);
+    for (const b of pills())
+      expect(b.className.split(" ")).toEqual(
+        expect.arrayContaining(["allm-inline-chip", "allm-pill-accent"]),
+      );
+    render(
+      <SuggestedPills
+        settings={{ suggestionStyle: "pills", defaultMessages: ["Kurse?"] }}
+      />,
+    );
+    expect(
+      $$("#anything-llm-suggestion-pills button")[0].className,
+    ).not.toContain("allm-pill-accent");
+    // CSS-Regel (main.jsx, customCss im Shadow DOM): Hover + Tastaturfokus
+    // Hintergrund/Rand Akzent, Text weiß, Übergang --allmi-transition,
+    // Fokusring sichtbar
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(`${process.cwd()}/src/main.jsx`, "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    expect(css).toContain(
+      ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: #FFFFFF !important; }",
+    );
+    expect(css).toMatch(
+      /\.allm-inline-chip\.allm-pill-accent \{ transition: background-color var\(--allmi-transition, 200ms\)[^}]*color var\(--allmi-transition, 200ms\)/,
+    );
+    expect(css).toContain(
+      ".allm-pill-accent:focus-visible { outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;",
+    );
+  });
+
   it("Kurskarten oben: Pillen ebenfalls unter der letzten Antwort", () => {
     render(
       <ChatHistory

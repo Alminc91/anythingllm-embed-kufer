@@ -26,6 +26,10 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Kurskarten v3: KI-Teaser blendet ein (.allm-course-teaser-in), nur wenn er
 // nach der schon sichtbaren Karte ankommt (nicht beim Verlauf-Laden, nicht
 // unter der Antwort); ohne Bewegung bei prefers-reduced-motion.
+// Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
+// Tastaturfokus füllen im Akzent, Text weiß (Farben stehen inline ->
+// !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
+// sonst 2px Akzent (!important gegen die allgemeine Fokus-Regel mit ID).
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
 const customCss = `
   /**
@@ -202,6 +206,21 @@ const customCss = `
   }
   .allm-inline-chip:hover {
     border-color: var(--allmi-accent);
+  }
+  .allm-inline-chip.allm-pill-accent {
+    transition: background-color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
+      color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
+      border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
+  }
+  .allm-pill-accent:hover,
+  .allm-pill-accent:focus-visible {
+    background-color: var(--allmi-accent, #01a5a9) !important;
+    border-color: var(--allmi-accent, #01a5a9) !important;
+    color: #FFFFFF !important;
+  }
+  .allm-pill-accent:focus-visible {
+    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;
+    outline-offset: 2px;
   }
 
   /* Inline-Box: Aufklapp-Effekte (inlineEffect, utils/layout.js

@@ -84,6 +84,10 @@ def pixel_cases():
         ("privacy-modal-mobile", {"attrs": PRIVACY}, mock(), "#anything-llm-privacy-notice", tv.MOBILE),
         ("privacy-bubble", {"attrs": PRIVACY_BUBBLE}, mock(), "#anything-llm-bubble-privacy", None),
         ("disclaimer-footer", {"attrs": DISCLAIMER}, mock(), "#anything-llm-ai-disclaimer", None),
+        # Feinschliff AK-2: Begrüßungsblase bleibt bei geladenem Verlauf erste
+        # Nachricht (Datenschutz in der Blase), keine Pillen
+        ("panel-greeting-persist", {"attrs": PRIVACY_BUBBLE}, mock(history=tv.HISTORY_ANSWER),
+         ".allm-anything-llm-assistant-message a", None),
     ]
 
 
@@ -163,7 +167,53 @@ def check_pills(browser, base_url):
         st = page.evaluate("""() => ({
           bubble: !!window.__q('#anything-llm-greeting-bubble'),
           sub: window.__q('#anything-llm-header-subtitle') && window.__q('#anything-llm-header-subtitle').textContent })""")
-        record("AK-3 nach dem Senden: Verlauf statt Begrüßung", not st["bubble"], json.dumps(st, ensure_ascii=False))
+        st.update(page.evaluate(PERSIST_PROBE))
+        record("AK-2 (Feinschliff) nach dem Senden: Begrüßungsblase bleibt erste Nachricht, Pillen weg",
+               st["bubble"] and st["first"] and st["count"] == 1 and not st["pills"], json.dumps(st, ensure_ascii=False))
+    finally:
+        ctx.close()
+
+
+PERSIST_PROBE = """() => {
+  const list = window.__q('#chat-history') && window.__q('#chat-history').firstElementChild;
+  const first = list && list.firstElementChild;
+  return { first: !!first && first.id === 'anything-llm-panel-welcome' && first.hasAttribute('data-persistent'),
+           count: window.__allmShadow.querySelectorAll('#anything-llm-greeting-bubble').length,
+           pills: !!window.__q('#anything-llm-suggestion-pills'),
+           privacy: !!window.__q('#chat-history #anything-llm-bubble-privacy'),
+           items: list ? list.children.length : 0 };
+}"""
+
+
+def check_greeting_persist(browser, base_url):
+    """Feinschliff AK-2: geladener Verlauf -> Begrüßungsblase (mit Datenschutz)
+    genau einmal an erster Stelle, keine Pillen; nach dem Neuladen ebenso.
+    NAK-1: greetingStyle text (Standard) -> Verlauf ohne Blase."""
+    m = mock(history=tv.HISTORY_ANSWER)
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, m)
+    try:
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st = page.evaluate(PERSIST_PROBE)
+        page.reload()
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st2 = page.evaluate(PERSIST_PROBE)
+        ok = all(x["first"] and x["count"] == 1 and not x["pills"] and x["privacy"] and x["items"] == 3
+                 for x in (st, st2)) and m.stream_requests == []
+        record("AK-2 (Feinschliff) Verlauf/Neuladen: Blase genau einmal an erster Stelle, keine Pillen", ok,
+               json.dumps({"geladen": st, "neu geladen": st2}))
+    finally:
+        ctx.close()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**OPEN, "suggestion-style": "pills",
+                                                           "default-messages": MSGS}},
+                             mock(history=tv.HISTORY_ANSWER))
+    try:
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st = page.evaluate(PERSIST_PROBE)
+        record("NAK-1 (Feinschliff) greetingStyle text: Verlauf ohne Blase", st["count"] == 0 and st["items"] == 2,
+               json.dumps(st))
     finally:
         ctx.close()
 
@@ -580,6 +630,7 @@ def main():
                 check_dot_ring_dark_header(browser, base_url)
                 check_privacy_bubble(browser, base_url)
                 check_bubble_two_paragraphs(browser, base_url)
+                check_greeting_persist(browser, base_url)
                 check_disclaimer(browser, base_url)
             browser.close()
     finally:
