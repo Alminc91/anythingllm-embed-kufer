@@ -34,6 +34,15 @@ Eintrag -> Karte nur mit Titel) + DOM-Prüfung below/above.
 Getrennte Rundung (--allm-radius-card): Zustand cc-radius-card (Panel 40 px,
 Karten 14 px, Blasen 18 px) + Messung mit/ohne --allm-radius-card.
 
+Kurskarten v3 (Fork >= 7.13): Dauer/Ort aus den Kopfzeilen (sessions/venue)
+und KI-Teaser je Karte (Chunk type "courseTeasers"): Zustände cc-v3-meta
+(Kopf-/Metazeile), cc-v3-teaser und cc-v3-teaser-mobile (Untertext, 2-Zeilen-
+Klammer bei 360 px) + DOM-Prüfung check_v3 (Teaser kommt nach den Karten,
+Karten bleiben stehen, Verlauf-Reload, Teaserzeilen eines älteren Servers nie
+sichtbar). Nur die neuen Zustände gezielt erzeugen:
+  python3 tests/visual/course_cards.py --baseline --new-states \
+      --only cc-v3-meta cc-v3-teaser cc-v3-teaser-mobile
+
 Ergebnisse: tests/visual/results/course-cards-*.png, summary-course-cards.json.
 """
 
@@ -154,6 +163,55 @@ def announced_history():
     h = history(ANSWER_SHORT, course_sources=ANNOUNCED + [BY[9]])
     h[1]["courseCardsAnnounced"] = len(ANNOUNCED)
     return h
+
+
+# Kurskarten v3: Donau-Yoga mit Dauer/Ort (Kopfzeilen "Dauer:"/"Kursort:")
+V3 = [
+    {**FIX["donauYoga"][0], "sessions": "16 Abende", "venue": "Realschule"},
+    {**FIX["donauYoga"][1], "sessions": "12 x", "venue": "Realschule"},
+]
+TEASERS_V3 = {
+    V3[0]["url"]: "Für Yoga-Erfahrene: kräftigende Haltungen, ruhige Atemübungen und ein "
+                  "entspannter Ausklang am Montagabend.",
+    V3[1]["url"]: "Sanfter Einstieg mit etwas Vorerfahrung – Dehnung, Atmung und Entspannung nach "
+                  "einem langen Arbeitstag, ideal zum Abschalten unter der Woche.",
+}
+ANSWER_V3 = (
+    "Ja, zwei Yogakurse am Abend passen gut zu Ihrer Frage. "
+    "Möchten Sie eher gezielt weitermachen oder in Ruhe einsteigen? Alle Kurse finden Sie unter "
+    "[Gesundheit](https://aw.donau.kufer.de/programm/gesundheit)."
+)
+TEASER_LINES_V3 = "[[TEASER 0: Kräftigende Haltungen am Montagabend.]]\n[[TEASER 1: Sanfter Einstieg dienstags.]]\n"
+
+
+def v3_events(uuid="u-1", parts=4, teasers=True, passthrough=False):
+    """Kurskarten v3: courseSources (vorab) -> courseTeasers -> Text -> Abschluss.
+    passthrough: älterer Server — kein Teaser-Chunk, Marker + Teaserzeilen im Text."""
+    text = ("[[KARTEN: 0, 1]]\n" + TEASER_LINES_V3 + ANSWER_V3) if passthrough else ANSWER_V3
+    size = max(1, len(text) // parts + 1)
+    chunks = [text[i : i + size] for i in range(0, len(text), size)]
+    ev = []
+    if not passthrough:
+        ev.append({"uuid": uuid, "type": "courseSources", "courseSources": V3, "close": False, "error": False})
+        if teasers:
+            ev.append({"uuid": uuid, "type": "courseTeasers", "teasers": TEASERS_V3, "close": False, "error": False})
+    ev += [
+        {"uuid": uuid, "type": "textResponseChunk", "close": False, "sources": [], "textResponse": c}
+        for c in chunks
+    ]
+    ev[-1]["close"] = True
+    ev.append({"uuid": uuid, "type": "finalizeResponseStream", "close": True, "error": False, "chatId": 4712})
+    return ev
+
+
+def v3_history(teasers=True):
+    h = history(ANSWER_V3, course_sources=V3)
+    h[1]["courseCardsAnnounced"] = len(V3)
+    if teasers:
+        h[1]["courseTeasers"] = TEASERS_V3
+    return h
+
+
 SMALL = {"width": 360, "height": 740}
 CARD_SEL = "[data-course-cards]"
 # Mockup vhs Rhein: Panel 40 px, Karten 14 px, Blasen 18 px (--allm-radius-card)
@@ -258,6 +316,13 @@ def pixel_cases():
         # Karten getrennt vom Panel gerundet (--allm-radius-card)
         ("cc-radius-card", {"attrs": CARDS, "css": RADIUS_CSS}, tv.Mock(config={}, stream=stream_events(ANSWER_3)),
          "#message-input", "send", None, "new"),
+        # Kurskarten v3: Dauer/Ort (ohne Teaser) und KI-Teaser als Untertext
+        ("cc-v3-meta", {"attrs": ABOVE}, tv.Mock(config={}, history=v3_history(teasers=False)), CARD_SEL, None,
+         None, "new"),
+        ("cc-v3-teaser", {"attrs": ABOVE}, tv.Mock(config={}, stream=v3_events()), "#message-input", "send", None,
+         "new"),
+        ("cc-v3-teaser-mobile", {"attrs": ABOVE}, tv.Mock(config={}, stream=v3_events()), "#message-input", "send",
+         SMALL, "new"),
     ]
 
 
@@ -700,7 +765,7 @@ ABOVE_PROBE_JS = r"""
 """
 
 
-def slow_page(browser, base_url, attrs, events, delay=250):
+def slow_page(browser, base_url, attrs, events, delay=250, extra_js=None):
     plan = {"events": events, "delay": delay}
 
     def before(ctx, page):
@@ -708,6 +773,8 @@ def slow_page(browser, base_url, attrs, events, delay=250):
         ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan)};")
         ctx.add_init_script(SLOW_STREAM_JS)
         ctx.add_init_script(ABOVE_PROBE_JS)
+        if extra_js:
+            ctx.add_init_script(extra_js)
 
     ctx, page = tv.open_page(browser, base_url, {"attrs": attrs}, tv.Mock(config={}), before_goto=before)
     tv.wait_shadow(page, "#message-input")
@@ -854,6 +921,147 @@ def check_radius_card(browser, base_url):
             ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Kurskarten v3: Dauer/Ort + KI-Teaser
+# ---------------------------------------------------------------------------
+# Protokoll: erster Teaser (Zeit), Kartenknoten vor/nach dem Teaser, rohe
+# Teaserzeilen im sichtbaren Text.
+V3_PROBE_JS = r"""
+(() => {
+  window.__v3 = { teaserAt: null, raw: 0, cardsBefore: null };
+  const watch = () => {
+    const s = window.__allmShadow;
+    if (!s) return requestAnimationFrame(watch);
+    new MutationObserver(() => {
+      const p = window.__v3;
+      const cards = [...s.querySelectorAll(".allm-course-card")];
+      if (s.querySelector(".allm-course-teaser")) {
+        if (p.teaserAt === null) p.teaserAt = performance.now();
+      } else if (cards.length) {
+        p.cardsBefore = cards;
+      }
+      if (/\[\[TEASER|KARTEN/.test(s.textContent)) p.raw++;
+    }).observe(s, { childList: true, subtree: true, characterData: true });
+  };
+  watch();
+})();
+"""
+
+V3_DOM_JS = r"""
+() => {
+  const s = window.__allmShadow;
+  const cards = [...s.querySelectorAll(".allm-course-card")];
+  const before = window.__v3 ? window.__v3.cardsBefore : null;
+  return {
+    sameNodes: !!before && before.length === cards.length && before.every((c, i) => c === cards[i]),
+    cards: cards.map((c) => {
+      const t = c.querySelector(".allm-course-teaser");
+      const title = c.querySelector(".allm-course-title");
+      const cs = t ? getComputedStyle(t) : null;
+      return {
+        title: title ? title.textContent : null,
+        schedule: (c.querySelector(".allm-course-schedule") || {}).textContent || null,
+        details: (c.querySelector(".allm-course-details") || {}).textContent || null,
+        teaser: t ? t.textContent : null,
+        afterTitle: !!t && t.previousElementSibling === title,
+        h: t ? t.getBoundingClientRect().height : null,
+        lh: cs ? parseFloat(cs.lineHeight) : null,
+        fs: cs ? cs.fontSize : null,
+        color: cs ? cs.color : null,
+        titleColor: title ? getComputedStyle(title).color : null,
+        clamp: cs ? cs.webkitLineClamp : null,
+        described: !!t && (c.getAttribute("aria-describedby") || "").includes(t.id),
+      };
+    }),
+    text: (s.querySelector(".allm-anything-llm-assistant-message") || {}).textContent || "",
+  };
+}
+"""
+
+
+def check_v3(browser, base_url):
+    """Kurskarten v3 (AK-2/AK-5/NAK-3): Dauer/Ort in Kopf- und Metazeile; KI-
+    Teaser kommt nach den Karten (Chunk courseTeasers), steht unter dem Titel
+    (13 px, Textfarbe, höchstens 2 Zeilen), Karten bleiben dieselben Knoten an
+    derselben Stelle; Verlauf-Reload zeigt ihn; Teaserzeilen eines älteren
+    Servers sind nie sichtbar."""
+    events = v3_events(parts=6)
+    for label, viewport in (("Desktop", None), ("360 px", SMALL)):
+        plan = {"events": events, "delay": 250}
+
+        def before(ctx, page):
+            freeze(ctx, page)
+            ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan)};")
+            ctx.add_init_script(SLOW_STREAM_JS)
+            ctx.add_init_script(ABOVE_PROBE_JS)
+            ctx.add_init_script(V3_PROBE_JS)
+
+        ctx, page = tv.open_page(browser, base_url, {"attrs": ABOVE}, tv.Mock(config={}), viewport=viewport,
+                                 before_goto=before)
+        try:
+            tv.wait_shadow(page, "#message-input")
+            send(page)
+            page.wait_for_function("() => window.__streamLog.length >= %d" % len(events), timeout=20000)
+            page.wait_for_timeout(800)
+            p = page.evaluate("() => window.__probe")
+            v = page.evaluate("() => window.__v3")
+            d = page.evaluate(V3_DOM_JS)
+            want = [TEASERS_V3[c["url"]] for c in V3]
+            got = [c["teaser"] for c in d["cards"]]
+            record(f"AK-5 Teaser unter dem Titel ({label})", got == want and all(c["afterTitle"] for c in d["cards"]),
+                   f"{[g[:25] if g else g for g in got]}")
+            ok_style = all(c["fs"] == "13px" and c["color"] == c["titleColor"] for c in d["cards"])
+            record(f"AK-5 Teaser 13 px in Textfarbe ({label})", ok_style,
+                   f"{[(c['fs'], c['color']) for c in d['cards']]}")
+            ok_clamp = all(c["clamp"] == "2" and c["h"] <= 2 * c["lh"] + 1 for c in d["cards"])
+            record(f"AK-5 höchstens 2 Zeilen ({label})", ok_clamp,
+                   f"Höhen {[round(c['h'], 1) for c in d['cards']]} bei Zeilenhöhe {d['cards'][0]['lh']}")
+            record(f"AK-5 Teaser in der Kartenbeschreibung ({label})", all(c["described"] for c in d["cards"]),
+                   "aria-describedby")
+            lead = (v["teaserAt"] - p["cardsAt"]) if v["teaserAt"] and p["cardsAt"] else None
+            record(f"AK-5 Karten zuerst, Teaser nachgefüllt ({label})", lead is not None and lead > 0,
+                   f"Teaser {lead:+.0f} ms nach den Karten" if lead is not None else f"{v} / {p}")
+            tops = p["tops"]
+            record(f"AK-5 kein Sprung: dieselben Kartenknoten, Fläche fest ({label})",
+                   d["sameNodes"] and p["adds"] == 1 and p["removes"] == 0 and bool(tops)
+                   and max(tops) - min(tops) <= 0.5,
+                   f"gleiche Knoten {d['sameNodes']}, eingefügt {p['adds']}x, Lage {min(tops) if tops else None}–"
+                   f"{max(tops) if tops else None} px")
+            record(f"AK-2 Kopf-/Metazeile mit Dauer und Ort ({label})",
+                   d["cards"][0]["schedule"] == "Mo · 18:00 Uhr · 16 Abende"
+                   and d["cards"][0]["details"] == "ab 14.09.2026 · Realschule · 60 €",
+                   f"„{d['cards'][0]['schedule']}“ / „{d['cards'][0]['details']}“")
+            record(f"Teaser/Marker nie als Text ({label})", v["raw"] == 0 and "TEASER" not in d["text"],
+                   f"{v['raw']} Sichtungen")
+        finally:
+            ctx.close()
+
+    # Verlauf-Reload: courseTeasers aus /history
+    ctx, page = tv.open_page(browser, base_url, {"attrs": ABOVE}, tv.Mock(config={}, history=v3_history()),
+                             before_goto=freeze)
+    try:
+        tv.wait_shadow(page, CARD_SEL)
+        d = page.evaluate(V3_DOM_JS)
+        record("AK-5 Verlauf-Reload zeigt die Teaser", [c["teaser"] for c in d["cards"]]
+               == [TEASERS_V3[c["url"]] for c in V3], f"{len(d['cards'])} Karten")
+    finally:
+        ctx.close()
+
+    # Älterer Server (< 7.13) reicht Marker + Teaserzeilen im Text durch
+    for label, attrs in (("above", ABOVE), ("below", CARDS)):
+        ev = v3_events(parts=9, passthrough=True)
+        ctx, page = slow_page(browser, base_url, attrs, ev, delay=120, extra_js=V3_PROBE_JS)
+        try:
+            v = page.evaluate("() => window.__v3")
+            txt = page.evaluate("() => window.__allmShadow.querySelector('.allm-anything-llm-assistant-message')"
+                                ".textContent")
+            record(f"NAK Teaserzeilen vom Server durchgereicht ({label}): nie sichtbar",
+                   v["raw"] == 0 and "TEASER" not in txt and txt.strip().startswith("Ja, zwei"),
+                   f"{v['raw']} Sichtungen, Text „{txt.strip()[:30]}…“")
+        finally:
+            ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true")
@@ -880,6 +1088,7 @@ def main():
                 check_ak4c(browser, base_url)
                 check_fallback(browser, base_url)
                 check_radius_card(browser, base_url)
+                check_v3(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()

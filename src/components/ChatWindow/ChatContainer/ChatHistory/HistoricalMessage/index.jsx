@@ -451,6 +451,8 @@ const HistoricalMessage = forwardRef(
       role,
       sources = [],
       courseSources = null,
+      // Kurskarten v3: KI-Teaser je Karte (URL -> Text)
+      courseTeasers = null,
       courseCards = "off",
       // Kurskarten v2 ("above"): Auswahl des umgebenden Blocks (ChatHistory,
       // Karten über der Antwort) -> hier nur noch der Abschlusslink
@@ -605,6 +607,7 @@ const HistoricalMessage = forwardRef(
             <CourseCards
               reply={responseContent}
               courseSources={courseSources}
+              courseTeasers={courseTeasers}
               courseCards={courseCards}
               fallback={courseCardsFinal}
               selection={courseCardsSelection}

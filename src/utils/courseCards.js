@@ -33,6 +33,16 @@
 // `courseCardsAnnounced` Einträge erscheinen dann in Server-Reihenfolge über
 // der Antwort, verlinkte weitere Kurse werden angehängt
 // (selectAnnouncedCourseCards). Ohne Ankündigung gilt die Auswahl oben.
+//
+// Kurskarten v3 (Fork >= 7.13): courseSources tragen optional `sessions`
+// (Kopfzeile "Dauer:", z. B. "16 Abende") und `venue` (Kopfzeile "Kursort:",
+// Teil vor dem ersten ";", z. B. "Realschule") -> Kopfzeile "Mo · 18:00 Uhr ·
+// 16 Abende", Metazeile "ab 14.09.2026 · Realschule · 60 €" (ein Ort ersetzt
+// "vor Ort"; "online" bleibt). Dazu KI-Teaser je Karte (Chunk type
+// "courseTeasers", { url: text }, nach den angekündigten Karten), als
+// Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]"
+// direkt hinter einem Marker entfernt das Widget zusätzlich selbst
+// (Übergangs-Abwehr für ältere Server, stripTeaserLines).
 
 export const COURSE_CARDS_MAX = 5;
 export const COURSE_COMPACT_MAX = 10;
@@ -102,6 +112,17 @@ const GENERIC_LINK_TEXT_RX =
 // Karten-Marker des Servers ("[[KARTEN: 0, 2]]" in der ersten Antwortzeile)
 const CARDS_MARKER_TAG = "[[KARTEN:";
 const CARDS_MARKER_BUFFER_MAX = 120;
+// Kurskarten v3: Teaserzeilen "[[TEASER n: …]]" direkt nach dem Marker.
+// Grenzen spiegeln embedCardsMarker.js im Fork: je Zeile höchstens 240
+// Zeichen, Schluss = letztes "]]" vor dem Zeilenende, höchstens 12 Zeilen
+// (COURSE_SOURCES_MAX, so viele Marker-Nummern gibt es höchstens).
+const TEASER_TAG = "[[TEASER";
+const TEASER_LINE_MAX = 240;
+const TEASER_LINES_MAX = 12;
+const TEASER_LINE_RX = /^\[\[TEASER[ \t]*\d{1,3}[ \t]*:[^\n]*\]\]$/i;
+export const TEASER_MAX_LEN = 200;
+// Einblenden nur, wenn der Teaser gerade eben (nach der Karte) angekommen ist
+export const TEASER_FADE_WINDOW_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -125,11 +146,26 @@ export function courseCardsAbove(settings = {}) {
  * Gültige oder kaputte Markerzeile -> entfernt (inkl. Leerraum dahinter).
  * partial (Antwort streamt noch): ein begonnener, noch offener Marker
  * (höchstens 120 Zeichen, wie der Server-Filter) ergibt "" statt Rohtext.
+ * Teaserzeilen (Kurskarten v3) werden nur direkt hinter einem Marker
+ * entfernt: hinter dem hier entfernten oder — afterMarker — hinter einem,
+ * den der Server schon verarbeitet hat (Antwort mit angekündigten Karten).
+ * Ohne Marker bleibt der Text unverändert, wie im Server.
  * @param {string} text
- * @param {{partial?: boolean}} [options]
+ * @param {{partial?: boolean, afterMarker?: boolean}} [options]
  * @returns {string}
  */
-export function stripCardsMarker(text, { partial = false } = {}) {
+export function stripCardsMarker(
+  text,
+  { partial = false, afterMarker = false } = {},
+) {
+  const rest = stripMarkerLine(text, { partial });
+  // rest !== text <=> Markerzeile entfernt bzw. noch offen (partial -> "")
+  if (rest === text && !afterMarker) return text;
+  if (typeof rest !== "string" || rest.length === 0) return rest;
+  return stripTeaserLines(rest, { partial });
+}
+
+function stripMarkerLine(text, { partial = false } = {}) {
   if (typeof text !== "string" || text.length === 0) return text;
   const body = text.trimStart();
   const head = body.slice(0, CARDS_MARKER_TAG.length).toUpperCase();
@@ -143,13 +179,66 @@ export function stripCardsMarker(text, { partial = false } = {}) {
   return partial && body.length <= CARDS_MARKER_BUFFER_MAX ? "" : text;
 }
 
+// Länge der Teaserzeile am Anfang von body (bis einschließlich ihres letzten
+// "]]" vor dem Zeilenende); null = keine bzw. kaputte Zeile (bleibt Text),
+// undefined = noch offen (partial: erst Zeilenende, 240-Zeichen-Grenze oder
+// Antwortende entscheiden — der Teaser darf selbst "]]" enthalten).
+function teaserLineLength(body, partial) {
+  const head = body.slice(0, TEASER_TAG.length).toUpperCase();
+  if (!TEASER_TAG.startsWith(head)) return null;
+  const win = body.slice(0, TEASER_LINE_MAX);
+  const newline = win.indexOf("\n");
+  if (partial && newline === -1 && body.length < TEASER_LINE_MAX)
+    return undefined;
+  const line = newline === -1 ? win : win.slice(0, newline);
+  const close = line.lastIndexOf("]]");
+  if (close === -1 || !TEASER_LINE_RX.test(line.slice(0, close + 2)))
+    return null;
+  return close + 2;
+}
+
+/**
+ * Kurskarten v3: Teaserzeilen "[[TEASER n: …]]" am Anfang eines Texts
+ * entfernen, der direkt hinter einem Karten-Marker steht (nur über
+ * stripCardsMarker aufrufen bzw. wenn ein Marker verarbeitet wurde).
+ * Übergangs-Abwehr: Server ≥ 7.13 entfernt die Zeilen selbst und schickt sie
+ * als Chunk "courseTeasers"; ältere Server reichen sie durch. Regeln
+ * spiegeln parseTeaserLines in embedCardsMarker.js (Fork): Leerraum davor
+ * und dazwischen wird übersprungen, je Zeile höchstens 240 Zeichen bis zum
+ * letzten "]]" vor dem Zeilenende, höchstens 12 Zeilen; kaputte Zeilen und
+ * alles danach bleiben Text.
+ * partial (Antwort streamt noch): eine begonnene, noch offene Zeile bzw. nur
+ * Leerraum hinter entfernten Zeilen ergibt "" (weiter puffern).
+ * @param {string} text
+ * @param {{partial?: boolean}} [options]
+ * @returns {string}
+ */
+export function stripTeaserLines(text, { partial = false } = {}) {
+  if (typeof text !== "string" || text.length === 0) return text;
+  let rest = text;
+  let count = 0;
+  let open = false;
+  while (count < TEASER_LINES_MAX) {
+    const body = rest.trimStart();
+    const len = teaserLineLength(body, partial);
+    open = len === undefined;
+    if (!len) break;
+    rest = body.slice(len);
+    count++;
+  }
+  return open ? "" : count > 0 ? rest.trimStart() : text;
+}
+
 /**
  * Text-Chunk an eine streamende Antwort anhängen, Karten-Marker am
  * Antwortanfang dabei entfernen. Solange noch nichts Sichtbares da ist und nur
  * ein (offener oder gerade geschlossener) Marker angekommen ist, bleibt der
  * Rohtext im Puffer (markerBuffer, Antwort gilt als wartend); sobald Text
  * folgt, die Grenze überschritten ist oder der Stream endet, wird er Inhalt.
- * @param {{content?: string, markerBuffer?: string}|null} prev - bisheriger Eintrag
+ * Hat der Server den Marker schon verarbeitet (Karten angekündigt,
+ * courseCardsAnnounced), gelten folgende Teaserzeilen als "hinter dem
+ * Marker" (afterMarker).
+ * @param {{content?: string, markerBuffer?: string, courseCardsAnnounced?: number}|null} prev - bisheriger Eintrag
  * @param {string} chunk - neuer Text
  * @param {boolean} done - Stream beendet (close)
  * @returns {{content: string, markerBuffer?: string}}
@@ -159,10 +248,20 @@ export function appendReplyText(prev, chunk, done = false) {
   const visible = prev?.content || "";
   if (visible.trim()) return { content: visible + add };
   const raw = (prev?.markerBuffer ?? visible) + add;
-  const content = stripCardsMarker(raw, { partial: !done });
+  const content = stripCardsMarker(raw, {
+    partial: !done,
+    afterMarker: cardsAnnounced(prev),
+  });
   return !done && raw && !content
     ? { content, markerBuffer: raw }
     : { content };
+}
+
+// Hat der Server zu dieser Antwort Karten vorab angekündigt (Marker
+// verarbeitet)?
+export function cardsAnnounced(entry) {
+  const n = entry?.courseCardsAnnounced;
+  return Number.isInteger(n) && n > 0;
 }
 
 /**
@@ -443,18 +542,47 @@ export function formatPrice(price) {
   return `${text} €`;
 }
 
-export function formatPlace(format, location) {
+// Kürzen an der Wortgrenze wie truncateAtWord im Server: höchstens max
+// Zeichen inkl. "…", geschnitten am letzten Leerraum vor der Grenze, wenn
+// dabei mindestens 60 % der Länge bleiben, sonst hart.
+export function truncateAtWord(value, max) {
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max - 1);
+  const space = cut.search(/\s\S*$/);
+  const head = space >= Math.floor(max * 0.6) ? cut.slice(0, space) : cut;
+  return `${head.trimEnd()}…`;
+}
+
+// Kurzer Klartext (Dauer, Ort, Teaser): Tags raus, Leerraum zusammengezogen,
+// höchstens max Zeichen (Wortgrenze); leer -> null
+function shortText(value, max) {
+  if (typeof value !== "string") return null;
+  const v = value
+    .replace(HTML_TAG_RX, " ")
+    .replace(/\s+/g, " ")
+    .replace(/ ([.,;:!?])/g, "$1")
+    .trim();
+  return v ? truncateAtWord(v, max) : null;
+}
+
+// Ort einer Karte: Kursort (venue, Kurskarten v3) hat Vorrang vor dem
+// KIE-480-Ortsfeld (location) und ersetzt "vor Ort" — nur bei Präsenz bzw.
+// hybrid. Online-Kurse (format "online" oder location "online" ohne
+// Präsenz-/Hybrid-Format) bleiben "online", auch mit venue (z. B. "Zoom").
+export function formatPlace(format, location, venue = null) {
+  const fmt = typeof format === "string" ? format.trim().toLowerCase() : null;
   const loc =
     typeof location === "string" && location.trim().length > 0
       ? location.trim()
       : null;
+  const locOnline = !!loc && loc.toLowerCase() === "online";
+  const present = fmt === "onsite" || fmt === "hybrid";
+  if (fmt === "online" || (locOnline && !present)) return "online";
   const locLabel =
-    loc && loc.toLowerCase() !== "online" ? capitalizeWords(loc) : null;
-  if (format === "online") return "online";
-  if (format === "hybrid")
+    shortText(venue, 60) || (loc && !locOnline ? capitalizeWords(loc) : null);
+  if (fmt === "hybrid")
     return locLabel ? `${locLabel} · auch online` : "online und vor Ort";
-  if (format === "onsite") return locLabel || "vor Ort";
-  if (loc && loc.toLowerCase() === "online") return "online";
+  if (fmt === "onsite") return locLabel || "vor Ort";
   return locLabel;
 }
 
@@ -469,7 +597,9 @@ export function formatCourse(entry) {
   const weekdays = formatWeekdays(entry.weekdays);
   const time = formatTime(entry.start_minutes);
   const start = formatDateDE(entry.start_date);
-  const schedule = [weekdays, time ? `${time} Uhr` : null]
+  // Kurskarten v3: Anzahl Termine ("16 Abende") ans Ende der Kopfzeile
+  const sessions = shortText(entry.sessions, 30);
+  const schedule = [weekdays, time ? `${time} Uhr` : null, sessions]
     .filter(Boolean)
     .join(" · ");
   return {
@@ -480,11 +610,54 @@ export function formatCourse(entry) {
     weekdays,
     time,
     start: start ? `ab ${start}` : null,
-    place: formatPlace(entry.format, entry.location),
+    place: formatPlace(entry.format, entry.location, entry.venue),
     price: formatPrice(entry.price),
     status: formatStatus(entry.bookable),
     bookable: typeof entry.bookable === "boolean" ? entry.bookable : null,
   };
+}
+
+/**
+ * Kurskarten v3: KI-Teaser je Karte (courseTeasers vom Server, URL -> Text)
+ * als Map normalisierte URL -> Text (Vergleich wie card.key). Text ohne
+ * HTML/Markdown-Zeichen, höchstens TEASER_MAX_LEN Zeichen; Ungültiges
+ * entfällt.
+ * @param {any} courseTeasers
+ * @returns {Map<string, string>}
+ */
+export function teaserMap(courseTeasers) {
+  const out = new Map();
+  if (
+    !courseTeasers ||
+    typeof courseTeasers !== "object" ||
+    Array.isArray(courseTeasers)
+  )
+    return out;
+  for (const [url, value] of Object.entries(courseTeasers)) {
+    const key = normalizeUrl(url);
+    if (!key || out.has(key) || typeof value !== "string") continue;
+    const text = shortText(stripMarkdown(value), TEASER_MAX_LEN);
+    if (text) out.set(key, text);
+  }
+  return out;
+}
+
+/**
+ * Kurskarten v3: Teaser einblenden? Nur, wenn er im Stream nach der schon
+ * sichtbaren Karte ankam (teaserArrivedAt, gesetzt vom Chunk
+ * "courseTeasers") und das gerade eben war — nicht beim Verlauf-Laden und
+ * nicht beim erneuten Aufbau der Karten (Fenster wieder geöffnet).
+ * @param {any} arrivedAt - Zeitstempel (ms) am Antwort-Eintrag
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function teaserFadeIn(arrivedAt, now = Date.now()) {
+  return (
+    typeof arrivedAt === "number" &&
+    Number.isFinite(arrivedAt) &&
+    now - arrivedAt >= 0 &&
+    now - arrivedAt < TEASER_FADE_WINDOW_MS
+  );
 }
 
 // Kurs-Pfadpräfix je Domain: gemeinsamer Pfadanfang der Kurs-URLs ohne ihre

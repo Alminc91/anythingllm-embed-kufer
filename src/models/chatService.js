@@ -1,6 +1,6 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
-import { stripCardsMarker } from "@/utils/courseCards";
+import { cardsAnnounced, stripCardsMarker } from "@/utils/courseCards";
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -33,10 +33,14 @@ const ChatService = {
       })
       .then((res) => {
         return res.history.map((msg) => {
-          // Karten-Marker (ältere Server) schon beim Laden entfernen
+          // Karten-Marker (ältere Server) schon beim Laden entfernen;
+          // Teaserzeilen nur hinter einem Marker (auch einem, den der
+          // Server schon entfernt hat: Antwort mit angekündigten Karten)
           const content =
             msg.role === "assistant"
-              ? stripCardsMarker(msg.content)
+              ? stripCardsMarker(msg.content, {
+                  afterMarker: cardsAnnounced(msg),
+                })
               : msg.content;
           return {
             ...msg,

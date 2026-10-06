@@ -1,4 +1,8 @@
-import { appendReplyText, stripCardsMarker } from "@/utils/courseCards";
+import {
+  appendReplyText,
+  cardsAnnounced,
+  stripCardsMarker,
+} from "@/utils/courseCards";
 
 // For handling of synchronous chats that are not utilizing streaming or chat requests.
 // Karten-Marker ("[[KARTEN: …]]", ältere Server) wird hier bei der Aufnahme
@@ -24,6 +28,10 @@ export default function handleChat(
     courseSources = null,
     // Kurskarten v2: Anzahl vorab angekündigter Kurse am Listenanfang
     courseCardsAnnounced = null,
+    // Kurskarten v3: KI-Teaser je Karte (Chunk type "courseTeasers")
+    teasers = null,
+    // Kurskarten v3: KI-Teaser in einer vollständigen Antwort (textResponse)
+    courseTeasers = null,
   } = chatResult;
   const courseExtra = Array.isArray(courseSources)
     ? {
@@ -68,25 +76,17 @@ export default function handleChat(
       sentAt,
     });
   } else if (type === "textResponse") {
-    const content = stripCardsMarker(textResponse);
-    setLoadingResponse(false);
-    setChatHistory([
-      ...remHistory,
-      {
-        uuid,
-        content,
-        role: "assistant",
-        sources,
-        closed: close,
-        error,
-        errorMsg,
-        animate: !close,
-        pending: false,
-        sentAt,
-        ...courseExtra,
-      },
-    ]);
-    _chatHistory.push({
+    // Vollständige Antwort in einem Stück. Gibt es zur uuid schon eine
+    // (wartende) Antwort — angelegt vom courseSources-/courseTeasers-Chunk —,
+    // wird genau diese aktualisiert (Karten und Teaser bleiben), sonst neu
+    // angehängt. Nie zwei Blasen für eine Antwort.
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
+    const content = stripCardsMarker(textResponse, {
+      afterMarker: cardsAnnounced(existing),
+    });
+    const entry = {
+      ...(existing || {}),
       uuid,
       content,
       role: "assistant",
@@ -98,7 +98,24 @@ export default function handleChat(
       pending: false,
       sentAt,
       ...courseExtra,
-    });
+      ...(isTeaserObject(courseTeasers)
+        ? {
+            courseTeasers: {
+              ...(existing?.courseTeasers || {}),
+              ...courseTeasers,
+            },
+          }
+        : {}),
+    };
+    delete entry.markerBuffer;
+    setLoadingResponse(false);
+    if (existing) {
+      _chatHistory[chatIdx] = entry;
+      setChatHistory([..._chatHistory]);
+    } else {
+      setChatHistory([...remHistory, entry]);
+      _chatHistory.push(entry);
+    }
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
@@ -149,6 +166,23 @@ export default function handleChat(
       });
     }
     setChatHistory([..._chatHistory]);
+  } else if (type === "courseTeasers") {
+    // Kurskarten v3: KI-Teaser (URL -> Text) zu den vorab angekündigten
+    // Karten, kommen nach dem courseSources-Chunk und vor dem ersten Text-
+    // Token. Nur an eine schon bestehende Antwort mit Karten; ändert weder
+    // Text noch Warte-/Stream-Zustand. Mehrere Chunks werden zusammengeführt.
+    // teaserArrivedAt: Teaser kam nach den schon angekündigten Karten -> die
+    // Karten oben blenden ihn ein (teaserFadeIn); nie beim Verlauf-Laden.
+    if (!isTeaserObject(teasers)) return;
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    if (chatIdx === -1) return;
+    const existing = _chatHistory[chatIdx];
+    _chatHistory[chatIdx] = {
+      ...existing,
+      courseTeasers: { ...(existing.courseTeasers || {}), ...teasers },
+      ...(cardsAnnounced(existing) ? { teaserArrivedAt: Date.now() } : {}),
+    };
+    setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
     // 👍/👎 sofort (ohne History-Reload) zugeordnet werden kann. Rein additiv —
@@ -165,6 +199,12 @@ export default function handleChat(
       setChatHistory([..._chatHistory]);
     }
   }
+}
+
+// courseTeasers/teasers: Objekt URL -> Text (Prüfung der Einträge in
+// teaserMap beim Rendern)
+function isTeaserObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 export function chatPrompt(workspace) {
