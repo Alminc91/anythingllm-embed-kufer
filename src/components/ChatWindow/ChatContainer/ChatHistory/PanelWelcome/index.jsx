@@ -4,6 +4,7 @@ import { embedderSettings } from "@/main";
 import { BUBBLE_RADIUS, BUBBLE_SHADOW } from "@/utils/theme";
 import { panelPills, panelTexts, privacyPoints } from "@/utils/layout";
 import { sendSuggestion } from "../..";
+import Pill from "../Pill";
 
 // Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B), nur im leeren
 // Chat und nur auf Wunsch (suggestionStyle "pills" / greetingStyle "bubble").
@@ -13,9 +14,8 @@ import { sendSuggestion } from "../..";
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
 
-// Wunschfragen als kleine Pillen (Form/Farben wie die Chips unter der
-// Leiste: --allmi-bar-*; Rand eigens über --allmi-pill-border, Standard =
-// --allmi-bar-border), umbrechend, höchstens 6, lange Texte gekürzt.
+// Wunschfragen als kleine Pillen (Pill, Standard-Variante: Rand über
+// --allmi-pill-border), umbrechend, höchstens 6, lange Texte gekürzt.
 export function SuggestedPills({ settings, align = "center" }) {
   const pills = panelPills(settings);
   if (pills.length === 0) return null;
@@ -31,29 +31,12 @@ export function SuggestedPills({ settings, align = "center" }) {
       }}
     >
       {pills.map(({ text, label }, i) => (
-        <button
+        <Pill
           key={i}
-          type="button"
-          title={label !== text ? text : undefined}
+          text={text}
+          label={label}
           onClick={() => sendSuggestion(text)}
-          className="allm-inline-chip allm-font-sans allm-cursor-pointer"
-          style={{
-            maxWidth: "100%",
-            margin: 0,
-            padding: "6px 14px",
-            border: "1px solid var(--allmi-pill-border, #d1d5db)",
-            borderRadius: "var(--allmi-bar-radius, 999px)",
-            backgroundColor: "var(--allmi-bar-bg, #FFFFFF)",
-            color: "var(--allmi-bar-text, #1f2937)",
-            fontSize: "12.5px",
-            lineHeight: 1.3,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {label}
-        </button>
+        />
       ))}
     </div>
   );

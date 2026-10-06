@@ -471,7 +471,7 @@ const HistoricalMessage = forwardRef(
       sessionId = null,
       // Folgefragen-Pillen (nur letzte, fertige Antwort; ChatHistory)
       followUps = null,
-      settings = null,
+      settings,
     },
     ref,
   ) => {
@@ -620,7 +620,7 @@ const HistoricalMessage = forwardRef(
           )}
 
         {role === "assistant" && !error && followUps && (
-          <FollowUps items={followUps} settings={settings || {}} />
+          <FollowUps items={followUps} settings={settings} />
         )}
 
         {sentAt && (

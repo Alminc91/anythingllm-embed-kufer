@@ -39,6 +39,7 @@ import {
 import handleChat from "../src/utils/chat/index.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
+import { SuggestedPills } from "../src/components/ChatWindow/ChatContainer/ChatHistory/PanelWelcome/index.jsx";
 
 const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
@@ -455,6 +456,28 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
       />,
     );
     expect($$("#anything-llm-follow-ups")).toHaveLength(0);
+  });
+
+  it("Befund 5: gemeinsame Pill — Folgefragen im Akzent mit Umbruch, Panel-Pillen neutral mit …", () => {
+    render(<ChatHistory settings={PILLS} history={HISTORY} />);
+    for (const b of pills()) {
+      expect(b.className).toContain("allm-inline-chip");
+      expect(b.style.color).toContain("--allmi-accent");
+      expect(b.style.border).toContain("--allmi-accent");
+      expect(b.style.wordBreak).toBe("break-word");
+      expect(b.style.textOverflow).toBe("");
+    }
+    render(
+      <SuggestedPills
+        settings={{ suggestionStyle: "pills", defaultMessages: ["Kurse?"] }}
+      />,
+    );
+    const [p] = $$("#anything-llm-suggestion-pills button");
+    expect(p.className).toContain("allm-inline-chip");
+    expect(p.style.border).toContain("--allmi-pill-border");
+    expect(p.style.color).toContain("--allmi-bar-text");
+    expect(p.style.textOverflow).toBe("ellipsis");
+    expect(p.style.whiteSpace).toBe("nowrap");
   });
 
   it("Kurskarten oben: Pillen ebenfalls unter der letzten Antwort", () => {
