@@ -417,7 +417,11 @@ def check_arrow_under_notice(browser, base_url):
 def check_bubble_scrolled_to_pills(browser, base_url):
     """Review 10: lange Datenschutz-Blase im Blasenfenster -> beim Öffnen ans
     Ende gescrollt, die Pillen liegen vollständig im sichtbaren Bereich."""
-    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, mock())
+    # Seit dem Fließtext (ein Absatz) passt die Standard-Blase ins Fenster ->
+    # fünf lange eigene Punkte erzwingen den Überlauf
+    long_text = " | ".join(f"Punkt {i + 1}: " + "Ein längerer Hinweis zum Datenschutz in der Begrüßung. " * 2
+                           for i in range(5))
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**PRIVACY_BUBBLE, "privacy-text": long_text}}, mock())
     try:
         tv.wait_shadow(page, "#anything-llm-suggestion-pills")
         tv.settle(page, 500)
@@ -459,19 +463,46 @@ def check_privacy_bubble(browser, base_url):
         tv.wait_shadow(page, "#anything-llm-bubble-privacy")
         tv.settle(page, 500)
         st = page.evaluate("""() => ({
-          paras: [...window.__q('#anything-llm-bubble-privacy').querySelectorAll('p')].map(p => p.textContent),
+          paras: [...window.__q('#anything-llm-greeting-bubble').querySelectorAll('p')].map(p => p.textContent),
+          privTag: window.__q('#anything-llm-bubble-privacy').tagName,
           strong: [...window.__q('#anything-llm-bubble-privacy').querySelectorAll('strong')].map(e => e.textContent),
           link: window.__q('#anything-llm-bubble-privacy a') && window.__q('#anything-llm-bubble-privacy a').getAttribute('href'),
           popup: !!window.__q('#anything-llm-privacy-notice'), disabled: window.__q('#message-input').disabled,
           small: !!window.__q('#anything-llm-greeting-small'),
           ls: Object.keys(localStorage).filter(k => k.startsWith('allm-privacy-ack-')) })""")
-        ok = (len(st["paras"]) == 4 and st["paras"][2].startswith("Bitte teilen Sie nur Angaben")
-              and st["strong"] == [] and st["paras"][3] == "Datenschutz" and st["link"] == "/datenschutz"
+        ok = (len(st["paras"]) == 1 and st["privTag"] == "P"
+              and st["paras"][0].startswith("Ihre Anfragen bleiben auf Servern in Deutschland")
+              and "Mitarbeitende der Einrichtung können" in st["paras"][0]
+              and st["paras"][0].endswith("nötig sind. Datenschutz")
+              and st["strong"] == [] and st["link"] == "/datenschutz"
               and not st["popup"] and st["disabled"] is False and not st["small"] and st["ls"] == [])
-        record("Datenschutz in der Blase: Punkte (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
+        record("Datenschutz in der Blase: Punkte als ein Absatz (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
                json.dumps(st, ensure_ascii=False)[:400])
     finally:
         ctx.close()
+
+
+BUBBLE_GEOM = """() => {
+  const b = window.__q('#anything-llm-greeting-bubble'), row = b.parentElement;
+  const cs = getComputedStyle(b), lh = parseFloat(cs.lineHeight);
+  const paras = [...b.childNodes].filter(n => n.nodeType === 3 ? n.textContent.trim() : true);
+  return { maxWidth: cs.maxWidth, ratio: +(b.getBoundingClientRect().width / row.getBoundingClientRect().width).toFixed(3),
+           parts: paras.length, h: Math.round(b.getBoundingClientRect().height), lines: Math.round((b.clientHeight - 22) / lh) };
+}"""
+
+
+def check_bubble_two_paragraphs(browser, base_url):
+    """AK-6: Begrüßungsblase mit Datenschutz = zwei Absätze, Breite ≤ 80 % (Desktop und 390 px)."""
+    for vp, key in ((None, "Desktop"), (tv.MOBILE, "390 px")):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, mock(), viewport=vp)
+        try:
+            tv.wait_shadow(page, "#anything-llm-bubble-privacy")
+            tv.settle(page, 400)
+            st = page.evaluate(BUBBLE_GEOM)
+            ok = st["maxWidth"] == "80%" and st["ratio"] <= 0.801 and st["parts"] == 2
+            record(f"AK-6 Blase: zwei Absätze, Breite ≤ 80 % ({key})", ok, json.dumps(st))
+        finally:
+            ctx.close()
 
 
 def check_disclaimer(browser, base_url):
@@ -548,6 +579,7 @@ def main():
                 check_bubble_scrolled_to_pills(browser, base_url)
                 check_dot_ring_dark_header(browser, base_url)
                 check_privacy_bubble(browser, base_url)
+                check_bubble_two_paragraphs(browser, base_url)
                 check_disclaimer(browser, base_url)
             browser.close()
     finally:
