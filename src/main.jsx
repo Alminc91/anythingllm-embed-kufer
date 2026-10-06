@@ -23,8 +23,9 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Link; Hover-Fläche --allm-hover-bg (Hintergrund steht inline ->
 // !important), Tastatur-Fokus --allm-focus-ring, sonst 2px Akzent
 // (!important gegen die allgemeine a:focus-visible-Regel mit ID-Selektor).
-// Kurskarten v3: KI-Teaser (.allm-course-teaser) blendet ein, sobald er
-// ankommt; ohne Bewegung bei prefers-reduced-motion.
+// Kurskarten v3: KI-Teaser blendet ein (.allm-course-teaser-in), nur wenn er
+// nach der schon sichtbaren Karte ankommt (nicht beim Verlauf-Laden, nicht
+// unter der Antwort); ohne Bewegung bei prefers-reduced-motion.
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
 const customCss = `
   /**
@@ -171,8 +172,8 @@ const customCss = `
   .allm-course-card:hover,.allm-course-row:hover{background-color:var(--allmi-hover-bg,#f3f4f6)!important}
   .allm-course-card:focus-visible,.allm-course-row:focus-visible{outline:var(--allmi-focus-ring,2px solid var(--allmi-accent,#01a5a9))!important;outline-offset:2px}
   @keyframes allm-course-teaser-in{from{opacity:0}to{opacity:1}}
-  .allm-course-teaser{animation:allm-course-teaser-in .24s ease-out}
-  @media (prefers-reduced-motion: reduce){.allm-course-teaser{animation:none}}
+  .allm-course-teaser-in{animation:allm-course-teaser-in .24s ease-out}
+  @media (prefers-reduced-motion: reduce){.allm-course-teaser-in{animation:none}}
 
   /* Inline-Leiste als Eingabefeld (inlineInput): Fokusring um die ganze Pille
      (--allm-focus-ring, sonst 2px Akzent), Platzhalter in Leisten-Textfarbe,

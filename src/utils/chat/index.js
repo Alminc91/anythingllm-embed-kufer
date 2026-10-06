@@ -171,6 +171,8 @@ export default function handleChat(
     // Karten, kommen nach dem courseSources-Chunk und vor dem ersten Text-
     // Token. Nur an eine schon bestehende Antwort mit Karten; ändert weder
     // Text noch Warte-/Stream-Zustand. Mehrere Chunks werden zusammengeführt.
+    // teaserArrivedAt: Teaser kam nach den schon angekündigten Karten -> die
+    // Karten oben blenden ihn ein (teaserFadeIn); nie beim Verlauf-Laden.
     if (!isTeaserObject(teasers)) return;
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     if (chatIdx === -1) return;
@@ -178,6 +180,7 @@ export default function handleChat(
     _chatHistory[chatIdx] = {
       ...existing,
       courseTeasers: { ...(existing.courseTeasers || {}), ...teasers },
+      ...(cardsAnnounced(existing) ? { teaserArrivedAt: Date.now() } : {}),
     };
     setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {

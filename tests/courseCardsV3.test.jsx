@@ -28,7 +28,10 @@ import {
   selectAnnouncedCourseCards,
   stripCardsMarker,
   stripTeaserLines,
+  teaserFadeIn,
   teaserMap,
+  TEASER_FADE_WINDOW_MS,
+  truncateAtWord,
 } from "../src/utils/courseCards.js";
 import handleChat from "../src/utils/chat/index.js";
 import HistoricalMessage from "../src/components/ChatWindow/ChatContainer/ChatHistory/HistoricalMessage/index.jsx";
@@ -92,6 +95,27 @@ describe("Dauer und Ort in der Karte (AK-2)", () => {
     expect(formatPlace(undefined, undefined, "Realschule")).toBe("Realschule");
   });
 
+  it("location 'online' ohne Präsenz-Format bleibt 'online', auch mit venue", () => {
+    expect(formatPlace(undefined, "online", "Zoom")).toBe("online");
+    expect(formatPlace(null, " Online ", "Zoom")).toBe("online");
+    expect(formatPlace("Online", "lingen", "Zoom")).toBe("online");
+    expect(
+      formatCourse({
+        ...YOGA,
+        format: undefined,
+        location: "online",
+        venue: "Zoom",
+      }).place,
+    ).toBe("online");
+    // Präsenz/hybrid: venue zeigt den Ort
+    expect(formatPlace("onsite", "online", "Realschule")).toBe("Realschule");
+    expect(formatPlace("hybrid", "online", "Realschule")).toBe(
+      "Realschule · auch online",
+    );
+    expect(formatPlace("hybrid", "online", null)).toBe("online und vor Ort");
+    expect(formatPlace("onsite", "online", null)).toBe("vor Ort");
+  });
+
   it("ohne sessions/venue: Karte wie bisher (NAK-3)", () => {
     const { sessions: _s, venue: _v, ...old } = YOGA;
     const card = formatCourse(old);
@@ -108,6 +132,27 @@ describe("Dauer und Ort in der Karte (AK-2)", () => {
     expect(card.schedule).not.toMatch(/[<>]/);
     expect(card.schedule.split(" · ")[2].length).toBeLessThanOrEqual(30);
     expect(card.place.length).toBeLessThanOrEqual(60);
+  });
+
+  it("Kürzen an der Wortgrenze (wie truncateAtWord im Server)", () => {
+    const venue =
+      "Staatliche Realschule Donauwörth, Hauptgebäude, Eingang über den Schulhof";
+    const card = formatCourse({ ...YOGA, venue });
+    expect(card.place).toBe(
+      "Staatliche Realschule Donauwörth, Hauptgebäude, Eingang…",
+    );
+    expect(card.place.length).toBeLessThanOrEqual(60);
+    // kein Wortende im hinteren Teil (< 60 % der Länge) -> hart
+    expect(truncateAtWord(`Realschule ${"x".repeat(80)}`, 60)).toBe(
+      `Realschule ${"x".repeat(48)}…`,
+    );
+    expect(truncateAtWord("Realschule", 60)).toBe("Realschule");
+    expect(
+      formatCourse({
+        ...YOGA,
+        sessions: "16 Abende jeweils montags und donnerstags",
+      }).schedule,
+    ).toBe("Mo · 18:00 Uhr · 16 Abende jeweils montags…");
   });
 });
 
@@ -265,6 +310,45 @@ describe("Stream-Verarbeitung: Chunk type courseTeasers", () => {
     });
     expect(set.mock.calls.at(-1)[0]).toHaveLength(1);
   });
+
+  it("teaserArrivedAt: nur, wenn die Karten schon angekündigt sind", () => {
+    const hist = [{ uuid: "a", role: "assistant", content: "", pending: true }];
+    handleChat(
+      { uuid: "a", type: "courseTeasers", teasers: TEASERS },
+      vi.fn(),
+      vi.fn(),
+      [],
+      hist,
+    );
+    expect(hist[0].courseTeasers).toEqual(TEASERS);
+    expect(hist[0].teaserArrivedAt).toBeUndefined();
+    handleChat(
+      { uuid: "b", type: "courseSources", courseSources: clone([YOGA]) },
+      vi.fn(),
+      vi.fn(),
+      [],
+      hist,
+    );
+    const before = Date.now();
+    handleChat(
+      { uuid: "b", type: "courseTeasers", teasers: TEASERS },
+      vi.fn(),
+      vi.fn(),
+      [],
+      hist,
+    );
+    expect(hist[1].teaserArrivedAt).toBeGreaterThanOrEqual(before);
+    expect(teaserFadeIn(hist[1].teaserArrivedAt)).toBe(true);
+  });
+
+  it("teaserFadeIn: nur frisch angekommene Teaser", () => {
+    const now = 1_000_000;
+    expect(teaserFadeIn(now - 10, now)).toBe(true);
+    expect(teaserFadeIn(now - TEASER_FADE_WINDOW_MS, now)).toBe(false);
+    expect(teaserFadeIn(now + 10, now)).toBe(false);
+    expect(teaserFadeIn(undefined, now)).toBe(false);
+    expect(teaserFadeIn("1", now)).toBe(false);
+  });
 });
 
 describe("Teaserzeilen nie als Text (Abwehr in der Tiefe, ältere Server)", () => {
@@ -280,6 +364,9 @@ describe("Teaserzeilen nie als Text (Abwehr in der Tiefe, ältere Server)", () =
     ],
     ["[[KARTEN: 0, 2]]\n[[TEASER 0: A.]]\n\nJa.", "Ja."],
     ["[[KARTEN: 0, 2]]\n[[TEASER 0: A.]]\n[[TEASER 2: B.]]\nJa.", "Ja."],
+    // Schluss = letztes "]]" vor dem Zeilenende
+    ["[[KARTEN: 0]]\n[[TEASER 0: Kurs [[A]] mit ]] Klammern]]\nJa.", "Ja."],
+    ["[[KARTEN: 0]]\n[[TEASER 0: A.]] Ja, gern.", "Ja, gern."],
     ["[[KARTEN: 0]]\n[[TEASER 0: kaputt\nText", "[[TEASER 0: kaputt\nText"],
     ["Ja. [[TEASER 0: A.]]", "Ja. [[TEASER 0: A.]]"],
     ["[[TEASER 0: kaputt\nText", "[[TEASER 0: kaputt\nText"],
@@ -324,12 +411,19 @@ describe("Teaserzeilen nie als Text (Abwehr in der Tiefe, ältere Server)", () =
     });
     expect(seen.slice(0, 5)).toEqual(["", "", "", "", ""]);
     expect(entry.content).toBe("Ja, gern.");
+    // geschlossene Zeile ohne Zeilenende: noch offen (ein späteres "]]"
+    // könnte der Schluss sein), am Antwortende entschieden
+    expect(stripTeaserLines("[[TEASER 0: A.]]", { partial: true })).toBe("");
+    expect(stripTeaserLines("[[TEASER 0: A.]]")).toBe("");
     // überlange Zeile (> 240 ohne "]]") wird Text
     const long = `[[TEASER 0: ${"x".repeat(250)}`;
     expect(stripTeaserLines(long, { partial: true })).toBe(long);
-    // höchstens 5 Zeilen
-    const six = Array.from({ length: 6 }, (_, i) => `[[TEASER ${i}: a]]`);
-    expect(stripTeaserLines(`${six.join("\n")}\nT`)).toBe(`${six[5]}\nT`);
+    // "]]" erst hinter der 240-Zeichen-Grenze: kaputt, bleibt Text
+    const late = `[[TEASER 0: ${"x".repeat(240)}]]\nT`;
+    expect(stripTeaserLines(late)).toBe(late);
+    // höchstens 12 Zeilen
+    const lines = Array.from({ length: 13 }, (_, i) => `[[TEASER ${i}: a]]`);
+    expect(stripTeaserLines(`${lines.join("\n")}\nT`)).toBe(`${lines[12]}\nT`);
   });
 });
 
@@ -428,6 +522,72 @@ describe("Teaser als Untertext (AK-5)", () => {
     expect(
       after.map((c) => c.querySelector(".allm-course-teaser").textContent),
     ).toEqual([TEASER_YOGA, TEASER_EN]);
+  });
+
+  it("Einblenden nur, wenn der Teaser nach der Karte ankommt (oben, frisch)", () => {
+    const base = answer({
+      content: "",
+      chatId: undefined,
+      animate: true,
+      pending: true,
+      courseCardsAnnounced: 2,
+      uuid: "u",
+    });
+    const el = mount(
+      h(ChatHistory, { settings: ABOVE, history: [user, base] }),
+    );
+    act(() =>
+      root.render(
+        h(ChatHistory, {
+          settings: ABOVE,
+          history: [
+            user,
+            { ...base, courseTeasers: TEASERS, teaserArrivedAt: Date.now() },
+          ],
+        }),
+      ),
+    );
+    const fading = () =>
+      [...el.querySelectorAll(".allm-course-teaser")].map((t) =>
+        t.classList.contains("allm-course-teaser-in"),
+      );
+    expect(fading()).toEqual([true, true]);
+    act(() => root.unmount());
+    container.remove();
+
+    // Verlauf geladen (kein teaserArrivedAt) bzw. später neu aufgebaut
+    for (const extra of [{}, { teaserArrivedAt: Date.now() - 60_000 }]) {
+      const again = mount(
+        h(ChatHistory, {
+          settings: ABOVE,
+          history: [
+            user,
+            answer({
+              courseTeasers: TEASERS,
+              courseCardsAnnounced: 2,
+              ...extra,
+            }),
+          ],
+        }),
+      );
+      expect(again.querySelectorAll(".allm-course-teaser")).toHaveLength(2);
+      expect(again.querySelector(".allm-course-teaser-in")).toBeNull();
+      act(() => root.unmount());
+      container.remove();
+    }
+
+    // unter der Antwort: Karte und Teaser erscheinen zusammen -> nie
+    const below = mount(
+      h(ChatHistory, {
+        settings: AUTO,
+        history: [
+          user,
+          answer({ courseTeasers: TEASERS, teaserArrivedAt: Date.now() }),
+        ],
+      }),
+    );
+    expect(below.querySelectorAll(".allm-course-teaser")).toHaveLength(2);
+    expect(below.querySelector(".allm-course-teaser-in")).toBeNull();
   });
 
   it("below + Verlauf: Teaser auch nach Reload (courseTeasers aus /history)", () => {

@@ -296,6 +296,7 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
         <CourseCards
           selection={selection}
           courseTeasers={props.courseTeasers}
+          teaserArrivedAt={props.teaserArrivedAt}
           position="above"
           part="cards"
         />
