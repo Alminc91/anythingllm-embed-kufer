@@ -1,4 +1,11 @@
-import React, { memo, forwardRef, useState, useEffect, useRef } from "react";
+import React, {
+  memo,
+  forwardRef,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Warning,
   CaretDown,
@@ -19,6 +26,7 @@ import CourseCards from "../CourseCards";
 import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
+import { replySpeechText, selectCourseCards } from "@/utils/courseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -488,10 +496,56 @@ const HistoricalMessage = forwardRef(
     const responseContent = stripThink(message).trim();
 
     // Clean text for TTS (remove markdown, HTML, etc.)
-    const plainTextForTTS = responseContent
+    const replyTextForTTS = responseContent
       ?.replace(/[#*_`~\[\]()]/g, "") // Remove markdown
       ?.replace(/<[^>]*>/g, "") // Remove HTML tags
       ?.trim();
+
+    // Kurskarten: Auswahl einmal hier (Karten unter der Antwort) bzw. von
+    // oben übernommen (courseCardsSelection, Position "above") — dieselbe
+    // für die Anzeige (CourseCards) und die Sprachausgabe.
+    const showCards =
+      role === "assistant" &&
+      !error &&
+      (!!courseCardsSelection ||
+        (Array.isArray(courseSources) && courseSources.length > 0) ||
+        (courseCardsFinal && courseCards === "auto"));
+    const cardSelection = useMemo(
+      () =>
+        !showCards
+          ? null
+          : courseCardsSelection ||
+            selectCourseCards(
+              responseContent,
+              courseSources,
+              { courseCards },
+              { fallback: courseCardsFinal },
+            ),
+      [
+        showCards,
+        courseCardsSelection,
+        responseContent,
+        courseSources,
+        courseCards,
+        courseCardsFinal,
+      ],
+    );
+    // Vorlesen: die Karten als Sätze (Titel, Zeit, Dauer, Beginn, Ort, Preis,
+    // Status, Teaser) — vor dem Text bei Karten oben, danach bei Karten
+    // unten; ohne Karten unverändert. Folgefragen nicht. Screenreader lesen
+    // die Karten wie bisher aus dem DOM.
+    const plainTextForTTS = useMemo(
+      () =>
+        replyTextForTTS
+          ? replySpeechText(
+              replyTextForTTS,
+              cardSelection,
+              courseTeasers,
+              courseCardsSelection ? "above" : "below",
+            )
+          : replyTextForTTS,
+      [replyTextForTTS, cardSelection, courseTeasers, courseCardsSelection],
+    );
 
     const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";
 
@@ -603,21 +657,17 @@ const HistoricalMessage = forwardRef(
             oben (Position "above") nur der Abschlusslink bzw. Fallback-
             Karten. Fertige Antwort: auch ohne courseSources (Fallback-Karten
             für verlinkte Kursseiten). */}
-        {role === "assistant" &&
-          !error &&
-          (courseCardsSelection ||
-            (Array.isArray(courseSources) && courseSources.length > 0) ||
-            (courseCardsFinal && courseCards === "auto")) && (
-            <CourseCards
-              reply={responseContent}
-              courseSources={courseSources}
-              courseTeasers={courseTeasers}
-              courseCards={courseCards}
-              fallback={courseCardsFinal}
-              selection={courseCardsSelection}
-              part={courseCardsSelection ? "footer" : "all"}
-            />
-          )}
+        {showCards && (
+          <CourseCards
+            reply={responseContent}
+            courseSources={courseSources}
+            courseTeasers={courseTeasers}
+            courseCards={courseCards}
+            fallback={courseCardsFinal}
+            selection={cardSelection}
+            part={courseCardsSelection ? "footer" : "all"}
+          />
+        )}
 
         {role === "assistant" && !error && followUps && (
           <FollowUps items={followUps} settings={settings} />

@@ -269,7 +269,9 @@ export default function ChatHistory({
                 role={props.role}
                 sources={props.sources}
                 courseSources={above ? null : props.courseSources}
-                courseTeasers={above ? null : props.courseTeasers}
+                // oben: Teaser nur für die Sprachausgabe (die Karten stehen
+                // im Block darüber; der Fuß zeigt keine Teaser)
+                courseTeasers={props.courseTeasers}
                 courseCards={settings?.courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
                 courseCardsSelection={selection}

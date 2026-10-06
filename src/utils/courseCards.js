@@ -725,6 +725,8 @@ export function formatCourse(entry) {
     schedule: schedule || null,
     weekdays,
     time,
+    // Dauer allein (Sprachausgabe, courseCardSpeech); angezeigt in schedule
+    sessions,
     start: start ? `ab ${start}` : null,
     place: formatPlace(entry.format, entry.location, entry.venue),
     price: formatPrice(entry.price),
@@ -1089,4 +1091,134 @@ export function selectAnnouncedCourseCards(
     footerCards: extra.slice(0, slots).map(cardOf),
     footerMore: extra.length - Math.min(slots, extra.length),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sprachausgabe (Vorlesen-Knopf unter der Antwort)
+// ---------------------------------------------------------------------------
+// Die Karten stehen nur im DOM (Screenreader lesen sie dort, Reihenfolge
+// unverändert); der Vorlesen-Text einer Antwort mit Karten bekommt sie
+// zusätzlich als Sätze: "Kurs 1: Yoga Aufbaukurs, montags 18 Uhr, 16 Abende,
+// ab 14. September 2026, Realschule, 60 Euro, buchbar. <Teaser>" — nur aus
+// den Kartendaten (formatCourse) und dem Teaser, fehlende Felder entfallen.
+// Kompaktliste und Fallback-Karten ohne Teaser (wie in der Anzeige).
+const WEEKDAY_SPEECH = {
+  Mo: "montags",
+  Di: "dienstags",
+  Mi: "mittwochs",
+  Do: "donnerstags",
+  Fr: "freitags",
+  Sa: "samstags",
+  So: "sonntags",
+};
+const MONTH_NAMES = [
+  "Januar",
+  "Februar",
+  "März",
+  "April",
+  "Mai",
+  "Juni",
+  "Juli",
+  "August",
+  "September",
+  "Oktober",
+  "November",
+  "Dezember",
+];
+const SENTENCE_END_RX = /[.!?…]$/;
+// Wie die Bereinigung des Antworttexts für die Sprachausgabe
+// (HistoricalMessage): Markdown-Zeichen und HTML-Tags raus
+const SPEECH_STRIP_RX = /[#*_`~\[\]()]/g;
+
+function speechList(items) {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} und ${items[items.length - 1]}`;
+}
+
+function sentence(text) {
+  const t = text.trim();
+  return !t || SENTENCE_END_RX.test(t) ? t : `${t}.`;
+}
+
+// "18:00" -> "18 Uhr", "08:30" -> "8:30 Uhr"
+function timeSpeech(time) {
+  const m = typeof time === "string" ? /^(\d{2}):(\d{2})$/.exec(time) : null;
+  if (!m) return null;
+  const h = Number(m[1]);
+  return m[2] === "00" ? `${h} Uhr` : `${h}:${m[2]} Uhr`;
+}
+
+// "ab 14.09.2026" -> "ab 14. September 2026"
+function startSpeech(start) {
+  const m =
+    typeof start === "string" ? /(\d{2})\.(\d{2})\.(\d{4})/.exec(start) : null;
+  if (!m) return null;
+  const month = MONTH_NAMES[Number(m[2]) - 1];
+  return month ? `ab ${Number(m[1])}. ${month} ${m[3]}` : null;
+}
+
+/**
+ * Eine Karte als Satz (ohne "Kurs n:"), danach der Teaser als eigener Satz.
+ * @param {object} card - Karte aus formatCourse
+ * @param {string|null} [teaser]
+ * @returns {string}
+ */
+export function courseCardSpeech(card, teaser = null) {
+  const days = (card.weekdays || "")
+    .split(", ")
+    .map((d) => WEEKDAY_SPEECH[d])
+    .filter(Boolean);
+  const when = [speechList(days), timeSpeech(card.time)]
+    .filter(Boolean)
+    .join(" ");
+  const parts = [
+    card.title,
+    when,
+    card.sessions,
+    startSpeech(card.start),
+    card.place ? card.place.replace(/ · /g, ", ") : null,
+    card.price ? card.price.replace(/\s*€$/, " Euro") : null,
+    card.status,
+  ].filter(Boolean);
+  const text = [
+    sentence(parts.join(", ")),
+    teaser && !card.fallback ? sentence(teaser) : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return text.replace(HTML_TAG_RX, "").replace(SPEECH_STRIP_RX, "").trim();
+}
+
+/**
+ * Vorlesen-Text einer Antwort samt Karten: Karten über der Antwort
+ * (position "above") vor dem Text, Fallback-Karten darunter (footerCards)
+ * danach; Karten unter der Antwort ("below") nach dem Text. Nummerierung
+ * durchgehend. Folgefragen gehören nicht dazu. Ohne Karten: text unverändert.
+ * @param {string} text - bereinigter Antworttext
+ * @param {{cards?: object[], footerCards?: object[], compact?: boolean}|null} selection
+ * @param {object|null} [courseTeasers] - URL -> Teaser (Kurskarten v3)
+ * @param {"above"|"below"} [position]
+ * @returns {string}
+ */
+export function replySpeechText(
+  text,
+  selection,
+  courseTeasers = null,
+  position = "below",
+) {
+  const cards = selection?.cards || [];
+  const extra = selection?.footerCards || [];
+  if (cards.length === 0 && extra.length === 0) return text;
+  const teasers = selection.compact ? new Map() : teaserMap(courseTeasers);
+  const say = (list, offset) =>
+    list
+      .map(
+        (card, i) =>
+          `Kurs ${offset + i + 1}: ${courseCardSpeech(card, teasers.get(card.key))}`,
+      )
+      .join(" ");
+  const above = position === "above";
+  const before = above ? say(cards, 0) : "";
+  const after = above ? say(extra, cards.length) : say([...cards, ...extra], 0);
+  return [before, text, after].filter((s) => s && s.trim()).join("\n\n");
 }
