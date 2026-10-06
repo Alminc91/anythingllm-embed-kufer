@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { embedderSettings } from "../main";
 import {
   DEFAULT_COURSE_CARDS_POSITION,
+  DEFAULT_COURSE_CARDS_LAYOUT,
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_EFFECT,
   DEFAULT_INLINE_HEIGHT,
@@ -102,6 +103,9 @@ export const DEFAULT_SETTINGS = {
   // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
   // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
+  // Kartenlayout "grid" (Raster) | "rows" (Zeilen-Karten über die volle
+  // Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
+  courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
   // Panel-Optik (opt-in, Standard = bisher): Vorschläge "bars" | "pills",
   // Begrüßung "text" | "bubble" (greetingBubbleText als Assistenten-Blase,
   // greeting klein darunter); Kopfzeile: Untertitel unter dem Namen und

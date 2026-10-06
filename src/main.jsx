@@ -26,6 +26,9 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Kurskarten v3: KI-Teaser blendet ein (.allm-course-teaser-in), nur wenn er
 // nach der schon sichtbaren Karte ankommt (nicht beim Verlauf-Laden, nicht
 // unter der Antwort); ohne Bewegung bei prefers-reduced-motion.
+// Teaser-Platzhalter (.allm-course-teaser-pending, Karten oben im Stream):
+// Opacity 0,45 <-> 0,9 in 1,6 s, ruhig (0,7) bei prefers-reduced-motion.
+// Zeilen-Karten (.allm-course-card-row) nutzen Hover/Fokus der Rasterkarten.
 // Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
 // Tastaturfokus füllen im Akzent, Text ON_ACCENT_TEXT (Farben stehen inline ->
 // !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
@@ -178,6 +181,9 @@ const customCss = `
   @keyframes allm-course-teaser-in{from{opacity:0}to{opacity:1}}
   .allm-course-teaser-in{animation:allm-course-teaser-in .24s ease-out}
   @media (prefers-reduced-motion: reduce){.allm-course-teaser-in{animation:none}}
+  @keyframes allm-teaser-pending{0%,100%{opacity:.45}50%{opacity:.9}}
+  .allm-course-teaser-pending{animation:allm-teaser-pending 1.6s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){.allm-course-teaser-pending{animation:none;opacity:.7}}
 
   /* Inline-Leiste als Eingabefeld (inlineInput): Fokusring um die ganze Pille
      (--allm-focus-ring, sonst 2px Akzent), Platzhalter in Leisten-Textfarbe,

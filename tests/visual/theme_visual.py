@@ -62,8 +62,8 @@ EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
 VIEWPORT = {"width": 1000, "height": 700}
 MOBILE = {"width": 390, "height": 700}
 MAX_DIFF_RATIO = 0.001  # 0,1 %
-# Basis = main nach Folgefragen, 2026-10-06
-BASE_JS_SIZE = 792_720
+# Basis = main nach Feinschliff, 2026-10-06 (c6bc308, gemessen 797.168 B)
+BASE_JS_SIZE = 797_168
 # Basis = main nach Kurskarten v2, 2026-10-06 (1e538e5)
 BASE_CSS_SIZE = 20_467
 

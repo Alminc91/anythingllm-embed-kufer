@@ -1,6 +1,15 @@
-import { memo, useId, useMemo, useState } from "react";
+import {
+  memo,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   MORE_COURSES_TEXT,
+  rowLead,
+  rowMeta,
   selectCourseCards,
   teaserFadeIn,
 } from "@/utils/courseCards";
@@ -77,11 +86,19 @@ const teaserStyle = {
 };
 const listReset = { listStyle: "none", margin: 0, padding: 0 };
 const itemStyle = { display: "flex", minWidth: 0 };
+const TEASER_LINE_PX = 18;
+// Zeilen-Karten nur ab dieser Kartenbreite; schmaler = Rasterkarte
+export const ROW_CARD_MIN_PX = 480;
+// Zeilen-Karte: Teaser höchstens 2 Zeilen (15–20 Wörter passen ab ≈ 500 px
+// Textbreite in zwei Zeilen), Raster 3
+const ROW_TEASER_LINES = 2;
+const GRID_TEASER_LINES = 3;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
 // "einblenden" fällt einmal beim Erscheinen (kein erneutes Einblenden bei
-// späteren Renders).
-function Teaser({ id, text, arrivedAt = null }) {
+// späteren Renders). reserve = Zeilen, die vorher der Platzhalter belegt hat
+// (min-height, die Karte wird beim Ersetzen nicht kleiner oder größer).
+function Teaser({ id, text, arrivedAt = null, lines, reserve = 0 }) {
   const [fadeIn] = useState(() => teaserFadeIn(arrivedAt));
   return (
     <span
@@ -92,11 +109,49 @@ function Teaser({ id, text, arrivedAt = null }) {
           : "allm-course-teaser"
       }
       data-course-teaser=""
-      style={teaserStyle}
+      style={{
+        ...teaserStyle,
+        WebkitLineClamp: lines,
+        ...(reserve > 0 && { minHeight: `${reserve * TEASER_LINE_PX}px` }),
+      }}
     >
       {text}
     </span>
   );
+}
+
+// Platzhalter an der Teaser-Stelle (Karten oben, Teaser erwartet): gedämpft,
+// pulsierend (CSS allm-course-teaser-pending in main.jsx, ruhig bei
+// prefers-reduced-motion), reserviert die Höhe des Teasers (lines Zeilen).
+// Immer Text (React escaped), nie HTML.
+function TeaserPending({ text, lines }) {
+  return (
+    <span
+      className="allm-course-teaser-pending"
+      data-teaser-pending=""
+      style={{
+        display: "block",
+        color: MUTED,
+        fontSize: "13px",
+        lineHeight: `${TEASER_LINE_PX}px`,
+        height: `${lines * TEASER_LINE_PX}px`,
+        overflow: "hidden",
+        overflowWrap: "anywhere",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+// Teaser-Stelle einer Karte: Teaser, Platzhalter oder nichts. Hat die Karte
+// einmal den Platzhalter gezeigt, behält der Teaser dessen Höhe (reserve).
+function useTeaserSlot({ teaser, pending, fallback, lines }) {
+  const reservedRef = useRef(0);
+  const showTeaser = !!teaser && !fallback;
+  const showPending = !showTeaser && !!pending && !fallback;
+  if (showPending) reservedRef.current = lines;
+  return { showTeaser, showPending, reserve: reservedRef.current };
 }
 
 function joinParts(parts) {
@@ -108,10 +163,21 @@ function joinParts(parts) {
 // die Metadaten-Zeilen fehlen einfach, sonst gleiche Karte (auch ohne
 // Teaser). teaser = KI-Teaser (Kurskarten v3), sonst null; teaserArrivedAt
 // = Ankunft des Teasers im Stream (nur Karten oben, sonst null).
-function Card({ card, teaser = null, teaserArrivedAt = null }) {
+// pending = Teaser erwartet (Platzhalter, nur Karten oben im Stream)
+function Card({
+  card,
+  teaser = null,
+  teaserArrivedAt = null,
+  pending = null,
+}) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
-  const showTeaser = !!teaser && !card.fallback;
+  const { showTeaser, showPending, reserve } = useTeaserSlot({
+    teaser,
+    pending,
+    fallback: card.fallback,
+    lines: GRID_TEASER_LINES,
+  });
   // Beschreibung = die sichtbaren Zeilen (Name = Titel per aria-label)
   const describedBy = [
     card.schedule && `${id}-s`,
@@ -162,7 +228,16 @@ function Card({ card, teaser = null, teaserArrivedAt = null }) {
           {card.title}
         </span>
         {showTeaser && (
-          <Teaser id={`${id}-t`} text={teaser} arrivedAt={teaserArrivedAt} />
+          <Teaser
+            id={`${id}-t`}
+            text={teaser}
+            arrivedAt={teaserArrivedAt}
+            lines={GRID_TEASER_LINES}
+            reserve={reserve}
+          />
+        )}
+        {showPending && (
+          <TeaserPending text={pending} lines={GRID_TEASER_LINES} />
         )}
         {details && (
           <span
@@ -194,6 +269,168 @@ function Card({ card, teaser = null, teaserArrivedAt = null }) {
       </a>
     </li>
   );
+}
+
+// Status-Pille (Raster und Zeilen-Karte): "buchbar" mit Akzentrahmen,
+// "nicht buchbar" neutral
+const statusStyle = (bookable) => ({
+  padding: "0 8px",
+  borderRadius: "999px",
+  border: `1px solid ${bookable ? ACCENT : BORDER}`,
+  color: TEXT,
+  fontSize: "11px",
+  lineHeight: "18px",
+  whiteSpace: "nowrap",
+});
+
+// Zeilen-Karte (courseCardsLayout "rows", Kartenbreite >= 480 px): links
+// Wochentag + Uhrzeit in Akzentfarbe (Tabellenziffern), Mitte Titel, Meta-
+// Zeile und Teaser (höchstens 2 Zeilen) bzw. Platzhalter, rechts die
+// Status-Pille. Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
+// sichtbare Zeilen; Hover/Fokus über .allm-course-card (main.jsx).
+function CardRow({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
+  const id = useId();
+  const lead = rowLead(card);
+  const meta = rowMeta(card);
+  const { showTeaser, showPending, reserve } = useTeaserSlot({
+    teaser,
+    pending,
+    fallback: card.fallback,
+    lines: ROW_TEASER_LINES,
+  });
+  const describedBy = [
+    lead && `${id}-s`,
+    meta && `${id}-d`,
+    showTeaser && `${id}-t`,
+    card.status && `${id}-b`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <li style={itemStyle}>
+      <a
+        href={card.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={card.title}
+        aria-describedby={describedBy || undefined}
+        data-course-link=""
+        data-course-row=""
+        data-course-fallback={card.fallback ? "" : undefined}
+        className="allm-course-card allm-course-card-row"
+        style={{
+          ...blockLinkStyle,
+          boxSizing: "border-box",
+          minWidth: 0,
+          flex: "1 1 auto",
+          backgroundColor: SURFACE,
+          border: `1px solid ${BORDER}`,
+          borderRadius: RADIUS,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "14px",
+          fontSize: "13px",
+          lineHeight: "18px",
+        }}
+      >
+        {lead && (
+          <span
+            id={`${id}-s`}
+            className="allm-course-when"
+            style={{
+              flex: "none",
+              minWidth: "4.5em",
+              color: ACCENT,
+              fontWeight: 600,
+              fontSize: "13px",
+              lineHeight: "19px",
+              fontVariantNumeric: "tabular-nums",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {lead}
+          </span>
+        )}
+        <span
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "2px",
+          }}
+        >
+          <span
+            className="allm-course-title"
+            style={{
+              color: TEXT,
+              fontWeight: 600,
+              fontSize: "14px",
+              lineHeight: "19px",
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+              overflow: "hidden",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {card.title}
+          </span>
+          {meta && (
+            <span
+              id={`${id}-d`}
+              className="allm-course-details"
+              style={{ ...mutedStyle, overflowWrap: "anywhere" }}
+            >
+              {meta}
+            </span>
+          )}
+          {showTeaser && (
+            <Teaser
+              id={`${id}-t`}
+              text={teaser}
+              arrivedAt={teaserArrivedAt}
+              lines={ROW_TEASER_LINES}
+              reserve={reserve}
+            />
+          )}
+          {showPending && (
+            <TeaserPending text={pending} lines={ROW_TEASER_LINES} />
+          )}
+        </span>
+        {card.status && (
+          <span
+            id={`${id}-b`}
+            className="allm-course-status"
+            style={{ ...statusStyle(card.bookable), flex: "none" }}
+          >
+            {card.status}
+          </span>
+        )}
+      </a>
+    </li>
+  );
+}
+
+// Breite der Kartenliste >= ROW_CARD_MIN_PX? Gemessen vor dem Paint und bei
+// jeder Größenänderung; ohne Layout (Breite 0: ausgeblendet, jsdom) gilt
+// "breit" — beim Einblenden misst der ResizeObserver neu.
+function useWideList(ref, active) {
+  const [wide, setWide] = useState(true);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const check = (w) => setWide(!(w > 0) || w >= ROW_CARD_MIN_PX);
+    check(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) =>
+      check(entries[0]?.contentRect?.width ?? el.clientWidth),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active]);
+  return wide;
 }
 
 function CompactRow({ card, first }) {
@@ -237,24 +474,42 @@ function CompactRow({ card, first }) {
 }
 
 // Karten als Raster (einspaltig bei schmaler Breite); teasers = Map
-// normalisierte URL -> Teaser (Kurskarten v3, sonst leer)
-function CardList({ cards, teasers = null, teaserArrivedAt = null }) {
+// normalisierte URL -> Teaser (Kurskarten v3, sonst leer). layout "rows":
+// Zeilen-Karten untereinander, unter ROW_CARD_MIN_PX Listenbreite die
+// Rasterkarte einspaltig. pending = Text des Platzhalters, solange Teaser
+// erwartet werden (sonst null).
+function CardList({
+  cards,
+  teasers = null,
+  teaserArrivedAt = null,
+  layout = "grid",
+  pending = null,
+}) {
+  const ref = useRef(null);
+  const rows = layout === "rows";
+  const wide = useWideList(ref, rows);
+  const Item = rows && wide ? CardRow : Card;
   return (
     <ul
+      ref={ref}
       className="allm-course-list"
+      data-layout={rows ? (wide ? "rows" : "rows-narrow") : undefined}
       style={{
         ...listReset,
         display: "grid",
         gap: "8px",
-        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
+        gridTemplateColumns: rows
+          ? "minmax(0, 1fr)"
+          : "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
       }}
     >
       {cards.map((card) => (
-        <Card
+        <Item
           key={card.key}
           card={card}
           teaser={teasers?.get(card.key)}
           teaserArrivedAt={teaserArrivedAt}
+          pending={pending}
         />
       ))}
     </ul>
@@ -305,6 +560,9 @@ function CategoryLink({ categoryLink }) {
 //     fehlt sie, sehen die Karten aus wie bisher.
 //     teaserArrivedAt: nur Karten oben — Teaser kam nach den Karten an und
 //     blendet ein (unter der Antwort erscheinen Karte und Teaser zusammen)
+//   layout: "grid" (Raster, Standard) | "rows" (Zeilen-Karten, courseCardsLayout)
+//   teaserPending: nur Karten oben im Stream — Text des Platzhalters an der
+//     Teaser-Stelle, solange Teaser erwartet werden (ChatHistory), sonst null
 function CourseCards({
   reply,
   courseSources,
@@ -315,6 +573,8 @@ function CourseCards({
   selection: given = null,
   position = "below",
   part = "all",
+  layout = "grid",
+  teaserPending = null,
 }) {
   const above = position === "above";
   const computed = useMemo(
@@ -346,7 +606,7 @@ function CourseCards({
         className="allm-course-cards-footer allm-font-sans allm-mt-2 allm-ml-[54px] allm-mr-6"
         style={{ color: TEXT }}
       >
-        <CardList cards={footerCards} />
+        <CardList cards={footerCards} layout={layout} />
         {categoryLink ? (
           <CategoryLink categoryLink={categoryLink} />
         ) : (
@@ -393,6 +653,8 @@ function CourseCards({
           cards={cards}
           teasers={teasers}
           teaserArrivedAt={teaserArrivedAt}
+          layout={layout}
+          pending={teaserPending}
         />
       )}
       {showFooter && categoryLink ? (
