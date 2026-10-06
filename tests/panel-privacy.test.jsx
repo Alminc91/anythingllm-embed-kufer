@@ -51,6 +51,7 @@ import ChatContainer, {
   sendSuggestion,
 } from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
+import { privacyParagraph } from "../src/components/ChatWindow/ChatContainer/ChatHistory/PanelWelcome/index.jsx";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
 import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
@@ -473,6 +474,69 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     );
   });
 
+  it("AK-5: neue Standardtexte in Blase (de/en) und Popup", () => {
+    render(
+      <ChatHistory
+        settings={{ greetingStyle: "bubble", privacyNotice: "bubble" }}
+        history={[]}
+      />,
+    );
+    const bubble = $("#anything-llm-greeting-bubble");
+    expect(bubble.textContent).toContain(
+      "Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
+    );
+    expect(bubble.textContent).toContain(
+      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+    );
+    render(
+      <ChatHistory
+        settings={{
+          greetingStyle: "bubble",
+          privacyNotice: "bubble",
+          language: "en",
+        }}
+        history={[]}
+      />,
+    );
+    expect($("#anything-llm-greeting-bubble").textContent).toContain(
+      "Staff of the institution may view conversations for quality assurance.",
+    );
+    render(
+      <ChatContainer
+        sessionId="s-1"
+        conversationId="c-1"
+        knownHistory={[]}
+        settings={{ ...BASE, enableStt: false, privacyNotice: "modal" }}
+      />,
+    );
+    expect($$("[role=dialog] li")[1].textContent).toBe(
+      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+    );
+  });
+
+  it("AK-6: Blase mit Datenschutz = zwei Absätze, Breite ≤ 80 %", () => {
+    render(
+      <ChatHistory
+        settings={{
+          greetingStyle: "bubble",
+          privacyNotice: "bubble",
+          privacyText: "Erstens. | Zweitens! | Drittens",
+        }}
+        history={[]}
+      />,
+    );
+    const bubble = $("#anything-llm-greeting-bubble");
+    expect(bubble.style.maxWidth).toBe("80%");
+    expect(bubble.style.boxSizing).toBe("border-box");
+    // Absatz 1 = Text vor dem Datenschutz-Absatz, Absatz 2 = Fließtext
+    expect(bubble.childNodes).toHaveLength(2);
+    expect(bubble.childNodes[0].nodeType).toBe(Node.TEXT_NODE);
+    expect(bubble.childNodes[1].textContent).toBe(
+      "Erstens. Zweitens! Drittens.",
+    );
+    expect(privacyParagraph(["a?", "b…", "c"])).toBe("a? b… c.");
+  });
+
   it("NAK-1: HTML in greetingBubbleText erscheint als Text", () => {
     render(
       <ChatHistory
@@ -486,6 +550,95 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const bubble = $("#anything-llm-greeting-bubble");
     expect(bubble.querySelector("b, img")).toBe(null);
     expect(bubble.textContent).toBe("<b>fett</b><img src=x onerror=alert(1)>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
+  const HIST = [
+    { role: "user", content: "Gibt es Yoga?", sentAt: 1 },
+    { role: "assistant", content: "Ja, montags.", sentAt: 2, chatId: 1 },
+  ];
+  const BUBBLE = {
+    ...BASE,
+    enableStt: false,
+    defaultMessages: MSGS,
+    suggestionStyle: "pills",
+    greetingStyle: "bubble",
+    privacyNotice: "bubble",
+    privacyUrl: "/datenschutz",
+  };
+  const list = () => $("#chat-history").firstElementChild;
+
+  it("AK-2: nach der ersten Frage bleibt die Blase (mit Datenschutz) erste Nachricht, Pillen weg", () => {
+    render(
+      <ChatContainer
+        sessionId="s-1"
+        conversationId="c-1"
+        knownHistory={[]}
+        settings={BUBBLE}
+      />,
+    );
+    expect($("#anything-llm-suggestion-pills")).not.toBe(null);
+    act(() => sendSuggestion("Yoga"));
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect($("#anything-llm-suggestion-pills")).toBe(null);
+    expect($$("#anything-llm-greeting-bubble")).toHaveLength(1);
+    const first = list().firstElementChild;
+    expect(first.id).toBe("anything-llm-panel-welcome");
+    expect(first.hasAttribute("data-persistent")).toBe(true);
+    expect(first.querySelector("#anything-llm-bubble-privacy a")).not.toBe(
+      null,
+    );
+    // danach die Frage
+    expect(first.nextElementSibling.textContent).toContain("Yoga");
+  });
+
+  it("AK-2: geladener Verlauf (Reload) -> Blase genau einmal an erster Stelle, keine Pillen", () => {
+    render(
+      <ChatContainer
+        sessionId="s-1"
+        conversationId="c-1"
+        knownHistory={HIST}
+        settings={BUBBLE}
+      />,
+    );
+    expect($$("#anything-llm-greeting-bubble")).toHaveLength(1);
+    expect(list().firstElementChild.id).toBe("anything-llm-panel-welcome");
+    expect(list().children).toHaveLength(3); // Blase + 2 Nachrichten
+    expect($("#anything-llm-suggestion-pills")).toBe(null);
+    expect($$(".msg-suggestion")).toHaveLength(0);
+    // Blase ist kein Chat-Eintrag: nichts gesendet
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+
+  it("ohne Datenschutz in der Blase: kleiner greeting-Text bleibt unter der Blase", () => {
+    render(
+      <ChatHistory
+        settings={{ greetingStyle: "bubble", greeting: GREETING }}
+        history={HIST}
+      />,
+    );
+    const welcome = list().firstElementChild;
+    expect(welcome.querySelector("#anything-llm-greeting-bubble")).not.toBe(
+      null,
+    );
+    expect(
+      welcome.querySelector("#anything-llm-greeting-small").textContent,
+    ).toBe(GREETING);
+  });
+
+  it("NAK-1: greetingStyle text (Bestandskunden) -> Verlauf unverändert, keine Blase, kein greeting", () => {
+    render(
+      <ChatHistory
+        settings={{ greeting: GREETING, defaultMessages: MSGS }}
+        history={HIST}
+      />,
+    );
+    expect($("#anything-llm-greeting-bubble")).toBe(null);
+    expect($("#anything-llm-panel-welcome")).toBe(null);
+    expect(container.textContent).not.toContain(GREETING);
+    expect(list().children).toHaveLength(2);
   });
 });
 
@@ -508,6 +661,27 @@ describe("Kopfzeile: Untertitel, Online-Punkt, Icon (AK-4)", () => {
     expect($("#anything-llm-header-subtitle")).toBe(null);
     expect($("[data-online-dot]")).toBe(null);
     expect(container.textContent).toContain("Ihr Online-Berater");
+  });
+
+  it("AK-4: onlineDot Standard aus — Konfiguration ohne onlineDot zeigt keinen Punkt", async () => {
+    const s = await loadEmbedSettings(
+      BASE,
+      fetchConfig({
+        greetingStyle: "bubble",
+        assistantSubtitle: "durchsucht 1.243 Kurse",
+      }),
+    );
+    expect(s.onlineDot).toBe(false);
+    render(<ChatWindowHeader {...props} settings={{ ...s, loaded: true }} />);
+    expect($("#anything-llm-header-subtitle")).not.toBe(null);
+    expect($("[data-online-dot]")).toBe(null);
+    // ausdrücklich false (Design Center der Demo) ebenso
+    const off = await loadEmbedSettings(
+      BASE,
+      fetchConfig({ onlineDot: false }),
+    );
+    render(<ChatWindowHeader {...props} settings={{ ...off, loaded: true }} />);
+    expect($("[data-online-dot]")).toBe(null);
   });
 
   it("Untertitel, grüner Punkt (aria-hidden, Tooltip online), Icon-URL", () => {
@@ -561,17 +735,23 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
 
   it("Standardtexte neutral (alle Kundenarten), ohne Speicherdauer, Standard ohne Link", async () => {
     expect(PANEL_TEXTS.de.greetingBubble).toBe(
-      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
     );
     expect(PANEL_TEXTS.en.greetingBubble).toBe(
       "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
     );
     expect(DEFAULT_PRIVACY_POINTS).toEqual([
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
-      "Unser Team kann Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ]);
-    expect(PANEL_TEXTS.en.privacyPoints).toHaveLength(3);
+    expect(PANEL_TEXTS.en.privacyPoints).toEqual([
+      "Your requests stay on servers in Germany and are not passed on to third parties.",
+      "Staff of the institution may view conversations for quality assurance.",
+      "Please only share information that is necessary for your request.",
+    ]);
+    // Datenschutz-Satz spricht für die Einrichtung des Kunden, nicht „Unser Team“
+    expect(JSON.stringify(PANEL_TEXTS)).not.toMatch(/Unser Team|Our team/);
     expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
     const all = JSON.stringify(PANEL_TEXTS);
     for (const word of [
@@ -944,17 +1124,22 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     expect(bubble.textContent.startsWith(DEFAULT_GREETING_BUBBLE_TEXT)).toBe(
       true,
     );
-    const paras = $$("#anything-llm-bubble-privacy p");
-    expect(paras.map((p) => p.textContent)).toEqual([
-      DEFAULT_PRIVACY_POINTS[0],
-      DEFAULT_PRIVACY_POINTS[1],
-      DEFAULT_PRIVACY_POINTS[2],
-      "Datenschutz",
-    ]);
-    expect($("#anything-llm-bubble-privacy strong")).toBe(null);
-    expect(paras[3].querySelector("a").getAttribute("href")).toBe(
-      "/datenschutz",
+    // Zwei Absätze: Begrüßung, dann die Punkte als ein Fließtext mit dem
+    // Link am Ende
+    const para = $("#anything-llm-bubble-privacy");
+    expect(para.tagName).toBe("P");
+    expect(bubble.querySelectorAll("p")).toHaveLength(1);
+    expect(para.textContent).toBe(
+      `${DEFAULT_PRIVACY_POINTS.join(" ")} Datenschutz`,
     );
+    expect(bubble.textContent).toBe(
+      `${DEFAULT_GREETING_BUBBLE_TEXT}${para.textContent}`,
+    );
+    expect($("#anything-llm-bubble-privacy strong")).toBe(null);
+    expect(para.querySelector("a").getAttribute("href")).toBe("/datenschutz");
+    expect(para.querySelector("a").textContent).toBe("Datenschutz");
+    // Breite wie Antwortblasen (≈ 80 %)
+    expect(bubble.style.maxWidth).toBe("80%");
     expect($("#anything-llm-privacy-notice")).toBe(null);
     expect($("#message-input").disabled).toBe(false);
     expect(window.localStorage.length).toBe(0);
@@ -973,8 +1158,10 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
         }}
       />,
     );
-    const paras = $$("#anything-llm-bubble-privacy p");
-    expect(paras.map((p) => p.textContent)).toEqual(["<b>Eins</b>", "Zwei"]);
+    // Punkte ohne Satzzeichen am Ende bekommen einen Punkt (Fließtext)
+    expect($("#anything-llm-bubble-privacy").textContent).toBe(
+      "<b>Eins</b>. Zwei.",
+    );
     expect($("#anything-llm-bubble-privacy a")).toBe(null);
     expect($("#anything-llm-bubble-privacy b")).toBe(null);
   });

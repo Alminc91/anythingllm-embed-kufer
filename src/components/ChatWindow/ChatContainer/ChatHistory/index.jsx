@@ -2,12 +2,13 @@ import HistoricalMessage from "./HistoricalMessage";
 import PromptReply from "./PromptReply";
 import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
-import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
+import PanelWelcome, { PanelGreeting, SuggestedPills } from "./PanelWelcome";
 import {
   courseCardsAbove,
   courseCardsEnabled,
   followUpsList,
   selectAnnouncedCourseCards,
+  teaserMap,
 } from "@/utils/courseCards";
 import { stripThink } from "@/utils/chat/think";
 import {
@@ -59,14 +60,17 @@ export default function ChatHistory({
   // Antwort und nur, wenn ein Klick sofort senden kann; hier einmal geprüft
   // (followUpsList), FollowUps bekommt die fertige Liste
   const last = history[history.length - 1];
-  const followUps =
+  const showFollowUps =
     settings.followUps === "pills" &&
     canSend &&
     last?.role === "assistant" &&
     !last.animate &&
-    !last.error
-      ? followUpsList(last.followUps)
-      : [];
+    !last.error;
+  const rawFollowUps = showFollowUps ? last.followUps : null;
+  const followUps = useMemo(
+    () => (rawFollowUps ? followUpsList(rawFollowUps) : []),
+    [rawFollowUps],
+  );
   // Gerade angekommene Folgefragen (nicht beim Verlauf-Laden)
   const pillsAt = followUps.length > 0 ? last.followUpsArrivedAt : undefined;
 
@@ -230,6 +234,13 @@ export default function ChatHistory({
       })}
     >
       <div className="allm-flex allm-flex-col allm-gap-y-4">
+        {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
+            Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
+            darunter gibt es nur im leeren Chat. Mit greetingStyle "text"
+            unverändert. */}
+        {settings?.greetingStyle === "bubble" && (
+          <PanelGreeting settings={settings} />
+        )}
         {history.map((props, index) => {
           const isLastMessage = index === history.length - 1;
           const live =
@@ -241,7 +252,7 @@ export default function ChatHistory({
 
           // selection: Kurskarten-Auswahl des Blocks oben (nur "above") ->
           // HistoricalMessage zeigt damit nur den Abschlusslink
-          const renderBody = (selection = null) =>
+          const renderBody = (selection = null, teasers = null) =>
             live ? (
               <PromptReply
                 key={props.uuid}
@@ -262,7 +273,10 @@ export default function ChatHistory({
                 role={props.role}
                 sources={props.sources}
                 courseSources={above ? null : props.courseSources}
+                // oben: Teaser (schon geprüft im Block darüber) nur für die
+                // Sprachausgabe; der Fuß zeigt keine Teaser
                 courseTeasers={above ? null : props.courseTeasers}
+                courseTeaserMap={teasers}
                 courseCards={settings?.courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
                 courseCardsSelection={selection}
@@ -309,13 +323,21 @@ function replyFinal(message) {
 // Die Karten erscheinen, sobald der Server sie ankündigt (Chunk
 // "courseSources", vor dem ersten Text-Token); bis zum ersten Token zeigt
 // PromptReply den Tipp-Indikator. Ergänzungen am Stream-Ende werden angehängt.
-// Die Auswahl wird hier einmal berechnet; die Antwort darunter bekommt sie
-// für den Abschlusslink (renderBody). Fallback-Karten (Kursseiten ohne
+// Die Auswahl und die Teaser werden hier einmal berechnet; die Antwort
+// darunter bekommt beide für den Abschlusslink bzw. die Sprachausgabe
+// (renderBody). Fallback-Karten (Kursseiten ohne
 // Serverdaten) erst bei fertiger Antwort: mit Ankündigung unter der Antwort
 // (footerCards), ohne Ankündigung zusammen mit den übrigen Karten oben.
 function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
   const { content, courseSources, courseCardsAnnounced, error } = props;
   const final = replyFinal(props);
+  // Security (Client-DoS): während des Streamings (animate bzw. pending) nur
+  // die angekündigten Karten (Text ""), Links/Titel der Antwort erst, wenn
+  // sie nicht mehr streamt — nicht pro Chunk die ganze Antwort durchsuchen.
+  // Verlauf-Einträge (ohne animate, auch ohne chatId) gelten als fertig.
+  const streaming = props.animate === true || props.pending === true;
+  const done = final || !streaming;
+  const replyText = done ? stripThink(content) : "";
   const hasCards =
     !error &&
     ((Array.isArray(courseSources) && courseSources.length > 0) ||
@@ -324,7 +346,7 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
     () =>
       hasCards
         ? selectAnnouncedCourseCards(
-            stripThink(content),
+            replyText,
             courseSources,
             { courseCards },
             { announced: courseCardsAnnounced, fallback: final },
@@ -332,12 +354,16 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
         : null,
     [
       hasCards,
-      content,
+      replyText,
       courseSources,
       courseCards,
       courseCardsAnnounced,
       final,
     ],
+  );
+  const teasers = useMemo(
+    () => teaserMap(props.courseTeasers),
+    [props.courseTeasers],
   );
   return (
     <div className="allm-pt-[5px]" data-assistant-turn="">
@@ -345,13 +371,13 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
       {selection && (
         <CourseCards
           selection={selection}
-          courseTeasers={props.courseTeasers}
+          teasers={teasers}
           teaserArrivedAt={props.teaserArrivedAt}
           position="above"
           part="cards"
         />
       )}
-      {renderBody(selection)}
+      {renderBody(selection, teasers)}
     </div>
   );
 }
@@ -387,7 +413,7 @@ function SuggestedMessages({ settings }) {
             fontSize: suggestionFontSize(settings.textSize),
           }}
           type="button"
-          onClick={() => sendSuggestion(content)}
+          onClick={(e) => sendSuggestion(content, e.currentTarget)}
           className={`msg-suggestion allm-font-sans allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
         >
           {content}

@@ -14,11 +14,11 @@ export default function FollowUps({ items, settings }) {
   const [sent, setSent] = useState(false);
   const sentRef = useRef(false);
   if (sent || items.length === 0) return null;
-  const send = (text) => {
+  const send = (text, source) => {
     if (sentRef.current) return;
     sentRef.current = true;
     setSent(true);
-    sendSuggestion(text);
+    sendSuggestion(text, source);
   };
   return (
     <div
@@ -29,7 +29,12 @@ export default function FollowUps({ items, settings }) {
       style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
     >
       {items.map((text, i) => (
-        <Pill key={i} text={text} variant="accent" onClick={() => send(text)} />
+        <Pill
+          key={i}
+          text={text}
+          variant="accent"
+          onClick={(e) => send(text, e.currentTarget)}
+        />
       ))}
     </div>
   );

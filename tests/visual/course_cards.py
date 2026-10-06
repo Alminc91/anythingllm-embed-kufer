@@ -36,8 +36,8 @@ Karten 14 px, Blasen 18 px) + Messung mit/ohne --allm-radius-card.
 
 Kurskarten v3 (Fork >= 7.13): Dauer/Ort aus den Kopfzeilen (sessions/venue)
 und KI-Teaser je Karte (Chunk type "courseTeasers"): Zustände cc-v3-meta
-(Kopf-/Metazeile), cc-v3-teaser und cc-v3-teaser-mobile (Untertext, 2-Zeilen-
-Klammer bei 360 px) + DOM-Prüfung check_v3 (Teaser kommt nach den Karten,
+(Kopf-/Metazeile), cc-v3-teaser und cc-v3-teaser-mobile (Untertext, bis zu
+3 Zeilen, Klammer nur als letzter Ausweg) + DOM-Prüfung check_v3 (Teaser kommt nach den Karten,
 Karten bleiben stehen, Verlauf-Reload, Teaserzeilen eines älteren Servers nie
 sichtbar). Nur die neuen Zustände gezielt erzeugen:
   python3 tests/visual/course_cards.py --baseline --new-states \
@@ -970,6 +970,7 @@ V3_DOM_JS = r"""
         color: cs ? cs.color : null,
         titleColor: title ? getComputedStyle(title).color : null,
         clamp: cs ? cs.webkitLineClamp : null,
+        clipped: !!t && t.scrollHeight > t.clientHeight + 1,
         described: !!t && (c.getAttribute("aria-describedby") || "").includes(t.id),
       };
     }),
@@ -982,7 +983,7 @@ V3_DOM_JS = r"""
 def check_v3(browser, base_url):
     """Kurskarten v3 (AK-2/AK-5/NAK-3): Dauer/Ort in Kopf- und Metazeile; KI-
     Teaser kommt nach den Karten (Chunk courseTeasers), steht unter dem Titel
-    (13 px, Textfarbe, höchstens 2 Zeilen), Karten bleiben dieselben Knoten an
+    (13 px, Textfarbe, bis zu 3 Zeilen), Karten bleiben dieselben Knoten an
     derselben Stelle; Verlauf-Reload zeigt ihn; Teaserzeilen eines älteren
     Servers sind nie sichtbar."""
     events = v3_events(parts=6)
@@ -1013,8 +1014,8 @@ def check_v3(browser, base_url):
             ok_style = all(c["fs"] == "13px" and c["color"] == c["titleColor"] for c in d["cards"])
             record(f"AK-5 Teaser 13 px in Textfarbe ({label})", ok_style,
                    f"{[(c['fs'], c['color']) for c in d['cards']]}")
-            ok_clamp = all(c["clamp"] == "2" and c["h"] <= 2 * c["lh"] + 1 for c in d["cards"])
-            record(f"AK-5 höchstens 2 Zeilen ({label})", ok_clamp,
+            ok_clamp = all(c["clamp"] == "3" and c["h"] <= 3 * c["lh"] + 1 for c in d["cards"])
+            record(f"AK-5 höchstens 3 Zeilen ({label})", ok_clamp,
                    f"Höhen {[round(c['h'], 1) for c in d['cards']]} bei Zeilenhöhe {d['cards'][0]['lh']}")
             record(f"AK-5 Teaser in der Kartenbeschreibung ({label})", all(c["described"] for c in d["cards"]),
                    "aria-describedby")
@@ -1062,6 +1063,42 @@ def check_v3(browser, base_url):
             ctx.close()
 
 
+# AK-3 (Feinschliff): Teaser mit 20 Wörtern bei 330 px Kartenbreite
+# vollständig (3 Zeilen, keine Ellipse). Schrift Arial (im Testsystem
+# Liberation Sans, metrisch gleich; typische Breite von Systemschriften):
+# die Standardschrift des Testsystems (DejaVu Sans, ≈ 10 % breiter) bräche
+# den Text in 4 Zeilen.
+# 20 Wörter, 136 Zeichen (Demo-Teaser 06.10.: 98–152 Zeichen, 15–19 Wörter;
+# bei 330 px passen in Arial-Metrik ≈ 140 Zeichen in 3 Zeilen)
+TEASER_20 = ("Sanfter Einstieg mit etwas Vorerfahrung: Dehnung, Atmung und Entspannung nach "
+             "der Arbeit, ideal zum Abschalten auch mitten in der Woche.")
+TEASER_FIT_JS = """() => { const l = window.__q('.allm-course-list'); l.style.gridTemplateColumns = '330px';
+  return [...l.querySelectorAll('.allm-course-card')].map(c => { const t = c.querySelector('.allm-course-teaser');
+    const lh = parseFloat(getComputedStyle(t).lineHeight);
+    return { w: Math.round(c.getBoundingClientRect().width), text: t.textContent,
+             lines: Math.round(t.scrollHeight / lh), clipped: t.scrollHeight > t.clientHeight + 1,
+             clamp: getComputedStyle(t).webkitLineClamp }; }); }"""
+
+
+def check_teaser_20_words(browser, base_url):
+    words = len([w for w in TEASER_20.split() if w != "–"])
+    hist = v3_history()
+    hist[1]["courseTeasers"] = {**TEASERS_V3, V3[1]["url"]: TEASER_20}
+    ctx, page = tv.open_page(browser, base_url,
+                             {"attrs": ABOVE, "css": "#anythingllm-embed-widget { --allm-font: Arial; }"},
+                             tv.Mock(config={}, history=hist), before_goto=freeze)
+    try:
+        tv.wait_shadow(page, CARD_SEL)
+        tv.settle(page, 400)
+        d = page.evaluate(TEASER_FIT_JS)
+        c = next(x for x in d if x["text"] == TEASER_20)
+        record("AK-3 Teaser mit 20 Wörtern bei 330 px vollständig (≤ 3 Zeilen, keine Ellipse)",
+               words == 20 and c["w"] == 330 and c["lines"] <= 3 and not c["clipped"] and c["clamp"] == "3",
+               json.dumps({**c, "text": f"{words} Wörter/{len(TEASER_20)} Zeichen"}, ensure_ascii=False))
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true")
@@ -1089,6 +1126,7 @@ def main():
                 check_fallback(browser, base_url)
                 check_radius_card(browser, base_url)
                 check_v3(browser, base_url)
+                check_teaser_20_words(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()

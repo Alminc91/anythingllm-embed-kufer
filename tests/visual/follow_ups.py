@@ -4,6 +4,9 @@
 
 Einrichtung wie tests/visual/theme_visual.py (requirements.txt + chromium).
 
+Feinschliff (Demo-Abnahme): Zustand fu-pills-hover (Maus über der ersten
+Pille) + check_hover_focus (Hover/Tastaturfokus im Akzent, Text weiß).
+
 Aufruf (aus dem Repo-Wurzelverzeichnis):
 
   # 1) Referenzen der NEUEN Zustände (gibt es auf main nicht) aus diesem Branch,
@@ -121,7 +124,19 @@ def pixel_cases():
         ("fu-pills-mobile", {"attrs": PILLS}, mock(), tv.MOBILE),
         ("fu-pills-history", {"attrs": PILLS}, mock(history=HISTORY), None),
         ("fu-pills-above", {"attrs": ABOVE}, mock(stream=above_stream(), config={}), None),
+        # Feinschliff AK-1: Maus über der ersten Pille (Akzent-Fläche, Text weiß)
+        ("fu-pills-hover", {"attrs": PILLS}, mock(), None),
     ]
+
+
+PILL_CENTER = """(i) => { const b = window.__q('#anything-llm-follow-ups').querySelectorAll('button')[i];
+  const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }"""
+
+
+def hover_pill(page, i=0):
+    c = page.evaluate(PILL_CENTER, i)
+    page.mouse.move(c["x"], c["y"])
+    page.wait_for_timeout(400)  # Übergang --allmi-transition (200 ms) abwarten
 
 
 def shoot(browser, base_url, case, out_path):
@@ -137,6 +152,8 @@ def shoot(browser, base_url, case, out_path):
         page.mouse.move(0, 0)
         page.evaluate("() => window.__allmShadow.activeElement && window.__allmShadow.activeElement.blur()")
         page.wait_for_timeout(100)
+        if name.endswith("-hover"):
+            hover_pill(page)
         page.screenshot(path=str(out_path), animations="disabled", caret="hide")
         return tv.errors_of(page)
     finally:
@@ -331,6 +348,50 @@ def check_pills_above(browser, base_url):
             ctx.close()
 
 
+PILL_STYLE = """() => [...window.__q('#anything-llm-follow-ups').querySelectorAll('button')].map(b => {
+  const cs = getComputedStyle(b);
+  return { bg: cs.backgroundColor, color: cs.color, border: cs.borderTopColor, outline: cs.outlineStyle + ' ' + cs.outlineWidth,
+           transition: cs.transitionProperty + ' ' + cs.transitionDuration };
+})"""
+
+
+def check_hover_focus(browser, base_url):
+    """Feinschliff AK-1: Hover und Tastaturfokus füllen die Pille im Akzent
+    (Text weiß), Übergang --allmi-transition; Fokus sichtbar; ohne Hover/Fokus
+    unverändert (Hintergrund der Leiste, Schrift Akzent)."""
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PILLS}, mock())
+    try:
+        tv.wait_shadow(page, "#message-input")
+        send(page)
+        wait_pills(page)
+        tv.settle(page, 500)
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(300)
+        accent = page.evaluate("""() => { const d = document.createElement('div');
+          d.style.color = 'var(--allmi-accent)'; window.__q('#anything-llm-follow-ups').appendChild(d);
+          const c = getComputedStyle(d).color; d.remove(); return c; }""")
+        rest = page.evaluate(PILL_STYLE)
+        hover_pill(page, 0)
+        hov = page.evaluate(PILL_STYLE)
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(400)
+        # Tastatur: Fokus auf die zweite Pille per Tab von der ersten aus
+        page.evaluate("() => window.__q('#anything-llm-follow-ups').querySelectorAll('button')[0].focus()")
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(400)
+        foc = page.evaluate(PILL_STYLE)
+        white = "rgb(255, 255, 255)"
+        ok = (rest[0]["bg"] != accent and rest[0]["color"] == accent
+              and hov[0]["bg"] == accent and hov[0]["color"] == white and hov[0]["border"] == accent
+              and hov[1]["bg"] == rest[1]["bg"]
+              and foc[1]["bg"] == accent and foc[1]["color"] == white and foc[1]["outline"].startswith("solid")
+              and "background-color" in rest[0]["transition"] and "0.2s" in rest[0]["transition"])
+        record("AK-1 Hover/Tastaturfokus: Akzent-Fläche, Text weiß, Fokusring, Übergang 200 ms", ok,
+               json.dumps({"accent": accent, "ruhe": rest[0], "hover": hov[0], "fokus": foc[1]}, ensure_ascii=False))
+    finally:
+        ctx.close()
+
+
 def check_default_dom(browser, base_url):
     """AK-5 (DOM): ohne Attribut bzw. mit "none" keine Pillen."""
     for name, attrs in (("ohne Attribut", OPEN), ("none", {**OPEN, "follow-ups": "none"})):
@@ -385,6 +446,7 @@ def main():
                 run_default_pixel(browser, base_url)
                 check_default_dom(browser, base_url)
                 check_stream_and_click(browser, base_url)
+                check_hover_focus(browser, base_url)
                 check_history(browser, base_url)
                 check_no_pills_while_streaming(browser, base_url)
                 check_mobile_wrap(browser, base_url)

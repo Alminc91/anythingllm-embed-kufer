@@ -1,4 +1,11 @@
-import React, { memo, forwardRef, useState, useEffect, useRef } from "react";
+import React, {
+  memo,
+  forwardRef,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Warning,
   CaretDown,
@@ -19,6 +26,13 @@ import CourseCards from "../CourseCards";
 import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
+import {
+  HTML_TAG_RX,
+  replySpeechText,
+  selectCourseCards,
+  SPEECH_STRIP_RX,
+  teaserMap,
+} from "@/utils/courseCards";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -454,6 +468,9 @@ const HistoricalMessage = forwardRef(
       courseSources = null,
       // Kurskarten v3: KI-Teaser je Karte (URL -> Text)
       courseTeasers = null,
+      // dieselben Teaser schon geprüft (teaserMap des umgebenden Blocks,
+      // Kurskarten "above") — dann wird courseTeasers nicht erneut geprüft
+      courseTeaserMap = null,
       courseCards = "off",
       // Kurskarten v2 ("above"): Auswahl des umgebenden Blocks (ChatHistory,
       // Karten über der Antwort) -> hier nur noch der Abschlusslink
@@ -488,10 +505,56 @@ const HistoricalMessage = forwardRef(
     const responseContent = stripThink(message).trim();
 
     // Clean text for TTS (remove markdown, HTML, etc.)
-    const plainTextForTTS = responseContent
-      ?.replace(/[#*_`~\[\]()]/g, "") // Remove markdown
-      ?.replace(/<[^>]*>/g, "") // Remove HTML tags
+    const replyTextForTTS = responseContent
+      ?.replace(SPEECH_STRIP_RX, "") // Remove markdown
+      ?.replace(HTML_TAG_RX, "") // Remove HTML tags (begrenzt: linear)
       ?.trim();
+
+    // Kurskarten: Auswahl einmal hier (Karten unter der Antwort) bzw. von
+    // oben übernommen (courseCardsSelection, Position "above") — dieselbe
+    // für die Anzeige (CourseCards) und die Sprachausgabe.
+    const showCards =
+      role === "assistant" &&
+      !error &&
+      (!!courseCardsSelection ||
+        (Array.isArray(courseSources) && courseSources.length > 0) ||
+        (courseCardsFinal && courseCards === "auto"));
+    const cardSelection = useMemo(
+      () =>
+        !showCards
+          ? null
+          : courseCardsSelection ||
+            selectCourseCards(
+              responseContent,
+              courseSources,
+              { courseCards },
+              { fallback: courseCardsFinal },
+            ),
+      [
+        showCards,
+        courseCardsSelection,
+        responseContent,
+        courseSources,
+        courseCards,
+        courseCardsFinal,
+      ],
+    );
+    // Teaser einmal je Antwort prüfen (Karten unten und Sprachausgabe)
+    const teasers = useMemo(
+      () => courseTeaserMap || teaserMap(courseTeasers),
+      [courseTeaserMap, courseTeasers],
+    );
+    // Vorlesen: erst der Antworttext, danach die Karten als Sätze (Titel,
+    // Zeit, Dauer, Beginn, Ort, Preis, Status, Teaser; Länge begrenzt, s.
+    // replySpeechText); ohne Karten unverändert. Folgefragen nicht.
+    // Screenreader lesen die Karten wie bisher aus dem DOM.
+    const plainTextForTTS = useMemo(
+      () =>
+        replyTextForTTS
+          ? replySpeechText(replyTextForTTS, cardSelection, teasers)
+          : replyTextForTTS,
+      [replyTextForTTS, cardSelection, teasers],
+    );
 
     const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";
 
@@ -603,21 +666,18 @@ const HistoricalMessage = forwardRef(
             oben (Position "above") nur der Abschlusslink bzw. Fallback-
             Karten. Fertige Antwort: auch ohne courseSources (Fallback-Karten
             für verlinkte Kursseiten). */}
-        {role === "assistant" &&
-          !error &&
-          (courseCardsSelection ||
-            (Array.isArray(courseSources) && courseSources.length > 0) ||
-            (courseCardsFinal && courseCards === "auto")) && (
-            <CourseCards
-              reply={responseContent}
-              courseSources={courseSources}
-              courseTeasers={courseTeasers}
-              courseCards={courseCards}
-              fallback={courseCardsFinal}
-              selection={courseCardsSelection}
-              part={courseCardsSelection ? "footer" : "all"}
-            />
-          )}
+        {showCards && (
+          <CourseCards
+            reply={responseContent}
+            courseSources={courseSources}
+            // Fuß (Karten oben): Abschlusslink und Fallback-Karten, ohne Teaser
+            teasers={courseCardsSelection ? null : teasers}
+            courseCards={courseCards}
+            fallback={courseCardsFinal}
+            selection={cardSelection}
+            part={courseCardsSelection ? "footer" : "all"}
+          />
+        )}
 
         {role === "assistant" && !error && followUps && (
           <FollowUps items={followUps} settings={settings} />

@@ -6,7 +6,9 @@ import { embedderSettings } from "@/main";
 //   - Standard: Rand --allmi-pill-border, Schrift --allmi-bar-text,
 //     einzeilig, lange Texte mit … (label; voller Text im title)
 //   - variant "accent" (Folgefragen): Rand und Schrift im Akzent
-//     (--allmi-accent), langer Text bricht um statt gekürzt zu werden
+//     (--allmi-accent), langer Text bricht um statt gekürzt zu werden;
+//     Hover und Tastaturfokus füllen die Pille im Akzent, Text weiß
+//     (.allm-pill-accent, CSS in main.jsx, Übergang --allmi-transition)
 export default function Pill({ text, label = text, onClick, variant = null }) {
   const accent =
     variant === "accent"
@@ -17,7 +19,7 @@ export default function Pill({ text, label = text, onClick, variant = null }) {
       type="button"
       title={label !== text ? text : undefined}
       onClick={onClick}
-      className="allm-inline-chip allm-font-sans allm-cursor-pointer"
+      className={`allm-inline-chip allm-font-sans allm-cursor-pointer${accent ? " allm-pill-accent" : ""}`}
       style={{
         maxWidth: "100%",
         margin: 0,

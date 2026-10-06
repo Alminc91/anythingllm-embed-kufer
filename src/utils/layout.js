@@ -96,11 +96,11 @@ export const URL_MAX_LEN = 512;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble:
-      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
     privacyTitle: "Datenschutz:",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
-      "Unser Team kann Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
     privacyButton: "Start",
@@ -118,7 +118,7 @@ export const PANEL_TEXTS = {
     privacyTitle: "Privacy:",
     privacyPoints: [
       "Your requests stay on servers in Germany and are not passed on to third parties.",
-      "Our team may view conversations for quality assurance.",
+      "Staff of the institution may view conversations for quality assurance.",
       "Please only share information that is necessary for your request.",
     ],
     privacyButton: "Start",

@@ -7,12 +7,24 @@ import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
-// Vorschlag (Balken bzw. Pille im leeren Chat) senden: ChatContainer hört auf
-// SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
-export function sendSuggestion(text) {
-  window.dispatchEvent(
-    new CustomEvent(SEND_TEXT_EVENT, { detail: { command: text } }),
-  );
+// id des Shadow-Hosts jedes Widgets (main.jsx)
+const WIDGET_HOST_ID = "anythingllm-embed-widget";
+// Vorschlag (Balken/Pille im leeren Chat, Folgefrage) senden: ChatContainer
+// hört auf SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
+// Security: das Ereignis startet am angeklickten Element (source) und steigt
+// nur bis zur Wurzel des EIGENEN ChatContainers auf (nicht composed: bleibt im
+// Shadow DOM) — bei zwei Widgets auf einer Seite sendet nur das angeklickte.
+// Ohne source (Aufruf von außen) wie bisher auf window.
+// Von der Webseite ausgelöste Ereignisse (window, document, Seitenelemente)
+// wirken wie bisher in jedem Widget; verworfen werden nur Ereignisse aus
+// einem anderen Widget (Ziel liegt in dessen Shadow-Host, WIDGET_HOST_ID).
+export function sendSuggestion(text, source = null) {
+  const detail = { command: text };
+  if (source && typeof source.dispatchEvent === "function")
+    source.dispatchEvent(
+      new CustomEvent(SEND_TEXT_EVENT, { detail, bubbles: true }),
+    );
+  else window.dispatchEvent(new CustomEvent(SEND_TEXT_EVENT, { detail }));
 }
 
 export default function ChatContainer({
@@ -22,7 +34,10 @@ export default function ChatContainer({
   knownHistory = [],
   pendingFirstMessage = null,
   onPendingFirstMessageConsumed = null,
+  // Blasen-Modus: Escape im Datenschutz-Hinweis schließt das Fenster
+  onClose = null,
 }) {
+  const rootRef = useRef(null);
   const [message, setMessage] = useState("");
   const [loadingResponse, setLoadingResponse] = useState(false);
   const [chatHistory, setChatHistory] = useState(knownHistory);
@@ -42,6 +57,26 @@ export default function ChatContainer({
   );
   const privacyLockedRef = useRef(privacyLocked);
   privacyLockedRef.current = privacyLocked;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Blasen-Modus (onClose; im Inline-Modus null, dort klappt InlineChat bei
+  // Escape ein): solange der Datenschutz-Hinweis sperrt, schließt Escape das
+  // Fenster wie der Schließen-Knopf, ohne zu bestätigen — auch wenn der Fokus
+  // auf der Webseite liegt (keydown aus dem Shadow DOM ist composed und kommt
+  // ebenfalls am document an). Keine Tastaturfalle.
+  const escapeCloses = privacyLocked && !!onClose;
+  useEffect(() => {
+    if (!escapeCloses) return;
+    const doc = rootRef.current?.ownerDocument || document;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onCloseRef.current?.();
+    };
+    doc.addEventListener("keydown", onKeyDown);
+    return () => doc.removeEventListener("keydown", onKeyDown);
+  }, [escapeCloses]);
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -227,16 +262,36 @@ export default function ChatContainer({
     autofillRef.current = handleAutofillEvent;
   });
 
+  // Eigene Vorschläge kommen an der Wurzel dieses Containers an (und gehen
+  // nicht weiter); auf window alles von der Webseite (window, document,
+  // Seitenelemente) und aus dem eigenen Widget, nie aus einem anderen: dort
+  // zeigt das Ziel (auf window auf den Shadow-Host umgelenkt) in einen
+  // fremden Widget-Host.
   useEffect(() => {
-    const listener = (event) => autofillRef.current(event);
-    window.addEventListener(SEND_TEXT_EVENT, listener);
+    const root = rootRef.current;
+    const ownHost = root?.getRootNode?.()?.host ?? null;
+    const local = (event) => {
+      event.stopPropagation();
+      autofillRef.current(event);
+    };
+    const external = (event) => {
+      const target = event.target;
+      const el = target?.nodeType === 1 ? target : target?.parentElement;
+      const widget = el?.closest?.(`#${WIDGET_HOST_ID}`) ?? null;
+      if (widget && widget !== ownHost && !widget.contains(root)) return;
+      autofillRef.current(event);
+    };
+    root?.addEventListener(SEND_TEXT_EVENT, local);
+    window.addEventListener(SEND_TEXT_EVENT, external);
     return () => {
-      window.removeEventListener(SEND_TEXT_EVENT, listener);
+      root?.removeEventListener(SEND_TEXT_EVENT, local);
+      window.removeEventListener(SEND_TEXT_EVENT, external);
     };
   }, []);
 
   return (
     <div
+      ref={rootRef}
       className="allm-h-full allm-w-full allm-flex allm-flex-col"
       style={privacyLocked ? { position: "relative" } : undefined}
     >

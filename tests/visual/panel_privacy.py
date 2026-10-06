@@ -84,6 +84,10 @@ def pixel_cases():
         ("privacy-modal-mobile", {"attrs": PRIVACY}, mock(), "#anything-llm-privacy-notice", tv.MOBILE),
         ("privacy-bubble", {"attrs": PRIVACY_BUBBLE}, mock(), "#anything-llm-bubble-privacy", None),
         ("disclaimer-footer", {"attrs": DISCLAIMER}, mock(), "#anything-llm-ai-disclaimer", None),
+        # Feinschliff AK-2: Begrüßungsblase bleibt bei geladenem Verlauf erste
+        # Nachricht (Datenschutz in der Blase), keine Pillen
+        ("panel-greeting-persist", {"attrs": PRIVACY_BUBBLE}, mock(history=tv.HISTORY_ANSWER),
+         ".allm-anything-llm-assistant-message a", None),
     ]
 
 
@@ -163,7 +167,53 @@ def check_pills(browser, base_url):
         st = page.evaluate("""() => ({
           bubble: !!window.__q('#anything-llm-greeting-bubble'),
           sub: window.__q('#anything-llm-header-subtitle') && window.__q('#anything-llm-header-subtitle').textContent })""")
-        record("AK-3 nach dem Senden: Verlauf statt Begrüßung", not st["bubble"], json.dumps(st, ensure_ascii=False))
+        st.update(page.evaluate(PERSIST_PROBE))
+        record("AK-2 (Feinschliff) nach dem Senden: Begrüßungsblase bleibt erste Nachricht, Pillen weg",
+               st["bubble"] and st["first"] and st["count"] == 1 and not st["pills"], json.dumps(st, ensure_ascii=False))
+    finally:
+        ctx.close()
+
+
+PERSIST_PROBE = """() => {
+  const list = window.__q('#chat-history') && window.__q('#chat-history').firstElementChild;
+  const first = list && list.firstElementChild;
+  return { first: !!first && first.id === 'anything-llm-panel-welcome' && first.hasAttribute('data-persistent'),
+           count: window.__allmShadow.querySelectorAll('#anything-llm-greeting-bubble').length,
+           pills: !!window.__q('#anything-llm-suggestion-pills'),
+           privacy: !!window.__q('#chat-history #anything-llm-bubble-privacy'),
+           items: list ? list.children.length : 0 };
+}"""
+
+
+def check_greeting_persist(browser, base_url):
+    """Feinschliff AK-2: geladener Verlauf -> Begrüßungsblase (mit Datenschutz)
+    genau einmal an erster Stelle, keine Pillen; nach dem Neuladen ebenso.
+    NAK-1: greetingStyle text (Standard) -> Verlauf ohne Blase."""
+    m = mock(history=tv.HISTORY_ANSWER)
+    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, m)
+    try:
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st = page.evaluate(PERSIST_PROBE)
+        page.reload()
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st2 = page.evaluate(PERSIST_PROBE)
+        ok = all(x["first"] and x["count"] == 1 and not x["pills"] and x["privacy"] and x["items"] == 3
+                 for x in (st, st2)) and m.stream_requests == []
+        record("AK-2 (Feinschliff) Verlauf/Neuladen: Blase genau einmal an erster Stelle, keine Pillen", ok,
+               json.dumps({"geladen": st, "neu geladen": st2}))
+    finally:
+        ctx.close()
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**OPEN, "suggestion-style": "pills",
+                                                           "default-messages": MSGS}},
+                             mock(history=tv.HISTORY_ANSWER))
+    try:
+        tv.wait_shadow(page, ".allm-anything-llm-assistant-message a")
+        tv.settle(page, 400)
+        st = page.evaluate(PERSIST_PROBE)
+        record("NAK-1 (Feinschliff) greetingStyle text: Verlauf ohne Blase", st["count"] == 0 and st["items"] == 2,
+               json.dumps(st))
     finally:
         ctx.close()
 
@@ -269,9 +319,20 @@ def check_privacy(browser, base_url):
                card["radius"] == "24px" and 0.85 <= card["widthRatio"] <= 0.95 and card["h2"] == "20px"
                and card["li"] == 3 and card["btnH"] >= 44 and card["btnCentered"] and card["btnRadius"] == "999px",
                json.dumps(card))
+        # Security-Sweep 4: Escape schließt im Blasen-Modus das Fenster (keine
+        # Tastaturfalle), bestätigt nicht; erneutes Öffnen zeigt den Hinweis
         page.keyboard.press("Escape")
-        page.wait_for_timeout(200)
-        record("AK-5 Escape bestätigt nicht", page.evaluate(PRIV_PROBE)["shown"], "")
+        page.wait_for_timeout(300)
+        esc = page.evaluate(PRIV_PROBE)
+        closed = page.evaluate("() => !!window.__q('#anything-llm-embed-chat-button') && !window.__q('#message-input')")
+        page.evaluate("() => window.__q('#anything-llm-embed-chat-button').click()")
+        tv.wait_shadow(page, "#anything-llm-privacy-notice")
+        page.wait_for_timeout(300)
+        again = page.evaluate(PRIV_PROBE)
+        record("AK-5 Escape schließt das Fenster (Blase), bestätigt nicht; Hinweis beim Öffnen wieder",
+               closed and not esc["shown"] and esc["ls"] is None and again["shown"] and again["ls"] is None
+               and again["inputDisabled"] is True,
+               json.dumps({"geschlossen": closed, "lsNachEscape": esc["ls"], "wieder": again["shown"]}))
         page.evaluate("() => [...window.__q('#anything-llm-privacy-notice').querySelectorAll('button')].find(b => b.textContent === 'Start').click()")
         page.wait_for_timeout(300)
         st2 = page.evaluate(PRIV_PROBE)
@@ -417,7 +478,11 @@ def check_arrow_under_notice(browser, base_url):
 def check_bubble_scrolled_to_pills(browser, base_url):
     """Review 10: lange Datenschutz-Blase im Blasenfenster -> beim Öffnen ans
     Ende gescrollt, die Pillen liegen vollständig im sichtbaren Bereich."""
-    ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, mock())
+    # Seit dem Fließtext (ein Absatz) passt die Standard-Blase ins Fenster ->
+    # fünf lange eigene Punkte erzwingen den Überlauf
+    long_text = " | ".join(f"Punkt {i + 1}: " + "Ein längerer Hinweis zum Datenschutz in der Begrüßung. " * 2
+                           for i in range(5))
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**PRIVACY_BUBBLE, "privacy-text": long_text}}, mock())
     try:
         tv.wait_shadow(page, "#anything-llm-suggestion-pills")
         tv.settle(page, 500)
@@ -459,19 +524,46 @@ def check_privacy_bubble(browser, base_url):
         tv.wait_shadow(page, "#anything-llm-bubble-privacy")
         tv.settle(page, 500)
         st = page.evaluate("""() => ({
-          paras: [...window.__q('#anything-llm-bubble-privacy').querySelectorAll('p')].map(p => p.textContent),
+          paras: [...window.__q('#anything-llm-greeting-bubble').querySelectorAll('p')].map(p => p.textContent),
+          privTag: window.__q('#anything-llm-bubble-privacy').tagName,
           strong: [...window.__q('#anything-llm-bubble-privacy').querySelectorAll('strong')].map(e => e.textContent),
           link: window.__q('#anything-llm-bubble-privacy a') && window.__q('#anything-llm-bubble-privacy a').getAttribute('href'),
           popup: !!window.__q('#anything-llm-privacy-notice'), disabled: window.__q('#message-input').disabled,
           small: !!window.__q('#anything-llm-greeting-small'),
           ls: Object.keys(localStorage).filter(k => k.startsWith('allm-privacy-ack-')) })""")
-        ok = (len(st["paras"]) == 4 and st["paras"][2].startswith("Bitte teilen Sie nur Angaben")
-              and st["strong"] == [] and st["paras"][3] == "Datenschutz" and st["link"] == "/datenschutz"
+        ok = (len(st["paras"]) == 1 and st["privTag"] == "P"
+              and st["paras"][0].startswith("Ihre Anfragen bleiben auf Servern in Deutschland")
+              and "Mitarbeitende der Einrichtung können" in st["paras"][0]
+              and st["paras"][0].endswith("nötig sind. Datenschutz")
+              and st["strong"] == [] and st["link"] == "/datenschutz"
               and not st["popup"] and st["disabled"] is False and not st["small"] and st["ls"] == [])
-        record("Datenschutz in der Blase: Punkte (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
+        record("Datenschutz in der Blase: Punkte als ein Absatz (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
                json.dumps(st, ensure_ascii=False)[:400])
     finally:
         ctx.close()
+
+
+BUBBLE_GEOM = """() => {
+  const b = window.__q('#anything-llm-greeting-bubble'), row = b.parentElement;
+  const cs = getComputedStyle(b), lh = parseFloat(cs.lineHeight);
+  const paras = [...b.childNodes].filter(n => n.nodeType === 3 ? n.textContent.trim() : true);
+  return { maxWidth: cs.maxWidth, ratio: +(b.getBoundingClientRect().width / row.getBoundingClientRect().width).toFixed(3),
+           parts: paras.length, h: Math.round(b.getBoundingClientRect().height), lines: Math.round((b.clientHeight - 22) / lh) };
+}"""
+
+
+def check_bubble_two_paragraphs(browser, base_url):
+    """AK-6: Begrüßungsblase mit Datenschutz = zwei Absätze, Breite ≤ 80 % (Desktop und 390 px)."""
+    for vp, key in ((None, "Desktop"), (tv.MOBILE, "390 px")):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": PRIVACY_BUBBLE}, mock(), viewport=vp)
+        try:
+            tv.wait_shadow(page, "#anything-llm-bubble-privacy")
+            tv.settle(page, 400)
+            st = page.evaluate(BUBBLE_GEOM)
+            ok = st["maxWidth"] == "80%" and st["ratio"] <= 0.801 and st["parts"] == 2
+            record(f"AK-6 Blase: zwei Absätze, Breite ≤ 80 % ({key})", ok, json.dumps(st))
+        finally:
+            ctx.close()
 
 
 def check_disclaimer(browser, base_url):
@@ -548,6 +640,8 @@ def main():
                 check_bubble_scrolled_to_pills(browser, base_url)
                 check_dot_ring_dark_header(browser, base_url)
                 check_privacy_bubble(browser, base_url)
+                check_bubble_two_paragraphs(browser, base_url)
+                check_greeting_persist(browser, base_url)
                 check_disclaimer(browser, base_url)
             browser.close()
     finally:
