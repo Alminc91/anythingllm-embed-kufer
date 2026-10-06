@@ -100,7 +100,7 @@ export const URL_MAX_LEN = 512;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble:
-      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
     privacyTitle: "Datenschutz:",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
@@ -120,7 +120,7 @@ export const PANEL_TEXTS = {
   },
   en: {
     greetingBubble:
-      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
+      "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
     privacyTitle: "Privacy:",
     privacyPoints: [
       "Your requests stay on servers in Germany and are not passed on to third parties.",

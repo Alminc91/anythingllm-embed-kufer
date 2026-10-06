@@ -527,17 +527,28 @@ def check_privacy_bubble(browser, base_url):
           paras: [...window.__q('#anything-llm-greeting-bubble').querySelectorAll('p')].map(p => p.textContent),
           privTag: window.__q('#anything-llm-bubble-privacy').tagName,
           strong: [...window.__q('#anything-llm-bubble-privacy').querySelectorAll('strong')].map(e => e.textContent),
+          titleWeight: (() => { const t = window.__q('#anything-llm-bubble-privacy strong'); return t ? +getComputedStyle(t).fontWeight : null; })(),
+          titleOwnLine: (() => { const t = window.__q('#anything-llm-bubble-privacy strong'); if (!t) return false;
+            const range = document.createRange(); const n = t.nextSibling; if (!n) return false; range.setStart(n, 0); range.setEnd(n, 1);
+            return range.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 0.5; })(),
+          greet: window.__q('#anything-llm-greeting-bubble').firstChild.textContent,
           link: window.__q('#anything-llm-bubble-privacy a') && window.__q('#anything-llm-bubble-privacy a').getAttribute('href'),
           popup: !!window.__q('#anything-llm-privacy-notice'), disabled: window.__q('#message-input').disabled,
           small: !!window.__q('#anything-llm-greeting-small'),
           ls: Object.keys(localStorage).filter(k => k.startsWith('allm-privacy-ack-')) })""")
+        # Issue embed-zeilenkarten-tasten-morph-datenschutz (AK-11): Absatz 1
+        # neuer Standardtext, dann fette Überschrift „Datenschutz:“ in eigener
+        # Zeile, darunter der Fließtext mit dem Link am Ende
         ok = (len(st["paras"]) == 1 and st["privTag"] == "P"
-              and st["paras"][0].startswith("Ihre Anfragen bleiben auf Servern in Deutschland")
+              and st["greet"] == "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). "
+                                 "Beschreiben Sie einfach, was Sie suchen."
+              and st["paras"][0].startswith("Datenschutz:Ihre Anfragen bleiben auf Servern in Deutschland")
               and "Mitarbeitende der Einrichtung können" in st["paras"][0]
               and st["paras"][0].endswith("nötig sind. Datenschutz")
-              and st["strong"] == [] and st["link"] == "/datenschutz"
+              and st["strong"] == ["Datenschutz:"] and st["titleWeight"] >= 600 and st["titleOwnLine"]
+              and st["link"] == "/datenschutz"
               and not st["popup"] and st["disabled"] is False and not st["small"] and st["ls"] == [])
-        record("Datenschutz in der Blase: Punkte als ein Absatz (neutral, ohne „Wichtig:“), Link; kein Popup, Eingabe frei, kein localStorage", ok,
+        record("AK-11 bubble-privacy-title: neuer Begrüßungstext, „Datenschutz:“ fett in eigener Zeile, Punkte als ein Absatz, Link; kein Popup, Eingabe frei, kein localStorage", ok,
                json.dumps(st, ensure_ascii=False)[:400])
     finally:
         ctx.close()

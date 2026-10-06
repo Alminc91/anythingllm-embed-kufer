@@ -170,10 +170,11 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
   );
 }
 
-// Datenschutz in der Begrüßungsblase (privacyNotice "bubble"): EIN Absatz
-// unter dem Begrüßungstext, die Punkte als Fließtext (neutral, ohne
-// Hervorhebung; ein Punkt ohne Satzzeichen am Ende bekommt einen Punkt),
-// am Ende der Link (privacyUrl).
+// Datenschutz in der Begrüßungsblase (privacyNotice "bubble"): unter dem
+// Begrüßungstext eine fette Überschrift in eigener Zeile (privacyTitle —
+// derselbe Schlüssel wie die Karte, Standard „Datenschutz:“), darunter die
+// Punkte als Fließtext (ein Punkt ohne Satzzeichen am Ende bekommt einen
+// Punkt), am Ende der Link (privacyUrl). Alles Text, nie HTML.
 export function privacyParagraph(points) {
   return points.map((p) => (/[.!?…:;]$/.test(p) ? p : `${p}.`)).join(" ");
 }
@@ -181,6 +182,12 @@ export function privacyParagraph(points) {
 function BubblePrivacy({ settings, texts }) {
   return (
     <p id="anything-llm-bubble-privacy" style={{ margin: "8px 0 0" }}>
+      <strong
+        id="anything-llm-bubble-privacy-title"
+        style={{ display: "block", fontWeight: 700 }}
+      >
+        {settings.privacyTitle || texts.privacyTitle}
+      </strong>
       {privacyParagraph(privacyPoints(settings))}
       {settings.privacyUrl && (
         <>

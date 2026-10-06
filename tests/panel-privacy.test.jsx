@@ -483,7 +483,7 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     );
     const bubble = $("#anything-llm-greeting-bubble");
     expect(bubble.textContent).toContain(
-      "Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
     );
     expect(bubble.textContent).toContain(
       "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
@@ -528,11 +528,14 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const bubble = $("#anything-llm-greeting-bubble");
     expect(bubble.style.maxWidth).toBe("80%");
     expect(bubble.style.boxSizing).toBe("border-box");
-    // Absatz 1 = Text vor dem Datenschutz-Absatz, Absatz 2 = Fließtext
+    // Absatz 1 = Text vor dem Datenschutz-Absatz, Absatz 2 = fette
+    // Überschrift in eigener Zeile + Fließtext
     expect(bubble.childNodes).toHaveLength(2);
     expect(bubble.childNodes[0].nodeType).toBe(Node.TEXT_NODE);
+    const title = bubble.childNodes[1].querySelector("strong");
+    expect(title.textContent).toBe("Datenschutz:");
     expect(bubble.childNodes[1].textContent).toBe(
-      "Erstens. Zweitens! Drittens.",
+      "Datenschutz:Erstens. Zweitens! Drittens.",
     );
     expect(privacyParagraph(["a?", "b…", "c"])).toBe("a? b… c.");
   });
@@ -735,10 +738,10 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
 
   it("Standardtexte neutral (alle Kundenarten), ohne Speicherdauer, Standard ohne Link", async () => {
     expect(PANEL_TEXTS.de.greetingBubble).toBe(
-      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
     );
     expect(PANEL_TEXTS.en.greetingBubble).toBe(
-      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
+      "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
     );
     expect(DEFAULT_PRIVACY_POINTS).toEqual([
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
@@ -1129,13 +1132,18 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     const para = $("#anything-llm-bubble-privacy");
     expect(para.tagName).toBe("P");
     expect(bubble.querySelectorAll("p")).toHaveLength(1);
+    // fette Überschrift „Datenschutz:“ in eigener Zeile, dann die Punkte
     expect(para.textContent).toBe(
-      `${DEFAULT_PRIVACY_POINTS.join(" ")} Datenschutz`,
+      `Datenschutz:${DEFAULT_PRIVACY_POINTS.join(" ")} Datenschutz`,
     );
     expect(bubble.textContent).toBe(
       `${DEFAULT_GREETING_BUBBLE_TEXT}${para.textContent}`,
     );
-    expect($("#anything-llm-bubble-privacy strong")).toBe(null);
+    const title = $("#anything-llm-bubble-privacy strong");
+    expect(title.textContent).toBe("Datenschutz:");
+    expect(title.style.display).toBe("block");
+    expect(Number(title.style.fontWeight)).toBeGreaterThanOrEqual(600);
+    expect(para.firstChild).toBe(title);
     expect(para.querySelector("a").getAttribute("href")).toBe("/datenschutz");
     expect(para.querySelector("a").textContent).toBe("Datenschutz");
     // Breite wie Antwortblasen (≈ 80 %)
@@ -1160,10 +1168,37 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     );
     // Punkte ohne Satzzeichen am Ende bekommen einen Punkt (Fließtext)
     expect($("#anything-llm-bubble-privacy").textContent).toBe(
-      "<b>Eins</b>. Zwei.",
+      "Datenschutz:<b>Eins</b>. Zwei.",
     );
     expect($("#anything-llm-bubble-privacy a")).toBe(null);
     expect($("#anything-llm-bubble-privacy b")).toBe(null);
+  });
+
+  it("::bubble-privacy-title — Überschrift aus privacyTitle (wie die Karte), englisch „Privacy:“, nur Text (AK-11, NAK-7)", () => {
+    render(
+      <ChatContainer
+        {...props}
+        settings={{ ...settings, privacyTitle: "<b>Ihre Daten</b> [x](https://evil.test)" }}
+      />,
+    );
+    const title = $("#anything-llm-bubble-privacy strong");
+    expect(title.textContent).toBe("<b>Ihre Daten</b> [x](https://evil.test)");
+    expect(title.querySelector("b, a")).toBe(null);
+    expect($("#anything-llm-bubble-privacy a").textContent).toBe("Datenschutz");
+    render(
+      <ChatContainer {...props} settings={{ ...settings, language: "en" }} />,
+    );
+    expect($("#anything-llm-bubble-privacy strong").textContent).toBe(
+      "Privacy:",
+    );
+    // ohne Datenschutz in der Blase: keine Überschrift
+    render(
+      <ChatContainer
+        {...props}
+        settings={{ ...settings, privacyNotice: "none" }}
+      />,
+    );
+    expect($("#anything-llm-bubble-privacy")).toBe(null);
   });
 
   it("Vorschlag wird ohne Sperre gesendet", () => {
