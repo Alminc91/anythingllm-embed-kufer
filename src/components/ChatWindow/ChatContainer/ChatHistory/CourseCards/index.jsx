@@ -89,9 +89,12 @@ const itemStyle = { display: "flex", minWidth: 0 };
 const TEASER_LINE_PX = 18;
 // Zeilen-Karten nur ab dieser Kartenbreite; schmaler = Rasterkarte
 export const ROW_CARD_MIN_PX = 480;
-// Zeilen-Karte: Teaser höchstens 2 Zeilen (15–20 Wörter passen ab ≈ 500 px
-// Textbreite in zwei Zeilen), Raster 3
-const ROW_TEASER_LINES = 2;
+// Zeilen-Karte: Teaser-Zeilen nach Kartenbreite — 20 Wörter brauchen
+// ≈ 500 px Textbreite für zwei Zeilen (Karte ≈ 680 px abzüglich Zeit-Spalte,
+// Pille, Polsterung); schmaler 3 Zeilen. Raster immer 3.
+export const ROW_TEASER_2_LINES_MIN_PX = 680;
+const rowTeaserLines = (width) =>
+  width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3;
 const GRID_TEASER_LINES = 3;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
@@ -288,7 +291,13 @@ const statusStyle = (bookable) => ({
 // Zeile und Teaser (höchstens 2 Zeilen) bzw. Platzhalter, rechts die
 // Status-Pille. Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
 // sichtbare Zeilen; Hover/Fokus über .allm-course-card (main.jsx).
-function CardRow({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
+function CardRow({
+  card,
+  teaser = null,
+  teaserArrivedAt = null,
+  pending = null,
+  lines = 2,
+}) {
   const id = useId();
   const lead = rowLead(card);
   const meta = rowMeta(card);
@@ -296,7 +305,7 @@ function CardRow({ card, teaser = null, teaserArrivedAt = null, pending = null }
     teaser,
     pending,
     fallback: card.fallback,
-    lines: ROW_TEASER_LINES,
+    lines,
   });
   const describedBy = [
     lead && `${id}-s`,
@@ -391,13 +400,11 @@ function CardRow({ card, teaser = null, teaserArrivedAt = null, pending = null }
               id={`${id}-t`}
               text={teaser}
               arrivedAt={teaserArrivedAt}
-              lines={ROW_TEASER_LINES}
+              lines={lines}
               reserve={reserve}
             />
           )}
-          {showPending && (
-            <TeaserPending text={pending} lines={ROW_TEASER_LINES} />
-          )}
+          {showPending && <TeaserPending text={pending} lines={lines} />}
         </span>
         {card.status && (
           <span
@@ -413,15 +420,25 @@ function CardRow({ card, teaser = null, teaserArrivedAt = null, pending = null }
   );
 }
 
-// Breite der Kartenliste >= ROW_CARD_MIN_PX? Gemessen vor dem Paint und bei
-// jeder Größenänderung; ohne Layout (Breite 0: ausgeblendet, jsdom) gilt
-// "breit" — beim Einblenden misst der ResizeObserver neu.
-function useWideList(ref, active) {
-  const [wide, setWide] = useState(true);
+// Breite der Kartenliste (= Kartenbreite, eine Spalte), gemessen vor dem
+// Paint und bei jeder Größenänderung; ohne Layout (Breite 0: ausgeblendet,
+// jsdom) gilt "breit" (Infinity) — beim Einblenden misst der ResizeObserver
+// neu. State wechselt nur an den Schwellen (Zeilen-Karte ja/nein, Teaser-
+// Zeilen), nicht bei jedem Pixel.
+const listWidthClass = (w) =>
+  !(w > 0)
+    ? Infinity
+    : w < ROW_CARD_MIN_PX
+      ? 0
+      : w < ROW_TEASER_2_LINES_MIN_PX
+        ? ROW_CARD_MIN_PX
+        : ROW_TEASER_2_LINES_MIN_PX;
+function useListWidth(ref, active) {
+  const [width, setWidth] = useState(Infinity);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!active || !el) return;
-    const check = (w) => setWide(!(w > 0) || w >= ROW_CARD_MIN_PX);
+    const check = (w) => setWidth(listWidthClass(w));
     check(el.clientWidth);
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) =>
@@ -430,7 +447,7 @@ function useWideList(ref, active) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [active]);
-  return wide;
+  return width;
 }
 
 function CompactRow({ card, first }) {
@@ -487,7 +504,8 @@ function CardList({
 }) {
   const ref = useRef(null);
   const rows = layout === "rows";
-  const wide = useWideList(ref, rows);
+  const width = useListWidth(ref, rows);
+  const wide = width >= ROW_CARD_MIN_PX;
   const Item = rows && wide ? CardRow : Card;
   return (
     <ul
@@ -510,6 +528,7 @@ function CardList({
           teaser={teasers?.get(card.key)}
           teaserArrivedAt={teaserArrivedAt}
           pending={pending}
+          {...(Item === CardRow && { lines: rowTeaserLines(width) })}
         />
       ))}
     </ul>

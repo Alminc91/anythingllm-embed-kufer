@@ -1252,7 +1252,11 @@ def check_rows(browser, base_url):
         ctx.close()
 
 
-ROWS_FIT_JS = """(teasers) => { const l = window.__q('.allm-course-list'); l.style.gridTemplateColumns = '700px';
+ROWS_FIT_JS = """async ([teasers, width]) => { const l = window.__q('.allm-course-list');
+  // Kartenbreite über die Listenbreite (eine Spalte) — der ResizeObserver
+  // des Widgets sieht dieselbe Breite wie bei einem schmaleren Fenster
+  l.style.width = width + 'px';
+  for (let i = 0; i < 3; i++) await new Promise((r) => requestAnimationFrame(r));
   const cards = [...l.querySelectorAll('[data-course-row]')];
   return cards.map((c, i) => { const t = c.querySelector('.allm-course-teaser'); t.textContent = teasers[i];
     const lh = parseFloat(getComputedStyle(t).lineHeight);
@@ -1262,27 +1266,29 @@ ROWS_FIT_JS = """(teasers) => { const l = window.__q('.allm-course-list'); l.sty
 
 
 def check_rows_teaser_fit(browser, base_url):
-    """AK-2 rows-teaser-fit: Teaser à 18–20 Wörter passen bei 700 px
-    Kartenbreite ohne Kappung in höchstens 2 Zeilen (Arial-Metrik wie AK-3
-    des Feinschliffs)."""
+    """AK-2 rows-teaser-fit: Teaser à 18–20 Wörter passen ohne Kappung —
+    bei 700 px Kartenbreite in höchstens 2 Zeilen (Klammer 2), bei 640 und
+    480 px (Review-Befund 5: unter 680 px 3 Zeilen) in höchstens 3 Zeilen
+    (Klammer 3). Arial-Metrik wie AK-3 des Feinschliffs."""
     hist = v3_history()
     extra = {**FIX["donauYoga"][0], "url": V3[0]["url"].replace("262-", "262-9"), "title": "KI-Basics für den Alltag"}
     hist[1]["courseSources"] = V3 + [extra]
     hist[1]["courseCardsAnnounced"] = 3
     hist[1]["courseTeasers"] = {c["url"]: "x" for c in V3 + [extra]}
-    ctx, page = tv.open_page(browser, base_url,
-                             {"attrs": ROWS_WIDE, "css": "#anythingllm-embed-widget { --allm-font: Arial; }"},
-                             tv.Mock(config=WIDE, history=hist), before_goto=freeze)
-    try:
-        tv.wait_shadow(page, CARD_SEL)
-        tv.settle(page, 400)
-        d = page.evaluate(ROWS_FIT_JS, TEASERS_FIT)
-        ok = (len(d) == 3 and all(18 <= x["words"] <= 20 and x["w"] == 700 and x["fits"] and x["lines"] <= 2
-                                  and x["clamp"] == "2" for x in d))
-        record("AK-2 rows-teaser-fit: 3 Teaser à 18–20 Wörter bei 700 px ohne Kappung, ≤ 2 Zeilen", ok,
-               json.dumps(d))
-    finally:
-        ctx.close()
+    for width, max_lines in ((700, 2), (640, 3), (480, 3)):
+        ctx, page = tv.open_page(browser, base_url,
+                                 {"attrs": ROWS_WIDE, "css": "#anythingllm-embed-widget { --allm-font: Arial; }"},
+                                 tv.Mock(config=WIDE, history=hist), before_goto=freeze)
+        try:
+            tv.wait_shadow(page, CARD_SEL)
+            tv.settle(page, 400)
+            d = page.evaluate(ROWS_FIT_JS, [TEASERS_FIT, width])
+            ok = (len(d) == 3 and all(18 <= x["words"] <= 20 and x["w"] == width and x["fits"]
+                                      and x["lines"] <= max_lines and x["clamp"] == str(max_lines) for x in d))
+            record(f"AK-2 rows-teaser-fit: 3 Teaser à 18–20 Wörter bei {width} px ohne Kappung, "
+                   f"≤ {max_lines} Zeilen", ok, json.dumps(d))
+        finally:
+            ctx.close()
 
 
 PENDING_PROBE_JS = r"""

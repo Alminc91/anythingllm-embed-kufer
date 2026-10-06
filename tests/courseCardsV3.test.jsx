@@ -820,6 +820,57 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(teaser.style.minHeight).toBe("");
   });
 
+  // Review-Befund 5: Teaser-Zeilen nach Kartenbreite (ResizeObserver der
+  // Liste): ab 680 px 2 Zeilen, 480–679 px 3 Zeilen, darunter Rasterkarte
+  for (const [width, layout, lines] of [
+    [700, "rows", 2],
+    [680, "rows", 2],
+    [640, "rows", 3],
+    [480, "rows", 3],
+    [470, "rows-narrow", 3],
+  ])
+    it(`::rows-teaser-lines — Kartenbreite ${width} px: ${layout}, Teaser/Platzhalter ${lines} Zeilen`, () => {
+      const cw = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockImplementation(function () {
+          return this.classList?.contains("allm-course-list") ? width : 0;
+        });
+      try {
+        const el = mount(
+          h(ChatHistory, {
+            settings: ROWS_ABOVE,
+            history: [user, streaming()],
+          }),
+        );
+        expect(
+          el.querySelector(".allm-course-list").getAttribute("data-layout"),
+        ).toBe(layout);
+        for (const p of pendingEls(el))
+          expect(p.style.height).toBe(`${lines * 18}px`);
+        act(() =>
+          root.render(
+            h(ChatHistory, {
+              settings: ROWS_ABOVE,
+              history: [
+                user,
+                streaming({ courseTeasers: TEASERS, teaserArrivedAt: Date.now() }),
+              ],
+            }),
+          ),
+        );
+        const teasers = [...el.querySelectorAll(".allm-course-teaser")];
+        expect(teasers).toHaveLength(2);
+        for (const t of teasers) {
+          expect(t.style.webkitLineClamp || t.style.WebkitLineClamp).toBe(
+            String(lines),
+          );
+          expect(t.style.minHeight).toBe(`${lines * 18}px`);
+        }
+      } finally {
+        cw.mockRestore();
+      }
+    });
+
   it("ohne Setting: Rasterkarten wie bisher (kein data-course-row, kein data-layout)", () => {
     const el = mount(
       h(ChatHistory, {
