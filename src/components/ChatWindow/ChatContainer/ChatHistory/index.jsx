@@ -2,6 +2,8 @@ import HistoricalMessage from "./HistoricalMessage";
 import PromptReply from "./PromptReply";
 import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
+import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
+import { greetingAsBubble } from "@/utils/layout";
 import {
   courseCardsAbove,
   courseCardsEnabled,
@@ -144,13 +146,25 @@ export default function ChatHistory({
   );
 
   if (history.length === 0) {
+    // Panel-Optik (opt-in): Pillen statt Balken, Begrüßung als Blase
+    const suggestions =
+      settings?.suggestionStyle === "pills" ? (
+        <SuggestedPills
+          settings={settings}
+          align={greetingAsBubble(settings) ? "start" : "center"}
+        />
+      ) : (
+        <SuggestedMessages settings={settings} />
+      );
+    if (greetingAsBubble(settings))
+      return <PanelWelcome settings={settings} suggestions={suggestions} />;
     return (
       <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
           <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
             {settings?.greeting ?? "Send a chat to get started."}
           </p>
-          <SuggestedMessages settings={settings} />
+          {suggestions}
         </div>
       </div>
     );

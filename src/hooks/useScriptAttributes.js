@@ -101,6 +101,29 @@ export const DEFAULT_SETTINGS = {
   // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
   // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
+  // Panel-Optik (opt-in, Standard = bisher): Vorschläge "bars" | "pills",
+  // Begrüßung "text" | "bubble" (greetingBubbleText als Assistenten-Blase,
+  // greeting klein darunter); Kopfzeile: Untertitel unter dem Namen und
+  // dekorativer Online-Punkt am Icon. Icon-Bild = brandImageUrl (Kopfzeile)
+  // bzw. assistantIcon (Blase), im Design Center per Logo gesetzt.
+  suggestionStyle: "bars",
+  greetingStyle: "text",
+  greetingBubbleText: null, // max. 300 Zeichen; null = Standard der Sprache
+  assistantSubtitle: null, // max. 60 Zeichen
+  onlineDot: false,
+  // Datenschutz-Hinweis: "none" | "bubble" (Absätze in der Begrüßungsblase,
+  // ohne Bestätigung) | "modal" (einmalige Karte beim ersten Öffnen,
+  // Bestätigung in localStorage allm-privacy-ack-<embedId>). Texte null =
+  // Standard der Sprache (utils/layout.js PANEL_TEXTS).
+  privacyNotice: "none",
+  privacyTitle: null, // max. 120 Zeichen
+  privacyText: null, // Stichpunkte je Zeile bzw. "|", max. 5 × 160 Zeichen
+  privacyButtonText: null, // max. 40 Zeichen, Standard „Start“
+  privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
+  // Fester KI-Hinweis unter dem Eingabefeld: "none" | "footer";
+  // disclaimerText max. 160 Zeichen, null = i18n chat.ai-disclaimer
+  disclaimer: "none",
+  disclaimerText: null,
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
