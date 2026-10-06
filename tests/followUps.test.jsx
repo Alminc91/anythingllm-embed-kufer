@@ -30,7 +30,12 @@ vi.mock("react-i18next", () => ({
 import { embedderSettings } from "../src/main.jsx";
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import { layoutValidations } from "../src/utils/layout.js";
-import { followUpsList, splitFollowUpsLine } from "../src/utils/courseCards.js";
+import {
+  followUpsList,
+  followUpText,
+  holdFollowUpsLine,
+  splitFollowUpsLine,
+} from "../src/utils/courseCards.js";
 import handleChat from "../src/utils/chat/index.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
@@ -141,24 +146,92 @@ describe("followUpsList / splitFollowUpsLine (Regeln wie Server)", () => {
     expect(followUpsList(null)).toEqual([]);
   });
 
-  it("Endzeile am Antwortende abgetrennt, sonst Text unverändert", () => {
-    expect(splitFollowUpsLine(`${BODY}\n\n${LINE}\n`)).toEqual({
-      text: BODY,
-      followUps: FU,
-    });
-    expect(splitFollowUpsLine(`${BODY}\n[[FRAGEN: -]]`)).toEqual({
-      text: BODY,
-      followUps: [],
-    });
+  it("followUpText: Regeln wie cleanTeaserText im Fork", () => {
+    for (const [raw, clean] of [
+      ["- Wie melde ich mich an?", "Wie melde ich mich an?"],
+      [
+        "https://www.vhs.de/anmeldung Was kostet der Kurs?",
+        "Was kostet der Kurs?",
+      ],
+      ["Gibt es den *Kurs* auch online ?", "Gibt es den Kurs auch online?"],
+      ["_Abends_?", "Abends?"],
+      ["(*neu*) Kurse?", "(neu) Kurse?"],
+      ["snake_case und 2*3 und C#?", "snake_case und 2*3 und C#?"],
+      ["**Fett** und `Code`?", "Fett und Code?"],
+      ["# Titel?", "Titel?"],
+      ["> Zitat?", "Zitat?"],
+      ["• Punkt?", "Punkt?"],
+      ["Gibt es [[B1]]?", "Gibt es [B1]?"],
+      ["<b>Online?</b>", "Online?"],
+      ["[Abends?](https://x.de)", "Abends?"],
+    ])
+      expect(followUpText(raw)).toBe(clean);
+    // nur Satzzeichen/Striche/Leerraum = leer
+    for (const raw of ["-", "–", "—", "•", "·", "*", "...", " - – ", "", 3])
+      expect(followUpText(raw)).toBe("");
+  });
+
+  it("Endzeile: erstes ]] am Zeilenende -> immer entfernt, bis zu 3 gültige Einträge", () => {
+    const split = (line) => splitFollowUpsLine(`${BODY}\n\n${line}\n`);
+    expect(split(LINE)).toEqual({ text: BODY, followUps: FU });
+    // Review-Beispiel: führender Strich, URL vor dem Text
+    expect(
+      split(
+        "[[FRAGEN: - Wie melde ich mich an? | https://www.vhs.de/anmeldung Was kostet der Kurs?]]",
+      ).followUps,
+    ).toEqual(["Wie melde ich mich an?", "Was kostet der Kurs?"]);
+    expect(
+      split("[[FRAGEN: Gibt es den *Kurs* auch abends?]]").followUps,
+    ).toEqual(["Gibt es den Kurs auch abends?"]);
+    // zu lange Einträge verworfen (nicht die Zeile), mehr als 3 -> die ersten 3
+    expect(split(`[[FRAGEN: a? | ${"x".repeat(61)} | b?]]`).followUps).toEqual([
+      "a?",
+      "b?",
+    ]);
+    expect(split("[[FRAGEN: a? | b? | – | c? | d?]]").followUps).toEqual([
+      "a?",
+      "b?",
+      "c?",
+    ]);
+    // 0 gültige Einträge: Zeile weg, keine Vorschläge
+    for (const line of [
+      "[[FRAGEN: -]]",
+      "[[FRAGEN: –]]",
+      "[[FRAGEN: ]]",
+      "[[fragen: — | · | *]]",
+      `[[FRAGEN: ${"x".repeat(61)}]]`,
+    ])
+      expect(split(line)).toEqual({ text: BODY, followUps: [] });
+  });
+
+  it("Endzeile kaputt -> Text unverändert (zwei Gruppen, Text dahinter, offen, > 300 Zeichen)", () => {
     for (const text of [
-      `${BODY}\n[[FRAGEN: a? | ${"x".repeat(61)}]]`,
-      `${BODY}\n[[FRAGEN: a? | b? | c? | d?]]`,
+      `${BODY}\n[[FRAGEN: a? | b?]] [[FRAGEN: c?]]`,
+      `${BODY}\n[[FRAGEN: Gibt es [[B1]]-Kurse?]]`,
       `${BODY}\n[[FRAGEN: ${"Frage ".repeat(60)}]]`,
       `${BODY}\n${LINE}\nNoch ein Satz.`,
       `${BODY}\n[[FRAGEN: a? | b?`,
+      `${BODY} ${LINE}`,
       BODY,
     ])
       expect(splitFollowUpsLine(text)).toEqual({ text, followUps: null });
+  });
+
+  it("Stream: begonnene Endzeile zurückgehalten, sonst durchgereicht", () => {
+    for (const tail of ["[", "[[", "[[F", "[[FRAG", LINE.slice(0, 20), LINE])
+      expect(holdFollowUpsLine(`${BODY}\n${tail}`)).toEqual({
+        text: BODY,
+        hold: `\n${tail}`,
+      });
+    for (const text of [
+      `${BODY}\n[Kursseite](https://x.de)`,
+      `${BODY}\n${LINE} und mehr`,
+      `${BODY}\n[[FRAGEN: ${"x".repeat(300)}`,
+      `${BODY}\n[[KARTEN: 1]]`,
+      BODY,
+      "",
+    ])
+      expect(holdFollowUpsLine(text)).toEqual({ text });
   });
 });
 
@@ -172,15 +245,21 @@ describe("handleChat: Chunk followUps", () => {
     return shown;
   }
 
-  it("Text -> followUps -> finalize: Vorschläge an der Antwort, Text unverändert", () => {
+  it("Text -> followUps -> finalize: Vorschläge an der Antwort (geprüft erst beim Anzeigen), Text unverändert", () => {
+    const raw = [...FU, "x".repeat(61)];
     const shown = stream([
       { uuid: "u", type: "textResponseChunk", textResponse: BODY },
       { uuid: "u", type: "textResponseChunk", textResponse: "", close: true },
-      { uuid: "u", type: "followUps", followUps: [...FU, "x".repeat(61)] },
+      { uuid: "u", type: "followUps", followUps: raw },
       { uuid: "u", type: "finalizeResponseStream", chatId: 9 },
     ]);
     expect(shown).toHaveLength(1);
-    expect(shown[0]).toMatchObject({ content: BODY, followUps: FU, chatId: 9 });
+    expect(shown[0]).toMatchObject({
+      content: BODY,
+      followUps: raw,
+      chatId: 9,
+    });
+    expect(shown[0].followUpsArrivedAt).toEqual(expect.any(Number));
   });
 
   it("followUps ohne Antwort bzw. leer: ignoriert", () => {
@@ -210,6 +289,82 @@ describe("handleChat: Chunk followUps", () => {
     ]);
     expect(full[0].content).toBe(BODY);
     expect(full[0].followUps).toEqual(FU);
+  });
+
+  it("Befund 2: tokenweises Streamen (älterer Server) zeigt nie [[FRAGEN", () => {
+    for (const size of [1, 2, 3, 7]) {
+      const text = `${BODY}\n\n${LINE}\n`;
+      const hist = [];
+      const seen = [];
+      const set = (h) => seen.push(h[h.length - 1]);
+      for (let i = 0; i < text.length; i += size)
+        handleChat(
+          {
+            uuid: "u",
+            type: "textResponseChunk",
+            textResponse: text.slice(i, i + size),
+          },
+          vi.fn(),
+          set,
+          [],
+          hist,
+        );
+      handleChat(
+        { uuid: "u", type: "textResponseChunk", textResponse: "", close: true },
+        vi.fn(),
+        set,
+        [],
+        hist,
+      );
+      for (const e of seen) expect(e.content).not.toContain("[");
+      const end = seen[seen.length - 1];
+      expect(end).toMatchObject({ content: BODY, followUps: FU, closed: true });
+      expect(end.followUpsHold).toBeUndefined();
+    }
+  });
+
+  it("Befund 2: keine Endzeile -> zurückgehaltener Text kommt vollständig zurück", () => {
+    const run = (chunks) => {
+      const hist = [];
+      let last;
+      for (const c of chunks)
+        handleChat(
+          { uuid: "u", ...c },
+          vi.fn(),
+          (h) => (last = h[h.length - 1]),
+          [],
+          hist,
+        );
+      return last;
+    };
+    const tail = "[[FRAGEN: a?]] und mehr Text.";
+    let e = run([
+      { type: "textResponseChunk", textResponse: `${BODY}\n[[FRA` },
+    ]);
+    expect(e.content).toBe(BODY);
+    e = run([
+      { type: "textResponseChunk", textResponse: `${BODY}\n[[FRA` },
+      { type: "textResponseChunk", textResponse: tail.slice(5) },
+    ]);
+    expect(e.content).toBe(`${BODY}\n${tail}`);
+    // 300-Zeichen-Grenze ohne "]]": Zeile ist Text, schon vor dem Ende
+    const long = `[[FRAGEN: ${"x".repeat(300)}`;
+    e = run([{ type: "textResponseChunk", textResponse: `${BODY}\n${long}` }]);
+    expect(e.content).toBe(`${BODY}\n${long}`);
+    // Endzeile mit Text dahinter, dann Abschluss: alles Text
+    e = run([
+      { type: "textResponseChunk", textResponse: `${BODY}\n${LINE}` },
+      {
+        type: "textResponseChunk",
+        textResponse: "\nNoch ein Satz.",
+        close: true,
+      },
+    ]);
+    expect(e.content).toBe(`${BODY}\n${LINE}\nNoch ein Satz.`);
+    expect(e).not.toHaveProperty("followUps");
+    // Antwort nur aus der begonnenen Zeile: wartend statt leerer Blase
+    e = run([{ type: "textResponseChunk", textResponse: "[[FRAG" }]);
+    expect(e).toMatchObject({ content: "", pending: true });
   });
 });
 
@@ -268,6 +423,40 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     expect(pills()).toHaveLength(0);
   });
 
+  it("Befund 6: Liste einmal geprüft (bereinigt, ≤ 60, max. 3) durchgereicht", () => {
+    render(
+      <ChatHistory
+        settings={PILLS}
+        history={[
+          user("Englisch?"),
+          answer(BODY, {
+            followUps: [
+              " **Gibt es B1?** ",
+              42,
+              "x".repeat(61),
+              "–",
+              "b?",
+              "c?",
+              "d?",
+            ],
+          }),
+        ]}
+      />,
+    );
+    expect(pills().map((b) => b.textContent)).toEqual([
+      "Gibt es B1?",
+      "b?",
+      "c?",
+    ]);
+    render(
+      <ChatHistory
+        settings={PILLS}
+        history={[user("Englisch?"), answer(BODY, { followUps: ["–", 3] })]}
+      />,
+    );
+    expect($$("#anything-llm-follow-ups")).toHaveLength(0);
+  });
+
   it("Kurskarten oben: Pillen ebenfalls unter der letzten Antwort", () => {
     render(
       <ChatHistory
@@ -280,6 +469,64 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
       />,
     );
     expect(pills().map((b) => b.textContent)).toEqual(FU);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Befund 3: Kurskarten oben — Pillen ins Bild scrollen", () => {
+  const ABOVE = { ...PILLS, courseCards: "auto", courseCardsPosition: "above" };
+  const streaming = [
+    user("Englisch?"),
+    answer(BODY, { animate: true, closed: false }),
+  ];
+  const done = (extra = {}) => [
+    user("Englisch?"),
+    answer(BODY, { followUps: FU, followUpsArrivedAt: 1, ...extra }),
+  ];
+  const smooth = (spy) =>
+    spy.mock.calls.filter(([o]) => o && o.behavior === "smooth");
+
+  it("Chunk followUps kommt, Nutzer hat nicht gescrollt -> sanft ans Ende", () => {
+    const spy = vi.spyOn(Element.prototype, "scrollTo");
+    render(<ChatHistory settings={ABOVE} history={streaming} />);
+    expect(smooth(spy)).toHaveLength(0);
+    render(<ChatHistory settings={ABOVE} history={done()} />);
+    expect(pills()).toHaveLength(2);
+    expect(smooth(spy)).toHaveLength(1);
+    // weitere Chunks (finalize) scrollen nicht erneut
+    render(<ChatHistory settings={ABOVE} history={done({ chatId: 8 })} />);
+    expect(smooth(spy)).toHaveLength(1);
+  });
+
+  it("Nutzer hat seit Beginn der Antwort gescrollt -> nichts", () => {
+    const spy = vi.spyOn(Element.prototype, "scrollTo");
+    render(<ChatHistory settings={ABOVE} history={streaming} />);
+    act(() => {
+      container
+        .querySelector("#chat-history")
+        .dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    });
+    render(<ChatHistory settings={ABOVE} history={done()} />);
+    expect(pills()).toHaveLength(2);
+    expect(smooth(spy)).toHaveLength(0);
+  });
+
+  it("Verlauf geladen (ohne Ankunftszeit), Karten unten oder ohne Pillen -> nichts", () => {
+    const spy = vi.spyOn(Element.prototype, "scrollTo");
+    render(
+      <ChatHistory
+        settings={ABOVE}
+        history={done({ followUpsArrivedAt: undefined })}
+      />,
+    );
+    render(<ChatHistory settings={PILLS} history={done()} />);
+    render(
+      <ChatHistory
+        settings={{ ...ABOVE, followUps: "none" }}
+        history={done()}
+      />,
+    );
+    expect(smooth(spy)).toHaveLength(0);
   });
 });
 
@@ -362,30 +609,47 @@ describe("ChatContainer: Klick sendet genau eine Anfrage (AK-2)", () => {
 
 // ---------------------------------------------------------------------------
 describe("Verlauf laden (embedSessionHistory)", () => {
-  it("followUps vom Server bereinigt übernommen; Endzeile älterer Server abgetrennt", async () => {
+  const history = [
+    { role: "user", content: "Englisch?" },
+    {
+      role: "assistant",
+      content: "Antwort eins.",
+      followUps: [" **Gibt es B1-Kurse?** ", 3, "x".repeat(61)],
+    },
+    { role: "user", content: "Und B1?" },
+    { role: "assistant", content: `${BODY}\n${LINE}` },
+  ];
+  async function load(settings) {
     const { default: realService } = await vi.importActual(
       "../src/models/chatService.js",
     );
-    const history = [
-      { role: "user", content: "Englisch?" },
-      {
-        role: "assistant",
-        content: "Antwort eins.",
-        followUps: [" **Gibt es B1-Kurse?** ", 3, "x".repeat(61)],
-      },
-      { role: "user", content: "Und B1?" },
-      { role: "assistant", content: `${BODY}\n${LINE}` },
-    ];
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ history }),
     });
-    const loaded = await realService.embedSessionHistory(BASE, "s", "c");
-    expect(loaded[1].followUps).toEqual(["Gibt es B1-Kurse?"]);
+    return realService.embedSessionHistory(settings, "s", "c");
+  }
+
+  it("pills: followUps vom Server übernommen; Endzeile älterer Server abgetrennt", async () => {
+    const loaded = await load({ ...BASE, ...PILLS });
+    expect(loaded[1].followUps).toEqual(history[1].followUps);
     expect(loaded[3].content).toBe(BODY);
     expect(loaded[3].textResponse).toBe(BODY);
     expect(loaded[3].followUps).toEqual(FU);
     expect(loaded[0]).not.toHaveProperty("followUps");
     expect(JSON.stringify(loaded)).not.toContain("FRAGEN");
+    expect(loaded[3]).not.toHaveProperty("followUpsArrivedAt");
+    // angezeigt: geprüft, nur unter der letzten Antwort
+    render(<ChatHistory settings={PILLS} history={loaded} />);
+    expect(pills().map((b) => b.textContent)).toEqual(FU);
+  });
+
+  it("none (Standard): /history liefert followUps trotzdem -> verworfen, Endzeile trotzdem weg", async () => {
+    for (const settings of [BASE, { ...BASE, followUps: "none" }]) {
+      const loaded = await load(settings);
+      expect(loaded.some((m) => "followUps" in m)).toBe(false);
+      expect(loaded[3].content).toBe(BODY);
+      expect(JSON.stringify(loaded)).not.toContain("FRAGEN");
+    }
   });
 });

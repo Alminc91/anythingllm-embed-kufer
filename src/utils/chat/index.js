@@ -1,7 +1,7 @@
 import {
   appendReplyText,
   cardsAnnounced,
-  followUpsList,
+  holdFollowUpsLine,
   splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
@@ -115,6 +115,7 @@ export default function handleChat(
         : {}),
     };
     delete entry.markerBuffer;
+    delete entry.followUpsHold;
     setLoadingResponse(false);
     if (existing) {
       _chatHistory[chatIdx] = entry;
@@ -126,24 +127,39 @@ export default function handleChat(
   } else if (type === "textResponseChunk") {
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
-    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend
-    const reply = appendReplyText(existing, textResponse, close);
+    // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend.
+    // Zurückgehaltene Folgefragen-Endzeile (followUpsHold) gehört zum Text.
+    const reply = appendReplyText(
+      existing && {
+        ...existing,
+        content: (existing.content || "") + (existing.followUpsHold || ""),
+      },
+      textResponse,
+      close,
+    );
     const { markerBuffer } = reply;
-    // Antwortende: Folgefragen-Endzeile älterer Server abtrennen
-    const { text: content, followUps: lineFollowUps } = close
+    // Folgefragen-Endzeile älterer Server: im Stream zurückgehalten (nie
+    // sichtbar), am Antwortende abgetrennt
+    const {
+      text: content,
+      hold: followUpsHold,
+      followUps: lineFollowUps,
+    } = close
       ? splitFollowUpsLine(reply.content)
-      : { text: reply.content, followUps: null };
+      : holdFollowUpsLine(reply.content);
     const entry = {
       ...(existing || { uuid, role: "assistant" }),
       ...followUpsExtra(lineFollowUps),
       content,
       markerBuffer,
+      followUpsHold,
       sources,
       error,
       errorMsg,
       closed: close,
       animate: !close,
-      pending: markerBuffer !== undefined,
+      pending:
+        markerBuffer !== undefined || (!content.trim() && !!followUpsHold),
       sentAt,
       ...courseExtra,
     };
@@ -195,11 +211,11 @@ export default function handleChat(
   } else if (type === "followUps") {
     // Folgefragen (Fork >= 7.14): kommen nach dem letzten Textchunk und vor
     // finalizeResponseStream. Nur an die bestehende Antwort; ändert weder
-    // Text noch Stream-Zustand.
-    const list = followUpsList(followUps);
+    // Text noch Stream-Zustand. Geprüft wird beim Anzeigen (ChatHistory).
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
-    if (list.length === 0 || chatIdx === -1) return;
-    _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], followUps: list };
+    const extra = followUpsExtra(followUps);
+    if (!extra.followUps || chatIdx === -1) return;
+    _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], ...extra };
     setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
@@ -219,9 +235,13 @@ export default function handleChat(
   }
 }
 
-// Folgefragen aus der Endzeile (Übergangs-Abwehr): nur gültige, nicht leere
+// Folgefragen (nicht leere Liste) an die Antwort, die gerade im Gespräch
+// ankommt (followUpsArrivedAt: bei Kurskarten oben scrollt ChatHistory die
+// Pillen ins Bild — nie beim Verlauf-Laden)
 function followUpsExtra(list) {
-  return Array.isArray(list) && list.length > 0 ? { followUps: list } : {};
+  return Array.isArray(list) && list.length > 0
+    ? { followUps: list, followUpsArrivedAt: Date.now() }
+    : {};
 }
 
 // courseTeasers/teasers: Objekt URL -> Text (Prüfung der Einträge in

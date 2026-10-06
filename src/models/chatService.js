@@ -2,7 +2,6 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { v4 } from "uuid";
 import {
   cardsAnnounced,
-  followUpsList,
   splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
@@ -42,7 +41,9 @@ const ChatService = {
           // Teaserzeilen nur hinter einem Marker (auch einem, den der
           // Server schon entfernt hat: Antwort mit angekündigten Karten)
           // Folgefragen: vom Server (followUps) bzw. aus der Endzeile älterer
-          // Server (Übergangs-Abwehr); angezeigt nur unter der letzten Antwort
+          // Server (Übergangs-Abwehr, Zeile immer entfernt); übernommen nur
+          // bei followUps "pills" (/history liefert sie unabhängig vom Modus),
+          // geprüft und angezeigt in ChatHistory (nur letzte Antwort)
           const split =
             msg.role === "assistant"
               ? splitFollowUpsLine(
@@ -52,11 +53,16 @@ const ChatService = {
                 )
               : { text: msg.content, followUps: null };
           const content = split.text;
-          const followUps = followUpsList(msg.followUps ?? split.followUps);
+          const followUps =
+            embedSettings.followUps === "pills"
+              ? (msg.followUps ?? split.followUps)
+              : null;
           const { followUps: _raw, ...rest } = msg;
           return {
             ...rest,
-            ...(followUps.length > 0 ? { followUps } : {}),
+            ...(Array.isArray(followUps) && followUps.length > 0
+              ? { followUps }
+              : {}),
             content,
             id: v4(),
             sender: msg.role === "user" ? "user" : "system",

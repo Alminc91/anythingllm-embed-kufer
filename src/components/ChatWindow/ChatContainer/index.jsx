@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
@@ -223,7 +223,9 @@ export default function ChatContainer({
   // im Gespräch: sendCommand braucht den aktuellen Verlauf, nicht den beim
   // Einhängen).
   const autofillRef = useRef(handleAutofillEvent);
-  autofillRef.current = handleAutofillEvent;
+  useLayoutEffect(() => {
+    autofillRef.current = handleAutofillEvent;
+  });
 
   useEffect(() => {
     const listener = (event) => autofillRef.current(event);
@@ -286,6 +288,7 @@ function awaitsFirstText(message) {
     message.pending === true &&
     !message.content &&
     message.markerBuffer === undefined &&
+    !message.followUpsHold &&
     Array.isArray(message.courseSources)
   );
 }

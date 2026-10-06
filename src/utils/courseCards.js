@@ -268,20 +268,37 @@ export function appendReplyText(prev, chunk, done = false) {
     : { content };
 }
 
-// Folgefrage bereinigen: Markdown-Links -> Linktext, HTML-Tags und
-// Markdown-Zeichen raus, Leerraum zusammengezogen ("" = kein Text). Länger
-// als FOLLOW_UP_MAX_LEN wird verworfen, nie gekürzt (Aufrufer).
-function followUpText(value) {
+// Folgefrage bereinigen — dieselben Regeln wie cleanTeaserText im Fork:
+// HTML-Tags raus, Markdown-Links -> Linktext, nackte URLs raus, "[["/"]]" ->
+// "["/"]", Markdown nur an Delimitern ("**", "__", Backticks, gepaartes
+// "*x*"/"_x_" am Wortrand — nicht "snake_case" oder "2*3"; "#"/">" am
+// Anfang), kein Leerraum vor Satzzeichen, führende "- – • : >" raus,
+// Leerraum zusammengezogen. Nur Satzzeichen/Leerraum = "" (kein Text).
+// Länger als FOLLOW_UP_MAX_LEN wird verworfen, nie gekürzt (Aufrufer).
+const EMPHASIS_RX = /(^|[\s(])([*_])(\S|\S[^*_]*?\S)\2(?=[\s.,;:!?)]|$)/g;
+export function followUpText(value) {
   if (typeof value !== "string") return "";
-  return stripMarkdown(
-    value.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(HTML_TAG_RX, " "),
-  ).replace(/ ([.,;:!?])/g, "$1");
+  const text = value
+    .replace(HTML_TAG_RX, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\[{2,}/g, "[")
+    .replace(/\]{2,}/g, "]")
+    .replace(/\*\*|__|`+/g, "")
+    .replace(EMPHASIS_RX, "$1$3")
+    .replace(/^[ \t]*#+[ \t]+/gm, "")
+    .replace(/^[ \t]*>[ \t]+/gm, "")
+    .replace(/[\s\p{Cc}]+([.,;:!?])/gu, "$1")
+    .replace(/^[\s\p{Cc}\-–•:>]+/u, "")
+    .replace(/[\s\p{Cc}]+/gu, " ")
+    .trim();
+  return /^[\p{P}\s]*$/u.test(text) ? "" : text;
 }
 
 /**
- * Folgefragen einer Antwort (Chunk "followUps" bzw. Verlauf) prüfen: nur
- * Strings, bereinigt, höchstens 60 Zeichen (längere verworfen), ohne
- * Dubletten, höchstens FOLLOW_UPS_MAX.
+ * Folgefragen prüfen (Chunk "followUps", Verlauf, Endzeile): nur Strings,
+ * bereinigt (followUpText), leere und zu lange (> 60 Zeichen) verworfen,
+ * ohne Dubletten, die ersten FOLLOW_UPS_MAX gültigen.
  * @param {any} value
  * @returns {string[]}
  */
@@ -298,44 +315,62 @@ export function followUpsList(value) {
   return out;
 }
 
+// Folgefragen-Endzeile: Beginn (Index) der letzten Zeile von text, wenn sie
+// (nach Einrückung) mit "[[FRAGEN:" beginnt — partial: auch ein Präfix
+// davon —, höchstens 300 Zeichen lang ist und hinter ihrem ERSTEN "]]" nur
+// Leerraum steht (ohne "]]" nur partial: noch offen). Sonst -1.
+function followUpsLineStart(text, partial) {
+  const content = text.trimEnd();
+  const start = content.lastIndexOf("\n") + 1;
+  const line = content.slice(start).trimStart();
+  const head = line.slice(0, FOLLOW_UPS_TAG.length).toUpperCase();
+  if (!line || line.length > FOLLOW_UPS_LINE_MAX) return -1;
+  if (!(partial ? FOLLOW_UPS_TAG.startsWith(head) : head === FOLLOW_UPS_TAG))
+    return -1;
+  const close = line.indexOf("]]");
+  if (close === -1) return partial ? start : -1;
+  return close + 2 === line.length ? start : -1;
+}
+
 /**
  * Übergangs-Abwehr (Server < 7.14): Folgefragen-Endzeile einer fertigen
- * Antwort abtrennen. Regeln wie parseFollowUps im Fork: nur die letzte Zeile
- * vor dem abschließenden Leerraum, beginnt (nach Einrückung) mit
- * "[[FRAGEN:", endet mit "]]", höchstens 300 Zeichen; Einträge durch "|"
- * getrennt, 1–3 à höchstens 60 Zeichen ("-"/leer = keine Vorschläge, Zeile
- * trotzdem entfernt). Sonst bleibt der Text unverändert (followUps null).
+ * Antwort abtrennen — Regeln wie im Fork: die letzte Zeile vor dem
+ * abschließenden Leerraum, beginnt mit "[[FRAGEN:", Schluss am ersten "]]"
+ * (danach nur Leerraum), höchstens 300 Zeichen. Solch eine Zeile wird IMMER
+ * entfernt; Einträge durch "|" getrennt, gesammelt die ersten 3 gültigen
+ * (followUpsList; 0 gültige -> [] = keine Pillen). Sonst bleibt der Text
+ * unverändert (followUps null).
  * @param {string} text
  * @returns {{text: string, followUps: string[]|null}}
  */
 export function splitFollowUpsLine(text) {
-  const none = { text, followUps: null };
-  if (typeof text !== "string") return none;
-  const content = text.trimEnd();
-  const lineStart = content.lastIndexOf("\n") + 1;
-  const line = content.slice(lineStart).trimStart();
-  if (
-    line.slice(0, FOLLOW_UPS_TAG.length).toUpperCase() !== FOLLOW_UPS_TAG ||
-    line.length > FOLLOW_UPS_LINE_MAX ||
-    !line.endsWith("]]")
-  )
-    return none;
-  const raw = line.slice(FOLLOW_UPS_TAG.length, -2).trim();
-  const items = [];
-  if (raw !== "" && raw !== "-") {
-    for (const part of raw.split("|")) {
-      const item = followUpText(part);
-      if (!item) continue;
-      if (item.length > FOLLOW_UP_MAX_LEN) return none;
-      if (!items.some((t) => t.toLowerCase() === item.toLowerCase()))
-        items.push(item);
-    }
-    if (items.length === 0 || items.length > FOLLOW_UPS_MAX) return none;
-  }
+  if (typeof text !== "string") return { text, followUps: null };
+  const start = followUpsLineStart(text, false);
+  if (start === -1) return { text, followUps: null };
+  const line = text.slice(start).trim();
   return {
-    text: text.slice(0, text.slice(0, lineStart).trimEnd().length),
-    followUps: items,
+    text: text.slice(0, start).trimEnd(),
+    followUps: followUpsList(
+      line.slice(FOLLOW_UPS_TAG.length, line.indexOf("]]")).split("|"),
+    ),
   };
+}
+
+/**
+ * Streamende Antwort (ältere Server): eine begonnene Folgefragen-Endzeile
+ * ("[[F…" am Zeilenanfang, noch ohne "]]" bzw. mit "]]" am Ende) samt
+ * Leerraum davor zurückhalten, bis das Antwortende (splitFollowUpsLine),
+ * weiterer Text oder die 300-Zeichen-Grenze entscheidet — so ist die
+ * Rohzeile nie zu sehen.
+ * @param {string} text - bisher empfangener Text (ohne Karten-Marker)
+ * @returns {{text: string, hold?: string}}
+ */
+export function holdFollowUpsLine(text) {
+  const start =
+    typeof text === "string" && text ? followUpsLineStart(text, true) : -1;
+  if (start === -1) return { text };
+  const end = text.slice(0, start).trimEnd().length;
+  return { text: text.slice(0, end), hold: text.slice(end) };
 }
 
 // Hat der Server zu dieser Antwort Karten vorab angekündigt (Marker

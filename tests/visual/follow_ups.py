@@ -27,6 +27,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import theme_visual as tv  # noqa: E402
 import inline_input as ii  # noqa: E402  (CountingMock)
+import course_cards as cc  # noqa: E402  (Kurskarten oben: Ankündigung)
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = tv.ROOT
@@ -76,6 +77,25 @@ class SeqMock(ii.CountingMock):
         return super().handle(route)
 
 
+# Befund 3: Kurskarten oben + lange Antwort -> die Pillen lägen unter dem
+# sichtbaren Bereich; beim Eintreffen des followUps-Chunks scrollt das Widget
+# sanft ans Ende (Nutzer hat nicht selbst gescrollt).
+ABOVE = {**PILLS, "course-cards": "auto", "course-cards-position": "above"}
+LONG_ANSWER = cc.ANSWER_SHORT.replace(
+    "\n\nSuchen Sie eher einen Kurs am Wochenende?",
+    "\n\nAlle drei Kurse finden abends statt und eignen sich auch für Einsteiger. "
+    "Bitte bringen Sie eine Matte, eine Decke und bequeme Kleidung mit.\n\n"
+    "Die Anmeldung ist online über die Kursseite möglich; bei Fragen hilft Ihnen "
+    "die Geschäftsstelle gern weiter. Ermäßigungen sind auf Antrag möglich.\n\n"
+    "Weitere Angebote zu Entspannung und Bewegung finden Sie im Programmbereich Gesundheit.")
+
+
+def above_stream(uuid="u-1"):
+    ev = cc.announced_events(answer=LONG_ANSWER, uuid=uuid)
+    ev.insert(-1, {"uuid": uuid, "type": "followUps", "followUps": FU, "close": False, "error": False})
+    return ev
+
+
 def mock(**k):
     k.setdefault("stream", stream())
     return ii.CountingMock(**k)
@@ -100,6 +120,7 @@ def pixel_cases():
         ("fu-pills-dark", {"attrs": {**PILLS, "theme": "dark"}}, mock(), None),
         ("fu-pills-mobile", {"attrs": PILLS}, mock(), tv.MOBILE),
         ("fu-pills-history", {"attrs": PILLS}, mock(history=HISTORY), None),
+        ("fu-pills-above", {"attrs": ABOVE}, mock(stream=above_stream(), config={}), None),
     ]
 
 
@@ -112,7 +133,7 @@ def shoot(browser, base_url, case, out_path):
         if not m.history:
             send(page)
         wait_pills(page)
-        tv.settle(page)
+        tv.settle(page, 1000 if name == "fu-pills-above" else 700)
         page.mouse.move(0, 0)
         page.evaluate("() => window.__allmShadow.activeElement && window.__allmShadow.activeElement.blur()")
         page.wait_for_timeout(100)
@@ -280,6 +301,36 @@ def check_no_pills_while_streaming(browser, base_url):
         ctx.close()
 
 
+IN_VIEW = """() => {
+  const box = window.__q('#chat-history').getBoundingClientRect();
+  const wrap = window.__q('#anything-llm-follow-ups');
+  const cards = window.__q('[data-course-cards]');
+  const r = wrap ? wrap.getBoundingClientRect() : null;
+  return { pills: !!wrap, inView: !!r && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5,
+           cards: !!cards, overflow: window.__q('#chat-history').scrollHeight > box.height + 1,
+           text: window.__allmShadow.textContent };
+}"""
+
+
+def check_pills_above(browser, base_url):
+    """Befund 3: Kurskarten oben, lange Antwort -> Pillen nach dem Eintreffen
+    im sichtbaren Bereich (sanft ans Ende gescrollt); Desktop und 360 px."""
+    for label, viewport in (("Desktop", None), ("360 px", {"width": 360, "height": 740})):
+        ctx, page = tv.open_page(browser, base_url, {"attrs": ABOVE}, mock(stream=above_stream(), config={}),
+                                 viewport=viewport)
+        try:
+            tv.wait_shadow(page, "#message-input")
+            send(page, cc.QUESTION)
+            wait_pills(page)
+            tv.settle(page, 1000)
+            st = page.evaluate(IN_VIEW)
+            ok = st["pills"] and st["inView"] and st["cards"] and st["overflow"] and "FRAGEN" not in st["text"]
+            record(f"Befund 3 Karten oben, lange Antwort: Pillen im Bild ({label})", ok,
+                   json.dumps({k: st[k] for k in ("pills", "inView", "cards", "overflow")}))
+        finally:
+            ctx.close()
+
+
 def check_default_dom(browser, base_url):
     """AK-5 (DOM): ohne Attribut bzw. mit "none" keine Pillen."""
     for name, attrs in (("ohne Attribut", OPEN), ("none", {**OPEN, "follow-ups": "none"})):
@@ -337,6 +388,7 @@ def main():
                 check_history(browser, base_url)
                 check_no_pills_while_streaming(browser, base_url)
                 check_mobile_wrap(browser, base_url)
+                check_pills_above(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()
