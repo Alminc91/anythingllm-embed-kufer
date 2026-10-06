@@ -544,7 +544,9 @@ describe("Zuklappen wie das Original: Leistenform vom Aufklappen, Box festgehalt
     const ui = setup({ inlineLayout: "flow" });
     openAndSettle(ui);
     const win = ui.chat();
-    rootRect = { left: 30, top: 90, width: 640, height: 520 };
+    // Inline-Fläche steht noch dort, wo sie am Ende des Aufklappens stand
+    // (nur höher); die Box liegt woanders -> Ziel relativ zur Box
+    rootRect = { left: 0, top: 0, width: 760, height: 520 };
     panelRect = { left: 30, top: 90, width: 640, height: 520 };
     act(() => chatWindowProps.current.closeChat());
     expect(v(win, "mw")).toBe("600px");
@@ -572,6 +574,59 @@ describe("Zuklappen wie das Original: Leistenform vom Aufklappen, Box festgehalt
     expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
     transitionEnd(win);
     expect(visible(ui)).toBe(false);
+  });
+
+  // Review-Befund 1: Scroll-Container/Layoutverschiebung zwischen Aufklappen
+  // und Zuklappen (window.scroll unverändert) -> gespeicherte Seiten-
+  // koordinaten veraltet -> frisch messen (Signal kurz weg, Layout lesen)
+  it("::close-after-shift — Inline-Fläche um 300 px verschoben (ohne window.scroll): Ziel frisch gemessen, relativ zur Box", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    expect(window.scrollY).toBe(0);
+    rootRect = { left: 0, top: 300, width: 760, height: 68 };
+    barRect = { left: 100, top: 350, width: 600, height: 56 };
+    panelRect = { left: 20, top: 350, width: 760, height: 520 };
+    barSignals = [];
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    // Leiste (100, 350) relativ zur Box (20, 350) — nicht die veraltete
+    // Seitenlage vom Aufklappen (das wäre translate(80px, -300px))
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    // gemessen im eingeklappten Stand (Signal weg), danach Signal weg
+    expect(barSignals).toEqual([null]);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    // frisch gemessen -> Box nicht festgehalten
+    expect(ui.box().style.width).toBe("");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("::close-after-shift (flow) — Fläche verschoben: Ziel = Lage der Fläche, frisch gemessen", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    rootRect = { left: 0, top: 300, width: 760, height: 520 };
+    panelRect = { left: 0, top: 300, width: 760, height: 520 };
+    act(() => chatWindowProps.current.closeChat());
+    expect(v(win, "mw")).toBe("760px");
+    expect(v(win, "mh")).toBe("56px");
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    expect(ui.box().style.width).toBe("");
+  });
+
+  it("Fläche nur um < 1 px verschoben (Subpixel): gespeicherte Leistenform bleibt", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    rootRect = { left: 0.6, top: 0.4, width: 760, height: 68 };
+    barSignals = [];
+    act(() => chatWindowProps.current.closeChat());
+    expect(barSignals).toEqual([]);
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(ui.box().style.width).toBe("760px");
   });
 
   it("Viewport-Wechsel verwirft die Leistenform: Zuklappen danach ohne Morph", () => {

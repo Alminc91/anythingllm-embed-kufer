@@ -701,6 +701,9 @@ export default function InlineChat({
       onEnd: () => {
         m.stop = null;
         releaseScrollReserve();
+        // Bezug fürs Zuklappen (closeGeom): Seitenlage der Inline-Fläche im
+        // aufgeklappten, ruhenden Zustand
+        g.rootPage = rootPagePos();
         // Ende des Laufs: aufgefangene Zeichen ins Feld (liegt es unter dem
         // Viewport, nur wenn getippt wurde -> dann einmal hinscrollen)
         deliverKeys({ reveal: true });
@@ -1071,6 +1074,50 @@ export default function InlineChat({
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
   };
+  // Seitenlage der Inline-Fläche (Fensterscroll zählt nicht)
+  const rootPagePos = () => {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width };
+  };
+  // Steht die Inline-Fläche noch dort, wo sie am Ende des Aufklappens stand
+  // (± 1 px, gleiche Breite)? Ohne Bezug (Zuklappen mitten im Aufklappen):
+  // ja — der Lauf kehrt einfach um.
+  const rootUnmoved = (p) => {
+    if (!p) return true;
+    const q = rootPagePos();
+    return (
+      !!q &&
+      Math.abs(q.x - p.x) <= 1 &&
+      Math.abs(q.y - p.y) <= 1 &&
+      Math.abs(q.w - p.w) < 0.5
+    );
+  };
+  // Fallback (Inline-Fläche verschoben): Leistenform vor dem Rückweg frisch
+  // messen. Die Seite zeigt dafür ohne Paint kurz den eingeklappten Stand
+  // (Signal data-allm-expanded weg, Layout lesen, Signal wieder an), damit
+  // ein per Seiten-CSS verbreiterter Platzhalter nicht mitzählt. Schwebend:
+  // die unsichtbare Leiste im Seitenfluss messen; im Seitenfluss (Leiste
+  // nicht gerendert): Lage/Breite der Inline-Fläche, Höhe/Rundung vom
+  // Aufklappen. Panel-Ecke = äußere Box (nie transformiert).
+  const measureCloseGeom = (g, box) => {
+    const panel = box.getBoundingClientRect();
+    const root = rootRef.current;
+    const signal = !!mountTarget?.hasAttribute(EXPANDED_ATTR);
+    if (signal) mountTarget.removeAttribute(EXPANDED_ATTR);
+    try {
+      const pill = floating ? root?.querySelector(BAR_SELECTOR) : null;
+      if (pill) Object.assign(g, measureBar(pill));
+      else if (root) {
+        const r = root.getBoundingClientRect();
+        Object.assign(g, { x: r.left, y: r.top, w: r.width, h: g.barH, r: g.barR });
+      }
+    } finally {
+      if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
+    }
+    g.dx = g.x - panel.left;
+    g.dy = g.y - panel.top;
+  };
   // "morph", Ziel des Rückwegs. Fenster unverändert seit dem Aufklappen:
   // die dort gemessene Leistenform (echter eingeklappter Zustand, in
   // Seitenkoordinaten — Scrollen ändert nichts) relativ zur festgehaltenen
@@ -1084,7 +1131,15 @@ export default function InlineChat({
   const closeGeom = (g, box) => {
     const root = rootRef.current;
     if (!root) return null;
-    if (window.innerWidth === g.vw && window.innerHeight === g.vh) {
+    const sameView = window.innerWidth === g.vw && window.innerHeight === g.vh;
+    // Inline-Fläche seit dem Aufklappen verschoben (Scroll-Container der
+    // Seite, Layoutverschiebung): gespeicherte Seitenkoordinaten gelten
+    // nicht mehr -> frisch messen wie früher (measureCloseGeom)
+    if (sameView && !rootUnmoved(g.rootPage)) {
+      measureCloseGeom(g, box);
+      return null;
+    }
+    if (sameView) {
       const b = box.getBoundingClientRect();
       const r = root.getBoundingClientRect();
       const root0 = { x: r.left + window.scrollX, y: r.top + window.scrollY };

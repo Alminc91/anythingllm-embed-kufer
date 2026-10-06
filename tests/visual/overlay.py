@@ -1602,7 +1602,7 @@ CLOSE_REC_JS = r"""(ms) => { const out = []; window.__rec = null; window.__t0 = 
   const step = () => setTimeout(sample, 0);
   const sample = () => { const w = window.__q('#anything-llm-chat'); const r = w ? w.getBoundingClientRect() : null;
     const h = host.getBoundingClientRect();
-    out.push({ t: performance.now(), x: r ? r.x : null, w: r ? r.width : 0, h: r ? r.height : 0,
+    out.push({ t: performance.now(), x: r ? r.x : null, y: r ? r.y : null, w: r ? r.width : 0, h: r ? r.height : 0,
       hostW: h.width, hostX: h.x, cls: w ? /allm-morph/.test(w.className) : false,
       close: w ? w.classList.contains('allm-morph-close') : false });
     if (performance.now() - start < ms) requestAnimationFrame(step);
@@ -1610,8 +1610,9 @@ CLOSE_REC_JS = r"""(ms) => { const out = []; window.__rec = null; window.__t0 = 
   requestAnimationFrame(step); return true; }"""
 
 
-def demo_close_page(browser, base_url, viewport):
-    ctx, page = tv.open_page(browser, base_url, {"attrs": {**MORPH, **INPUT}, "inline": True, "css": DEMO_CLOSE_CSS},
+def demo_close_page(browser, base_url, viewport, extra_css=""):
+    ctx, page = tv.open_page(browser, base_url, {"attrs": {**MORPH, **INPUT}, "inline": True,
+                                                 "css": DEMO_CLOSE_CSS + extra_css},
                              tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=viewport,
                              before_goto=lambda c, p: c.add_init_script(DEMO_CLOSE_JS))
     ready(page, "#anything-llm-inline-input")
@@ -1719,6 +1720,48 @@ def check_morph_close_after_resize(browser, base_url):
         ctx.close()
 
 
+def check_morph_close_after_scroll(browser, base_url):
+    """::morph-close-after-scroll (Review-Befund 1/4) — Panel offen, Seite
+    per Mausrad 300 px gescrollt, dann „Einklappen“: der letzte Frame des
+    Laufs = Leiste (x, y, Breite, Höhe ± 1 px, im Viewport nach dem Scroll),
+    danach keine Nachbewegung (Host-Breite < 1 px, Leiste bleibt stehen)."""
+    ctx, page = demo_close_page(browser, base_url, {"width": 1280, "height": 1400},
+                                extra_css="#slot { margin-top: 400px; } body { padding-bottom: 2400px; }")
+    try:
+        demo_open(page)
+        page.mouse.move(40, 1300)
+        page.mouse.wheel(0, 300)
+        page.wait_for_function("() => scrollY >= 300", timeout=3000)
+        page.wait_for_timeout(400)
+        sy = page.evaluate("() => scrollY")
+        page.evaluate(CLOSE_REC_JS, 1500)
+        page.wait_for_timeout(40)
+        page.mouse.click(*page.evaluate(
+            "() => { const r = window.__q('button[aria-label=\"Einklappen\"]').getBoundingClientRect();"
+            " return [r.x + r.width / 2, r.y + r.height / 2]; }"))
+        page.wait_for_function("() => window.__rec !== null", timeout=5000)
+        rec = page.evaluate("() => window.__rec")
+        wait_bar_back(page)
+        tv.settle(page, 300)
+        bar = pill_rect(page)
+        sy_end = page.evaluate("() => scrollY")
+        page.wait_for_timeout(400)
+        bar2 = pill_rect(page)
+        run, last, at350, after, host_span = analyse_close(rec)
+        still = all(abs(bar[k] - bar2[k]) < 0.5 for k in ("x", "y", "w", "h"))
+        ok = (bool(run) and sy == sy_end and abs(last["w"] - bar["w"]) <= 1 and abs(last["h"] - bar["h"]) <= 1
+              and abs(last["x"] - bar["x"]) <= 1 and abs(last["y"] - bar["y"]) <= 1
+              and host_span is not None and host_span < 1 and still)
+        record("Befund 1 morph-close-after-scroll: nach 300 px Mausrad endet der Lauf auf der Leiste, keine Nachbewegung",
+               ok,
+               f"scrollY {sy} (Ende {sy_end}); Leiste {bar['w']:.0f}×{bar['h']:.0f} @ ({bar['x']:.0f}, {bar['y']:.0f}); "
+               f"letzter Lauf-Frame {last['w']:.1f}×{last['h']:.1f} @ ({last['x']:.1f}, {last['y']:.1f}); "
+               f"Host-Spanne danach {host_span:.2f} px; Leiste ruhig {still}"
+               if last else f"kein Lauf: {len(rec['frames'])} Frames")
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true", help="fehlende Referenz-Screenshots erzeugen")
@@ -1761,6 +1804,7 @@ def main():
                 check_morph_close_timing(browser, base_url)
                 check_morph_close_geometry(browser, base_url)
                 check_morph_close_after_resize(browser, base_url)
+                check_morph_close_after_scroll(browser, base_url)
                 check_morph_chips(browser, base_url)
                 check_morph_chips_reverse(browser, base_url)
                 check_morph_scroll_before(browser, base_url)
