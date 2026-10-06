@@ -36,7 +36,7 @@ export function SuggestedPills({ settings, align = "center" }) {
           key={i}
           text={text}
           label={label}
-          onClick={() => sendSuggestion(text)}
+          onClick={(e) => sendSuggestion(text, e.currentTarget)}
         />
       ))}
     </div>

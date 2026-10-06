@@ -7,12 +7,19 @@ import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
-// Vorschlag (Balken bzw. Pille im leeren Chat) senden: ChatContainer hört auf
-// SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
-export function sendSuggestion(text) {
-  window.dispatchEvent(
-    new CustomEvent(SEND_TEXT_EVENT, { detail: { command: text } }),
-  );
+// Vorschlag (Balken/Pille im leeren Chat, Folgefrage) senden: ChatContainer
+// hört auf SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
+// Security: das Ereignis startet am angeklickten Element (source) und steigt
+// nur bis zur Wurzel des EIGENEN ChatContainers auf (nicht composed: bleibt im
+// Shadow DOM) — bei zwei Widgets auf einer Seite sendet nur das angeklickte.
+// Ohne source (Aufruf von außen) wie bisher auf window.
+export function sendSuggestion(text, source = null) {
+  const detail = { command: text };
+  if (source && typeof source.dispatchEvent === "function")
+    source.dispatchEvent(
+      new CustomEvent(SEND_TEXT_EVENT, { detail, bubbles: true }),
+    );
+  else window.dispatchEvent(new CustomEvent(SEND_TEXT_EVENT, { detail }));
 }
 
 export default function ChatContainer({
@@ -22,7 +29,10 @@ export default function ChatContainer({
   knownHistory = [],
   pendingFirstMessage = null,
   onPendingFirstMessageConsumed = null,
+  // Blasen-Modus: Escape im Datenschutz-Hinweis schließt das Fenster
+  onClose = null,
 }) {
+  const rootRef = useRef(null);
   const [message, setMessage] = useState("");
   const [loadingResponse, setLoadingResponse] = useState(false);
   const [chatHistory, setChatHistory] = useState(knownHistory);
@@ -227,16 +237,29 @@ export default function ChatContainer({
     autofillRef.current = handleAutofillEvent;
   });
 
+  // Eigene Vorschläge kommen an der Wurzel dieses Containers an; auf window
+  // nur Ereignisse, die direkt dort ausgelöst wurden (von außen), nie die
+  // eines anderen Widgets.
   useEffect(() => {
-    const listener = (event) => autofillRef.current(event);
-    window.addEventListener(SEND_TEXT_EVENT, listener);
+    const root = rootRef.current;
+    const local = (event) => {
+      event.stopPropagation();
+      autofillRef.current(event);
+    };
+    const external = (event) => {
+      if (event.target === event.currentTarget) autofillRef.current(event);
+    };
+    root?.addEventListener(SEND_TEXT_EVENT, local);
+    window.addEventListener(SEND_TEXT_EVENT, external);
     return () => {
-      window.removeEventListener(SEND_TEXT_EVENT, listener);
+      root?.removeEventListener(SEND_TEXT_EVENT, local);
+      window.removeEventListener(SEND_TEXT_EVENT, external);
     };
   }, []);
 
   return (
     <div
+      ref={rootRef}
       className="allm-h-full allm-w-full allm-flex allm-flex-col"
       style={privacyLocked ? { position: "relative" } : undefined}
     >
@@ -244,6 +267,7 @@ export default function ChatContainer({
         <PrivacyNotice
           settings={settings}
           onAcknowledge={acknowledge}
+          onEscape={onClose}
           suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
       )}

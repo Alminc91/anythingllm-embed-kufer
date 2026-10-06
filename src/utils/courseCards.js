@@ -89,13 +89,27 @@ const SECOND_LEVEL = new Set([
 
 // Links in der Antwort. Markdown-URLs dürfen balancierte Klammern enthalten
 // ([Kurs](https://vhs.de/kurs/123-(abend))).
+// Security (ReDoS/Client-DoS, wie embedCourseSources.js im Fork): Linktext,
+// Anchor-Attribute, href und Anchor-Text sind begrenzt und enden (außer dem
+// Anchor-Text) an der Zeile; Linktext ohne "[", Attribute ohne "<" — sonst
+// läuft die Suche bei vielen "[" bzw. "<a " ohne Abschluss quadratisch.
+// Zusätzlich werden nur die ersten REPLY_SCAN_LEN Zeichen einer Antwort
+// durchsucht (selectCourseCards, selectAnnouncedCourseCards, extractLinks).
 const MD_LINK_RX =
-  /\[([^\]]*)\]\(\s*<?(https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)>?(?:\s+"[^"]*")?\s*\)/g;
+  /\[([^[\]\n]{0,300})\]\(\s*<?(https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+)>?(?:\s+"[^"\n]*")?\s*\)/g;
 const ANCHOR_RX =
-  /<a\s[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  /<a\s[^<>\n]{0,500}href=["'](https?:\/\/[^"'\n]{1,1000})["'][^<>\n]{0,500}>([\s\S]{0,500}?)<\/a>/gi;
+export const REPLY_SCAN_LEN = 20000;
+// Rohwerte vor dem Bereinigen kappen (Defense in Depth): Folgefrage wie die
+// Endzeile im Fork (300), Teaser/Kurzfelder wie eine Teaserzeile (240)
+const FOLLOW_UP_RAW_MAX = 300;
+const SHORT_TEXT_RAW_MAX = 240;
+// höchstens so viele Einträge der Folgefragen-Liste werden geprüft
+const FOLLOW_UPS_SCAN_MAX = 20;
 const BARE_URL_RX = /<?(https?:\/\/[^\s<>"'\]]+)>?/g;
 const ANY_URL_RX = /https?:\/\/\S+/g;
-const HTML_TAG_RX = /<[^>]*>/g;
+// Tag begrenzt (höchstens 1.000 Zeichen): viele "<" ohne ">" bleiben linear
+const HTML_TAG_RX = /<[^<>]{0,1000}>/g;
 // Satz = Text bis einschließlich Satzzeichen bzw. Zeilenende
 const SENTENCE_RX = /[^.!?\n]+[.!?]*/g;
 const WORD_RX = /\S+/g;
@@ -279,6 +293,7 @@ const EMPHASIS_RX = /(^|[\s(])([*_])(\S|\S[^*_]*?\S)\2(?=[\s.,;:!?)]|$)/g;
 export function followUpText(value) {
   if (typeof value !== "string") return "";
   const text = value
+    .slice(0, FOLLOW_UP_RAW_MAX)
     .replace(HTML_TAG_RX, " ")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/https?:\/\/\S+/g, " ")
@@ -305,7 +320,7 @@ export function followUpText(value) {
 export function followUpsList(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
-  for (const item of value) {
+  for (const item of value.slice(0, FOLLOW_UPS_SCAN_MAX)) {
     if (out.length >= FOLLOW_UPS_MAX) break;
     const text = followUpText(item);
     if (!text || text.length > FOLLOW_UP_MAX_LEN) continue;
@@ -562,7 +577,8 @@ const blankOut = (m) => " ".repeat(m.length);
 // Links der Antwort: [Text](url), <a href="url">Text</a>, <url>, nackte URL —
 // in Reihenfolge ihres Vorkommens, mit Position (index) im Originaltext.
 export function extractLinks(replyText = "") {
-  const text = typeof replyText === "string" ? replyText : "";
+  const text =
+    typeof replyText === "string" ? replyText.slice(0, REPLY_SCAN_LEN) : "";
   const links = [];
   const push = (url, label, index) => {
     const clean = typeof url === "string" ? trimUrlTail(url) : "";
@@ -674,6 +690,7 @@ export function truncateAtWord(value, max) {
 function shortText(value, max) {
   if (typeof value !== "string") return null;
   const v = value
+    .slice(0, SHORT_TEXT_RAW_MAX)
     .replace(HTML_TAG_RX, " ")
     .replace(/\s+/g, " ")
     .replace(/ ([.,;:!?])/g, "$1")
@@ -754,7 +771,10 @@ export function teaserMap(courseTeasers) {
   for (const [url, value] of Object.entries(courseTeasers)) {
     const key = normalizeUrl(url);
     if (!key || out.has(key) || typeof value !== "string") continue;
-    const text = shortText(stripMarkdown(value), TEASER_MAX_LEN);
+    const text = shortText(
+      stripMarkdown(value.slice(0, SHORT_TEXT_RAW_MAX)),
+      TEASER_MAX_LEN,
+    );
     if (text) out.set(key, text);
   }
   return out;
@@ -958,6 +978,8 @@ export function selectCourseCards(
   if (!courseCardsEnabled(settings)) return EMPTY;
   if (typeof replyText !== "string" || replyText.trim().length === 0)
     return EMPTY;
+  // nur der Anfang wird durchsucht (Links und Titel, ReDoS/Client-DoS)
+  replyText = replyText.slice(0, REPLY_SCAN_LEN);
 
   // 1) + 2) gültige Kursquellen der Kundendomain
   const ctx = ownCourseSources(courseSources, options.pageHost);

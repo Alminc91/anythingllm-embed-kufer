@@ -134,6 +134,7 @@ export default function ChatWindow({
             knownHistory={chatHistory}
             pendingFirstMessage={pendingFirstMessage}
             onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
+            onClose={inline ? null : closeChat}
           />
         </div>
         <div className="allm-pt-2 allm-pb-3 allm-h-fit allm-z-10">

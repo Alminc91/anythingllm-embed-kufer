@@ -253,13 +253,11 @@ describe("Vorlesen-Knopf mit Karten (AK-7, NAK-2, NAK-3)", () => {
         close: false,
       },
       { uuid: "u", type: "courseTeasers", teasers: clone(TEASERS) },
-      ...raw
-        .match(/[\s\S]{1,9}/g)
-        .map((t) => ({
-          uuid: "u",
-          type: "textResponseChunk",
-          textResponse: t,
-        })),
+      ...raw.match(/[\s\S]{1,9}/g).map((t) => ({
+        uuid: "u",
+        type: "textResponseChunk",
+        textResponse: t,
+      })),
       { uuid: "u", type: "textResponseChunk", textResponse: "", close: true },
       { uuid: "u", type: "followUps", followUps: FU },
       { uuid: "u", type: "finalizeResponseStream", close: true, chatId: 9 },

@@ -498,7 +498,7 @@ const HistoricalMessage = forwardRef(
     // Clean text for TTS (remove markdown, HTML, etc.)
     const replyTextForTTS = responseContent
       ?.replace(/[#*_`~\[\]()]/g, "") // Remove markdown
-      ?.replace(/<[^>]*>/g, "") // Remove HTML tags
+      ?.replace(/<[^>]{0,1000}>/g, "") // Remove HTML tags (begrenzt: linear)
       ?.trim();
 
     // Kurskarten: Auswahl einmal hier (Karten unter der Antwort) bzw. von

@@ -319,9 +319,20 @@ def check_privacy(browser, base_url):
                card["radius"] == "24px" and 0.85 <= card["widthRatio"] <= 0.95 and card["h2"] == "20px"
                and card["li"] == 3 and card["btnH"] >= 44 and card["btnCentered"] and card["btnRadius"] == "999px",
                json.dumps(card))
+        # Security-Sweep 4: Escape schließt im Blasen-Modus das Fenster (keine
+        # Tastaturfalle), bestätigt nicht; erneutes Öffnen zeigt den Hinweis
         page.keyboard.press("Escape")
-        page.wait_for_timeout(200)
-        record("AK-5 Escape bestätigt nicht", page.evaluate(PRIV_PROBE)["shown"], "")
+        page.wait_for_timeout(300)
+        esc = page.evaluate(PRIV_PROBE)
+        closed = page.evaluate("() => !!window.__q('#anything-llm-embed-chat-button') && !window.__q('#message-input')")
+        page.evaluate("() => window.__q('#anything-llm-embed-chat-button').click()")
+        tv.wait_shadow(page, "#anything-llm-privacy-notice")
+        page.wait_for_timeout(300)
+        again = page.evaluate(PRIV_PROBE)
+        record("AK-5 Escape schließt das Fenster (Blase), bestätigt nicht; Hinweis beim Öffnen wieder",
+               closed and not esc["shown"] and esc["ls"] is None and again["shown"] and again["ls"] is None
+               and again["inputDisabled"] is True,
+               json.dumps({"geschlossen": closed, "lsNachEscape": esc["ls"], "wieder": again["shown"]}))
         page.evaluate("() => [...window.__q('#anything-llm-privacy-notice').querySelectorAll('button')].find(b => b.textContent === 'Start').click()")
         page.wait_for_timeout(300)
         st2 = page.evaluate(PRIV_PROBE)

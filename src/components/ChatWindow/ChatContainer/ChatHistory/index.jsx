@@ -59,14 +59,17 @@ export default function ChatHistory({
   // Antwort und nur, wenn ein Klick sofort senden kann; hier einmal geprüft
   // (followUpsList), FollowUps bekommt die fertige Liste
   const last = history[history.length - 1];
-  const followUps =
+  const showFollowUps =
     settings.followUps === "pills" &&
     canSend &&
     last?.role === "assistant" &&
     !last.animate &&
-    !last.error
-      ? followUpsList(last.followUps)
-      : [];
+    !last.error;
+  const rawFollowUps = showFollowUps ? last.followUps : null;
+  const followUps = useMemo(
+    () => (rawFollowUps ? followUpsList(rawFollowUps) : []),
+    [rawFollowUps],
+  );
   // Gerade angekommene Folgefragen (nicht beim Verlauf-Laden)
   const pillsAt = followUps.length > 0 ? last.followUpsArrivedAt : undefined;
 
@@ -325,6 +328,11 @@ function replyFinal(message) {
 function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
   const { content, courseSources, courseCardsAnnounced, error } = props;
   const final = replyFinal(props);
+  // Security (Client-DoS): während des Streamings nur die angekündigten
+  // Karten (Text ""), Links/Titel der Antwort erst bei fertiger Antwort
+  // (close bzw. chatId) — nicht pro Chunk die ganze Antwort durchsuchen.
+  const done = final || props.closed === true;
+  const replyText = done ? stripThink(content) : "";
   const hasCards =
     !error &&
     ((Array.isArray(courseSources) && courseSources.length > 0) ||
@@ -333,7 +341,7 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
     () =>
       hasCards
         ? selectAnnouncedCourseCards(
-            stripThink(content),
+            replyText,
             courseSources,
             { courseCards },
             { announced: courseCardsAnnounced, fallback: final },
@@ -341,7 +349,7 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
         : null,
     [
       hasCards,
-      content,
+      replyText,
       courseSources,
       courseCards,
       courseCardsAnnounced,
@@ -396,7 +404,7 @@ function SuggestedMessages({ settings }) {
             fontSize: suggestionFontSize(settings.textSize),
           }}
           type="button"
-          onClick={() => sendSuggestion(content)}
+          onClick={(e) => sendSuggestion(content, e.currentTarget)}
           className={`msg-suggestion allm-font-sans allm-border-none hover:allm-shadow-[0_4px_14px_rgba(0,0,0,0.5)] allm-cursor-pointer allm-px-2 allm-py-2 allm-rounded-lg allm-w-full allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)]`}
         >
           {content}

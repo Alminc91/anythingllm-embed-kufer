@@ -13,17 +13,20 @@ import { focusIsElsewhereOnPage } from "../ChatContainer/PromptInput";
 // Datenschutz“ (privacyUrl), mittig der Knopf („Start“, privacyButtonText).
 // ChatContainer zeigt sie, solange nicht bestätigt (utils/privacy.js), und
 // sperrt bis dahin die Eingabe. Tastatur: Fokus auf den Knopf (Regel wie
-// PromptInput, s. u.), Tab bleibt in der Karte; Escape bestätigt nicht (klappt
-// im Inline-Modus wie gewohnt das Panel ein -> keine Tastaturfalle, der
-// Hinweis kommt beim nächsten Öffnen wieder). z-index 60 wie das Overlay
-// „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50). Alle Texte als
-// Text (nie HTML); Farben über --allmi-*.
+// PromptInput, s. u.), Tab bleibt in der Karte; Escape bestätigt nicht —
+// im Inline-Modus klappt es wie gewohnt das Panel ein, im Blasen-Modus
+// schließt es das Chatfenster wie der Schließen-Knopf (onEscape) -> keine
+// Tastaturfalle, der Hinweis kommt beim nächsten Öffnen wieder. z-index 60
+// wie das Overlay „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50).
+// Alle Texte als Text (nie HTML); Farben über --allmi-*.
 export default function PrivacyNotice({
   settings = {},
   onAcknowledge,
   // wie PromptInput: Frage per Touch aus der Leiste abgeschickt -> kein
   // Auto-Fokus (keine Bildschirmtastatur/kein Fokus-Sprung)
   suppressAutoFocus = false,
+  // Blasen-Modus: Fenster schließen (closeChat), ohne zu bestätigen
+  onEscape = null,
 }) {
   const embedMode = useEmbedMode();
   const cardRef = useRef(null);
@@ -46,6 +49,12 @@ export default function PrivacyNotice({
   }, []);
 
   const trapTab = (e) => {
+    if (e.key === "Escape" && onEscape && !embedMode.inline) {
+      e.preventDefault();
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
     if (e.key !== "Tab") return;
     const items = [...cardRef.current.querySelectorAll("a[href], button")];
     if (items.length === 0) return;
