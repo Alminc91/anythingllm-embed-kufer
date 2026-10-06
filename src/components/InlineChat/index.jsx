@@ -81,6 +81,19 @@ import {
 // zur Box vor dem Lauf (ohne Animation), nie währenddessen; Chips unter der
 // Leiste blenden weich aus bzw. wieder ein.
 //
+// Tastenübergabe (Desktop, Aufklappen ohne Senden, kein Touch): Zeichen, die
+// ab dem Klick getippt werden, gehen nie verloren. Der Fokus geht in der
+// Klick-Geste (preventScroll) in ein unsichtbares Auffangfeld oben in der
+// Box (sinkRef) — es existiert sofort, auch solange der Chat noch lädt.
+// Sobald das Chat-Eingabefeld bereit ist (kein wartender Entwurf mehr, nicht
+// gesperrt) und — "morph" schwebend — in seiner Endlage ganz im Viewport
+// liegt, wandert der aufgefangene Text ans Ende des Chat-Eingabefelds und der
+// Fokus dorthin (deliverKeys); bis dahin landet alles im Auffangfeld. Liegt
+// das Feld unter dem Viewport, wartet die Übergabe bis zum Ende des Laufs und
+// bis getippt wurde, dann scrollt die Seite einmal zum Feld (nie während des
+// Laufs). Enter im Auffangfeld sendet den Text wie Enter im Chat. Zuklappen
+// legt aufgefangenen Text wie eine wartende Übergabe zurück in die Leiste.
+//
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
 //                          (Entwurf wandert per Übergabe send: false mit). Nur
@@ -119,6 +132,19 @@ function prefersReducedMotion() {
   }
 }
 const px = (n) => `${Math.round(n * 100) / 100}px`;
+
+// Wert eines (von React gesteuerten) Eingabefelds setzen wie beim Tippen:
+// nativer Setter + input-Ereignis, damit onChange den neuen Wert übernimmt
+function setFieldValue(el, value) {
+  const proto =
+    el instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) setter.call(el, value);
+  else el.value = value;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 // Rundung einer Ecke (computed border-*-radius: "999px", "30%", "40px 10px")
 // für die Startform von "morph": Prozent gegen die kleinere Seite, bei zwei
@@ -371,6 +397,11 @@ const FOCUS_PROXY_STYLE = {
   pointerEvents: "none",
 };
 
+// Auffangfeld der Tastenübergabe (Box, Desktop): wie das Hilfsfeld, ohne
+// sichtbaren Cursor
+const KEY_SINK_STYLE = { ...FOCUS_PROXY_STYLE, caretColor: "transparent" };
+const KEY_SINK_ID = "anything-llm-key-sink";
+
 // Schwebende Box (inlineLayout "overlay"): relativ zur Inline-Fläche
 // (#anything-llm-embed-inline, position:relative), oben an der Leiste.
 const OVERLAY_BOX_STYLE = {
@@ -457,10 +488,14 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
-  // "morph": { geom, stop, closing, focusOnEnd } des laufenden bzw. letzten
-  // Laufs; geom.open = Panel im nächsten Commit messen und Lauf starten;
-  // focusOnEnd = schwebend nach dem Aufklappen ins Eingabefeld (falls sichtbar)
+  // "morph": { geom, stop, closing } des laufenden bzw. letzten Laufs;
+  // geom.open = Panel im nächsten Commit messen und Lauf starten
   const morphRef = useRef(null);
+  // Tastenübergabe: Auffangfeld (Box) und ob es gerade Zeichen sammelt;
+  // gate = nur in ein Eingabefeld übergeben, das ganz im Viewport liegt
+  // ("morph" schwebend), sonst sofort
+  const sinkRef = useRef(null);
+  const keysRef = useRef({ active: false, gate: false });
   // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
   // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
   const invalidateMorph = () => {
@@ -472,6 +507,9 @@ export default function InlineChat({
   // fortlaufende Nummer; der ChatContainer sendet jedes Ticket genau einmal.
   const [pendingFirstMessage, setPendingFirstMessage] = useState(null);
   const lastTicketRef = useRef(0);
+  // aktueller Stand für die Tastenübergabe (Listener/Timer außerhalb des Renders)
+  const pendingRef = useRef(null);
+  pendingRef.current = pendingFirstMessage;
   // Text der Eingabe-Leiste. Liegt hier, weil die Leiste beim Aufklappen
   // abgebaut wird: beim Zuklappen kommt eine verworfene Frage zurück ins Feld.
   const [barText, setBarText] = useState("");
@@ -619,10 +657,9 @@ export default function InlineChat({
       onEnd: () => {
         m.stop = null;
         releaseScrollReserve();
-        if (m.focusOnEnd) {
-          m.focusOnEnd = false;
-          focusInputIfVisible();
-        }
+        // Ende des Laufs: aufgefangene Zeichen ins Feld (liegt es unter dem
+        // Viewport, nur wenn getippt wurde -> dann einmal hinscrollen)
+        deliverKeys({ reveal: true });
       },
     });
     if (scrollPlan) applyFlowScroll(scrollPlan);
@@ -744,27 +781,99 @@ export default function InlineChat({
     focusRequestRef.current = true;
     if (inOverlay) proxyRef.current?.focus({ preventScroll: true });
   };
-  // "morph" schwebend (kein Scroll): nach dem Aufklappen nur dann ins
-  // Eingabefeld (bzw. ohne Feld: das Chat-Fenster als Maß), wenn es ganz im
-  // Viewport liegt — nie Tippen in ein unsichtbares Feld — und der Fokus
-  // nicht inzwischen auf einem Element der Seite liegt.
-  const focusInputIfVisible = () => {
-    const el =
-      embedderSettings.shadowRoot?.getElementById("message-input") ||
-      chatWindowRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
+  // Tastenübergabe (siehe Kopfkommentar). Endlage des Chat-Eingabefelds:
+  // Lage im Fenster (Inhalt steht in Panelgröße oben links im Fenster, auch
+  // mitten im Lauf) + Panel-Ecke (äußere Box, nie transformiert).
+  const inputFinalVisible = (input) => {
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    const r = input.getBoundingClientRect();
+    const top =
+      win && box
+        ? box.getBoundingClientRect().top +
+          (r.top - win.getBoundingClientRect().top)
+        : r.top;
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (r.top < 0 || r.bottom > vh) return;
-    const a = document.activeElement;
-    if (
-      a &&
-      a !== document.body &&
-      a !== document.documentElement &&
-      a !== host
-    )
+    return top >= 0 && top + r.height <= vh;
+  };
+  const chatInput = () =>
+    chatWindowRef.current?.querySelector("#message-input") ||
+    embedderSettings.shadowRoot?.getElementById("message-input");
+  const startKeyHandover = (gate) => {
+    const sink = sinkRef.current;
+    if (!sink) return false;
+    sink.value = "";
+    keysRef.current = { active: true, gate };
+    sink.focus({ preventScroll: true });
+    deliverKeys();
+    return true;
+  };
+  // Aufgefangenen Text ans Ende des Chat-Eingabefelds (über den nativen
+  // Setter + input-Ereignis -> onChange von PromptInput) und Fokus dorthin —
+  // nur, wenn er noch im Auffangfeld bzw. frei (body/Host) ist. Liegt das
+  // Feld (gate) unter dem Viewport, wird erst übergeben, wenn der Lauf vorbei
+  // ist, reveal gilt (Laufende, Tippen ins Auffangfeld) und Text da ist —
+  // dann scrollt die Seite einmal zum Feld. Rückgabe: übergeben?
+  const deliverKeys = ({ reveal = false } = {}) => {
+    const k = keysRef.current;
+    const sink = sinkRef.current;
+    if (!k.active) return false;
+    const input = chatInput();
+    if (!input || input.disabled || pendingRef.current) return false;
+    const visible = !k.gate || inputFinalVisible(input);
+    const m = morphRef.current;
+    const running = !!m?.stop && !m.closing;
+    const text = sink?.value || "";
+    if (!visible && (running || !(reveal && text))) return false;
+    keysRef.current = { active: false, gate: false };
+    if (sink) sink.value = "";
+    if (text) setFieldValue(input, input.value + text);
+    const a =
+      embedderSettings.shadowRoot?.activeElement || document.activeElement;
+    const free = !a || a === sink || a === document.body || a === host;
+    if (!free) return true;
+    input.focus({ preventScroll: true });
+    try {
+      input.setSelectionRange(input.value.length, input.value.length);
+    } catch (e) {
+      // ältere Browser: Cursor bleibt, wo er ist
+    }
+    if (!visible)
+      input.scrollIntoView?.({
+        block: "nearest",
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+      });
+    return true;
+  };
+  // Enter im Auffangfeld: wie Enter im Chat — Text übergeben und senden.
+  // Chat noch nicht bereit (lädt): als Frage übergeben (send), ein noch
+  // wartender Entwurf aus der Leiste steht davor. Leer: nichts.
+  const sinkEnter = (e) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent?.isComposing) return;
+    e.preventDefault();
+    const sink = sinkRef.current;
+    const text = sink?.value || "";
+    if (!keysRef.current.active || !text.trim()) return;
+    const input = chatInput();
+    if (input && !input.disabled && !pendingRef.current) {
+      keysRef.current.gate = false;
+      deliverKeys();
+      setTimeout(() => input.form?.requestSubmit?.(), 0);
       return;
-    focusInput(false);
+    }
+    if (input && !pendingRef.current) return; // gesperrt: Antwort läuft
+    keysRef.current = { active: false, gate: false };
+    if (sink) sink.value = "";
+    const ticket = ++lastTicketRef.current;
+    setPendingFirstMessage((prev) => ({
+      ticket,
+      text: `${prev && !prev.send ? prev.text : ""}${text}`.trim(),
+      send: true,
+      suppressAutoFocus: false,
+    }));
+  };
+  const sinkInput = () => {
+    if (keysRef.current.active) deliverKeys({ reveal: true });
   };
 
   // first (nur inlineInput): { text, send } aus der Leiste, sonst null.
@@ -835,14 +944,25 @@ export default function InlineChat({
     // Vorfahren (auch <html>) wieder her und bricht damit das sanfte Scrollen
     // zur Box ab. Nach der Antwort kommt der Fokus wie gewohnt ins Feld
     // (onPendingFirstMessageConsumed).
-    // "morph" schwebend: Fokus erst nach dem Lauf, nur wenn das Feld dann
-    // sichtbar ist (focusInputIfVisible) — die Seite scrollt dort nicht.
+    // Sonst Tastenübergabe (Kopfkommentar): Fokus sofort ins Auffangfeld,
+    // Text und Fokus wandern ins Chat-Eingabefeld, sobald es bereit ist —
+    // "morph" schwebend nur in ein Feld, das ganz im Viewport liegt.
     if (!sending && !isTouchDevice()) {
       const m = morphRef.current;
-      if (m?.stop && wantOverlay && !clipped) m.focusOnEnd = true;
-      else focusInput(false);
+      if (!startKeyHandover(!!m?.stop && wantOverlay && !clipped))
+        focusInput(false);
     }
   };
+
+  // Entwurf aus der Leiste verbraucht (steht im Chat-Eingabefeld): jetzt
+  // dahinter die aufgefangenen Zeichen
+  const deliverKeysRef = useRef(deliverKeys);
+  useLayoutEffect(() => {
+    deliverKeysRef.current = deliverKeys;
+  });
+  useEffect(() => {
+    if (!pendingFirstMessage && keysRef.current.active) deliverKeys();
+  }, [pendingFirstMessage]);
 
   // Vom ChatContainer aufgerufen, sobald er ein Ticket verbraucht hat.
   const onPendingFirstMessageConsumed = useCallback((pending) => {
@@ -872,7 +992,10 @@ export default function InlineChat({
   // focus false: Fokus bleibt; flush false: ohne flushSync (aus einem
   // Effekt-Cleanup, dort darf React nicht synchron rendern).
   const collapseNow = (focus = "bar", flush = true) => {
-    const unsent = pendingFirstMessage?.text;
+    // aufgefangene, noch nicht übergebene Zeichen gehören zum Entwurf
+    const caught = keysRef.current.active ? sinkRef.current?.value || "" : "";
+    keysRef.current = { active: false, gate: false };
+    const unsent = `${pendingFirstMessage?.text || ""}${caught}` || null;
     const apply = () => {
       setPendingFirstMessage(null);
       if (unsent) setBarText(unsent);
@@ -921,7 +1044,6 @@ export default function InlineChat({
     if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
       if (m.closing) return;
       m.closing = true;
-      m.focusOnEnd = false;
       m.stop?.(true);
       releaseScrollReserve();
       // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
@@ -1057,9 +1179,17 @@ export default function InlineChat({
     () => ({
       inline: true,
       overlay,
+      // Chat-Eingabefeld bereit (Mount bzw. wieder frei): eine laufende
+      // Tastenübergabe übernimmt Text und Fokus selbst (nach den Effekten
+      // dieses Commits; ein wartender Entwurf aus der Leiste kommt zuerst ins
+      // Feld, dann übergibt der Effekt auf pendingFirstMessage)
       consumeFocusRequest: () => {
         const wanted = focusRequestRef.current;
         focusRequestRef.current = false;
+        if (keysRef.current.active) {
+          Promise.resolve().then(() => deliverKeysRef.current());
+          return false;
+        }
         return wanted;
       },
     }),
@@ -1172,6 +1302,18 @@ export default function InlineChat({
                 />
               </div>
             </div>
+            {view === "box" && (
+              <input
+                ref={sinkRef}
+                id={KEY_SINK_ID}
+                aria-hidden="true"
+                tabIndex={-1}
+                autoComplete="off"
+                onKeyDown={sinkEnter}
+                onInput={sinkInput}
+                style={KEY_SINK_STYLE}
+              />
+            )}
           </div>
         )}
       </div>

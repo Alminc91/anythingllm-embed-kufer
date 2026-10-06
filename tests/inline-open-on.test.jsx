@@ -276,3 +276,122 @@ describe('inlineOpenOn "focus"', () => {
     expect(chatService.streamChat.mock.calls[0][2]).toBe("Yoga");
   });
 });
+
+// Tastenübergabe (Issue embed-zeilenkarten-tasten-morph-datenschutz, AK-6):
+// Zeichen ab dem Klick in die Leiste gehen nie verloren — erst ins
+// Auffangfeld (Chat lädt noch), dann ins Chat-Eingabefeld; Enter sendet.
+// Wie im Browser landet getipptes im jeweils fokussierten Feld.
+function typeFocused(text) {
+  const el = document.activeElement;
+  typeInto(el, el.value + text);
+  return el;
+}
+function enterFocused() {
+  const el = document.activeElement;
+  act(() =>
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        keyCode: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+}
+const sink = () => container.querySelector("#anything-llm-key-sink");
+
+describe("::keystrokes-during-open — Tastenübergabe beim Aufklappen", () => {
+  it("Fokus sofort im Auffangfeld; Zeichen vor und nach dem Laden landen vollständig im Chatfeld, Enter sendet", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    expect(ui.open()).toBe(true);
+    // Chat lädt noch: kein Eingabefeld, Fokus im Auffangfeld (unsichtbar)
+    expect(ui.message()).toBeNull();
+    expect(document.activeElement).toBe(sink());
+    expect(sink().getAttribute("aria-hidden")).toBe("true");
+    expect(sink().tabIndex).toBe(-1);
+    typeFocused("abc");
+    await flush(); // Verlauf geladen -> PromptInput gemountet -> Übergabe
+    await flush();
+    expect(ui.message().value).toBe("abc");
+    expect(document.activeElement).toBe(ui.message());
+    expect(sink().value).toBe("");
+    typeFocused("defgh");
+    expect(ui.message().value).toBe("abcdefgh");
+    enterFocused();
+    await flush();
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(chatService.streamChat.mock.calls[0][2]).toBe("abcdefgh");
+  });
+
+  it("Enter noch vor dem Laden: genau eine Frage mit dem getippten Text", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    typeFocused("abcdefgh");
+    enterFocused();
+    expect(sink().value).toBe("");
+    await flush();
+    await flush();
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(chatService.streamChat.mock.calls[0][2]).toBe("abcdefgh");
+  });
+
+  it("Entwurf aus der Leiste + weiter getippt: Entwurf zuerst, dann die neuen Zeichen", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    typeInto(ui.input(), "Yoga");
+    pointerClick(ui.input());
+    typeFocused(" am Abend");
+    await flush();
+    await flush();
+    expect(ui.message().value).toBe("Yoga am Abend");
+    expect(document.activeElement).toBe(ui.message());
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+
+  it("zweites Öffnen (Chat schon geladen): Fokus direkt im Chatfeld", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    await flush();
+    ui.collapse();
+    pointerClick(ui.input());
+    await flush();
+    expect(document.activeElement).toBe(ui.message());
+    typeFocused("xy");
+    expect(ui.message().value).toBe("xy");
+  });
+
+  it("Zuklappen vor der Übergabe: aufgefangene Zeichen zurück ins Leisten-Feld, nichts gesendet", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    typeFocused("Spa");
+    expect(sink().value).toBe("Spa");
+    // Einklappen-Knopf (Kopfzeile, schon während der Chat lädt)
+    const btn = container.querySelector('button[aria-label="Einklappen"]');
+    expect(btn).not.toBeNull();
+    click(btn);
+    expect(ui.open()).toBe(false);
+    expect(ui.input().value).toBe("Spa");
+    await flush();
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+
+  it("Touch-Tablet (Desktop-Breite, grober Zeiger): keine Übergabe, kein Auto-Fokus (wie bisher)", async () => {
+    const mm = vi.spyOn(window, "matchMedia").mockImplementation((q) => ({
+      matches: q !== "(prefers-reduced-motion: reduce)",
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input(), "touch");
+    expect(ui.open()).toBe(true);
+    expect(container.querySelector("#anything-llm-chat").className).not.toContain(
+      "allm-fixed",
+    ); // Box, kein Vollbild
+    expect(document.activeElement).not.toBe(sink());
+    await flush();
+    expect(document.activeElement).not.toBe(ui.message());
+    mm.mockRestore();
+  });
+});

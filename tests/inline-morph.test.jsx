@@ -776,7 +776,7 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
   });
 });
 
-describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", () => {
+describe("Befund 2 / Tastenübergabe: Overlay-Morph – Text nie in ein unsichtbares Feld", () => {
   let shadowHost;
   let input;
   beforeEach(() => {
@@ -794,18 +794,57 @@ describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", 
   });
   const focused = () => embedderSettings.shadowRoot.activeElement === input;
 
-  it("Feld nach dem Lauf im Viewport: Fokus erst am Ende des Laufs", () => {
+  const sink = () => container.querySelector("#anything-llm-key-sink");
+  const type = (el, text) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(el),
+      "value",
+    ).set;
+    act(() => {
+      setter.call(el, el.value + text);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  it("Tastenübergabe: Feld in Endlage im Viewport -> Fokus sofort in der Klick-Geste (Lauf läuft weiter)", () => {
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
+    expect(focused()).toBe(true);
     nextFrames();
-    expect(focused()).toBe(false); // nicht mitten im Lauf
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
     transitionEnd(ui.chat());
     expect(focused()).toBe(true);
   });
 
-  it("Feld nach dem Lauf unter dem Viewport: kein Fokus, kein Scroll", () => {
+  it("NAK-4: Feld unter dem Viewport -> Zeichen im Auffangfeld, kein Scroll im Lauf; danach Tippen -> Text im Feld + einmal hinscrollen", () => {
     const scrollTo = vi.fn();
     vi.stubGlobal("scrollTo", scrollTo);
+    const protoBefore = Element.prototype.scrollIntoView;
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView;
+    try {
+      panelRect = { left: 20, top: 600, width: 760, height: 520 };
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      expect(focused()).toBe(false);
+      expect(document.activeElement).toBe(sink());
+      nextFrames();
+      type(sink(), "abc"); // mitten im Lauf
+      expect(input.value).toBe("");
+      expect(intoView).not.toHaveBeenCalled();
+      transitionEnd(ui.chat());
+      // Ende des Laufs: Text übergeben, Fokus ins Feld, einmal hinscrollen
+      expect(input.value).toBe("abc");
+      expect(focused()).toBe(true);
+      expect(intoView).toHaveBeenCalledTimes(1);
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = protoBefore;
+    }
+  });
+
+  it("NAK-4: Feld unter dem Viewport, nichts getippt -> nach dem Lauf kein Scroll, erst das erste Zeichen holt das Feld", () => {
     const protoBefore = Element.prototype.scrollIntoView;
     const intoView = vi.fn();
     Element.prototype.scrollIntoView = intoView;
@@ -817,9 +856,12 @@ describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", 
       nextFrames();
       transitionEnd(ui.chat());
       expect(focused()).toBe(false);
-      expect(document.activeElement).toBe(document.body);
-      expect(scrollTo).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(sink());
       expect(intoView).not.toHaveBeenCalled();
+      type(sink(), "x");
+      expect(input.value).toBe("x");
+      expect(focused()).toBe(true);
+      expect(intoView).toHaveBeenCalledTimes(1);
     } finally {
       Element.prototype.scrollIntoView = protoBefore;
     }
@@ -910,8 +952,9 @@ describe("Morph flüssiger: Schließen", () => {
     expect(src.match(/will-change:[^;}]*/g)).toEqual([
       "will-change:width,height,transform",
     ]);
+    // Tastenübergabe: im Lauf overflow: clip (kein Scroll-Container)
     expect(src).toContain(
-      ".allm-morph,.allm-morph-from{will-change:width,height,transform}",
+      ".allm-morph,.allm-morph-from{will-change:width,height,transform;overflow:clip!important}",
     );
   });
 });

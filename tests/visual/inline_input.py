@@ -1024,6 +1024,98 @@ def check_focus_open(browser, base_url):
         ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Tastenübergabe beim Aufklappen (Issue embed-zeilenkarten-tasten-morph-
+# datenschutz, AK-6, AK-7, NAK-4): Seite wie die Demo — Leiste 600 px, offen
+# 760 px (Seiten-Transition per MutationObserver wie demo app.js), Öffnen bei
+# Klick, schwebend, morph, 520 px hoch.
+# ---------------------------------------------------------------------------
+MORPH_FOCUS = {**FOCUS, "inline-layout": "overlay", "inline-effect": "morph", "inline-height": "520px"}
+DEMO_LIKE_CSS = ("main { max-width: none; } #slot { max-width: 600px; margin: 0 auto; "
+                 "transition: max-width 500ms cubic-bezier(.16,1,.3,1); } #slot.is-open { max-width: 760px; }")
+DEMO_LIKE_JS = r"""
+(() => {
+  const hook = () => {
+    const ph = document.getElementById('kufer-assistent');
+    if (!ph) return requestAnimationFrame(hook);
+    new MutationObserver(() => document.getElementById('slot').classList.toggle('is-open',
+      ph.getAttribute('data-allm-expanded') === 'true')).observe(ph, { attributes: true,
+      attributeFilter: ['data-allm-expanded'] });
+  };
+  hook();
+})();
+"""
+# scrollY + Klassen des Fensters je Frame (nicht-blockierend, window.__rec)
+SCROLL_REC_JS = r"""(ms) => { const out = []; const t0 = performance.now();
+  const step = () => { const w = window.__q('#anything-llm-chat');
+    out.push({ t: Math.round(performance.now() - t0), sy: scrollY, morph: !!w && /allm-morph/.test(w.className) });
+    if (performance.now() - t0 < ms) requestAnimationFrame(step); else window.__rec = out; };
+  window.__rec = null; requestAnimationFrame(step); return true; }"""
+
+
+def check_type_during_morph(browser, base_url):
+    """::type-during-morph — Klick ins Leisten-Feld, nach 0/200/500/1000 ms
+    „abcdefgh“ tippen: alles im Chat-Eingabefeld, Enter sendet genau diese
+    Frage (AK-6); scrollY bleibt über alle Frames des Laufs gleich (AK-7).
+    Der Verlauf lädt 250 ms (wie auf der Demo): Zeichen davor dürfen nicht
+    verloren gehen.
+    ::type-field-below-fold (NAK-4) — Leiste weit unten (1280×900, Feld
+    in Endlage unter dem Viewport): Text kommt an, Enter sendet; gescrollt
+    wird erst nach dem Lauf."""
+    cases = [(w, {"width": 1280, "height": 1400}, "") for w in (0, 200, 500, 1000)]
+    cases += [(w, {"width": 1280, "height": 900}, "#slot { margin-top: 560px; }") for w in (0, 500)]
+    for wait_ms, vp, extra_css in cases:
+        below = bool(extra_css)
+        m = HeldHistoryMock()
+        ctx, page = tv.open_page(browser, base_url, {"attrs": MORPH_FOCUS, "inline": True,
+                                                     "css": DEMO_LIKE_CSS + extra_css}, m, viewport=vp,
+                                 before_goto=lambda c, p: c.add_init_script(DEMO_LIKE_JS))
+        try:
+            tv.wait_shadow(page, "#anything-llm-inline-input")
+            tv.settle(page, 300)
+            page.evaluate(SCROLL_REC_JS, 1600)
+            sy0 = page.evaluate("() => scrollY")
+            page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
+            if wait_ms:
+                page.wait_for_timeout(min(wait_ms, 250))
+            m.release_history() if wait_ms >= 250 else None
+            if wait_ms > 250:
+                page.wait_for_timeout(wait_ms - 250)
+            page.keyboard.type("abcdefgh")
+            if wait_ms < 250:
+                page.wait_for_timeout(250 - wait_ms)
+                m.release_history()
+            page.wait_for_function("() => Array.isArray(window.__rec)", timeout=5000)
+            rec = page.evaluate("() => window.__rec")
+            run = [f for f in rec if f["morph"]]
+            sy_run = sorted({f["sy"] for f in run})
+            value = page.evaluate("() => { const i = window.__q('#message-input'); return i ? i.value : null; }")
+            active = active_id(page)
+            sy_after = page.evaluate("() => scrollY")
+            page.keyboard.press("Enter")
+            try:
+                wait_user_and_token(page, "abcdefgh", timeout=5000)
+            except Exception:
+                pass
+            users = user_messages(page)
+            sent = [r.get("message") for r in m.stream_requests]
+            label = f"{vp['width']}×{vp['height']}, {wait_ms} ms" + (", Feld unter dem Viewport" if below else "")
+            key = "NAK-4 type-field-below-fold" if below else "AK-6 type-during-morph"
+            record(f"{key}: „abcdefgh“ im Chatfeld, Enter sendet ({label})",
+                   value == "abcdefgh" and active == "message-input" and sent == ["abcdefgh"]
+                   and any(u.endswith("abcdefgh") for u in users),
+                   f"Feld={value!r}, Fokus={active}, gesendet={sent}, Nutzerblasen={users}")
+            ok7 = bool(run) and sy_run == [sy0]
+            record(f"{'NAK-4' if below else 'AK-7'} kein Seiten-Scroll während des Laufs ({label})", ok7,
+                   f"scrollY vorher {sy0}, im Lauf {sy_run} ({len(run)} Frames), nach dem Lauf {sy_after}")
+            if below:
+                record(f"NAK-4 Seite scrollt nach dem Lauf zum Feld ({label})", sy_after > sy0,
+                       f"scrollY {sy0} -> {sy_after}")
+        finally:
+            m.release()
+            ctx.close()
+
+
 def api_requests(browser, base_url, attrs, m):
     reqs = []
     ctx, page = tv.open_page(browser, base_url, {"attrs": attrs, "inline": True}, m,
@@ -1115,6 +1207,7 @@ def main():
                 check_chip_with_text(browser, base_url)
                 check_bubble_dom(browser, base_url)
                 check_focus_open(browser, base_url)
+                check_type_during_morph(browser, base_url)
                 check_removed(browser, base_url)
                 check_nak4_body(body)
                 wbody = check_window_body(browser, base_url)
