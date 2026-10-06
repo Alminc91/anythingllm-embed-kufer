@@ -30,6 +30,8 @@ vi.mock("@/components/ChatWindow", () => ({
   },
 }));
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { embedderSettings } from "../src/main.jsx";
 import {
   DEFAULT_SETTINGS,
@@ -70,6 +72,10 @@ let barRect;
 let panelRect;
 let rootRect;
 let barRadius;
+// Inline-Fläche bei sichtbarer Box (null = rootRect), Eingabefeld, Chip-Opacity
+let rootOpenRect;
+let inputRect;
+let chipsOpacity;
 // Signal am Platzhalter bei jeder Messung der Leiste
 let barSignals;
 let mqlListeners;
@@ -88,6 +94,9 @@ beforeEach(() => {
   panelRect = PANEL;
   rootRect = { left: 0, top: 0, width: 760, height: 68 };
   barRadius = "999px";
+  rootOpenRect = null;
+  inputRect = { left: 20, top: 500, width: 760, height: 40 };
+  chipsOpacity = null;
   barSignals = [];
   mqlListeners = new Set();
   innerWidthBefore = window.innerWidth;
@@ -120,6 +129,16 @@ beforeEach(() => {
         barSignals.push(mountTarget?.getAttribute("data-allm-expanded"));
         return rect(barRect);
       }
+      if (this.id === "message-input") return rect(inputRect);
+      if (
+        this.id === "anything-llm-embed-inline" &&
+        rootOpenRect &&
+        this.querySelector("#anything-llm-chat") &&
+        !this.querySelector(
+          "#anything-llm-chat",
+        ).parentElement.classList.contains("allm-hidden")
+      )
+        return rect(rootOpenRect);
       // Chat-Fenster und äußere Box (Panel-Ecke)
       if (
         this.id === "anything-llm-chat" ||
@@ -134,11 +153,22 @@ beforeEach(() => {
     const cs = gcsBefore(el);
     if (el.id === "anything-llm-inline-bar")
       return { ...cs, borderTopLeftRadius: barRadius };
+    if (el.id === "anything-llm-inline-chips" && chipsOpacity != null)
+      return { ...cs, opacity: chipsOpacity };
     if (el.id === "anything-llm-chat")
       return {
         ...cs,
-        transitionDuration: el.classList.contains("allm-morph")
-          ? "0.46s, 0.46s"
+        // wie main.jsx: Aufklappen 720ms; Zuklappen 480ms, Box erst nach
+        // 80ms; Schatten jeweils + 100 ms (längste Transition)
+        transitionProperty:
+          "width, height, transform, border-radius, box-shadow",
+        transitionDuration: el.classList.contains("allm-morph-close")
+          ? "0.48s, 0.48s, 0.48s, 0.48s, 0.58s"
+          : el.classList.contains("allm-morph")
+            ? "0.72s, 0.72s, 0.72s, 0.72s, 0.82s"
+            : "0s",
+        transitionDelay: el.classList.contains("allm-morph-close")
+          ? "80ms"
           : "0s",
       };
     return cs;
@@ -288,7 +318,9 @@ describe("AK-2: Start- und Endgeometrie", () => {
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
     nextFrames();
-    act(() => vi.advanceTimersByTime(600));
+    act(() => vi.advanceTimersByTime(900)); // Schatten 820 + 100
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
+    act(() => vi.advanceTimersByTime(30));
     expect(ui.chat().classList.contains("allm-morph")).toBe(false);
     expect(visible(ui)).toBe(true);
   });
@@ -361,7 +393,7 @@ describe("AK-4 / AK-5: reduzierte Bewegung, mobil", () => {
   });
 });
 
-// Review-Befunde (Code-Review high, 05.10.)
+// Review-Befunde (Code-Review high, 05.10.); „Befund n“ weiter unten = Code-Review high, 06.10.
 const typeInto = (input, text) =>
   act(() => {
     Object.getOwnPropertyDescriptor(
@@ -486,7 +518,7 @@ describe("Review 3: Ende per transitionend jeder Form-Eigenschaft", () => {
     const win = ui.chat();
     expect(win.classList.contains("allm-morph")).toBe(true);
     transitionEnd(win, "opacity");
-    transitionEnd(win, "box-shadow");
+    transitionEnd(win.querySelector(".allm-inline-content"), "box-shadow");
     expect(win.classList.contains("allm-morph")).toBe(true);
     transitionEnd(win, "height");
     expect(win.classList.contains("allm-morph")).toBe(false);
@@ -550,3 +582,441 @@ describe("Review 6: Startrundung in px oder %", () => {
     expect(v(ui.chat(), "mr")).toBe("28px");
   });
 });
+
+// Issue „Morph flüssiger“: kein Scroll im Lauf, Schließen mit gleicher
+// Dauer/Kurve (Inhalt zuerst aus), Chips blenden aus/ein, will-change nur im
+// Lauf. Verlauf im Browser: tests/visual/overlay.py (ov-morph-frames u. a.).
+// Seite für die Scroll-Tests: Viewport 768 px, Box bei y = 600 (scrollY 0),
+// Endhöhe 520 px, darunter belowPx Inhalt. Dokumenthöhe folgt der Box
+// (Startform = 68 px) bzw. der reservierten Höhe (min-height der
+// Inline-Fläche); window.scrollTo klemmt wie ein Browser.
+describe("Morph flüssiger: Scroll vor dem Lauf", () => {
+  let scrollCalls;
+  let scrollToCalls;
+  let sy;
+  let belowPx;
+  let protoBefore;
+  let scrollToBefore;
+  const de = document.documentElement;
+  const inlineRoot = () =>
+    container.querySelector("#anything-llm-embed-inline");
+  const docHeight = () => {
+    const box = container.querySelector("#anything-llm-chat")?.parentElement;
+    const open = box && !box.classList.contains("allm-hidden");
+    let h = open && !box.classList.contains("allm-morph-flow-from") ? 520 : 68;
+    h = Math.max(h, parseFloat(inlineRoot()?.style.minHeight) || 0);
+    return 600 + h + belowPx;
+  };
+  beforeEach(() => {
+    scrollCalls = [];
+    scrollToCalls = [];
+    sy = 0;
+    belowPx = 2000;
+    protoBefore = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (opts) {
+      scrollCalls.push({
+        opts,
+        // Lauf noch nicht gestartet: nur die Startform (allm-morph-from) steht an
+        running: !!this.querySelector(".allm-morph"),
+      });
+    };
+    scrollToBefore = window.scrollTo;
+    window.scrollTo = (opts) => {
+      const box = container.querySelector("#anything-llm-chat")?.parentElement;
+      const max = docHeight() - 768;
+      const y = Math.min(Math.max(0, opts.top), max);
+      scrollToCalls.push({
+        opts,
+        y,
+        startForm: !!box?.classList.contains("allm-morph-flow-from"),
+        running: !!box?.querySelector(".allm-morph"),
+        reserve: inlineRoot()?.style.minHeight || "",
+        scrollBehavior: de.style.scrollBehavior,
+      });
+      sy = y;
+    };
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => sy,
+    });
+    Object.defineProperty(de, "scrollHeight", {
+      configurable: true,
+      get: docHeight,
+    });
+    Object.defineProperty(de, "clientHeight", {
+      configurable: true,
+      get: () => 768,
+    });
+  });
+  afterEach(() => {
+    Element.prototype.scrollIntoView = protoBefore;
+    window.scrollTo = scrollToBefore;
+    delete window.scrollY;
+    delete de.scrollHeight;
+    delete de.clientHeight;
+    de.style.removeProperty("scroll-behavior");
+  });
+
+  it("overlay: Box ragt aus dem Viewport -> trotzdem kein Scroll (wie das Mockup)", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    transitionEnd(ui.chat());
+    expect(scrollCalls).toHaveLength(0);
+    expect(scrollToCalls).toHaveLength(0);
+  });
+
+  it("NAK-1 flow: Box ragt aus dem Viewport -> genau ein Sofort-Scroll gegen die Endgröße, mit Startform, vor dem ersten Frame", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    rootOpenRect = panelRect;
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    expect(scrollCalls).toHaveLength(0);
+    expect(scrollToCalls).toEqual([
+      {
+        opts: { left: 0, top: 352, behavior: "instant" },
+        y: 352,
+        startForm: true,
+        running: false,
+        reserve: "", // genug Inhalt darunter: nichts reserviert
+        scrollBehavior: "",
+      },
+    ]);
+    nextFrames();
+    transitionEnd(ui.chat());
+    // nach dem Lauf scrollt nichts mehr nach
+    expect(scrollToCalls).toHaveLength(1);
+    expect(scrollCalls).toHaveLength(0);
+  });
+
+  it("Befund 1: nur 100 px Inhalt unter dem Widget -> Endhöhe reserviert, kein Klemmen, Box am Ende ganz sichtbar", () => {
+    belowPx = 100;
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    rootOpenRect = panelRect;
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    // Startform liegt an (Seite nur 768 px hoch) -> min-height = Endhöhe
+    expect(scrollToCalls).toHaveLength(1);
+    expect(scrollToCalls[0]).toMatchObject({
+      opts: { top: 352, behavior: "instant" },
+      y: 352, // nicht geklemmt (ohne Reserve: 0)
+      startForm: true,
+      reserve: "520px",
+    });
+    nextFrames();
+    expect(inlineRoot().style.minHeight).toBe("520px"); // während des Laufs
+    transitionEnd(ui.chat());
+    expect(inlineRoot().style.minHeight).toBe("");
+    // Box am Ende: 600 + 520 - 352 = 768 = Viewport-Unterkante, scrollY steht
+    expect(600 + 520 - sy).toBeLessThanOrEqual(768);
+    expect(sy).toBe(352);
+    expect(scrollToCalls).toHaveLength(1);
+  });
+
+  it("Befund 1: Zuklappen mitten im Lauf gibt die Reserve frei", () => {
+    belowPx = 100;
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    rootOpenRect = panelRect;
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    nextFrames();
+    expect(inlineRoot().style.minHeight).toBe("520px");
+    act(() => chatWindowProps.current.closeChat());
+    expect(inlineRoot().style.minHeight).toBe("");
+  });
+
+  it('Befund 3: ohne behavior "instant" (TypeError) -> "auto" mit kurzzeitig scroll-behavior: auto, danach wie vorher', () => {
+    de.style.setProperty("scroll-behavior", "smooth");
+    const plain = window.scrollTo;
+    window.scrollTo = (opts) => {
+      if (opts?.behavior === "instant") throw new TypeError("behavior");
+      plain(opts);
+    };
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    rootOpenRect = panelRect;
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    expect(scrollToCalls).toHaveLength(1);
+    expect(scrollToCalls[0]).toMatchObject({
+      opts: { top: 352, behavior: "auto" },
+      y: 352,
+      scrollBehavior: "auto",
+    });
+    expect(de.style.scrollBehavior).toBe("smooth");
+    expect(de.style.getPropertyPriority("scroll-behavior")).toBe("");
+    expect(sy).toBe(352);
+    nextFrames();
+    transitionEnd(ui.chat());
+  });
+
+  it("AK-1: Box im Viewport -> kein Scroll (weder vorher noch nachher)", () => {
+    for (const inlineLayout of ["overlay", "flow"]) {
+      const ui = setup({ inlineLayout });
+      ui.open();
+      nextFrames();
+      transitionEnd(ui.chat());
+      expect(scrollCalls).toHaveLength(0);
+      expect(scrollToCalls).toHaveLength(0);
+      act(() => chatWindowProps.current.closeChat());
+      transitionEnd(ui.chat());
+      expect(scrollCalls).toHaveLength(0);
+      expect(scrollToCalls).toHaveLength(0);
+    }
+  });
+
+  it("andere Effekte scrollen wie bisher sanft", () => {
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    const ui = setup({ inlineLayout: "overlay", inlineEffect: "float" });
+    ui.open();
+    expect(scrollCalls.map((c) => c.opts)).toEqual([
+      { block: "nearest", behavior: "smooth" },
+    ]);
+    expect(scrollToCalls).toHaveLength(0);
+  });
+});
+
+describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", () => {
+  let shadowHost;
+  let input;
+  beforeEach(() => {
+    shadowHost = document.createElement("div");
+    document.body.appendChild(shadowHost);
+    const sr = shadowHost.attachShadow({ mode: "open" });
+    input = document.createElement("textarea");
+    input.id = "message-input";
+    sr.appendChild(input);
+    embedderSettings.shadowRoot = sr;
+  });
+  afterEach(() => {
+    embedderSettings.shadowRoot = null;
+    shadowHost.remove();
+  });
+  const focused = () => embedderSettings.shadowRoot.activeElement === input;
+
+  it("Feld nach dem Lauf im Viewport: Fokus erst am Ende des Laufs", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    expect(focused()).toBe(false); // nicht mitten im Lauf
+    transitionEnd(ui.chat());
+    expect(focused()).toBe(true);
+  });
+
+  it("Feld nach dem Lauf unter dem Viewport: kein Fokus, kein Scroll", () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal("scrollTo", scrollTo);
+    const protoBefore = Element.prototype.scrollIntoView;
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView;
+    try {
+      panelRect = { left: 20, top: 600, width: 760, height: 520 };
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      nextFrames();
+      transitionEnd(ui.chat());
+      expect(focused()).toBe(false);
+      expect(document.activeElement).toBe(document.body);
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(intoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = protoBefore;
+    }
+  });
+
+  it("Schließen vor dem Ende: kein Fokus ins Feld", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    act(() => chatWindowProps.current.closeChat());
+    transitionEnd(ui.chat());
+    expect(focused()).toBe(false);
+  });
+
+  it("flow: Fokus wie bisher sofort in der Klick-Geste", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    ui.open();
+    expect(focused()).toBe(true);
+  });
+});
+
+describe("Morph flüssiger: Schließen", () => {
+  it("Sicherheits-Timer rechnet die Verzögerung des Rückwegs mit", () => {
+    vi.useFakeTimers();
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    act(() => chatWindowProps.current.closeChat());
+    act(() => vi.advanceTimersByTime(740)); // Schatten 580 + 80 + 100 = 760
+    expect(visible(ui)).toBe(true);
+    act(() => vi.advanceTimersByTime(30));
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("flow: äußere Box bekommt beim Rückweg die Verzögerung (allm-morph-flow-close)", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    openAndSettle(ui);
+    const box = ui.box();
+    act(() => chatWindowProps.current.closeChat());
+    expect(box.classList.contains("allm-morph-flow-close")).toBe(true);
+    expect(box.classList.contains("allm-morph-flow-from")).toBe(true);
+    transitionEnd(ui.chat());
+    expect(box.classList.contains("allm-morph-flow-close")).toBe(false);
+  });
+
+  it("AK-2 (CSS): Timing wie das Mockup (720 / 480 + 80 ms), Inhalt vor 50 % aus; will-change nur im Lauf; Schatten +100 ms", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/main.jsx"), "utf8");
+    const rule = (sel) => {
+      const i = src.indexOf(`\n  ${sel}{`);
+      expect(i).toBeGreaterThan(-1);
+      return src.slice(src.indexOf("{", i) + 1, src.indexOf("}", i));
+    };
+    // Aufklappen 720ms expo; Zuklappen eigene Dauer/Kurve (480ms,
+    // cubic-bezier(.65,0,.35,1)), Box erst nach 1/6 (80 ms)
+    expect(rule(".allm-morph,.allm-morph-flow,.allm-morph-chips-out")).toBe(
+      "--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s",
+    );
+    expect(
+      rule(".allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in"),
+    ).toBe(
+      "--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1));--allmi-fx-w:calc(var(--allmi-fx-d)/6)",
+    );
+    const tr = rule(".allm-morph");
+    for (const p of ["width", "height", "transform", "border-radius"])
+      expect(tr).toContain(
+        `${p} var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w)`,
+      );
+    expect(tr).toContain(
+      "box-shadow calc(var(--allmi-fx-d) + 100ms) ease var(--allmi-fx-w)",
+    );
+    // Inhalt beim Schließen: 1/3 der Dauer (160 ms), ohne Verzögerung (< 50 %)
+    expect(rule(".allm-morph-close>*")).toBe(
+      "transition:opacity calc(var(--allmi-fx-d)/3) ease",
+    );
+    // Befund 6: Chips-Einblenden nur in der Gruppe des Zuklappens (die
+    // erste Gruppe wäre für .allm-morph-chips-in ohnehin überschrieben)
+    expect(
+      src.match(/\n  [^{\n]*\.allm-morph-chips-in[,{][^\n]*--allmi-fx-d:/g),
+    ).toHaveLength(1);
+    // Befund 4/5: Ausblenden bleibt stehen (forwards), Einblenden ab
+    // --allmi-chips-o
+    expect(src).toContain(
+      "@keyframes allm-chips-in{from{opacity:var(--allmi-chips-o,0);visibility:visible}",
+    );
+    expect(rule(".allm-morph-chips-out,.allm-morph-chips-in")).toContain(
+      "animation:allm-chips-out calc(var(--allmi-fx-d)*.5) ease forwards",
+    );
+    // will-change nur an den Lauf-Klassen
+    expect(src.match(/will-change:[^;}]*/g)).toEqual([
+      "will-change:width,height,transform",
+    ]);
+    expect(src).toContain(
+      ".allm-morph,.allm-morph-from{will-change:width,height,transform}",
+    );
+  });
+});
+
+describe("Morph flüssiger: Chips unter der Leiste (AK-4)", () => {
+  const chips = () => container.querySelector("#anything-llm-inline-chips");
+  const SETTINGS = {
+    inlineLayout: "overlay",
+    inlineInput: true,
+    defaultMessages: ["Spanisch A1", "Yoga"],
+  };
+
+  it("Öffnen: Chips blenden aus (Klasse am Chip-Container), danach aufgeräumt", () => {
+    const ui = setup(SETTINGS);
+    ui.open();
+    // schwebend: Leiste samt Chips unsichtbar im Seitenfluss, Chips blenden aus
+    expect(chips().closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(chips().classList.contains("allm-morph-chips-out")).toBe(true);
+    nextFrames();
+    transitionEnd(ui.chat());
+    expect(chips().className).not.toContain("allm-morph-chips");
+  });
+
+  it("Schließen: Chips blenden wieder ein, danach normale Leiste mit Chips", () => {
+    const ui = setup(SETTINGS);
+    openAndSettle(ui);
+    act(() => chatWindowProps.current.closeChat());
+    expect(chips().classList.contains("allm-morph-chips-in")).toBe(true);
+    expect(chips().classList.contains("allm-morph-chips-out")).toBe(false);
+    transitionEnd(ui.chat());
+    expect(visible(ui)).toBe(false);
+    expect(chips().closest('[aria-hidden="true"]')).toBeNull();
+    expect(chips().className).not.toContain("allm-morph-chips");
+  });
+
+  it("Befund 4: Schließen, während die Chips noch ausblenden -> Einblenden ab der aktuellen Opacity", () => {
+    const ui = setup(SETTINGS);
+    ui.open();
+    nextFrames();
+    chipsOpacity = "0.4"; // Ausblenden halb gelaufen
+    act(() => chatWindowProps.current.closeChat());
+    expect(chips().classList.contains("allm-morph-chips-in")).toBe(true);
+    expect(chips().style.getPropertyValue("--allmi-chips-o")).toBe("0.4");
+    transitionEnd(ui.chat());
+    expect(chips().style.getPropertyValue("--allmi-chips-o")).toBe("");
+  });
+
+  it("Befund 4: Schließen nach beendetem Aufklappen -> Einblenden ab 0 (ohne Startwert)", () => {
+    const ui = setup(SETTINGS);
+    openAndSettle(ui);
+    chipsOpacity = "1"; // ohne Klasse: natürliche Opacity, gilt nicht
+    act(() => chatWindowProps.current.closeChat());
+    expect(chips().classList.contains("allm-morph-chips-in")).toBe(true);
+    expect(chips().style.getPropertyValue("--allmi-chips-o")).toBe("");
+  });
+
+  it("andere Effekte: Chips ohne Morph-Klassen", () => {
+    const ui = setup({ ...SETTINGS, inlineEffect: "float" });
+    ui.open();
+    expect(chips().className).not.toContain("allm-morph-chips");
+  });
+});
+
+describe("Befund 5: Ende erst nach der längsten Transition (Schatten +100 ms)", () => {
+  it("Form fertig, Schatten läuft noch -> Klassen bleiben bis zu dessen Ende", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    const win = ui.chat();
+    let running = [{ transitionProperty: "box-shadow", playState: "running" }];
+    win.getAnimations = () => running;
+    transitionEnd(win, "width");
+    transitionEnd(win, "transform");
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    running = [{ transitionProperty: "box-shadow", playState: "finished" }];
+    transitionEnd(win, "box-shadow");
+    expect(win.classList.contains("allm-morph")).toBe(false);
+  });
+
+  it("andere laufende Animationen (keine Transition) halten das Ende nicht auf", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    const win = ui.chat();
+    win.getAnimations = () => [{ playState: "running" }];
+    transitionEnd(win, "width");
+    expect(win.classList.contains("allm-morph")).toBe(false);
+  });
+
+  it("Sicherheits-Timer = längste Transition (Schatten) + 100 ms, nicht die erste", () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(globalThis, "setTimeout");
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    spy.mockClear();
+    nextFrames();
+    expect(spy.mock.calls.map((c) => c[1])).toContain(920); // 820 + 100
+    openAndSettleClose(ui, spy);
+  });
+});
+
+function openAndSettleClose(ui, spy) {
+  transitionEnd(ui.chat());
+  spy.mockClear();
+  act(() => chatWindowProps.current.closeChat());
+  // Zuklappen: Schatten 580 + 80 ms Verzögerung + 100
+  expect(spy.mock.calls.map((c) => c[1])).toContain(760);
+}

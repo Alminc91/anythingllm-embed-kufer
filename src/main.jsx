@@ -253,21 +253,40 @@ const customCss = `
   /* Effekt "morph" (InlineChat runMorph): keine Keyframes, sondern
      Transitionen von width/height/transform/border-radius/box-shadow des
      Chat-Fensters zwischen Leistenform (allm-morph-from, Maße als --allmi-m*)
-     und Panel. Inhalt in fester Panelgröße (kein Umbruch, keine Skalierung),
-     blendet nach 35 % der Dauer ein (Zuklappen: zuerst aus). Seitenfluss:
-     die äußere Box wächst in der Höhe mit (allm-morph-flow). Dauer
-     --allmi-effect-duration (utils/theme.js; ohne Seiten-CSS ungültig ->
-     Standard 460ms). */
-  .allm-morph,.allm-morph-flow{--allmi-fx-d:var(--allmi-effect-duration,460ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1))}
-  .allm-morph{transition:width var(--allmi-fx-d) var(--allmi-fx-e),height var(--allmi-fx-d) var(--allmi-fx-e),transform var(--allmi-fx-d) var(--allmi-fx-e),border-radius var(--allmi-fx-d) var(--allmi-fx-e),box-shadow var(--allmi-fx-d) var(--allmi-fx-e)}
+     und Panel. Timing wie das Mockup („Schweben“): Aufklappen
+     --allmi-effect-duration (720ms) / --allmi-effect-easing (expo), Inhalt
+     in fester Panelgröße (kein Umbruch, keine Skalierung) blendet nach 22 %
+     der Dauer in 50 % der Dauer ein (≈ 160 + 360 ms). Zuklappen
+     (allm-morph-close): --allmi-effect-close-duration (480ms) /
+     --allmi-effect-close-easing (cubic-bezier(.65,0,.35,1)), Box erst nach
+     1/6 der Dauer (≈ 80 ms, --allmi-fx-w), Inhalt blendet sofort in 1/3
+     aus (≈ 160 ms, ease). Schatten: Dauer + 100 ms, ease, gleiche
+     Verzögerung. will-change nur während des Laufs (Klassen). Seitenfluss:
+     die äußere Box wächst in der Höhe mit (allm-morph-flow). Chips unter der
+     schwebenden Leiste blenden in der halben Dauer aus bzw. beim Zuklappen
+     wieder ein (die Leiste darüber ist visibility:hidden, die Animation
+     macht sie solange sichtbar; Ausblenden bleibt bis zum Ende des Laufs
+     stehen, Einblenden startet bei --allmi-chips-o = Opacity beim
+     Umkehren, sonst 0). Ende des Laufs erst nach der längsten Transition
+     (Schatten, runMorph). Ohne Seiten-CSS sind die --allmi-* ungültig
+     (utils/theme.js) -> Standardwerte hier. */
+  .allm-morph,.allm-morph-flow,.allm-morph-chips-out{--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s}
+  .allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in{--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1));--allmi-fx-w:calc(var(--allmi-fx-d)/6)}
+  .allm-morph{transition:width var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),height var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),transform var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),border-radius var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),box-shadow calc(var(--allmi-fx-d) + 100ms) ease var(--allmi-fx-w)}
+  .allm-morph,.allm-morph-from{will-change:width,height,transform}
   .allm-morph-from{width:var(--allmi-mw)!important;height:var(--allmi-mh)!important;transform:var(--allmi-mt);border-radius:var(--allmi-mr)!important;box-shadow:var(--allmi-bar-shadow,none)!important}
-  .allm-morph>*,.allm-morph-from>*{width:var(--allmi-cw)!important;height:var(--allmi-ch)!important;flex:none;transition:opacity calc(var(--allmi-fx-d)*.65) var(--allmi-fx-e) calc(var(--allmi-fx-d)*.35)}
+  .allm-morph>*,.allm-morph-from>*{width:var(--allmi-cw)!important;height:var(--allmi-ch)!important;flex:none;transition:opacity calc(var(--allmi-fx-d)*.5) ease calc(var(--allmi-fx-d)*.22)}
   .allm-morph-from>*{opacity:0}
-  .allm-morph-close>*{transition-duration:calc(var(--allmi-fx-d)*.35);transition-delay:0s}
-  .allm-morph-flow{transition:height var(--allmi-fx-d) var(--allmi-fx-e)}
+  .allm-morph-close>*{transition:opacity calc(var(--allmi-fx-d)/3) ease}
+  .allm-morph-flow{transition:height var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w)}
   .allm-morph-flow-from{height:var(--allmi-bh)!important}
+  @keyframes allm-chips-out{from{opacity:1;visibility:visible}to{opacity:0;visibility:visible}}
+  @keyframes allm-chips-in{from{opacity:var(--allmi-chips-o,0);visibility:visible}to{opacity:1;visibility:visible}}
+  .allm-morph-chips-out,.allm-morph-chips-in{pointer-events:none;animation:allm-chips-out calc(var(--allmi-fx-d)*.5) ease forwards}
+  .allm-morph-chips-in{animation:allm-chips-in calc(var(--allmi-fx-d)*.5) ease var(--allmi-fx-w) both}
   @media (prefers-reduced-motion: reduce) {
     .allm-morph,.allm-morph-flow,.allm-morph>*{transition:none!important}
+    .allm-morph-chips-out,.allm-morph-chips-in{animation:none!important}
   }
 `;
 

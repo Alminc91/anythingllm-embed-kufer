@@ -450,7 +450,7 @@ describe("theme.test.js", () => {
 describe("Effekt-Dauer (Review 5: nur --allmi-*, Vorrang über theme.js)", () => {
   const mainSrc = readFileSync(resolve(process.cwd(), "src/main.jsx"), "utf8");
 
-  it("Mapping ohne Standard: Seiten-CSS --allm-effect-duration gewinnt, sonst Standard je Effekt (morph 460ms)", () => {
+  it("Mapping ohne Standard: Seiten-CSS --allm-effect-duration gewinnt, sonst Standard je Effekt (morph 720ms, Zuklappen 480ms)", () => {
     for (const mode of ["light", "dark"]) {
       const css = buildThemeCss(
         { ...DEFAULT_SETTINGS, buttonColor: "#123456" },
@@ -462,16 +462,25 @@ describe("Effekt-Dauer (Review 5: nur --allmi-*, Vorrang über theme.js)", () =>
       expect(
         resolveThemeVars(DEFAULT_SETTINGS, mode)["--allm-effect-duration"],
       ).toBeNull();
+      for (const k of ["close-duration", "close-easing"]) {
+        expect(css).toContain(`--allmi-effect-${k}: var(--allm-effect-${k});`);
+        expect(
+          resolveThemeVars(DEFAULT_SETTINGS, mode)[`--allm-effect-${k}`],
+        ).toBeNull();
+      }
     }
-    // Standard an der Verwendungsstelle: Keyframe-Effekte 320ms, morph 460ms
+    // Standard an der Verwendungsstelle: Keyframe-Effekte 320ms, morph 720ms
     expect(mainSrc).toContain(
       "animation-duration: var(--allmi-effect-duration, 320ms);",
     );
     expect(mainSrc).toContain(
-      "--allmi-fx-d:var(--allmi-effect-duration,460ms)",
+      "--allmi-fx-d:var(--allmi-effect-duration,720ms)",
     );
     expect(mainSrc).toContain(
       "--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1))",
+    );
+    expect(mainSrc).toContain(
+      "--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1))",
     );
   });
 
