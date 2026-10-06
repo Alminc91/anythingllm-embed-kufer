@@ -3,7 +3,17 @@ import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
 import ChatService from "@/models/chatService";
+import PrivacyNotice from "../PrivacyNotice";
+import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
+import { panelTexts } from "@/utils/layout";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
+// Vorschlag (Balken bzw. Pille im leeren Chat) senden: ChatContainer hört auf
+// SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
+export function sendSuggestion(text) {
+  window.dispatchEvent(
+    new CustomEvent(SEND_TEXT_EVENT, { detail: { command: text } }),
+  );
+}
 
 export default function ChatContainer({
   sessionId,
@@ -24,6 +34,14 @@ export default function ChatContainer({
   const streamControllerRef = useRef(null);
   // Zuletzt verbrauchtes Ticket der Inline-Leiste: jedes Ticket genau einmal.
   const lastConsumedTicketRef = useRef(null);
+  // Datenschutz-Hinweis (privacyNotice "modal"): bis zur Bestätigung (Knopf
+  // „Start“) ist die Eingabe gesperrt, Vorschläge/Fragen aus der Leiste
+  // warten. "bubble" = nur Text in der Begrüßungsblase, keine Sperre.
+  const [privacyLocked, setPrivacyLocked] = useState(() =>
+    privacyNoticePending(settings),
+  );
+  const privacyLockedRef = useRef(privacyLocked);
+  privacyLockedRef.current = privacyLocked;
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -170,8 +188,10 @@ export default function ChatContainer({
   // ersten Wort), wird gewartet — sonst liefen zwei Anfragen parallel.
   // Entwurf (send false): ins Eingabefeld — ein dort schon getippter Text
   // bleibt stehen, der Entwurf wird angehängt.
+  // Datenschutz-Hinweis: das Ticket wartet bis zur Bestätigung
+  // (consumePending direkt im Klick, siehe acknowledge).
   const replyStreaming = isStreaming(chatHistory[chatHistory.length - 1]);
-  useEffect(() => {
+  const consumePending = () => {
     const pending = pendingFirstMessage;
     if (!pending?.text || !onPendingFirstMessageConsumed) return;
     if (pending.ticket === lastConsumedTicketRef.current) return;
@@ -180,10 +200,23 @@ export default function ChatContainer({
     onPendingFirstMessageConsumed(pending);
     if (pending.send) sendCommand(pending.text, [], []);
     else setMessage((current) => appendDraft(current, pending.text));
-  }, [pendingFirstMessage, loadingResponse, replyStreaming]);
+  };
+  useEffect(() => {
+    if (!privacyLocked) consumePending();
+  }, [pendingFirstMessage, loadingResponse, replyStreaming, privacyLocked]);
+
+  // Knopf im Hinweis: Bestätigung speichern, Sperre lösen und eine wartende
+  // Frage im selben Klick senden (ein Commit: das Eingabefeld wird nicht
+  // erst frei und gleich wieder gesperrt).
+  const acknowledge = () => {
+    acknowledgePrivacy(settings?.embedId);
+    setPrivacyLocked(false);
+    consumePending();
+  };
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;
+    if (privacyLockedRef.current) return;
     sendCommand(event.detail.command, [], []);
   };
 
@@ -195,7 +228,17 @@ export default function ChatContainer({
   }, []);
 
   return (
-    <div className="allm-h-full allm-w-full allm-flex allm-flex-col">
+    <div
+      className="allm-h-full allm-w-full allm-flex allm-flex-col"
+      style={privacyLocked ? { position: "relative" } : undefined}
+    >
+      {privacyLocked && (
+        <PrivacyNotice
+          settings={settings}
+          onAcknowledge={acknowledge}
+          suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
+        />
+      )}
       <div className="allm-flex-1 allm-min-h-0 allm-mb-8">
         <ChatHistory
           settings={settings}
@@ -209,10 +252,13 @@ export default function ChatContainer({
           message={message}
           submit={handleSubmit}
           onChange={handleMessageChange}
-          inputDisabled={loadingResponse}
-          buttonDisabled={loadingResponse}
+          inputDisabled={loadingResponse || privacyLocked}
+          buttonDisabled={loadingResponse || privacyLocked}
           suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
+        {settings?.disclaimer === "footer" && (
+          <AiDisclaimer settings={settings} />
+        )}
       </div>
     </div>
   );
@@ -242,4 +288,28 @@ function awaitsFirstText(message) {
 export function appendDraft(current, draft) {
   if (!current || current.trim() === "") return draft;
   return `${current.replace(/\s+$/, "")} ${draft}`;
+}
+
+// Fester KI-Hinweis unter dem Eingabefeld (disclaimer "footer"), in allen
+// Modi. Text: disclaimerText, sonst der Standard der Panel-Texte
+// (utils/layout.js panelTexts: "en" englisch, sonst deutsch — dieselbe Regel
+// wie Begrüßungsblase und Datenschutz-Hinweis). Nur Text, nicht anklickbar.
+function AiDisclaimer({ settings }) {
+  const text = settings.disclaimerText || panelTexts(settings).aiDisclaimer;
+  return (
+    <p
+      id="anything-llm-ai-disclaimer"
+      role="note"
+      className="allm-font-sans"
+      style={{
+        margin: "6px 12px 0",
+        fontSize: "11.5px",
+        lineHeight: 1.4,
+        textAlign: "center",
+        color: "var(--allmi-text-muted, #6b7280)",
+      }}
+    >
+      {text}
+    </p>
+  );
 }

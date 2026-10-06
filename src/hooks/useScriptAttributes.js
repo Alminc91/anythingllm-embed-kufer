@@ -11,6 +11,7 @@ import {
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   layoutValidations,
+  normalizePanelSettings,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
 import { applyTheme } from "@/utils/theme";
@@ -101,6 +102,31 @@ export const DEFAULT_SETTINGS = {
   // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
   // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
+  // Panel-Optik (opt-in, Standard = bisher): Vorschläge "bars" | "pills",
+  // Begrüßung "text" | "bubble" (greetingBubbleText als Assistenten-Blase,
+  // greeting klein darunter); Kopfzeile: Untertitel unter dem Namen und
+  // dekorativer Online-Punkt am Icon. Icon-Bild = brandImageUrl (Kopfzeile)
+  // bzw. assistantIcon (Blase), im Design Center per Logo gesetzt.
+  suggestionStyle: "bars",
+  greetingStyle: "text",
+  greetingBubbleText: null, // max. 300 Zeichen; null = Standard der Sprache
+  assistantSubtitle: null, // max. 60 Zeichen
+  onlineDot: false,
+  // Datenschutz-Hinweis: "none" | "bubble" (Absätze in der Begrüßungsblase,
+  // ohne Bestätigung; setzt greetingStyle "bubble", normalisiert in
+  // loadEmbedSettings) | "modal" (einmalige Karte beim ersten Öffnen,
+  // Bestätigung in localStorage allm-privacy-ack-<embedId>). Texte null =
+  // Standard der Sprache (utils/layout.js PANEL_TEXTS).
+  privacyNotice: "none",
+  privacyTitle: null, // max. 120 Zeichen
+  privacyText: null, // Stichpunkte je Zeile bzw. "|", max. 5 × 160 Zeichen
+  privacyButtonText: null, // max. 40 Zeichen, Standard „Start“
+  privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
+  // Fester KI-Hinweis unter dem Eingabefeld: "none" | "footer";
+  // disclaimerText max. 160 Zeichen, null = Standard der Sprache
+  // (utils/layout.js PANEL_TEXTS.aiDisclaimer)
+  disclaimer: "none",
+  disclaimerText: null,
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
@@ -153,12 +179,12 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
       mergedServerConfig[key] = value;
   }
 
-  const resolved = {
+  const resolved = normalizePanelSettings({
     ...DEFAULT_SETTINGS,
     ...scriptSettings,
     ...parseAndValidateEmbedSettings(mergedServerConfig),
     loaded: true,
-  };
+  });
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
   warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
   return resolved;

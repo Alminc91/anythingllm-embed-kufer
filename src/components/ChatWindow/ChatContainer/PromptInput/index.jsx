@@ -338,8 +338,9 @@ export default function PromptInput({
 }
 
 // Liegt der Fokus gerade auf einem anderen Element der Webseite? (body/null =
-// niemand; der Shadow-Host = irgendwo im Widget)
-function focusIsElsewhereOnPage() {
+// niemand; der Shadow-Host = irgendwo im Widget). Auch vom Datenschutz-
+// Hinweis genutzt (gleiche Fokus-Regel).
+export function focusIsElsewhereOnPage() {
   const active = document.activeElement;
   return !(
     !active ||

@@ -224,6 +224,9 @@ export const THEME_VARIABLES = [
   { name: "bar-bg", bar: "bg" },
   { name: "bar-text", bar: "text" },
   { name: "bar-border", bar: "border" },
+  // Rand der Wunschfragen-Pillen im Panel (suggestionStyle "pills");
+  // Standard = Rand der Leiste/Chips
+  { name: "pill-border", chain: "bar-border", light: null, dark: null },
   { name: "bar-shadow", bar: "shadow" },
   {
     name: "bar-radius",

@@ -13,7 +13,8 @@ export const DEFAULT_INLINE_HEIGHT = "600px";
 // Inline-Leiste als Eingabefeld (inlineInput): Platzhalter + Text des Knopfs
 export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …";
 export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
-// Wunschfragen-Chips unter der Leiste (aus defaultMessages): höchstens so viele
+// Wunschfragen-Chips unter der Leiste und Pillen im Panel (aus
+// defaultMessages): höchstens so viele
 export const INLINE_CHIPS_MAX = 6;
 
 // Grenzen (Widget-seitig geklemmt, unabhängig davon was gespeichert ist)
@@ -51,6 +52,121 @@ export const DEFAULT_OVERLAY_EFFECT = "expand";
 // ("focus") statt erst beim Absenden ("submit", Standard).
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
+
+// Panel-Optik (Mockup „Wunschfragen im Panel“), alles opt-in; Standard =
+// bisherige Darstellung. Vorschläge im leeren Chat als Balken ("bars") oder
+// kleine Pillen ("pills"); Begrüßung als zentrierter Text ("text") oder als
+// Assistenten-Blase ("bubble", der greeting-Text steht dann klein darunter).
+export const SUGGESTION_STYLE_VALUES = ["bars", "pills"];
+export const GREETING_STYLE_VALUES = ["text", "bubble"];
+// Datenschutz-Hinweis: keiner ("none"), als Absätze in der Begrüßungsblase
+// ("bubble", ohne Bestätigung) oder einmalig als Karte beim ersten Öffnen
+// ("modal", Bestätigung per Knopf, gespeichert in localStorage).
+export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
+export const PANEL_PILL_TEXT_MAX = 60; // längere Wunschfragen: gekürzt mit …
+export const GREETING_BUBBLE_TEXT_MAX_LEN = 300;
+export const ASSISTANT_SUBTITLE_MAX_LEN = 60;
+export const PRIVACY_TITLE_MAX_LEN = 120;
+// privacyText: ein Stichpunkt je Zeile (Zeilenumbruch oder "|"), höchstens
+// 5 Punkte mit je höchstens 160 Zeichen; Rohtext höchstens 1000 Zeichen.
+export const PRIVACY_POINTS_MAX = 5;
+export const PRIVACY_POINT_MAX_LEN = 160;
+export const PRIVACY_TEXT_MAX_LEN = 1000;
+export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
+// Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
+// erzeugt; Text disclaimerText (max. 160 Zeichen) bzw. PANEL_TEXTS.aiDisclaimer.
+export const DISCLAIMER_VALUES = ["none", "footer"];
+export const DISCLAIMER_TEXT_MAX_LEN = 160;
+export const URL_MAX_LEN = 512;
+
+// Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises —
+// EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
+// (settings.language) "en" -> englisch, alles andere (fehlend, ungültig, eine
+// Sprache ohne eigene Texte wie "fr") -> deutsch. Absichtlich nicht über
+// i18next: ohne data-language stünde dort Englisch, und Sprachen ohne diese
+// Texte fielen auf Englisch zurück (gemischte Sprachen im Panel).
+// Neutral für alle Kundenarten (VHS, Bildungsträger, …), kurz, ohne
+// Speicherdauer, sachlich, keine Rechtsberatung; Kunden ersetzen die Punkte
+// über privacyText und tragen ihre Erklärung als privacyUrl ein (Standard:
+// kein Link).
+export const PANEL_TEXTS = {
+  de: {
+    greetingBubble:
+      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, ich finde passende Angebote.",
+    privacyTitle: "Datenschutz:",
+    privacyPoints: [
+      "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
+      "Unser Team kann Gespräche zur Qualitätssicherung einsehen.",
+      "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
+    ],
+    privacyButton: "Start",
+    privacyMoreLead: "Weitere Informationen in der ",
+    privacyMoreLink: "Erklärung zum Datenschutz",
+    privacyBubbleLink: "Datenschutz",
+    online: "online",
+    aiDisclaimer:
+      "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
+  },
+  en: {
+    greetingBubble:
+      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
+    privacyTitle: "Privacy:",
+    privacyPoints: [
+      "Your requests stay on servers in Germany and are not passed on to third parties.",
+      "Our team may view conversations for quality assurance.",
+      "Please only share information that is necessary for your request.",
+    ],
+    privacyButton: "Start",
+    privacyMoreLead: "More information in our ",
+    privacyMoreLink: "privacy statement",
+    privacyBubbleLink: "Privacy",
+    online: "online",
+    aiDisclaimer:
+      "I am an AI and can make mistakes. Please double-check my answers.",
+  },
+};
+// Sprache der Panel-Texte: Sprachcode (2 Buchstaben, optional Region wie
+// "en-GB"/"en_US"), nur Sprachen mit eigenen Texten; sonst "de".
+export function panelLanguage(settings = {}) {
+  const raw = typeof settings?.language === "string" ? settings.language : "";
+  const m = /^([a-z]{2})(?:[-_][a-z0-9]{1,8})?$/i.exec(raw.trim());
+  const lang = m ? m[1].toLowerCase() : "de";
+  return Object.prototype.hasOwnProperty.call(PANEL_TEXTS, lang) ? lang : "de";
+}
+export function panelTexts(settings = {}) {
+  return PANEL_TEXTS[panelLanguage(settings)];
+}
+export const DEFAULT_GREETING_BUBBLE_TEXT = PANEL_TEXTS.de.greetingBubble;
+export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
+export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
+export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
+
+// privacyText -> Stichpunkte (Zeilenumbruch oder "|"), leere verworfen.
+export function splitPrivacyPoints(text) {
+  if (typeof text !== "string") return [];
+  return text
+    .split(/\r?\n|\|/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+}
+
+// Wirksame Datenschutz-Punkte: privacyText bzw. Standard der Sprache.
+export function privacyPoints(settings = {}) {
+  const own = splitPrivacyPoints(settings.privacyText);
+  return own.length > 0 ? own : panelTexts(settings).privacyPoints;
+}
+
+// Datenschutz in der Blase (privacyNotice "bubble") setzt die Begrüßungsblase
+// voraus: einmal beim Laden normalisiert (loadEmbedSettings), danach gilt
+// überall nur greetingStyle.
+export function normalizePanelSettings(settings = {}) {
+  if (
+    settings.privacyNotice === "bubble" &&
+    settings.greetingStyle !== "bubble"
+  )
+    return { ...settings, greetingStyle: "bubble" };
+  return settings;
+}
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
 // Zahl wird als px interpretiert.
@@ -102,6 +218,38 @@ function shortText(value, maxLen = INLINE_TEXT_MAX_LEN) {
   return v;
 }
 
+// Datenschutz-Stichpunkte: 1–5 Punkte mit je höchstens 160 Zeichen, sonst
+// verworfen (nicht gekürzt). Rückgabe normalisiert: ein Punkt je Zeile.
+function privacyTextValue(value) {
+  const v = shortText(value, PRIVACY_TEXT_MAX_LEN);
+  if (v === undefined) return undefined;
+  const points = splitPrivacyPoints(v);
+  if (
+    points.length === 0 ||
+    points.length > PRIVACY_POINTS_MAX ||
+    points.some((p) => p.length > PRIVACY_POINT_MAX_LEN)
+  )
+    return undefined;
+  return points.join("\n");
+}
+
+// Link (Datenschutz): absolute https-URL oder Pfad der eigenen Seite ("/…",
+// nicht "//…" und nicht "/\…": Browser lesen den Backslash wie "/", das wäre
+// ein fremder Host), ohne Leer-/Steuerzeichen und ohne Backslash (überall),
+// höchstens URL_MAX_LEN Zeichen.
+function safeUrl(value) {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  if (!v || v.length > URL_MAX_LEN || /[\s\u0000-\u001f\u007f\\]/.test(v))
+    return undefined;
+  if (/^\/(?![\/\\])/.test(v)) return v;
+  try {
+    return new URL(v).protocol === "https:" ? v : undefined;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
 // genutzt). Rückgabe undefined = verwerfen.
 export const layoutValidations = {
@@ -139,6 +287,21 @@ export const layoutValidations = {
   // Öffnen bei Zeiger-Klick: ungültig -> verworfen, Warnung wie oben
   // (warnInvalidInlineEnums)
   inlineOpenOn: (v) => oneOf(v, INLINE_OPEN_ON_VALUES),
+  // Panel-Optik und Datenschutz-Hinweis: Enums ungültig -> verworfen,
+  // Warnung wie oben (warnInvalidInlineEnums); Texte getrimmt mit Höchstlänge
+  // (zu lang -> verworfen, nicht gekürzt), gerendert immer als Text.
+  suggestionStyle: (v) => oneOf(v, SUGGESTION_STYLE_VALUES),
+  greetingStyle: (v) => oneOf(v, GREETING_STYLE_VALUES),
+  greetingBubbleText: (v) => shortText(v, GREETING_BUBBLE_TEXT_MAX_LEN),
+  assistantSubtitle: (v) => shortText(v, ASSISTANT_SUBTITLE_MAX_LEN),
+  onlineDot: bool,
+  privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
+  privacyTitle: (v) => shortText(v, PRIVACY_TITLE_MAX_LEN),
+  privacyText: privacyTextValue,
+  privacyButtonText: (v) => shortText(v, PRIVACY_BUTTON_TEXT_MAX_LEN),
+  privacyUrl: safeUrl,
+  disclaimer: (v) => oneOf(v, DISCLAIMER_VALUES),
+  disclaimerText: (v) => shortText(v, DISCLAIMER_TEXT_MAX_LEN),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
   theme: (v) => {
@@ -170,6 +333,10 @@ export function warnInvalidInlineEnums(
     ["inlineLayout", INLINE_LAYOUT_VALUES],
     ["inlineEffect", INLINE_EFFECT_VALUES],
     ["inlineOpenOn", INLINE_OPEN_ON_VALUES],
+    ["suggestionStyle", SUGGESTION_STYLE_VALUES],
+    ["greetingStyle", GREETING_STYLE_VALUES],
+    ["privacyNotice", PRIVACY_NOTICE_VALUES],
+    ["disclaimer", DISCLAIMER_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {
@@ -215,6 +382,19 @@ export function inlineChips(settings = {}) {
     .filter((m) => typeof m === "string" && m.trim().length > 0)
     .map((m) => m.trim())
     .slice(0, INLINE_CHIPS_MAX);
+}
+
+// Pillen im Panel (suggestionStyle "pills"): dieselbe Liste wie die Chips
+// (inlineChips, höchstens INLINE_CHIPS_MAX); { text: vollständige Frage (wird
+// gesendet), label: Anzeige, ab PANEL_PILL_TEXT_MAX Zeichen mit … gekürzt }.
+export function panelPills(settings = {}) {
+  return inlineChips(settings).map((text) => ({
+    text,
+    label:
+      text.length > PANEL_PILL_TEXT_MAX
+        ? `${text.slice(0, PANEL_PILL_TEXT_MAX - 1).trimEnd()}…`
+        : text,
+  }));
 }
 
 // ---------------------------------------------------------------------------
