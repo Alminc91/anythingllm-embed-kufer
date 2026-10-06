@@ -6,6 +6,7 @@ import PanelWelcome, { SuggestedPills } from "./PanelWelcome";
 import {
   courseCardsAbove,
   courseCardsEnabled,
+  followUpsList,
   selectAnnouncedCourseCards,
 } from "@/utils/courseCards";
 import { stripThink } from "@/utils/chat/think";
@@ -35,6 +36,8 @@ export default function ChatHistory({
   settings = {},
   history = [],
   sessionId = null,
+  // Folgefragen: Eingabe frei (keine Antwort lädt, kein Datenschutz-Hinweis)
+  canSend = true,
 }) {
   const replyRef = useRef(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -188,6 +191,18 @@ export default function ChatHistory({
           const isLastMessage = index === history.length - 1;
           const live =
             isLastMessage && props.role === "assistant" && !!props.animate;
+          // Folgefragen-Pillen (followUps "pills"): nur unter der letzten,
+          // fertigen Antwort und nur, wenn ein Klick sofort senden kann
+          const followUps =
+            settings?.followUps === "pills" &&
+            canSend &&
+            isLastMessage &&
+            props.role === "assistant" &&
+            !live &&
+            !props.error &&
+            followUpsList(props.followUps).length > 0
+              ? props.followUps
+              : null;
           // Kurskarten über der Antwort: stabiler Block je Antwort (Name,
           // Karten, Antwort). Die Karten bleiben beim Wechsel PromptReply ->
           // HistoricalMessage am Stream-Ende im DOM (kein Neuaufbau).
@@ -226,6 +241,8 @@ export default function ChatHistory({
                 error={props.error}
                 errorMsg={props.errorMsg}
                 nameInWrapper={above}
+                followUps={followUps}
+                settings={followUps ? settings : null}
               />
             );
 

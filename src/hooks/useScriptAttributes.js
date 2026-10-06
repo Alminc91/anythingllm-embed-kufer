@@ -127,6 +127,9 @@ export const DEFAULT_SETTINGS = {
   // (utils/layout.js PANEL_TEXTS.aiDisclaimer)
   disclaimer: "none",
   disclaimerText: null,
+  // Folgefragen des Modells als Pillen unter der letzten Antwort: "none" |
+  // "pills" (Server-Chunk "followUps", Fork >= 7.14; ohne Wirkung sonst)
+  followUps: "none",
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface

@@ -219,11 +219,17 @@ export default function ChatContainer({
     if (privacyLockedRef.current) return;
     sendCommand(event.detail.command, [], []);
   };
+  // Der Listener ruft immer den aktuellen Handler (Folgefragen kommen mitten
+  // im Gespräch: sendCommand braucht den aktuellen Verlauf, nicht den beim
+  // Einhängen).
+  const autofillRef = useRef(handleAutofillEvent);
+  autofillRef.current = handleAutofillEvent;
 
   useEffect(() => {
-    window.addEventListener(SEND_TEXT_EVENT, handleAutofillEvent);
+    const listener = (event) => autofillRef.current(event);
+    window.addEventListener(SEND_TEXT_EVENT, listener);
     return () => {
-      window.removeEventListener(SEND_TEXT_EVENT, handleAutofillEvent);
+      window.removeEventListener(SEND_TEXT_EVENT, listener);
     };
   }, []);
 
@@ -244,6 +250,7 @@ export default function ChatContainer({
           settings={settings}
           history={chatHistory}
           sessionId={sessionId}
+          canSend={!loadingResponse && !privacyLocked}
         />
       </div>
       <div className="allm-flex-shrink-0 allm-mt-auto">

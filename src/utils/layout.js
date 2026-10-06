@@ -63,6 +63,10 @@ export const GREETING_STYLE_VALUES = ["text", "bubble"];
 // ("bubble", ohne Bestätigung) oder einmalig als Karte beim ersten Öffnen
 // ("modal", Bestätigung per Knopf, gespeichert in localStorage).
 export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
+// Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
+// der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
+// (Fork >= 7.14) liefert sie als Chunk "followUps" bzw. im Verlauf.
+export const FOLLOW_UPS_VALUES = ["none", "pills"];
 export const PANEL_PILL_TEXT_MAX = 60; // längere Wunschfragen: gekürzt mit …
 export const GREETING_BUBBLE_TEXT_MAX_LEN = 300;
 export const ASSISTANT_SUBTITLE_MAX_LEN = 60;
@@ -106,6 +110,7 @@ export const PANEL_TEXTS = {
     online: "online",
     aiDisclaimer:
       "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
+    followUps: "Vorschläge für Ihre nächste Frage",
   },
   en: {
     greetingBubble:
@@ -123,6 +128,7 @@ export const PANEL_TEXTS = {
     online: "online",
     aiDisclaimer:
       "I am an AI and can make mistakes. Please double-check my answers.",
+    followUps: "Suggestions for your next question",
   },
 };
 // Sprache der Panel-Texte: Sprachcode (2 Buchstaben, optional Region wie
@@ -301,6 +307,9 @@ export const layoutValidations = {
   privacyButtonText: (v) => shortText(v, PRIVACY_BUTTON_TEXT_MAX_LEN),
   privacyUrl: safeUrl,
   disclaimer: (v) => oneOf(v, DISCLAIMER_VALUES),
+  // Folgefragen-Pillen: ungültig -> verworfen (Standard "none"), Warnung wie
+  // oben (warnInvalidInlineEnums)
+  followUps: (v) => oneOf(v, FOLLOW_UPS_VALUES),
   disclaimerText: (v) => shortText(v, DISCLAIMER_TEXT_MAX_LEN),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").
@@ -337,6 +346,7 @@ export function warnInvalidInlineEnums(
     ["greetingStyle", GREETING_STYLE_VALUES],
     ["privacyNotice", PRIVACY_NOTICE_VALUES],
     ["disclaimer", DISCLAIMER_VALUES],
+    ["followUps", FOLLOW_UPS_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {

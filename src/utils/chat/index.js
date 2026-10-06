@@ -1,6 +1,8 @@
 import {
   appendReplyText,
   cardsAnnounced,
+  followUpsList,
+  splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
 
@@ -32,6 +34,8 @@ export default function handleChat(
     teasers = null,
     // Kurskarten v3: KI-Teaser in einer vollständigen Antwort (textResponse)
     courseTeasers = null,
+    // Folgefragen: Vorschläge für die nächste Frage (Chunk type "followUps")
+    followUps = null,
   } = chatResult;
   const courseExtra = Array.isArray(courseSources)
     ? {
@@ -82,11 +86,14 @@ export default function handleChat(
     // angehängt. Nie zwei Blasen für eine Antwort.
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
-    const content = stripCardsMarker(textResponse, {
-      afterMarker: cardsAnnounced(existing),
-    });
+    const { text: content, followUps: lineFollowUps } = splitFollowUpsLine(
+      stripCardsMarker(textResponse, {
+        afterMarker: cardsAnnounced(existing),
+      }),
+    );
     const entry = {
       ...(existing || {}),
+      ...followUpsExtra(lineFollowUps),
       uuid,
       content,
       role: "assistant",
@@ -120,13 +127,15 @@ export default function handleChat(
     const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
     const existing = chatIdx !== -1 ? _chatHistory[chatIdx] : null;
     // Offener Karten-Marker am Anfang: gepuffert, Antwort bleibt wartend
-    const { content, markerBuffer } = appendReplyText(
-      existing,
-      textResponse,
-      close,
-    );
+    const reply = appendReplyText(existing, textResponse, close);
+    const { markerBuffer } = reply;
+    // Antwortende: Folgefragen-Endzeile älterer Server abtrennen
+    const { text: content, followUps: lineFollowUps } = close
+      ? splitFollowUpsLine(reply.content)
+      : { text: reply.content, followUps: null };
     const entry = {
       ...(existing || { uuid, role: "assistant" }),
+      ...followUpsExtra(lineFollowUps),
       content,
       markerBuffer,
       sources,
@@ -183,6 +192,15 @@ export default function handleChat(
       ...(cardsAnnounced(existing) ? { teaserArrivedAt: Date.now() } : {}),
     };
     setChatHistory([..._chatHistory]);
+  } else if (type === "followUps") {
+    // Folgefragen (Fork >= 7.14): kommen nach dem letzten Textchunk und vor
+    // finalizeResponseStream. Nur an die bestehende Antwort; ändert weder
+    // Text noch Stream-Zustand.
+    const list = followUpsList(followUps);
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    if (list.length === 0 || chatIdx === -1) return;
+    _chatHistory[chatIdx] = { ..._chatHistory[chatIdx], followUps: list };
+    setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit
     // 👍/👎 sofort (ohne History-Reload) zugeordnet werden kann. Rein additiv —
@@ -199,6 +217,11 @@ export default function handleChat(
       setChatHistory([..._chatHistory]);
     }
   }
+}
+
+// Folgefragen aus der Endzeile (Übergangs-Abwehr): nur gültige, nicht leere
+function followUpsExtra(list) {
+  return Array.isArray(list) && list.length > 0 ? { followUps: list } : {};
 }
 
 // courseTeasers/teasers: Objekt URL -> Text (Prüfung der Einträge in

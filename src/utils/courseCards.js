@@ -43,6 +43,11 @@
 // Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]"
 // direkt hinter einem Marker entfernt das Widget zusätzlich selbst
 // (Übergangs-Abwehr für ältere Server, stripTeaserLines).
+//
+// Folgefragen (Fork >= 7.14): Die Endzeile "[[FRAGEN: a? | b?]]" entfernt der
+// Server und schickt die Vorschläge als Chunk "followUps" (followUpsList
+// prüft sie). Ältere Server reichen die Zeile durch: splitFollowUpsLine
+// entfernt sie am Antwortende nach denselben Regeln (Übergangs-Abwehr).
 
 export const COURSE_CARDS_MAX = 5;
 export const COURSE_COMPACT_MAX = 10;
@@ -121,6 +126,12 @@ const TEASER_LINE_MAX = 240;
 const TEASER_LINES_MAX = 12;
 const TEASER_LINE_RX = /^\[\[TEASER[ \t]*\d{1,3}[ \t]*:[^\n]*\]\]$/i;
 export const TEASER_MAX_LEN = 200;
+// Folgefragen: Grenzen spiegeln embedCardsMarker.js im Fork (Zeile höchstens
+// 300 Zeichen, 1–3 Einträge à höchstens 60 Zeichen nach dem Bereinigen)
+const FOLLOW_UPS_TAG = "[[FRAGEN:";
+const FOLLOW_UPS_LINE_MAX = 300;
+export const FOLLOW_UPS_MAX = 3;
+export const FOLLOW_UP_MAX_LEN = 60;
 // Einblenden nur, wenn der Teaser gerade eben (nach der Karte) angekommen ist
 export const TEASER_FADE_WINDOW_MS = 1000;
 
@@ -255,6 +266,76 @@ export function appendReplyText(prev, chunk, done = false) {
   return !done && raw && !content
     ? { content, markerBuffer: raw }
     : { content };
+}
+
+// Folgefrage bereinigen: Markdown-Links -> Linktext, HTML-Tags und
+// Markdown-Zeichen raus, Leerraum zusammengezogen ("" = kein Text). Länger
+// als FOLLOW_UP_MAX_LEN wird verworfen, nie gekürzt (Aufrufer).
+function followUpText(value) {
+  if (typeof value !== "string") return "";
+  return stripMarkdown(
+    value.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(HTML_TAG_RX, " "),
+  ).replace(/ ([.,;:!?])/g, "$1");
+}
+
+/**
+ * Folgefragen einer Antwort (Chunk "followUps" bzw. Verlauf) prüfen: nur
+ * Strings, bereinigt, höchstens 60 Zeichen (längere verworfen), ohne
+ * Dubletten, höchstens FOLLOW_UPS_MAX.
+ * @param {any} value
+ * @returns {string[]}
+ */
+export function followUpsList(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (out.length >= FOLLOW_UPS_MAX) break;
+    const text = followUpText(item);
+    if (!text || text.length > FOLLOW_UP_MAX_LEN) continue;
+    if (!out.some((t) => t.toLowerCase() === text.toLowerCase()))
+      out.push(text);
+  }
+  return out;
+}
+
+/**
+ * Übergangs-Abwehr (Server < 7.14): Folgefragen-Endzeile einer fertigen
+ * Antwort abtrennen. Regeln wie parseFollowUps im Fork: nur die letzte Zeile
+ * vor dem abschließenden Leerraum, beginnt (nach Einrückung) mit
+ * "[[FRAGEN:", endet mit "]]", höchstens 300 Zeichen; Einträge durch "|"
+ * getrennt, 1–3 à höchstens 60 Zeichen ("-"/leer = keine Vorschläge, Zeile
+ * trotzdem entfernt). Sonst bleibt der Text unverändert (followUps null).
+ * @param {string} text
+ * @returns {{text: string, followUps: string[]|null}}
+ */
+export function splitFollowUpsLine(text) {
+  const none = { text, followUps: null };
+  if (typeof text !== "string") return none;
+  const content = text.trimEnd();
+  const lineStart = content.lastIndexOf("\n") + 1;
+  const line = content.slice(lineStart).trimStart();
+  if (
+    line.slice(0, FOLLOW_UPS_TAG.length).toUpperCase() !== FOLLOW_UPS_TAG ||
+    line.length > FOLLOW_UPS_LINE_MAX ||
+    !line.endsWith("]]")
+  )
+    return none;
+  const raw = line.slice(FOLLOW_UPS_TAG.length, -2).trim();
+  const items = [];
+  if (raw !== "" && raw !== "-") {
+    for (const part of raw.split("|")) {
+      const item = followUpText(part);
+      if (!item) continue;
+      if (item.length > FOLLOW_UP_MAX_LEN) return none;
+      if (!items.some((t) => t.toLowerCase() === item.toLowerCase()))
+        items.push(item);
+    }
+    if (items.length === 0 || items.length > FOLLOW_UPS_MAX) return none;
+  }
+  return {
+    text: text.slice(0, text.slice(0, lineStart).trimEnd().length),
+    followUps: items,
+  };
 }
 
 // Hat der Server zu dieser Antwort Karten vorab angekündigt (Marker
