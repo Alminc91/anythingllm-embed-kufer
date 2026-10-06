@@ -978,7 +978,81 @@ describe("Befund 2 / Tastenübergabe: Overlay-Morph – Text nie in ein unsichtb
     }
   });
 
-  it("NAK-4: Feld unter dem Viewport, nichts getippt -> nach dem Lauf kein Scroll, erst das erste Zeichen holt das Feld", () => {
+  it("Befund 8 / NAK-4: Feld unter dem Viewport, nichts getippt -> am Laufende Fokus ins Chatfeld (preventScroll), nie aufs Auffangfeld, kein Scroll", () => {
+    const protoBefore = Element.prototype.scrollIntoView;
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView;
+    const focusSpy = vi.spyOn(input, "focus");
+    try {
+      panelRect = { left: 20, top: 600, width: 760, height: 520 };
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      nextFrames();
+      // im Lauf: Auffangfeld (unsichtbares Feld bekommt keinen Fokus)
+      expect(document.activeElement).toBe(sink());
+      expect(focused()).toBe(false);
+      transitionEnd(ui.chat());
+      // Laufende: Übergabe beendet, Fokus im Chatfeld
+      expect(focused()).toBe(true);
+      expect(document.activeElement).not.toBe(sink());
+      expect(embedderSettings.shadowRoot.activeElement).not.toBe(sink());
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+      expect(intoView).not.toHaveBeenCalled();
+      // weitere Frames/Tippen ins Chatfeld: Fokus bleibt dort
+      nextFrames();
+      type(input, "x");
+      expect(input.value).toBe("x");
+      expect(focused()).toBe(true);
+      expect(sink().value).toBe("");
+    } finally {
+      Element.prototype.scrollIntoView = protoBefore;
+    }
+  });
+
+  it("Befund 3: Enter im Auffangfeld mitten im Lauf, Chatfeld bereit aber unter dem Viewport -> Text ins Feld, requestSubmit genau einmal", async () => {
+    const form = document.createElement("form");
+    embedderSettings.shadowRoot.appendChild(form);
+    form.appendChild(input);
+    const submit = vi.spyOn(form, "requestSubmit").mockImplementation(() => {});
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    expect(document.activeElement).toBe(sink());
+    type(sink(), "abcdefgh");
+    expect(input.value).toBe("");
+    const ev = new KeyboardEvent("keydown", {
+      key: "Enter",
+      keyCode: 13,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => sink().dispatchEvent(ev));
+    expect(ev.defaultPrevented).toBe(true);
+    // Lauf läuft noch; Text steht im Chatfeld, Auffangfeld leer
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
+    expect(input.value).toBe("abcdefgh");
+    expect(sink().value).toBe("");
+    expect(submit).not.toHaveBeenCalled();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+    // zweites Enter (Auffangfeld leer, Übergabe beendet): nichts
+    act(() =>
+      sink().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      ),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("Befund 6: IME-Komposition über das Laufende -> erst bei compositionend übergeben, genau einmal, Komposition nicht abgebrochen", async () => {
     const protoBefore = Element.prototype.scrollIntoView;
     const intoView = vi.fn();
     Element.prototype.scrollIntoView = intoView;
@@ -988,14 +1062,50 @@ describe("Befund 2 / Tastenübergabe: Overlay-Morph – Text nie in ein unsichtb
       const ui = setup({ inlineLayout: "overlay" });
       ui.open();
       nextFrames();
+      const s = sink();
+      const blur = vi.fn();
+      s.addEventListener("blur", blur);
+      act(() =>
+        s.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" })),
+      );
+      // Zwischenstand der Komposition (Dead-Key „´“, dann „é“)
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      ).set;
+      for (const v of ["´", "é"]) {
+        act(() => {
+          setter.call(s, v);
+          s.dispatchEvent(
+            new InputEvent("input", { bubbles: true, isComposing: true, data: v }),
+          );
+        });
+      }
+      // Laufende während der Komposition: nichts übergeben, Fokus bleibt
       transitionEnd(ui.chat());
-      expect(focused()).toBe(false);
-      expect(document.activeElement).toBe(sink());
-      expect(intoView).not.toHaveBeenCalled();
-      type(sink(), "x");
-      expect(input.value).toBe("x");
+      expect(input.value).toBe("");
+      expect(document.activeElement).toBe(s);
+      expect(blur).not.toHaveBeenCalled();
+      expect(s.value).toBe("é");
+      act(() =>
+        s.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "é" })),
+      );
+      // Safari: letztes input NACH compositionend (isComposing false)
+      act(() =>
+        s.dispatchEvent(new InputEvent("input", { bubbles: true, data: "é" })),
+      );
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 5));
+      });
+      expect(input.value).toBe("é");
       expect(focused()).toBe(true);
+      expect(s.value).toBe("");
       expect(intoView).toHaveBeenCalledTimes(1);
+      // nicht doppelt
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 5));
+      });
+      expect(input.value).toBe("é");
     } finally {
       Element.prototype.scrollIntoView = protoBefore;
     }

@@ -337,6 +337,92 @@ describe("::keystrokes-during-open — Tastenübergabe beim Aufklappen", () => {
     expect(chatService.streamChat.mock.calls[0][2]).toBe("abcdefgh");
   });
 
+  it("Befund 2: Entwurf „Yoga“ + „ am Abend“ getippt, Enter vor dem Laden: genau eine Anfrage „Yoga am Abend“", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    typeInto(ui.input(), "Yoga");
+    pointerClick(ui.input());
+    expect(ui.message()).toBeNull(); // Chat lädt noch
+    expect(document.activeElement).toBe(sink());
+    typeFocused(" am Abend");
+    enterFocused();
+    expect(sink().value).toBe("");
+    await flush();
+    await flush();
+    await flush();
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(chatService.streamChat.mock.calls[0][2]).toBe("Yoga am Abend");
+    // der Entwurf landet nicht zusätzlich im Chatfeld
+    expect(ui.message().value).toBe("");
+  });
+
+  it("Befund 7: Enter vor dem Laden, danach weiter getippt -> nach der Antwort steht das Neue im Chatfeld (Fokus dort), nur eine Anfrage", async () => {
+    chatService.streamChat.mockImplementation(
+      async (_s, _settings, _msg, handle) => {
+        handle({
+          uuid: "u",
+          sources: [],
+          type: "textResponse",
+          textResponse: "Ja.",
+          close: true,
+        });
+      },
+    );
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    typeFocused("abc");
+    enterFocused();
+    // Fokus bleibt im (leeren) Auffangfeld, die Übergabe läuft weiter
+    expect(document.activeElement).toBe(sink());
+    typeFocused("xyz");
+    expect(sink().value).toBe("xyz");
+    await flush();
+    await flush();
+    await flush();
+    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+    expect(chatService.streamChat.mock.calls[0][2]).toBe("abc");
+    expect(ui.message().disabled).toBe(false);
+    expect(ui.message().value).toBe("xyz");
+    expect(document.activeElement).toBe(ui.message());
+    expect(sink().value).toBe("");
+  });
+
+  it("Befund 6: IME-Komposition, während der Chat lädt -> Übergabe (consumeFocusRequest) wartet bis compositionend, genau einmal", async () => {
+    const ui = setup({ inlineOpenOn: "focus" });
+    pointerClick(ui.input());
+    const s = sink();
+    const blur = vi.fn();
+    s.addEventListener("blur", blur);
+    act(() =>
+      s.dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true, data: "" }),
+      ),
+    );
+    typeFocused("ka"); // Zwischenstand der Komposition
+    await flush(); // Verlauf geladen -> PromptInput gemountet
+    await flush();
+    expect(ui.message()).not.toBeNull();
+    expect(ui.message().value).toBe("");
+    expect(document.activeElement).toBe(s);
+    expect(blur).not.toHaveBeenCalled();
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      ).set.call(s, "か");
+      s.dispatchEvent(
+        new CompositionEvent("compositionend", { bubbles: true, data: "か" }),
+      );
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(ui.message().value).toBe("か");
+    expect(document.activeElement).toBe(ui.message());
+    await flush();
+    expect(ui.message().value).toBe("か");
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+
   it("Entwurf aus der Leiste + weiter getippt: Entwurf zuerst, dann die neuen Zeichen", async () => {
     const ui = setup({ inlineOpenOn: "focus" });
     typeInto(ui.input(), "Yoga");

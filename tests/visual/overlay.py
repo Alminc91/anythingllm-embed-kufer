@@ -1405,8 +1405,8 @@ def check_morph_frames(browser, base_url):
 def check_morph_scroll_before(browser, base_url):
     """Box weit unten (ragt aus dem Viewport), Seite mit scroll-behavior: smooth.
     AK-1 overlay: scrollY bleibt ab dem Klick in jedem Frame gleich (wie das
-    Mockup, die Box ragt unten heraus), kein Fokus ins unsichtbare
-    Eingabefeld (Befund 2). NAK-1 flow: die Seite scrollt VOR dem ersten
+    Mockup, die Box ragt unten heraus); nach dem Lauf Fokus mit preventScroll
+    im Chatfeld, nie im Auffangfeld, kein Scroll (Review-Befund 8). NAK-1 flow: die Seite scrollt VOR dem ersten
     Morph-Frame ohne Animation, im Lauf nicht. Befund 1 flow-short: nur 100 px
     Inhalt unter dem Widget — Scroll gegen die Endgröße, kein Klemmen, kein
     Sprung bis nach dem Lauf, Box am Ende ganz sichtbar."""
@@ -1432,13 +1432,20 @@ def check_morph_scroll_before(browser, base_url):
             box = page.evaluate("() => { const b = window.__q('#anything-llm-chat').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, vh: innerHeight }; }")
             errs = tv.errors_of(page)
             if layout == "overlay":
+                # Review-Befund 8 (ersetzt „kein Fokus ins unsichtbare Feld“):
+                # am Laufende kommt der Fokus mit preventScroll ins Chatfeld —
+                # nie bleibt er auf dem Auffangfeld —, die Seite scrollt dafür
+                # nicht (erst ein Tastendruck darf zum Feld scrollen, NAK-4)
+                page.wait_for_timeout(200)
                 focus = active_id(page)
+                sy_end = page.evaluate("() => scrollY")
                 ok = (len(win) > 3 and set(sys_) == {round(rec["pre"], 1)} and box["bottom"] > box["vh"]
-                      and focus != "message-input" and not errs)
-                record("AK-1 morph overlay: Box ragt heraus, trotzdem kein Scroll, kein Fokus ins unsichtbare Feld", ok,
-                       f"scrollY vorher {rec['pre']:.0f}, im Lauf {sorted(set(sys_))} ({len(win)} Frames), "
-                       f"Box danach {box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px), Seite smooth, "
-                       f"Fokus im Widget: {focus}")
+                      and focus == "message-input" and abs(sy_end - rec["pre"]) < 0.5 and not errs)
+                record("AK-1 morph overlay: Box ragt heraus, trotzdem kein Scroll; nach dem Lauf Fokus im Chatfeld "
+                       "(preventScroll, nie im Auffangfeld)", ok,
+                       f"scrollY vorher {rec['pre']:.0f}, im Lauf {sorted(set(sys_))} ({len(win)} Frames), danach "
+                       f"{sy_end:.0f}; Box danach {box['top']:.0f}–{box['bottom']:.0f} px (Viewport {box['vh']} px), "
+                       f"Seite smooth, Fokus im Widget: {focus}")
             elif layout == "flow-short":
                 i0 = next((i for i, x in enumerate(rec["f"]) if x["morph"]), None)
                 after = sorted({round(x["sy"], 1) for x in rec["f"][i0:]}) if i0 is not None else []

@@ -1045,26 +1045,42 @@ DEMO_LIKE_JS = r"""
   hook();
 })();
 """
-# scrollY + Klassen des Fensters je Frame (nicht-blockierend, window.__rec)
+# scrollY + Klassen des Fensters je Frame (nicht-blockierend, window.__rec);
+# dazu scrollTop/scrollLeft von #anything-llm-chat und .allm-inline-content
+# (Review-Befund 11: overflow: clip im Lauf -> kein innerer Scroll)
 SCROLL_REC_JS = r"""(ms) => { const out = []; const t0 = performance.now();
-  const step = () => { const w = window.__q('#anything-llm-chat');
-    out.push({ t: Math.round(performance.now() - t0), sy: scrollY, morph: !!w && /allm-morph/.test(w.className) });
+  const step = () => { const w = window.__q('#anything-llm-chat'); const ic = window.__q('.allm-inline-content');
+    out.push({ t: Math.round(performance.now() - t0), sy: scrollY, morph: !!w && /allm-morph/.test(w.className),
+      inner: [w ? w.scrollTop : 0, w ? w.scrollLeft : 0, ic ? ic.scrollTop : 0, ic ? ic.scrollLeft : 0] });
     if (performance.now() - t0 < ms) requestAnimationFrame(step); else window.__rec = out; };
   window.__rec = null; requestAnimationFrame(step); return true; }"""
+# Zustand im Moment von Enter (Befund 3): Chatfeld da und frei, Lauf läuft
+ENTER_STATE_JS = r"""() => { const i = window.__q('#message-input'); const w = window.__q('#anything-llm-chat');
+  return { input: !!i, disabled: i ? i.disabled : null, morph: !!w && /allm-morph/.test(w.className) }; }"""
 
 
 def check_type_during_morph(browser, base_url):
     """::type-during-morph — Klick ins Leisten-Feld, nach 0/200/500/1000 ms
     „abcdefgh“ tippen: alles im Chat-Eingabefeld, Enter sendet genau diese
-    Frage (AK-6); scrollY bleibt über alle Frames des Laufs gleich (AK-7).
+    Frage (AK-6); scrollY bleibt über alle Frames des Laufs gleich (AK-7),
+    #anything-llm-chat und .allm-inline-content scrollen im Lauf nie
+    (scrollTop/scrollLeft 0, Befund 11).
     Der Verlauf lädt 250 ms (wie auf der Demo): Zeichen davor dürfen nicht
     verloren gehen.
     ::type-field-below-fold (NAK-4) — Leiste weit unten (1280×900, Feld
     in Endlage unter dem Viewport): Text kommt an, Enter sendet; gescrollt
-    wird erst nach dem Lauf."""
-    cases = [(w, {"width": 1280, "height": 1400}, "") for w in (0, 200, 500, 1000)]
-    cases += [(w, {"width": 1280, "height": 900}, "#slot { margin-top: 560px; }") for w in (0, 500)]
-    for wait_ms, vp, extra_css in cases:
+    wird erst nach dem Lauf. Varianten: „enter“ (Befund 3) — Chat sofort
+    geladen, „abcdefgh“ + Enter ≈ 300 ms nach dem Klick (Lauf läuft, Chatfeld
+    bereit, aber unter dem Viewport) -> genau eine Anfrage; „idle“ (Befund 8)
+    — nichts getippt: nach dem Lauf Fokus im Chatfeld (nie im Auffangfeld),
+    kein Scroll; danach getippt + Enter sendet."""
+    tall = {"width": 1280, "height": 1400}
+    low = {"width": 1280, "height": 900}
+    low_css = "#slot { margin-top: 560px; }"
+    cases = [("type", w, tall, "") for w in (0, 200, 500, 1000)]
+    cases += [("type", w, low, low_css) for w in (0, 500)]
+    cases += [("enter", 150, low, low_css), ("idle", 1200, low, low_css)]
+    for mode, wait_ms, vp, extra_css in cases:
         below = bool(extra_css)
         m = HeldHistoryMock()
         ctx, page = tv.open_page(browser, base_url, {"attrs": MORPH_FOCUS, "inline": True,
@@ -1075,40 +1091,88 @@ def check_type_during_morph(browser, base_url):
             tv.settle(page, 300)
             page.evaluate(SCROLL_REC_JS, 1600)
             sy0 = page.evaluate("() => scrollY")
+            t_click = time.time()
             page.mouse.click(*center_of(page, "#anything-llm-inline-input", 20))
-            if wait_ms:
-                page.wait_for_timeout(min(wait_ms, 250))
-            m.release_history() if wait_ms >= 250 else None
-            if wait_ms > 250:
-                page.wait_for_timeout(wait_ms - 250)
-            page.keyboard.type("abcdefgh")
-            if wait_ms < 250:
-                page.wait_for_timeout(250 - wait_ms)
+            enter_state = None
+            idle = None
+            if mode == "enter":
                 m.release_history()
+                page.wait_for_timeout(wait_ms)
+                page.keyboard.type("abcdefgh")
+                enter_state = page.evaluate(ENTER_STATE_JS)
+                page.keyboard.press("Enter")
+                enter_ms = round((time.time() - t_click) * 1000)
+            elif mode == "idle":
+                page.wait_for_timeout(250)
+                m.release_history()
+                page.wait_for_function("() => Array.isArray(window.__rec)", timeout=5000)
+                page.wait_for_timeout(200)
+                idle = {"active": active_id(page), "sy": page.evaluate("() => scrollY"),
+                        "doc": page.evaluate("() => document.activeElement && document.activeElement.id")}
+                page.keyboard.type("abcdefgh")
+            else:
+                if wait_ms:
+                    page.wait_for_timeout(min(wait_ms, 250))
+                m.release_history() if wait_ms >= 250 else None
+                if wait_ms > 250:
+                    page.wait_for_timeout(wait_ms - 250)
+                page.keyboard.type("abcdefgh")
+                if wait_ms < 250:
+                    page.wait_for_timeout(250 - wait_ms)
+                    m.release_history()
             page.wait_for_function("() => Array.isArray(window.__rec)", timeout=5000)
             rec = page.evaluate("() => window.__rec")
             run = [f for f in rec if f["morph"]]
             sy_run = sorted({f["sy"] for f in run})
-            value = page.evaluate("() => { const i = window.__q('#message-input'); return i ? i.value : null; }")
-            active = active_id(page)
+            inner_run = sorted({tuple(f["inner"]) for f in run})
+            if mode == "enter":
+                try:
+                    wait_user_and_token(page, "abcdefgh", timeout=8000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(300)
+                value = None
+                active = None
+            else:
+                value = page.evaluate("() => { const i = window.__q('#message-input'); return i ? i.value : null; }")
+                active = active_id(page)
             sy_after = page.evaluate("() => scrollY")
-            page.keyboard.press("Enter")
-            try:
-                wait_user_and_token(page, "abcdefgh", timeout=5000)
-            except Exception:
-                pass
+            if mode != "enter":
+                page.keyboard.press("Enter")
+                try:
+                    wait_user_and_token(page, "abcdefgh", timeout=5000)
+                except Exception:
+                    pass
             users = user_messages(page)
             sent = [r.get("message") for r in m.stream_requests]
-            label = f"{vp['width']}×{vp['height']}, {wait_ms} ms" + (", Feld unter dem Viewport" if below else "")
+            label = (f"{vp['width']}×{vp['height']}, " + {"type": f"{wait_ms} ms", "enter": "Enter ≈ 300 ms",
+                                                          "idle": "nichts getippt"}[mode]
+                     + (", Feld unter dem Viewport" if below else ""))
             key = "NAK-4 type-field-below-fold" if below else "AK-6 type-during-morph"
-            record(f"{key}: „abcdefgh“ im Chatfeld, Enter sendet ({label})",
-                   value == "abcdefgh" and active == "message-input" and sent == ["abcdefgh"]
-                   and any(u.endswith("abcdefgh") for u in users),
-                   f"Feld={value!r}, Fokus={active}, gesendet={sent}, Nutzerblasen={users}")
+            if mode == "enter":
+                record(f"{key} / Befund 3: „abcdefgh“ + Enter im Lauf (Chatfeld bereit, unter dem Viewport) "
+                       f"-> genau eine Anfrage ({label})",
+                       sent == ["abcdefgh"] and any(u.endswith("abcdefgh") for u in users)
+                       and enter_state["input"] and not enter_state["disabled"] and enter_state["morph"]
+                       and enter_ms <= 450,
+                       f"Enter nach ≈ {enter_ms} ms, Zustand {enter_state}, gesendet={sent}, Nutzerblasen={users}")
+            else:
+                record(f"{key}: „abcdefgh“ im Chatfeld, Enter sendet ({label})",
+                       value == "abcdefgh" and active == "message-input" and sent == ["abcdefgh"]
+                       and any(u.endswith("abcdefgh") for u in users),
+                       f"Feld={value!r}, Fokus={active}, gesendet={sent}, Nutzerblasen={users}")
             ok7 = bool(run) and sy_run == [sy0]
             record(f"{'NAK-4' if below else 'AK-7'} kein Seiten-Scroll während des Laufs ({label})", ok7,
                    f"scrollY vorher {sy0}, im Lauf {sy_run} ({len(run)} Frames), nach dem Lauf {sy_after}")
-            if below:
+            record(f"Befund 11 kein innerer Scroll im Lauf (#anything-llm-chat, .allm-inline-content) ({label})",
+                   bool(run) and inner_run == [(0, 0, 0, 0)],
+                   f"scrollTop/Left [chat, content] im Lauf: {inner_run} ({len(run)} Frames)")
+            if mode == "idle":
+                record(f"NAK-4 / Befund 8: nach dem Lauf Fokus im Chatfeld, nie im Auffangfeld, kein Scroll ({label})",
+                       idle["active"] == "message-input" and idle["sy"] == sy0,
+                       f"Shadow-Fokus={idle['active']}, document.activeElement={idle['doc']}, "
+                       f"scrollY {sy0} -> {idle['sy']}")
+            elif below and mode == "type":
                 record(f"NAK-4 Seite scrollt nach dem Lauf zum Feld ({label})", sy_after > sy0,
                        f"scrollY {sy0} -> {sy_after}")
         finally:

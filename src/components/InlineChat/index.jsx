@@ -89,10 +89,15 @@ import {
 // gesperrt) und — "morph" schwebend — in seiner Endlage ganz im Viewport
 // liegt, wandert der aufgefangene Text ans Ende des Chat-Eingabefelds und der
 // Fokus dorthin (deliverKeys); bis dahin landet alles im Auffangfeld. Liegt
-// das Feld unter dem Viewport, wartet die Übergabe bis zum Ende des Laufs und
-// bis getippt wurde, dann scrollt die Seite einmal zum Feld (nie während des
-// Laufs). Enter im Auffangfeld sendet den Text wie Enter im Chat. Zuklappen
-// legt aufgefangenen Text wie eine wartende Übergabe zurück in die Leiste.
+// das Feld unter dem Viewport, wartet die Übergabe bis zum Ende des Laufs:
+// dann kommt der Fokus (preventScroll) immer ins Chatfeld — nie bleibt er
+// auf dem Auffangfeld —, und nur wenn schon getippt wurde, scrollt die Seite
+// einmal zum Feld (nie während des Laufs). Während einer IME-/Dead-Key-
+// Komposition wird nie übergeben (erst nach compositionend). Enter im
+// Auffangfeld sendet den Text wie Enter im Chat; lädt der Chat noch, wird er
+// als Frage übergeben und weiter Getipptes danach ins Chatfeld gebracht.
+// Zuklappen legt aufgefangenen Text wie eine wartende Übergabe zurück in die
+// Leiste.
 //
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
@@ -540,6 +545,9 @@ export default function InlineChat({
   // ("morph" schwebend), sonst sofort
   const sinkRef = useRef(null);
   const keysRef = useRef({ active: false, gate: false });
+  // IME-/Dead-Key-Komposition im Auffangfeld läuft (compositionstart ..
+  // compositionend): Fokus nicht wegnehmen, nichts übergeben
+  const composingRef = useRef(false);
   // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
   // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
   const invalidateMorph = () => {
@@ -704,9 +712,10 @@ export default function InlineChat({
         // Bezug fürs Zuklappen (closeGeom): Seitenlage der Inline-Fläche im
         // aufgeklappten, ruhenden Zustand
         g.rootPage = rootPagePos();
-        // Ende des Laufs: aufgefangene Zeichen ins Feld (liegt es unter dem
-        // Viewport, nur wenn getippt wurde -> dann einmal hinscrollen)
-        deliverKeys({ reveal: true });
+        // Ende des Laufs: Übergabe beenden — Text (falls getippt) und Fokus
+        // ins Chatfeld; liegt es unter dem Viewport, nur mit Text einmal
+        // hinscrollen
+        deliverKeys();
       },
     });
     if (scrollPlan) applyFlowScroll(scrollPlan);
@@ -850,28 +859,31 @@ export default function InlineChat({
     const sink = sinkRef.current;
     if (!sink) return false;
     sink.value = "";
+    composingRef.current = false;
     keysRef.current = { active: true, gate };
     sink.focus({ preventScroll: true });
     deliverKeys();
     return true;
   };
   // Aufgefangenen Text ans Ende des Chat-Eingabefelds (über den nativen
-  // Setter + input-Ereignis -> onChange von PromptInput) und Fokus dorthin —
-  // nur, wenn er noch im Auffangfeld bzw. frei (body/Host) ist. Liegt das
-  // Feld (gate) unter dem Viewport, wird erst übergeben, wenn der Lauf vorbei
-  // ist, reveal gilt (Laufende, Tippen ins Auffangfeld) und Text da ist —
-  // dann scrollt die Seite einmal zum Feld. Rückgabe: übergeben?
-  const deliverKeys = ({ reveal = false } = {}) => {
+  // Setter + input-Ereignis -> onChange von PromptInput) und Fokus dorthin
+  // (preventScroll) — nur, wenn er noch im Auffangfeld bzw. frei (body/Host)
+  // ist. Nie während einer Komposition und nie während des Zuklappens. Liegt
+  // das Feld (gate) unter dem Viewport, erst nach dem Lauf — dann immer (der
+  // Fokus bleibt nie auf dem Auffangfeld); mit Text scrollt die Seite einmal
+  // zum Feld, ohne Text nicht (ein späterer Caret-Scroll beim Tippen ist dann
+  // erlaubt). Rückgabe: übergeben?
+  const deliverKeys = () => {
     const k = keysRef.current;
     const sink = sinkRef.current;
-    if (!k.active) return false;
+    if (!k.active || composingRef.current) return false;
     const input = chatInput();
     if (!input || input.disabled || pendingRef.current) return false;
-    const visible = !k.gate || inputFinalVisible(input);
     const m = morphRef.current;
-    const running = !!m?.stop && !m.closing;
+    if (m?.closing) return false;
+    const visible = !k.gate || inputFinalVisible(input);
+    if (!visible && m?.stop) return false;
     const text = sink?.value || "";
-    if (!visible && (running || !(reveal && text))) return false;
     keysRef.current = { active: false, gate: false };
     if (sink) sink.value = "";
     if (text) setFieldValue(input, input.value + text);
@@ -885,18 +897,22 @@ export default function InlineChat({
     } catch (e) {
       // ältere Browser: Cursor bleibt, wo er ist
     }
-    if (!visible)
+    if (!visible && text)
       input.scrollIntoView?.({
         block: "nearest",
         behavior: prefersReducedMotion() ? "auto" : "smooth",
       });
     return true;
   };
-  // Enter im Auffangfeld: wie Enter im Chat — Text übergeben und senden.
-  // Chat noch nicht bereit (lädt): als Frage übergeben (send), ein noch
-  // wartender Entwurf aus der Leiste steht davor. Leer: nichts.
+  // Enter im Auffangfeld: wie Enter im Chat — Text übergeben und senden
+  // (Chatfeld bereit, auch mitten im Lauf in ein noch gesperrtes Feld unter
+  // dem Viewport: Senden geht vor). Chat noch nicht bereit (lädt): als Frage
+  // übergeben (send), ein noch wartender Entwurf aus der Leiste steht davor;
+  // die Übergabe läuft weiter (Auffangfeld leer), danach Getipptes kommt
+  // nach dem Mount ins Chatfeld. Leer bzw. Komposition: nichts.
   const sinkEnter = (e) => {
-    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent?.isComposing) return;
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.nativeEvent?.isComposing || composingRef.current) return;
     e.preventDefault();
     const sink = sinkRef.current;
     const text = sink?.value || "";
@@ -904,13 +920,12 @@ export default function InlineChat({
     const input = chatInput();
     if (input && !input.disabled && !pendingRef.current) {
       keysRef.current.gate = false;
-      deliverKeys();
-      setTimeout(() => input.form?.requestSubmit?.(), 0);
+      if (deliverKeys()) setTimeout(() => input.form?.requestSubmit?.(), 0);
       return;
     }
     if (input && !pendingRef.current) return; // gesperrt: Antwort läuft
-    keysRef.current = { active: false, gate: false };
     if (sink) sink.value = "";
+    keysRef.current = { ...keysRef.current, active: true };
     const ticket = ++lastTicketRef.current;
     setPendingFirstMessage((prev) => ({
       ticket,
@@ -919,8 +934,22 @@ export default function InlineChat({
       suppressAutoFocus: false,
     }));
   };
-  const sinkInput = () => {
-    if (keysRef.current.active) deliverKeys({ reveal: true });
+  const sinkInput = (e) => {
+    if (e?.nativeEvent?.isComposing || composingRef.current) return;
+    if (keysRef.current.active) deliverKeys();
+  };
+  const sinkCompositionStart = () => {
+    composingRef.current = true;
+  };
+  // Komposition fertig: erst nach allen Ereignissen dieses Tastendrucks
+  // (Safari schickt das letzte input NACH compositionend) übergeben —
+  // aufgeschobene Übergaben (Laufende, Chat bereit) holen das hier nach
+  const sinkCompositionEnd = () => {
+    composingRef.current = false;
+    setTimeout(() => {
+      if (keysRef.current.active && !composingRef.current)
+        deliverKeysRef.current();
+    }, 0);
   };
 
   // first (nur inlineInput): { text, send } aus der Leiste, sonst null.
@@ -1059,6 +1088,7 @@ export default function InlineChat({
     // aufgefangene, noch nicht übergebene Zeichen gehören zum Entwurf
     const caught = keysRef.current.active ? sinkRef.current?.value || "" : "";
     keysRef.current = { active: false, gate: false };
+    composingRef.current = false;
     const unsent = `${pendingFirstMessage?.text || ""}${caught}` || null;
     const apply = () => {
       setPendingFirstMessage(null);
@@ -1444,6 +1474,8 @@ export default function InlineChat({
                 autoComplete="off"
                 onKeyDown={sinkEnter}
                 onInput={sinkInput}
+                onCompositionStart={sinkCompositionStart}
+                onCompositionEnd={sinkCompositionEnd}
                 style={KEY_SINK_STYLE}
               />
             )}
