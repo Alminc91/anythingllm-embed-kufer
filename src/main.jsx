@@ -4,7 +4,7 @@ import App from "./App.jsx";
 import "./index.css";
 import { parseStylesSrc } from "./utils/constants.js";
 import { initI18n } from "./i18n.js";
-import { THEME_STYLE_ID } from "./utils/theme.js";
+import { ON_ACCENT_TEXT, THEME_STYLE_ID } from "./utils/theme.js";
 
 // CSS Strings für Shadow DOM (von Head.jsx übernommen)
 const hljsCss = `
@@ -27,7 +27,7 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // nach der schon sichtbaren Karte ankommt (nicht beim Verlauf-Laden, nicht
 // unter der Antwort); ohne Bewegung bei prefers-reduced-motion.
 // Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
-// Tastaturfokus füllen im Akzent, Text weiß (Farben stehen inline ->
+// Tastaturfokus füllen im Akzent, Text ON_ACCENT_TEXT (Farben stehen inline ->
 // !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
 // sonst 2px Akzent (!important gegen die allgemeine Fokus-Regel mit ID).
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
@@ -216,7 +216,7 @@ const customCss = `
   .allm-pill-accent:focus-visible {
     background-color: var(--allmi-accent, #01a5a9) !important;
     border-color: var(--allmi-accent, #01a5a9) !important;
-    color: #FFFFFF !important;
+    color: ${ON_ACCENT_TEXT} !important;
   }
   .allm-pill-accent:focus-visible {
     outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;

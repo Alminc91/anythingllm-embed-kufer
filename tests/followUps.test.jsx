@@ -503,7 +503,13 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
       " ",
     );
     expect(css).toContain(
-      ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: #FFFFFF !important; }",
+      ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
+    );
+    // Textfarbe aus utils/theme.js (ON_ACCENT_TEXT, weiß), nicht fest
+    const { ON_ACCENT_TEXT } = await import("../src/utils/theme.js");
+    expect(ON_ACCENT_TEXT).toBe("#FFFFFF");
+    expect(css).toContain(
+      'import { ON_ACCENT_TEXT, THEME_STYLE_ID } from "./utils/theme.js";',
     );
     expect(css).toMatch(
       /\.allm-inline-chip\.allm-pill-accent \{ transition: background-color var\(--allmi-transition, 200ms\)[^}]*color var\(--allmi-transition, 200ms\)/,

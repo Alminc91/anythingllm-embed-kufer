@@ -3,7 +3,6 @@ import {
   MORE_COURSES_TEXT,
   selectCourseCards,
   teaserFadeIn,
-  teaserMap,
 } from "@/utils/courseCards";
 
 // Kurskarten zu einer Assistenten-Antwort (Setting courseCards "auto").
@@ -301,15 +300,16 @@ function CategoryLink({ categoryLink }) {
 //     umgebenden Block, selectAnnouncedCourseCards) — part "cards": Karten
 //     über der Antwort, part "footer": Abschlusslink darunter bzw. die
 //     Fallback-Karten (footerCards) samt Abschlusslink
-//   courseTeasers (Kurskarten v3): KI-Teaser je Karte (URL -> Text) als
-//     Untertext; fehlt das Feld, sehen die Karten aus wie bisher.
+//   teasers (Kurskarten v3): KI-Teaser je Karte als Untertext — Map aus
+//     teaserMap, einmal je Antwort berechnet (auch für die Sprachausgabe);
+//     fehlt sie, sehen die Karten aus wie bisher.
 //     teaserArrivedAt: nur Karten oben — Teaser kam nach den Karten an und
 //     blendet ein (unter der Antwort erscheinen Karte und Teaser zusammen)
 function CourseCards({
   reply,
   courseSources,
   courseCards,
-  courseTeasers = null,
+  teasers = null,
   teaserArrivedAt = null,
   fallback = false,
   selection: given = null,
@@ -317,7 +317,6 @@ function CourseCards({
   part = "all",
 }) {
   const above = position === "above";
-  const teasers = useMemo(() => teaserMap(courseTeasers), [courseTeasers]);
   const computed = useMemo(
     () =>
       given

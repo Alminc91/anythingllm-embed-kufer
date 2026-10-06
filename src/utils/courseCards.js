@@ -109,8 +109,9 @@ const RAW_TEXT_MAX = 2000;
 const FOLLOW_UPS_SCAN_MAX = 20;
 const BARE_URL_RX = /<?(https?:\/\/[^\s<>"'\]]+)>?/g;
 const ANY_URL_RX = /https?:\/\/\S+/g;
-// Tag begrenzt (höchstens 1.000 Zeichen): viele "<" ohne ">" bleiben linear
-const HTML_TAG_RX = /<[^<>]{0,1000}>/g;
+// Tag begrenzt (höchstens 1.000 Zeichen): viele "<" ohne ">" bleiben linear.
+// Auch für die Sprachausgabe (HistoricalMessage).
+export const HTML_TAG_RX = /<[^<>]{0,1000}>/g;
 // Satz = Text bis einschließlich Satzzeichen bzw. Zeilenende
 const SENTENCE_RX = /[^.!?\n]+[.!?]*/g;
 const WORD_RX = /\S+/g;
@@ -1149,9 +1150,9 @@ const MONTH_NAMES = [
   "Dezember",
 ];
 const SENTENCE_END_RX = /[.!?…]$/;
-// Wie die Bereinigung des Antworttexts für die Sprachausgabe
-// (HistoricalMessage): Markdown-Zeichen und HTML-Tags raus
-const SPEECH_STRIP_RX = /[#*_`~\[\]()]/g;
+// Bereinigung für die Sprachausgabe (Antworttext in HistoricalMessage und
+// Kartensätze): Markdown-Zeichen raus, HTML-Tags über HTML_TAG_RX
+export const SPEECH_STRIP_RX = /[#*_`~\[\]()]/g;
 
 function speechList(items) {
   if (items.length <= 1) return items.join("");

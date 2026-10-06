@@ -8,6 +8,7 @@ import {
   courseCardsEnabled,
   followUpsList,
   selectAnnouncedCourseCards,
+  teaserMap,
 } from "@/utils/courseCards";
 import { stripThink } from "@/utils/chat/think";
 import {
@@ -251,7 +252,7 @@ export default function ChatHistory({
 
           // selection: Kurskarten-Auswahl des Blocks oben (nur "above") ->
           // HistoricalMessage zeigt damit nur den Abschlusslink
-          const renderBody = (selection = null) =>
+          const renderBody = (selection = null, teasers = null) =>
             live ? (
               <PromptReply
                 key={props.uuid}
@@ -272,9 +273,10 @@ export default function ChatHistory({
                 role={props.role}
                 sources={props.sources}
                 courseSources={above ? null : props.courseSources}
-                // oben: Teaser nur für die Sprachausgabe (die Karten stehen
-                // im Block darüber; der Fuß zeigt keine Teaser)
-                courseTeasers={props.courseTeasers}
+                // oben: Teaser (schon geprüft im Block darüber) nur für die
+                // Sprachausgabe; der Fuß zeigt keine Teaser
+                courseTeasers={above ? null : props.courseTeasers}
+                courseTeaserMap={teasers}
                 courseCards={settings?.courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
                 courseCardsSelection={selection}
@@ -321,8 +323,9 @@ function replyFinal(message) {
 // Die Karten erscheinen, sobald der Server sie ankündigt (Chunk
 // "courseSources", vor dem ersten Text-Token); bis zum ersten Token zeigt
 // PromptReply den Tipp-Indikator. Ergänzungen am Stream-Ende werden angehängt.
-// Die Auswahl wird hier einmal berechnet; die Antwort darunter bekommt sie
-// für den Abschlusslink (renderBody). Fallback-Karten (Kursseiten ohne
+// Die Auswahl und die Teaser werden hier einmal berechnet; die Antwort
+// darunter bekommt beide für den Abschlusslink bzw. die Sprachausgabe
+// (renderBody). Fallback-Karten (Kursseiten ohne
 // Serverdaten) erst bei fertiger Antwort: mit Ankündigung unter der Antwort
 // (footerCards), ohne Ankündigung zusammen mit den übrigen Karten oben.
 function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
@@ -358,19 +361,23 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
       final,
     ],
   );
+  const teasers = useMemo(
+    () => teaserMap(props.courseTeasers),
+    [props.courseTeasers],
+  );
   return (
     <div className="allm-pt-[5px]" data-assistant-turn="">
       <AssistantName />
       {selection && (
         <CourseCards
           selection={selection}
-          courseTeasers={props.courseTeasers}
+          teasers={teasers}
           teaserArrivedAt={props.teaserArrivedAt}
           position="above"
           part="cards"
         />
       )}
-      {renderBody(selection)}
+      {renderBody(selection, teasers)}
     </div>
   );
 }

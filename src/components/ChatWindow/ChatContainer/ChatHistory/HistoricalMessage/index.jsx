@@ -27,8 +27,10 @@ import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import {
+  HTML_TAG_RX,
   replySpeechText,
   selectCourseCards,
+  SPEECH_STRIP_RX,
   teaserMap,
 } from "@/utils/courseCards";
 import {
@@ -466,6 +468,9 @@ const HistoricalMessage = forwardRef(
       courseSources = null,
       // Kurskarten v3: KI-Teaser je Karte (URL -> Text)
       courseTeasers = null,
+      // dieselben Teaser schon geprüft (teaserMap des umgebenden Blocks,
+      // Kurskarten "above") — dann wird courseTeasers nicht erneut geprüft
+      courseTeaserMap = null,
       courseCards = "off",
       // Kurskarten v2 ("above"): Auswahl des umgebenden Blocks (ChatHistory,
       // Karten über der Antwort) -> hier nur noch der Abschlusslink
@@ -501,8 +506,8 @@ const HistoricalMessage = forwardRef(
 
     // Clean text for TTS (remove markdown, HTML, etc.)
     const replyTextForTTS = responseContent
-      ?.replace(/[#*_`~\[\]()]/g, "") // Remove markdown
-      ?.replace(/<[^>]{0,1000}>/g, "") // Remove HTML tags (begrenzt: linear)
+      ?.replace(SPEECH_STRIP_RX, "") // Remove markdown
+      ?.replace(HTML_TAG_RX, "") // Remove HTML tags (begrenzt: linear)
       ?.trim();
 
     // Kurskarten: Auswahl einmal hier (Karten unter der Antwort) bzw. von
@@ -534,6 +539,11 @@ const HistoricalMessage = forwardRef(
         courseCardsFinal,
       ],
     );
+    // Teaser einmal je Antwort prüfen (Karten unten und Sprachausgabe)
+    const teasers = useMemo(
+      () => courseTeaserMap || teaserMap(courseTeasers),
+      [courseTeaserMap, courseTeasers],
+    );
     // Vorlesen: erst der Antworttext, danach die Karten als Sätze (Titel,
     // Zeit, Dauer, Beginn, Ort, Preis, Status, Teaser; Länge begrenzt, s.
     // replySpeechText); ohne Karten unverändert. Folgefragen nicht.
@@ -541,13 +551,9 @@ const HistoricalMessage = forwardRef(
     const plainTextForTTS = useMemo(
       () =>
         replyTextForTTS
-          ? replySpeechText(
-              replyTextForTTS,
-              cardSelection,
-              teaserMap(courseTeasers),
-            )
+          ? replySpeechText(replyTextForTTS, cardSelection, teasers)
           : replyTextForTTS,
-      [replyTextForTTS, cardSelection, courseTeasers],
+      [replyTextForTTS, cardSelection, teasers],
     );
 
     const ttsPosition = embedderSettings.settings.ttsPosition || "bottom-right";
@@ -664,7 +670,8 @@ const HistoricalMessage = forwardRef(
           <CourseCards
             reply={responseContent}
             courseSources={courseSources}
-            courseTeasers={courseTeasers}
+            // Fuß (Karten oben): Abschlusslink und Fallback-Karten, ohne Teaser
+            teasers={courseCardsSelection ? null : teasers}
             courseCards={courseCards}
             fallback={courseCardsFinal}
             selection={cardSelection}
