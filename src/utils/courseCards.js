@@ -33,6 +33,15 @@
 // `courseCardsAnnounced` Einträge erscheinen dann in Server-Reihenfolge über
 // der Antwort, verlinkte weitere Kurse werden angehängt
 // (selectAnnouncedCourseCards). Ohne Ankündigung gilt die Auswahl oben.
+//
+// Kurskarten v3 (Fork >= 7.13): courseSources tragen optional `sessions`
+// (Kopfzeile "Dauer:", z. B. "16 Abende") und `venue` (Kopfzeile "Kursort:",
+// Teil vor dem ersten ";", z. B. "Realschule") -> Kopfzeile "Mo · 18:00 Uhr ·
+// 16 Abende", Metazeile "ab 14.09.2026 · Realschule · 60 €" (ein Ort ersetzt
+// "vor Ort"; "online" bleibt). Dazu KI-Teaser je Karte (Chunk type
+// "courseTeasers", { url: text }, nach den angekündigten Karten), als
+// Untertext unter dem Titel (teaserMap). Teaserzeilen "[[TEASER n: …]]" am
+// Antwortanfang entfernt das Widget zusätzlich selbst (ältere Server).
 
 export const COURSE_CARDS_MAX = 5;
 export const COURSE_COMPACT_MAX = 10;
@@ -102,6 +111,13 @@ const GENERIC_LINK_TEXT_RX =
 // Karten-Marker des Servers ("[[KARTEN: 0, 2]]" in der ersten Antwortzeile)
 const CARDS_MARKER_TAG = "[[KARTEN:";
 const CARDS_MARKER_BUFFER_MAX = 120;
+// Kurskarten v3: Teaserzeilen "[[TEASER n: …]]" direkt nach dem Marker
+// (gleiche Grenzen wie der Server-Filter)
+const TEASER_TAG = "[[TEASER";
+const TEASER_LINE_MAX = 240;
+const TEASER_LINES_MAX = 5;
+const TEASER_LINE_RX = /^\[\[TEASER[ \t]*\d{1,3}[ \t]*:[^\n]*\]\]$/i;
+export const TEASER_MAX_LEN = 200;
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -130,6 +146,12 @@ export function courseCardsAbove(settings = {}) {
  * @returns {string}
  */
 export function stripCardsMarker(text, { partial = false } = {}) {
+  const rest = stripMarkerLine(text, { partial });
+  if (typeof rest !== "string" || rest.length === 0) return rest;
+  return stripTeaserLines(rest, { partial });
+}
+
+function stripMarkerLine(text, { partial = false } = {}) {
   if (typeof text !== "string" || text.length === 0) return text;
   const body = text.trimStart();
   const head = body.slice(0, CARDS_MARKER_TAG.length).toUpperCase();
@@ -141,6 +163,46 @@ export function stripCardsMarker(text, { partial = false } = {}) {
     return body.slice(close + 2).trimStart();
   if (newline !== -1) return body.slice(newline + 1).trimStart();
   return partial && body.length <= CARDS_MARKER_BUFFER_MAX ? "" : text;
+}
+
+/**
+ * Kurskarten v3: Teaserzeilen "[[TEASER n: …]]" am Textanfang entfernen
+ * (Abwehr in der Tiefe: der Server ab Fork 7.13 schickt sie als eigenen
+ * Chunk; ältere Server reichen sie hinter dem Marker durch). Regeln wie der
+ * Server-Filter: je Zeile höchstens 240 Zeichen bis "]]" vor dem
+ * Zeilenende, höchstens 5 Zeilen; kaputte Zeilen bleiben Text.
+ * partial (Antwort streamt noch): begonnene, noch offene Teaserzeile bzw.
+ * nur Leerraum hinter entfernten Zeilen ergibt "" (weiter puffern).
+ * @param {string} text
+ * @param {{partial?: boolean}} [options]
+ * @returns {string}
+ */
+export function stripTeaserLines(text, { partial = false } = {}) {
+  if (typeof text !== "string" || text.length === 0) return text;
+  let rest = text;
+  let count = 0;
+  for (;;) {
+    const stripped = count > 0;
+    const body = rest.trimStart();
+    if (body.length === 0) return stripped ? "" : text;
+    const head = body.slice(0, TEASER_TAG.length).toUpperCase();
+    const settled = stripped ? body : text;
+    if (!TEASER_TAG.startsWith(head) || count >= TEASER_LINES_MAX)
+      return settled;
+    if (body.length < TEASER_TAG.length) return partial ? "" : settled;
+    const win = body.slice(0, TEASER_LINE_MAX);
+    const close = win.indexOf("]]");
+    const newline = win.indexOf("\n");
+    if (close !== -1 && (newline === -1 || close < newline)) {
+      if (!TEASER_LINE_RX.test(body.slice(0, close + 2))) return settled;
+      rest = body.slice(close + 2);
+      count++;
+      continue;
+    }
+    if (newline === -1 && body.length < TEASER_LINE_MAX)
+      return partial ? "" : settled;
+    return settled;
+  }
 }
 
 /**
@@ -443,18 +505,35 @@ export function formatPrice(price) {
   return `${text} €`;
 }
 
-export function formatPlace(format, location) {
+// Kurzer Klartext (Dauer, Ort): Tags raus, Leerraum zusammengezogen,
+// höchstens max Zeichen; leer -> null
+function shortText(value, max) {
+  if (typeof value !== "string") return null;
+  const v = value
+    .replace(HTML_TAG_RX, " ")
+    .replace(/\s+/g, " ")
+    .replace(/ ([.,;:!?])/g, "$1")
+    .trim();
+  if (!v) return null;
+  return v.length > max ? `${v.slice(0, max - 1).trimEnd()}…` : v;
+}
+
+// Ort einer Karte: Kursort (venue, Kurskarten v3) hat Vorrang vor dem
+// KIE-480-Ortsfeld (location) und ersetzt "vor Ort"; "online" bleibt.
+export function formatPlace(format, location, venue = null) {
   const loc =
     typeof location === "string" && location.trim().length > 0
       ? location.trim()
       : null;
+  const venueLabel = shortText(venue, 60);
   const locLabel =
-    loc && loc.toLowerCase() !== "online" ? capitalizeWords(loc) : null;
+    venueLabel ||
+    (loc && loc.toLowerCase() !== "online" ? capitalizeWords(loc) : null);
   if (format === "online") return "online";
   if (format === "hybrid")
     return locLabel ? `${locLabel} · auch online` : "online und vor Ort";
   if (format === "onsite") return locLabel || "vor Ort";
-  if (loc && loc.toLowerCase() === "online") return "online";
+  if (!venueLabel && loc && loc.toLowerCase() === "online") return "online";
   return locLabel;
 }
 
@@ -469,7 +548,9 @@ export function formatCourse(entry) {
   const weekdays = formatWeekdays(entry.weekdays);
   const time = formatTime(entry.start_minutes);
   const start = formatDateDE(entry.start_date);
-  const schedule = [weekdays, time ? `${time} Uhr` : null]
+  // Kurskarten v3: Anzahl Termine ("16 Abende") ans Ende der Kopfzeile
+  const sessions = shortText(entry.sessions, 30);
+  const schedule = [weekdays, time ? `${time} Uhr` : null, sessions]
     .filter(Boolean)
     .join(" · ");
   return {
@@ -480,11 +561,36 @@ export function formatCourse(entry) {
     weekdays,
     time,
     start: start ? `ab ${start}` : null,
-    place: formatPlace(entry.format, entry.location),
+    place: formatPlace(entry.format, entry.location, entry.venue),
     price: formatPrice(entry.price),
     status: formatStatus(entry.bookable),
     bookable: typeof entry.bookable === "boolean" ? entry.bookable : null,
   };
+}
+
+/**
+ * Kurskarten v3: KI-Teaser je Karte (courseTeasers vom Server, URL -> Text)
+ * als Map normalisierte URL -> Text (Vergleich wie card.key). Text ohne
+ * HTML/Markdown-Zeichen, höchstens TEASER_MAX_LEN Zeichen; Ungültiges
+ * entfällt.
+ * @param {any} courseTeasers
+ * @returns {Map<string, string>}
+ */
+export function teaserMap(courseTeasers) {
+  const out = new Map();
+  if (
+    !courseTeasers ||
+    typeof courseTeasers !== "object" ||
+    Array.isArray(courseTeasers)
+  )
+    return out;
+  for (const [url, value] of Object.entries(courseTeasers)) {
+    const key = normalizeUrl(url);
+    if (!key || out.has(key) || typeof value !== "string") continue;
+    const text = shortText(stripMarkdown(value), TEASER_MAX_LEN);
+    if (text) out.set(key, text);
+  }
+  return out;
 }
 
 // Kurs-Pfadpräfix je Domain: gemeinsamer Pfadanfang der Kurs-URLs ohne ihre

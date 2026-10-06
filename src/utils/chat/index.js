@@ -24,6 +24,8 @@ export default function handleChat(
     courseSources = null,
     // Kurskarten v2: Anzahl vorab angekündigter Kurse am Listenanfang
     courseCardsAnnounced = null,
+    // Kurskarten v3: KI-Teaser je Karte (Chunk type "courseTeasers")
+    teasers = null,
   } = chatResult;
   const courseExtra = Array.isArray(courseSources)
     ? {
@@ -148,6 +150,21 @@ export default function handleChat(
         ...announced,
       });
     }
+    setChatHistory([..._chatHistory]);
+  } else if (type === "courseTeasers") {
+    // Kurskarten v3: KI-Teaser (URL -> Text) zu den vorab angekündigten
+    // Karten, kommen nach dem courseSources-Chunk und vor dem ersten Text-
+    // Token. Nur an eine schon bestehende Antwort mit Karten; ändert weder
+    // Text noch Warte-/Stream-Zustand. Mehrere Chunks werden zusammengeführt.
+    if (!teasers || typeof teasers !== "object" || Array.isArray(teasers))
+      return;
+    const chatIdx = _chatHistory.findIndex((chat) => chat.uuid === uuid);
+    if (chatIdx === -1) return;
+    const existing = _chatHistory[chatIdx];
+    _chatHistory[chatIdx] = {
+      ...existing,
+      courseTeasers: { ...(existing.courseTeasers || {}), ...teasers },
+    };
     setChatHistory([..._chatHistory]);
   } else if (type === "finalizeResponseStream") {
     // KIE-504: Die chatId der gerade gestreamten Antwort nachtragen, damit

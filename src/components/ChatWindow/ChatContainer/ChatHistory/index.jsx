@@ -216,6 +216,7 @@ export default function ChatHistory({
                 role={props.role}
                 sources={props.sources}
                 courseSources={above ? null : props.courseSources}
+                courseTeasers={above ? null : props.courseTeasers}
                 courseCards={settings?.courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
                 courseCardsSelection={selection}
@@ -292,7 +293,12 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
     <div className="allm-pt-[5px]" data-assistant-turn="">
       <AssistantName />
       {selection && (
-        <CourseCards selection={selection} position="above" part="cards" />
+        <CourseCards
+          selection={selection}
+          courseTeasers={props.courseTeasers}
+          position="above"
+          part="cards"
+        />
       )}
       {renderBody(selection)}
     </div>

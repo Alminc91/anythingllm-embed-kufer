@@ -1,5 +1,9 @@
 import { memo, useId, useMemo } from "react";
-import { MORE_COURSES_TEXT, selectCourseCards } from "@/utils/courseCards";
+import {
+  MORE_COURSES_TEXT,
+  selectCourseCards,
+  teaserMap,
+} from "@/utils/courseCards";
 
 // Kurskarten zu einer Assistenten-Antwort (Setting courseCards "auto").
 // Optik ausschließlich über die internen Theme-Variablen (--allmi-*, gesetzt
@@ -54,6 +58,21 @@ const blockLinkStyle = {
 };
 
 const mutedStyle = { color: MUTED, fontSize: "12px", lineHeight: "17px" };
+
+// Kurskarten v3: KI-Teaser als Untertext unter dem Titel — 13 px, Textfarbe,
+// höchstens 2 Zeilen (Zeilenklammer), blendet beim Eintreffen ein
+// (Keyframes allm-course-teaser-in in main.jsx, ohne Bewegung bei
+// prefers-reduced-motion).
+const teaserStyle = {
+  color: TEXT,
+  fontSize: "13px",
+  lineHeight: "18px",
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  overflowWrap: "anywhere",
+};
 const listReset = { listStyle: "none", margin: 0, padding: 0 };
 const itemStyle = { display: "flex", minWidth: 0 };
 
@@ -63,13 +82,16 @@ function joinParts(parts) {
 
 // card.url ist immer gesetzt (selectCourseCards nimmt nur http(s)-Kurs-URLs).
 // Fallback-Karte (card.fallback, Kurs ohne Serverdaten): nur der Titel —
-// die Metadaten-Zeilen fehlen einfach, sonst gleiche Karte.
-function Card({ card }) {
+// die Metadaten-Zeilen fehlen einfach, sonst gleiche Karte (auch ohne
+// Teaser). teaser = KI-Teaser (Kurskarten v3), sonst null.
+function Card({ card, teaser = null }) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
+  const showTeaser = !!teaser && !card.fallback;
   // Beschreibung = die sichtbaren Zeilen (Name = Titel per aria-label)
   const describedBy = [
     card.schedule && `${id}-s`,
+    showTeaser && `${id}-t`,
     details && `${id}-d`,
     card.status && `${id}-b`,
   ]
@@ -115,6 +137,16 @@ function Card({ card }) {
         >
           {card.title}
         </span>
+        {showTeaser && (
+          <span
+            id={`${id}-t`}
+            className="allm-course-teaser"
+            data-course-teaser=""
+            style={teaserStyle}
+          >
+            {teaser}
+          </span>
+        )}
         {details && (
           <span
             id={`${id}-d`}
@@ -187,8 +219,9 @@ function CompactRow({ card, first }) {
   );
 }
 
-// Karten als Raster (einspaltig bei schmaler Breite)
-function CardList({ cards }) {
+// Karten als Raster (einspaltig bei schmaler Breite); teasers = Map
+// normalisierte URL -> Teaser (Kurskarten v3, sonst leer)
+function CardList({ cards, teasers = null }) {
   return (
     <ul
       className="allm-course-list"
@@ -200,7 +233,7 @@ function CardList({ cards }) {
       }}
     >
       {cards.map((card) => (
-        <Card key={card.key} card={card} />
+        <Card key={card.key} card={card} teaser={teasers?.get(card.key)} />
       ))}
     </ul>
   );
@@ -245,16 +278,20 @@ function CategoryLink({ categoryLink }) {
 //     umgebenden Block, selectAnnouncedCourseCards) — part "cards": Karten
 //     über der Antwort, part "footer": Abschlusslink darunter bzw. die
 //     Fallback-Karten (footerCards) samt Abschlusslink
+//   courseTeasers (Kurskarten v3): KI-Teaser je Karte (URL -> Text) als
+//     Untertext; fehlt das Feld, sehen die Karten aus wie bisher
 function CourseCards({
   reply,
   courseSources,
   courseCards,
+  courseTeasers = null,
   fallback = false,
   selection: given = null,
   position = "below",
   part = "all",
 }) {
   const above = position === "above";
+  const teasers = useMemo(() => teaserMap(courseTeasers), [courseTeasers]);
   const computed = useMemo(
     () =>
       given
@@ -327,7 +364,7 @@ function CourseCards({
           ))}
         </ul>
       ) : (
-        <CardList cards={cards} />
+        <CardList cards={cards} teasers={teasers} />
       )}
       {showFooter && categoryLink ? (
         <CategoryLink categoryLink={categoryLink} />
