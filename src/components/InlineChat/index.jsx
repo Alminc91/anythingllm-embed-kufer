@@ -81,6 +81,24 @@ import {
 // zur Box vor dem Lauf (ohne Animation), nie währenddessen; Chips unter der
 // Leiste blenden weich aus bzw. wieder ein.
 //
+// Tastenübergabe (Desktop, Aufklappen ohne Senden, kein Touch): Zeichen, die
+// ab dem Klick getippt werden, gehen nie verloren. Der Fokus geht in der
+// Klick-Geste (preventScroll) in ein unsichtbares Auffangfeld oben in der
+// Box (sinkRef) — es existiert sofort, auch solange der Chat noch lädt.
+// Sobald das Chat-Eingabefeld bereit ist (kein wartender Entwurf mehr, nicht
+// gesperrt) und — "morph" schwebend — in seiner Endlage ganz im Viewport
+// liegt, wandert der aufgefangene Text ans Ende des Chat-Eingabefelds und der
+// Fokus dorthin (deliverKeys); bis dahin landet alles im Auffangfeld. Liegt
+// das Feld unter dem Viewport, wartet die Übergabe bis zum Ende des Laufs:
+// dann kommt der Fokus (preventScroll) immer ins Chatfeld — nie bleibt er
+// auf dem Auffangfeld —, und nur wenn schon getippt wurde, scrollt die Seite
+// einmal zum Feld (nie während des Laufs). Während einer IME-/Dead-Key-
+// Komposition wird nie übergeben (erst nach compositionend). Enter im
+// Auffangfeld sendet den Text wie Enter im Chat; lädt der Chat noch, wird er
+// als Frage übergeben und weiter Getipptes danach ins Chatfeld gebracht.
+// Zuklappen legt aufgefangenen Text wie eine wartende Übergabe zurück in die
+// Leiste.
+//
 // Schaltbare Variante der Eingabe-Leiste (Standard = Verhalten oben):
 //   inlineOpenOn "focus"   Klick/Tippen mit Zeiger ins Leisten-Feld klappt auf
 //                          (Entwurf wandert per Übergabe send: false mit). Nur
@@ -119,6 +137,19 @@ function prefersReducedMotion() {
   }
 }
 const px = (n) => `${Math.round(n * 100) / 100}px`;
+
+// Wert eines (von React gesteuerten) Eingabefelds setzen wie beim Tippen:
+// nativer Setter + input-Ereignis, damit onChange den neuen Wert übernimmt
+function setFieldValue(el, value) {
+  const proto =
+    el instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) setter.call(el, value);
+  else el.value = value;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 // Rundung einer Ecke (computed border-*-radius: "999px", "30%", "40px 10px")
 // für die Startform von "morph": Prozent gegen die kleinere Seite, bei zwei
@@ -210,10 +241,13 @@ function hasRunningTransition(el) {
 // 100 ms); onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein
 // Rücksprung). Schließen, während die Chips noch ausblenden: Einblenden ab
 // der aktuellen Opacity (--allmi-chips-o), kein Sprung.
+// pin (Zuklappen): hält die äußere Box für die Dauer des Laufs fest
+// (pinBox), Rückgabe = Lösen; gelöst wird bei jedem stop, vor onEnd.
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
-function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
+function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
-  set(win, "mw", px(geom.w));
+  // Breite in px oder (Zuklappen nach Fensteränderung) "100%" der Box
+  set(win, "mw", typeof geom.w === "string" ? geom.w : px(geom.w));
   set(win, "mh", px(geom.h));
   set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
   set(win, "mr", px(geom.r));
@@ -225,6 +259,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
   if (flow) set(box, "bh", px(geom.rootH));
   let raf = 0;
   let timer = 0;
+  let unpin = null;
   const onTransitionEnd = (e) => {
     if (e.target !== win) return;
     if (!isMorphProperty(e.propertyName) && e.propertyName !== "box-shadow")
@@ -235,6 +270,8 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
     cancelAnimationFrame(raf);
     clearTimeout(timer);
     win.removeEventListener("transitionend", onTransitionEnd);
+    unpin?.();
+    unpin = null;
     if (keep) return;
     win.classList.remove(...MORPH_CLASSES);
     box.classList.remove(...MORPH_FLOW_CLASSES);
@@ -249,6 +286,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
     stop();
   }
   const run = () => {
+    if (pin) unpin = pin();
     win.classList.add("allm-morph");
     if (flow) box.classList.add("allm-morph-flow");
     win.classList.toggle("allm-morph-from", !opening);
@@ -286,6 +324,43 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd }) {
     finish(); // nichts transitioniert (Leistenform liegt schon an)
   else run();
   return stop;
+}
+
+// Zuklappen: äußere Box (Panel) für die Dauer des Laufs an ihrer Stelle im
+// Dokument festhalten, auch wenn die Seite die Inline-Fläche gleichzeitig
+// verschiebt oder schmaler macht (Seiten-Transition auf das Signal
+// data-allm-expanded, z. B. .ask { max-width } der Demo): feste Breite und je
+// Frame left/top = Versatz der Inline-Fläche seit dem Start (Seitenkoordinaten,
+// Scrollen zählt nicht). So läuft das Fenster mit eigener Dauer/Kurve von der
+// Panel- zur Leistenform, unabhängig von der Kurve der Seite. root0 = Lage der
+// Inline-Fläche, width = Breite der Box, beide VOR dem Entfernen des Signals
+// gemessen (Seiten-CSS kann synchron reagieren). Rückgabe: Lösen (Stil wie
+// vorher).
+function pinBox(box, root, root0, width) {
+  const prev = ["left", "right", "top", "width"].map((k) => [
+    k,
+    box.style.getPropertyValue(k),
+  ]);
+  const baseLeft = parseFloat(box.style.left) || 0;
+  const baseTop = parseFloat(box.style.top) || 0;
+  box.style.setProperty("width", px(width));
+  box.style.setProperty("right", "auto");
+  let raf = 0;
+  const step = () => {
+    const r = root.getBoundingClientRect();
+    const dx = root0.x - (r.left + window.scrollX);
+    const dy = root0.y - (r.top + window.scrollY);
+    box.style.setProperty("left", px(baseLeft + dx));
+    box.style.setProperty("top", px(baseTop + dy));
+    raf = requestAnimationFrame(step);
+  };
+  step();
+  return () => {
+    cancelAnimationFrame(raf);
+    for (const [k, v] of prev)
+      if (v) box.style.setProperty(k, v);
+      else box.style.removeProperty(k);
+  };
 }
 
 // Fenster sofort (nie animiert, auch bei scroll-behavior: smooth der Seite)
@@ -370,6 +445,11 @@ const FOCUS_PROXY_STYLE = {
   fontSize: "16px",
   pointerEvents: "none",
 };
+
+// Auffangfeld der Tastenübergabe (Box, Desktop): wie das Hilfsfeld, ohne
+// sichtbaren Cursor
+const KEY_SINK_STYLE = { ...FOCUS_PROXY_STYLE, caretColor: "transparent" };
+const KEY_SINK_ID = "anything-llm-key-sink";
 
 // Schwebende Box (inlineLayout "overlay"): relativ zur Inline-Fläche
 // (#anything-llm-embed-inline, position:relative), oben an der Leiste.
@@ -457,10 +537,17 @@ export default function InlineChat({
   const spacerHeightRef = useRef(0);
   const focusRequestRef = useRef(false);
   const scrollOnExpandRef = useRef(false);
-  // "morph": { geom, stop, closing, focusOnEnd } des laufenden bzw. letzten
-  // Laufs; geom.open = Panel im nächsten Commit messen und Lauf starten;
-  // focusOnEnd = schwebend nach dem Aufklappen ins Eingabefeld (falls sichtbar)
+  // "morph": { geom, stop, closing } des laufenden bzw. letzten Laufs;
+  // geom.open = Panel im nächsten Commit messen und Lauf starten
   const morphRef = useRef(null);
+  // Tastenübergabe: Auffangfeld (Box) und ob es gerade Zeichen sammelt;
+  // gate = nur in ein Eingabefeld übergeben, das ganz im Viewport liegt
+  // ("morph" schwebend), sonst sofort
+  const sinkRef = useRef(null);
+  const keysRef = useRef({ active: false, gate: false });
+  // IME-/Dead-Key-Komposition im Auffangfeld läuft (compositionstart ..
+  // compositionend): Fokus nicht wegnehmen, nichts übergeben
+  const composingRef = useRef(false);
   // Leistenform gilt nach Viewport-Wechsel/Neuberechnung des Overlays nicht
   // mehr: Zuklappen dann ohne Morph (ein laufender Lauf behält sein stop)
   const invalidateMorph = () => {
@@ -472,6 +559,9 @@ export default function InlineChat({
   // fortlaufende Nummer; der ChatContainer sendet jedes Ticket genau einmal.
   const [pendingFirstMessage, setPendingFirstMessage] = useState(null);
   const lastTicketRef = useRef(0);
+  // aktueller Stand für die Tastenübergabe (Listener/Timer außerhalb des Renders)
+  const pendingRef = useRef(null);
+  pendingRef.current = pendingFirstMessage;
   // Text der Eingabe-Leiste. Liegt hier, weil die Leiste beim Aufklappen
   // abgebaut wird: beim Zuklappen kommt eine verworfene Frage zurück ins Feld.
   const [barText, setBarText] = useState("");
@@ -619,10 +709,13 @@ export default function InlineChat({
       onEnd: () => {
         m.stop = null;
         releaseScrollReserve();
-        if (m.focusOnEnd) {
-          m.focusOnEnd = false;
-          focusInputIfVisible();
-        }
+        // Bezug fürs Zuklappen (closeGeom): Seitenlage der Inline-Fläche im
+        // aufgeklappten, ruhenden Zustand
+        g.rootPage = rootPagePos();
+        // Ende des Laufs: Übergabe beenden — Text (falls getippt) und Fokus
+        // ins Chatfeld; liegt es unter dem Viewport, nur mit Text einmal
+        // hinscrollen
+        deliverKeys();
       },
     });
     if (scrollPlan) applyFlowScroll(scrollPlan);
@@ -744,27 +837,119 @@ export default function InlineChat({
     focusRequestRef.current = true;
     if (inOverlay) proxyRef.current?.focus({ preventScroll: true });
   };
-  // "morph" schwebend (kein Scroll): nach dem Aufklappen nur dann ins
-  // Eingabefeld (bzw. ohne Feld: das Chat-Fenster als Maß), wenn es ganz im
-  // Viewport liegt — nie Tippen in ein unsichtbares Feld — und der Fokus
-  // nicht inzwischen auf einem Element der Seite liegt.
-  const focusInputIfVisible = () => {
-    const el =
-      embedderSettings.shadowRoot?.getElementById("message-input") ||
-      chatWindowRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
+  // Tastenübergabe (siehe Kopfkommentar). Endlage des Chat-Eingabefelds:
+  // Lage im Fenster (Inhalt steht in Panelgröße oben links im Fenster, auch
+  // mitten im Lauf) + Panel-Ecke (äußere Box, nie transformiert).
+  const inputFinalVisible = (input) => {
+    const win = chatWindowRef.current;
+    const box = boxRef.current;
+    const r = input.getBoundingClientRect();
+    const top =
+      win && box
+        ? box.getBoundingClientRect().top +
+          (r.top - win.getBoundingClientRect().top)
+        : r.top;
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (r.top < 0 || r.bottom > vh) return;
-    const a = document.activeElement;
-    if (
-      a &&
-      a !== document.body &&
-      a !== document.documentElement &&
-      a !== host
-    )
+    return top >= 0 && top + r.height <= vh;
+  };
+  const chatInput = () =>
+    chatWindowRef.current?.querySelector("#message-input") ||
+    embedderSettings.shadowRoot?.getElementById("message-input");
+  const startKeyHandover = (gate) => {
+    const sink = sinkRef.current;
+    if (!sink) return false;
+    sink.value = "";
+    composingRef.current = false;
+    keysRef.current = { active: true, gate };
+    sink.focus({ preventScroll: true });
+    deliverKeys();
+    return true;
+  };
+  // Aufgefangenen Text ans Ende des Chat-Eingabefelds (über den nativen
+  // Setter + input-Ereignis -> onChange von PromptInput) und Fokus dorthin
+  // (preventScroll) — nur, wenn er noch im Auffangfeld bzw. frei (body/Host)
+  // ist. Nie während einer Komposition und nie während des Zuklappens. Liegt
+  // das Feld (gate) unter dem Viewport, erst nach dem Lauf — dann immer (der
+  // Fokus bleibt nie auf dem Auffangfeld); mit Text scrollt die Seite einmal
+  // zum Feld, ohne Text nicht (ein späterer Caret-Scroll beim Tippen ist dann
+  // erlaubt). Rückgabe: übergeben?
+  const deliverKeys = () => {
+    const k = keysRef.current;
+    const sink = sinkRef.current;
+    if (!k.active || composingRef.current) return false;
+    const input = chatInput();
+    if (!input || input.disabled || pendingRef.current) return false;
+    const m = morphRef.current;
+    if (m?.closing) return false;
+    const visible = !k.gate || inputFinalVisible(input);
+    if (!visible && m?.stop) return false;
+    const text = sink?.value || "";
+    keysRef.current = { active: false, gate: false };
+    if (sink) sink.value = "";
+    if (text) setFieldValue(input, input.value + text);
+    const a =
+      embedderSettings.shadowRoot?.activeElement || document.activeElement;
+    const free = !a || a === sink || a === document.body || a === host;
+    if (!free) return true;
+    input.focus({ preventScroll: true });
+    try {
+      input.setSelectionRange(input.value.length, input.value.length);
+    } catch (e) {
+      // ältere Browser: Cursor bleibt, wo er ist
+    }
+    if (!visible && text)
+      input.scrollIntoView?.({
+        block: "nearest",
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+      });
+    return true;
+  };
+  // Enter im Auffangfeld: wie Enter im Chat — Text übergeben und senden
+  // (Chatfeld bereit, auch mitten im Lauf in ein noch gesperrtes Feld unter
+  // dem Viewport: Senden geht vor). Chat noch nicht bereit (lädt): als Frage
+  // übergeben (send), ein noch wartender Entwurf aus der Leiste steht davor;
+  // die Übergabe läuft weiter (Auffangfeld leer), danach Getipptes kommt
+  // nach dem Mount ins Chatfeld. Leer bzw. Komposition: nichts.
+  const sinkEnter = (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.nativeEvent?.isComposing || composingRef.current) return;
+    e.preventDefault();
+    const sink = sinkRef.current;
+    const text = sink?.value || "";
+    if (!keysRef.current.active || !text.trim()) return;
+    const input = chatInput();
+    if (input && !input.disabled && !pendingRef.current) {
+      keysRef.current.gate = false;
+      if (deliverKeys()) setTimeout(() => input.form?.requestSubmit?.(), 0);
       return;
-    focusInput(false);
+    }
+    if (input && !pendingRef.current) return; // gesperrt: Antwort läuft
+    if (sink) sink.value = "";
+    keysRef.current = { ...keysRef.current, active: true };
+    const ticket = ++lastTicketRef.current;
+    setPendingFirstMessage((prev) => ({
+      ticket,
+      text: `${prev && !prev.send ? prev.text : ""}${text}`.trim(),
+      send: true,
+      suppressAutoFocus: false,
+    }));
+  };
+  const sinkInput = (e) => {
+    if (e?.nativeEvent?.isComposing || composingRef.current) return;
+    if (keysRef.current.active) deliverKeys();
+  };
+  const sinkCompositionStart = () => {
+    composingRef.current = true;
+  };
+  // Komposition fertig: erst nach allen Ereignissen dieses Tastendrucks
+  // (Safari schickt das letzte input NACH compositionend) übergeben —
+  // aufgeschobene Übergaben (Laufende, Chat bereit) holen das hier nach
+  const sinkCompositionEnd = () => {
+    composingRef.current = false;
+    setTimeout(() => {
+      if (keysRef.current.active && !composingRef.current)
+        deliverKeysRef.current();
+    }, 0);
   };
 
   // first (nur inlineInput): { text, send } aus der Leiste, sonst null.
@@ -818,8 +1003,25 @@ export default function InlineChat({
       !prefersReducedMotion()
     ) {
       const g = measureBar(pill);
+      const r = rootRef.current.getBoundingClientRect();
       morphRef.current = {
-        geom: { ...g, open: true, rootH: flowHeightRef.current || g.h },
+        geom: {
+          ...g,
+          open: true,
+          rootH: flowHeightRef.current || g.h,
+          // für das Zuklappen (closeGeom): Leistenform im eingeklappten
+          // Zustand in Seitenkoordinaten, Lage in der Inline-Fläche und
+          // Fenstergröße beim Messen
+          pageX: g.x + window.scrollX,
+          pageY: g.y + window.scrollY,
+          barW: g.w,
+          barH: g.h,
+          barR: g.r,
+          rootDx: g.x - r.left,
+          rootDy: g.y - r.top,
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+        },
       };
     }
     const clipped = isOverlayClipped();
@@ -835,14 +1037,25 @@ export default function InlineChat({
     // Vorfahren (auch <html>) wieder her und bricht damit das sanfte Scrollen
     // zur Box ab. Nach der Antwort kommt der Fokus wie gewohnt ins Feld
     // (onPendingFirstMessageConsumed).
-    // "morph" schwebend: Fokus erst nach dem Lauf, nur wenn das Feld dann
-    // sichtbar ist (focusInputIfVisible) — die Seite scrollt dort nicht.
+    // Sonst Tastenübergabe (Kopfkommentar): Fokus sofort ins Auffangfeld,
+    // Text und Fokus wandern ins Chat-Eingabefeld, sobald es bereit ist —
+    // "morph" schwebend nur in ein Feld, das ganz im Viewport liegt.
     if (!sending && !isTouchDevice()) {
       const m = morphRef.current;
-      if (m?.stop && wantOverlay && !clipped) m.focusOnEnd = true;
-      else focusInput(false);
+      if (!startKeyHandover(!!m?.stop && wantOverlay && !clipped))
+        focusInput(false);
     }
   };
+
+  // Entwurf aus der Leiste verbraucht (steht im Chat-Eingabefeld): jetzt
+  // dahinter die aufgefangenen Zeichen
+  const deliverKeysRef = useRef(deliverKeys);
+  useLayoutEffect(() => {
+    deliverKeysRef.current = deliverKeys;
+  });
+  useEffect(() => {
+    if (!pendingFirstMessage && keysRef.current.active) deliverKeys();
+  }, [pendingFirstMessage]);
 
   // Vom ChatContainer aufgerufen, sobald er ein Ticket verbraucht hat.
   const onPendingFirstMessageConsumed = useCallback((pending) => {
@@ -872,7 +1085,11 @@ export default function InlineChat({
   // focus false: Fokus bleibt; flush false: ohne flushSync (aus einem
   // Effekt-Cleanup, dort darf React nicht synchron rendern).
   const collapseNow = (focus = "bar", flush = true) => {
-    const unsent = pendingFirstMessage?.text;
+    // aufgefangene, noch nicht übergebene Zeichen gehören zum Entwurf
+    const caught = keysRef.current.active ? sinkRef.current?.value || "" : "";
+    keysRef.current = { active: false, gate: false };
+    composingRef.current = false;
+    const unsent = `${pendingFirstMessage?.text || ""}${caught}` || null;
     const apply = () => {
       setPendingFirstMessage(null);
       if (unsent) setBarText(unsent);
@@ -887,13 +1104,32 @@ export default function InlineChat({
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
   };
-  // "morph", Leistenform vor jedem Rückweg frisch messen (Fenstergröße,
-  // Umbruch, Scrollen seit dem Aufklappen). Die Seite zeigt dafür ohne Paint
-  // kurz den eingeklappten Stand (Signal data-allm-expanded weg, Layout lesen,
-  // Signal wieder an), damit ein per Seiten-CSS verbreiterter Platzhalter
-  // nicht mitzählt. Schwebend: die unsichtbare Leiste im Seitenfluss messen;
-  // im Seitenfluss (Leiste nicht gerendert): Lage/Breite der Inline-Fläche,
-  // Höhe/Rundung vom Aufklappen. Panel-Ecke = äußere Box (nie transformiert).
+  // Seitenlage der Inline-Fläche (Fensterscroll zählt nicht)
+  const rootPagePos = () => {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width };
+  };
+  // Steht die Inline-Fläche noch dort, wo sie am Ende des Aufklappens stand
+  // (± 1 px, gleiche Breite)? Ohne Bezug (Zuklappen mitten im Aufklappen):
+  // ja — der Lauf kehrt einfach um.
+  const rootUnmoved = (p) => {
+    if (!p) return true;
+    const q = rootPagePos();
+    return (
+      !!q &&
+      Math.abs(q.x - p.x) <= 1 &&
+      Math.abs(q.y - p.y) <= 1 &&
+      Math.abs(q.w - p.w) < 0.5
+    );
+  };
+  // Fallback (Inline-Fläche verschoben): Leistenform vor dem Rückweg frisch
+  // messen. Die Seite zeigt dafür ohne Paint kurz den eingeklappten Stand
+  // (Signal data-allm-expanded weg, Layout lesen, Signal wieder an), damit
+  // ein per Seiten-CSS verbreiterter Platzhalter nicht mitzählt. Schwebend:
+  // die unsichtbare Leiste im Seitenfluss messen; im Seitenfluss (Leiste
+  // nicht gerendert): Lage/Breite der Inline-Fläche, Höhe/Rundung vom
+  // Aufklappen. Panel-Ecke = äußere Box (nie transformiert).
   const measureCloseGeom = (g, box) => {
     const panel = box.getBoundingClientRect();
     const root = rootRef.current;
@@ -904,13 +1140,58 @@ export default function InlineChat({
       if (pill) Object.assign(g, measureBar(pill));
       else if (root) {
         const r = root.getBoundingClientRect();
-        Object.assign(g, { x: r.left, y: r.top, w: r.width });
+        Object.assign(g, { x: r.left, y: r.top, w: r.width, h: g.barH, r: g.barR });
       }
     } finally {
       if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
     }
     g.dx = g.x - panel.left;
     g.dy = g.y - panel.top;
+  };
+  // "morph", Ziel des Rückwegs. Fenster unverändert seit dem Aufklappen:
+  // die dort gemessene Leistenform (echter eingeklappter Zustand, in
+  // Seitenkoordinaten — Scrollen ändert nichts) relativ zur festgehaltenen
+  // Box (pinBox) — Breite, Höhe, Lage und Rundung laufen in EINEM Lauf mit
+  // eigener Kurve, egal wie die Seite die Fläche zurückbaut. Fenster
+  // verändert (Breite/Höhe): die Leiste füllt im eingeklappten Zustand die
+  // Inline-Fläche -> Ziel = Lage in der Fläche vom Aufklappen, Breite 100 %
+  // der (mitlaufenden, nicht festgehaltenen) Box, Höhe/Rundung frisch von der
+  // unsichtbaren Leiste (schwebend) bzw. vom Aufklappen (Seitenfluss): endet
+  // genau auf der neuen Leiste. Rückgabe: pin-Funktion für runMorph bzw. null.
+  const closeGeom = (g, box) => {
+    const root = rootRef.current;
+    if (!root) return null;
+    const sameView = window.innerWidth === g.vw && window.innerHeight === g.vh;
+    // Inline-Fläche seit dem Aufklappen verschoben (Scroll-Container der
+    // Seite, Layoutverschiebung): gespeicherte Seitenkoordinaten gelten
+    // nicht mehr -> frisch messen wie früher (measureCloseGeom)
+    if (sameView && !rootUnmoved(g.rootPage)) {
+      measureCloseGeom(g, box);
+      return null;
+    }
+    if (sameView) {
+      const b = box.getBoundingClientRect();
+      const r = root.getBoundingClientRect();
+      const root0 = { x: r.left + window.scrollX, y: r.top + window.scrollY };
+      Object.assign(g, {
+        w: g.barW,
+        h: g.barH,
+        r: g.barR,
+        dx: g.pageX - (b.left + window.scrollX),
+        dy: g.pageY - (b.top + window.scrollY),
+      });
+      return () => pinBox(box, root, root0, b.width);
+    }
+    const pill = floating ? root.querySelector(BAR_SELECTOR) : null;
+    const bar = pill ? measureBar(pill) : null;
+    Object.assign(g, {
+      w: "100%",
+      h: bar ? bar.h : g.barH,
+      r: bar ? bar.r : g.barR,
+      dx: g.rootDx,
+      dy: g.rootDy,
+    });
+    return null;
   };
   // "morph": erst zur Leistenform zurück, dann einklappen (aktuelle Übergabe/
   // Fokus beim Ende); weitere Aufrufe während des Rückwegs zählen nicht.
@@ -921,17 +1202,21 @@ export default function InlineChat({
     if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
       if (m.closing) return;
       m.closing = true;
-      m.focusOnEnd = false;
       m.stop?.(true);
       releaseScrollReserve();
       // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
-      // (runMorph endet dann sofort): nichts zu messen
-      if (!win.classList.contains("allm-morph-from"))
-        measureCloseGeom(m.geom, box);
+      // (runMorph endet dann sofort): nichts zu messen. Ziel messen, solange
+      // die Seite noch aufgeklappt ist, dann das Signal sofort entfernen —
+      // eine Seiten-Transition läuft parallel zum Lauf, nicht danach.
+      const pin = win.classList.contains("allm-morph-from")
+        ? null
+        : closeGeom(m.geom, box);
+      mountTarget?.removeAttribute(EXPANDED_ATTR);
       const stop = runMorph(win, box, m.geom, {
         opening: false,
         flow: !floating,
         chips: morphChips(),
+        pin,
         onEnd: () => {
           m.stop = null;
           m.closing = false;
@@ -1057,9 +1342,17 @@ export default function InlineChat({
     () => ({
       inline: true,
       overlay,
+      // Chat-Eingabefeld bereit (Mount bzw. wieder frei): eine laufende
+      // Tastenübergabe übernimmt Text und Fokus selbst (nach den Effekten
+      // dieses Commits; ein wartender Entwurf aus der Leiste kommt zuerst ins
+      // Feld, dann übergibt der Effekt auf pendingFirstMessage)
       consumeFocusRequest: () => {
         const wanted = focusRequestRef.current;
         focusRequestRef.current = false;
+        if (keysRef.current.active) {
+          Promise.resolve().then(() => deliverKeysRef.current());
+          return false;
+        }
         return wanted;
       },
     }),
@@ -1172,6 +1465,20 @@ export default function InlineChat({
                 />
               </div>
             </div>
+            {view === "box" && (
+              <input
+                ref={sinkRef}
+                id={KEY_SINK_ID}
+                aria-hidden="true"
+                tabIndex={-1}
+                autoComplete="off"
+                onKeyDown={sinkEnter}
+                onInput={sinkInput}
+                onCompositionStart={sinkCompositionStart}
+                onCompositionEnd={sinkCompositionEnd}
+                style={KEY_SINK_STYLE}
+              />
+            )}
           </div>
         )}
       </div>

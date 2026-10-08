@@ -464,35 +464,175 @@ describe("Review 1: abgebrochener Rückweg klappt trotzdem ein", () => {
   });
 });
 
-describe("Review 2: Leistenform vor jedem Rückweg frisch gemessen", () => {
-  it("overlay: unsichtbare Leiste ohne Signal gemessen, Panel-Ecke frisch", () => {
+describe("Zuklappen wie das Original: Leistenform vom Aufklappen, Box festgehalten, Signal beim Start", () => {
+  it("overlay: Fenster unverändert -> Leistenform vom Aufklappen (in Seitenkoordinaten) relativ zur festgehaltenen Box", () => {
     const ui = setup({ inlineLayout: "overlay" });
     openAndSettle(ui);
     const win = ui.chat();
-    // Fenster/Seite geändert: Leiste schmaler und tiefer, Panel verschoben
+    // Seite seit dem Aufklappen verändert (Panel verschoben, Leiste wäre im
+    // aufgeklappten Zustand breiter) -> zählt nicht, nichts wird neu gemessen
     barRect = { left: 150, top: 80, width: 500, height: 60 };
     panelRect = { left: 40, top: 80, width: 700, height: 520 };
     barSignals = [];
     act(() => chatWindowProps.current.closeChat());
-    expect(v(win, "mw")).toBe("500px");
-    expect(v(win, "mh")).toBe("60px");
-    expect(v(win, "mt")).toBe("translate(110px, 0px)");
-    expect(v(win, "mr")).toBe("30px");
-    // eingeklappter Stand der Seite (Signal kurz weg), danach wieder gesetzt
-    expect(barSignals).toEqual([null]);
-    expect(mountTarget.getAttribute("data-allm-expanded")).toBe("true");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    expect(v(win, "mr")).toBe("28px");
+    // Leiste beim Aufklappen bei (100, 50); Box jetzt bei (40, 80)
+    expect(v(win, "mt")).toBe("translate(60px, -30px)");
+    expect(barSignals).toEqual([]);
+    // Box festgehalten: feste Breite, kein right
+    expect(ui.box().style.width).toBe("700px");
+    expect(ui.box().style.right).toBe("auto");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
   });
 
-  it("flow: Lage/Breite der Inline-Fläche, Höhe der Leiste vom Aufklappen", () => {
+  it("::expanded-attr-removed-on-close-start — Signal fällt beim Start, vor der ersten Lauf-Klasse, und kommt nicht wieder (AK-9)", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    expect(mountTarget.getAttribute("data-allm-expanded")).toBe("true");
+    const mo = new MutationObserver(() => {});
+    mo.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["data-allm-expanded", "class"],
+    });
+    act(() => chatWindowProps.current.closeChat());
+    const recs = mo.takeRecords();
+    mo.disconnect();
+    const removed = recs.findIndex(
+      (r) =>
+        r.attributeName === "data-allm-expanded" && r.target === mountTarget,
+    );
+    const closeClass = recs.findIndex(
+      (r) => r.target === win && win.classList.contains("allm-morph-close"),
+    );
+    expect(removed).toBeGreaterThanOrEqual(0);
+    expect(closeClass).toBeGreaterThan(removed);
+    // während des ganzen Laufs weg (Seite baut parallel zurück)
+    expect(visible(ui)).toBe(true);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    nextFrames();
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    transitionEnd(win);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+  });
+
+  it("Box folgt der Seite nicht: verschiebt die Seite die Inline-Fläche im Lauf, gleicht die Box je Frame aus; am Ende gelöst", () => {
+    rootOpenRect = { left: 0, top: 0, width: 760, height: 68 };
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const box = ui.box();
+    expect(box.style.left).toBe("0px"); // OVERLAY_BOX_STYLE
+    act(() => chatWindowProps.current.closeChat());
+    // Seite zieht die Fläche zusammen (80 px nach rechts, wie .ask der Demo)
+    rootOpenRect = { left: 80, top: 0, width: 600, height: 68 };
+    nextFrames();
+    expect(box.style.left).toBe("-80px");
+    expect(box.style.top).toBe("0px");
+    transitionEnd(ui.chat());
+    expect(visible(ui)).toBe(false);
+    // gelöst und eingeklappt: keine festen Maße bleiben an der Box
+    expect(box.style.width).toBe("");
+    expect(box.style.right).toBe("");
+    expect(box.style.left).toBe("");
+    // kein Nachführ-Frame mehr: auch nach weiteren Frames bleibt die Box
+    // frei, die Frame-Warteschlange ist leer
+    nextFrames();
+    expect(box.style.left).toBe("");
+    expect(box.style.top).toBe("");
+    expect(frames).toHaveLength(0);
+  });
+
+  it("flow: Leistenform vom Aufklappen, Box festgehalten", () => {
     const ui = setup({ inlineLayout: "flow" });
     openAndSettle(ui);
     const win = ui.chat();
-    rootRect = { left: 30, top: 90, width: 640, height: 520 };
+    // Inline-Fläche steht noch dort, wo sie am Ende des Aufklappens stand
+    // (nur höher); die Box liegt woanders -> Ziel relativ zur Box
+    rootRect = { left: 0, top: 0, width: 760, height: 520 };
     panelRect = { left: 30, top: 90, width: 640, height: 520 };
     act(() => chatWindowProps.current.closeChat());
-    expect(v(win, "mw")).toBe("640px");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    expect(v(win, "mt")).toBe("translate(70px, -40px)");
+    expect(ui.box().style.width).toBe("640px");
+  });
+
+  it("Fenstergröße geändert (1024 -> 900, weiter Desktop): Ziel = Leiste in der Inline-Fläche, Breite 100 % der mitlaufenden Box (AK-10)", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    resizeTo(900);
+    expect(visible(ui)).toBe(true);
+    barRect = { left: 100, top: 50, width: 500, height: 60 };
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    expect(v(win, "mw")).toBe("100%");
+    expect(v(win, "mh")).toBe("60px");
+    expect(v(win, "mr")).toBe("30px");
+    // Lage der Leiste in der Inline-Fläche vom Aufklappen (BAR - Fläche)
+    expect(v(win, "mt")).toBe("translate(100px, 50px)");
+    // nicht festgehalten
+    expect(ui.box().style.width).toBe("");
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+  });
+
+  // Review-Befund 1: Scroll-Container/Layoutverschiebung zwischen Aufklappen
+  // und Zuklappen (window.scroll unverändert) -> gespeicherte Seiten-
+  // koordinaten veraltet -> frisch messen (Signal kurz weg, Layout lesen)
+  it("::close-after-shift — Inline-Fläche um 300 px verschoben (ohne window.scroll): Ziel frisch gemessen, relativ zur Box", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    expect(window.scrollY).toBe(0);
+    rootRect = { left: 0, top: 300, width: 760, height: 68 };
+    barRect = { left: 100, top: 350, width: 600, height: 56 };
+    panelRect = { left: 20, top: 350, width: 760, height: 520 };
+    barSignals = [];
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    // Leiste (100, 350) relativ zur Box (20, 350) — nicht die veraltete
+    // Seitenlage vom Aufklappen (das wäre translate(80px, -300px))
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    // gemessen im eingeklappten Stand (Signal weg), danach Signal weg
+    expect(barSignals).toEqual([null]);
+    expect(mountTarget.hasAttribute("data-allm-expanded")).toBe(false);
+    // frisch gemessen -> Box nicht festgehalten
+    expect(ui.box().style.width).toBe("");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+  });
+
+  it("::close-after-shift (flow) — Fläche verschoben: Ziel = Lage der Fläche, frisch gemessen", () => {
+    const ui = setup({ inlineLayout: "flow" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    rootRect = { left: 0, top: 300, width: 760, height: 520 };
+    panelRect = { left: 0, top: 300, width: 760, height: 520 };
+    act(() => chatWindowProps.current.closeChat());
+    expect(v(win, "mw")).toBe("760px");
     expect(v(win, "mh")).toBe("56px");
     expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    expect(ui.box().style.width).toBe("");
+  });
+
+  it("Fläche nur um < 1 px verschoben (Subpixel): gespeicherte Leistenform bleibt", () => {
+    const ui = setup({ inlineLayout: "overlay" });
+    openAndSettle(ui);
+    const win = ui.chat();
+    rootRect = { left: 0.6, top: 0.4, width: 760, height: 68 };
+    barSignals = [];
+    act(() => chatWindowProps.current.closeChat());
+    expect(barSignals).toEqual([]);
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(ui.box().style.width).toBe("760px");
   });
 
   it("Viewport-Wechsel verwirft die Leistenform: Zuklappen danach ohne Morph", () => {
@@ -776,7 +916,7 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
   });
 });
 
-describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", () => {
+describe("Befund 2 / Tastenübergabe: Overlay-Morph – Text nie in ein unsichtbares Feld", () => {
   let shadowHost;
   let input;
   beforeEach(() => {
@@ -794,16 +934,29 @@ describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", 
   });
   const focused = () => embedderSettings.shadowRoot.activeElement === input;
 
-  it("Feld nach dem Lauf im Viewport: Fokus erst am Ende des Laufs", () => {
+  const sink = () => container.querySelector("#anything-llm-key-sink");
+  const type = (el, text) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(el),
+      "value",
+    ).set;
+    act(() => {
+      setter.call(el, el.value + text);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  it("Tastenübergabe: Feld in Endlage im Viewport -> Fokus sofort in der Klick-Geste (Lauf läuft weiter)", () => {
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
+    expect(focused()).toBe(true);
     nextFrames();
-    expect(focused()).toBe(false); // nicht mitten im Lauf
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
     transitionEnd(ui.chat());
     expect(focused()).toBe(true);
   });
 
-  it("Feld nach dem Lauf unter dem Viewport: kein Fokus, kein Scroll", () => {
+  it("NAK-4: Feld unter dem Viewport -> Zeichen im Auffangfeld, kein Scroll im Lauf; danach Tippen -> Text im Feld + einmal hinscrollen", () => {
     const scrollTo = vi.fn();
     vi.stubGlobal("scrollTo", scrollTo);
     const protoBefore = Element.prototype.scrollIntoView;
@@ -814,12 +967,151 @@ describe("Befund 2: Overlay-Morph – Fokus nur in ein sichtbares Eingabefeld", 
       inputRect = { left: 20, top: 1060, width: 760, height: 40 };
       const ui = setup({ inlineLayout: "overlay" });
       ui.open();
-      nextFrames();
-      transitionEnd(ui.chat());
       expect(focused()).toBe(false);
-      expect(document.activeElement).toBe(document.body);
-      expect(scrollTo).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(sink());
+      nextFrames();
+      type(sink(), "abc"); // mitten im Lauf
+      expect(input.value).toBe("");
       expect(intoView).not.toHaveBeenCalled();
+      transitionEnd(ui.chat());
+      // Ende des Laufs: Text übergeben, Fokus ins Feld, einmal hinscrollen
+      expect(input.value).toBe("abc");
+      expect(focused()).toBe(true);
+      expect(intoView).toHaveBeenCalledTimes(1);
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = protoBefore;
+    }
+  });
+
+  it("Befund 8 / NAK-4: Feld unter dem Viewport, nichts getippt -> am Laufende Fokus ins Chatfeld (preventScroll), nie aufs Auffangfeld, kein Scroll", () => {
+    const protoBefore = Element.prototype.scrollIntoView;
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView;
+    const focusSpy = vi.spyOn(input, "focus");
+    try {
+      panelRect = { left: 20, top: 600, width: 760, height: 520 };
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      nextFrames();
+      // im Lauf: Auffangfeld (unsichtbares Feld bekommt keinen Fokus)
+      expect(document.activeElement).toBe(sink());
+      expect(focused()).toBe(false);
+      transitionEnd(ui.chat());
+      // Laufende: Übergabe beendet, Fokus im Chatfeld
+      expect(focused()).toBe(true);
+      expect(document.activeElement).not.toBe(sink());
+      expect(embedderSettings.shadowRoot.activeElement).not.toBe(sink());
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+      expect(intoView).not.toHaveBeenCalled();
+      // weitere Frames/Tippen ins Chatfeld: Fokus bleibt dort
+      nextFrames();
+      type(input, "x");
+      expect(input.value).toBe("x");
+      expect(focused()).toBe(true);
+      expect(sink().value).toBe("");
+    } finally {
+      Element.prototype.scrollIntoView = protoBefore;
+    }
+  });
+
+  it("Befund 3: Enter im Auffangfeld mitten im Lauf, Chatfeld bereit aber unter dem Viewport -> Text ins Feld, requestSubmit genau einmal", async () => {
+    const form = document.createElement("form");
+    embedderSettings.shadowRoot.appendChild(form);
+    form.appendChild(input);
+    const submit = vi.spyOn(form, "requestSubmit").mockImplementation(() => {});
+    panelRect = { left: 20, top: 600, width: 760, height: 520 };
+    inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    expect(document.activeElement).toBe(sink());
+    type(sink(), "abcdefgh");
+    expect(input.value).toBe("");
+    const ev = new KeyboardEvent("keydown", {
+      key: "Enter",
+      keyCode: 13,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => sink().dispatchEvent(ev));
+    expect(ev.defaultPrevented).toBe(true);
+    // Lauf läuft noch; Text steht im Chatfeld, Auffangfeld leer
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
+    expect(input.value).toBe("abcdefgh");
+    expect(sink().value).toBe("");
+    expect(submit).not.toHaveBeenCalled();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+    // zweites Enter (Auffangfeld leer, Übergabe beendet): nichts
+    act(() =>
+      sink().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      ),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("Befund 6: IME-Komposition über das Laufende -> erst bei compositionend übergeben, genau einmal, Komposition nicht abgebrochen", async () => {
+    const protoBefore = Element.prototype.scrollIntoView;
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView;
+    try {
+      panelRect = { left: 20, top: 600, width: 760, height: 520 };
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      nextFrames();
+      const s = sink();
+      const blur = vi.fn();
+      s.addEventListener("blur", blur);
+      act(() =>
+        s.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" })),
+      );
+      // Zwischenstand der Komposition (Dead-Key „´“, dann „é“)
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      ).set;
+      for (const v of ["´", "é"]) {
+        act(() => {
+          setter.call(s, v);
+          s.dispatchEvent(
+            new InputEvent("input", { bubbles: true, isComposing: true, data: v }),
+          );
+        });
+      }
+      // Laufende während der Komposition: nichts übergeben, Fokus bleibt
+      transitionEnd(ui.chat());
+      expect(input.value).toBe("");
+      expect(document.activeElement).toBe(s);
+      expect(blur).not.toHaveBeenCalled();
+      expect(s.value).toBe("é");
+      act(() =>
+        s.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "é" })),
+      );
+      // Safari: letztes input NACH compositionend (isComposing false)
+      act(() =>
+        s.dispatchEvent(new InputEvent("input", { bubbles: true, data: "é" })),
+      );
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 5));
+      });
+      expect(input.value).toBe("é");
+      expect(focused()).toBe(true);
+      expect(s.value).toBe("");
+      expect(intoView).toHaveBeenCalledTimes(1);
+      // nicht doppelt
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 5));
+      });
+      expect(input.value).toBe("é");
     } finally {
       Element.prototype.scrollIntoView = protoBefore;
     }
@@ -910,8 +1202,11 @@ describe("Morph flüssiger: Schließen", () => {
     expect(src.match(/will-change:[^;}]*/g)).toEqual([
       "will-change:width,height,transform",
     ]);
-    expect(src).toContain(
-      ".allm-morph,.allm-morph-from{will-change:width,height,transform}",
+    // Tastenübergabe: im Lauf overflow: clip (kein Scroll-Container) —
+    // nur, dass die Eigenschaft an den Lauf-Klassen steht; ob dabei nichts
+    // scrollt, misst inline_input.py (check_type_during_morph) je Frame
+    expect(rule(".allm-morph,.allm-morph-from")).toMatch(
+      /(^|;)overflow:clip(!important)?(;|$)/,
     );
   });
 });

@@ -4,8 +4,10 @@ import CourseCards from "./CourseCards";
 import AssistantName from "./AssistantName";
 import PanelWelcome, { PanelGreeting, SuggestedPills } from "./PanelWelcome";
 import {
+  cardsAnnounced,
   courseCardsAbove,
   courseCardsEnabled,
+  courseCardsLayout,
   followUpsList,
   selectAnnouncedCourseCards,
   teaserMap,
@@ -23,6 +25,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
+import { panelTexts } from "@/utils/layout";
 import debounce from "lodash.debounce";
 import { sendSuggestion } from "..";
 
@@ -299,6 +302,8 @@ export default function ChatHistory({
               key={index}
               message={props}
               courseCards={settings?.courseCards}
+              layout={courseCardsLayout(settings)}
+              pendingText={panelTexts(settings).teaserPending}
               renderBody={renderBody}
             />
           );
@@ -328,7 +333,29 @@ function replyFinal(message) {
 // (renderBody). Fallback-Karten (Kursseiten ohne
 // Serverdaten) erst bei fertiger Antwort: mit Ankündigung unter der Antwort
 // (footerCards), ohne Ankündigung zusammen mit den übrigen Karten oben.
-function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
+// Teaser-Platzhalter (teaserPending): solange zu den angekündigten Karten
+// noch ein Teaser erwartet wird — Karten angekündigt (courseSources-Chunk),
+// Antwort streamt, kein Fehler, noch kein courseTeasers-Chunk und noch kein
+// Antworttext (der Server schickt die Teaser vor dem ersten Textchunk). Nie
+// im geladenen Verlauf, nie unter der Antwort, nie für Fallback-Karten
+// (CourseCards). Ein Teaser-Chunk ohne Eintrag für eine Karte beendet deren
+// Platzhalter ebenso wie das Stream-Ende.
+export function teasersExpected(message) {
+  if (!message || message.error || !cardsAnnounced(message)) return false;
+  const streaming = message.animate === true || message.pending === true;
+  if (!streaming) return false;
+  const t = message.courseTeasers;
+  if (t && typeof t === "object" && !Array.isArray(t)) return false;
+  return !(typeof message.content === "string" && message.content.trim());
+}
+
+function AssistantTurnAbove({
+  message: props,
+  courseCards,
+  layout = "grid",
+  pendingText = null,
+  renderBody,
+}) {
   const { content, courseSources, courseCardsAnnounced, error } = props;
   const final = replyFinal(props);
   // Security (Client-DoS): während des Streamings (animate bzw. pending) nur
@@ -375,6 +402,8 @@ function AssistantTurnAbove({ message: props, courseCards, renderBody }) {
           teaserArrivedAt={props.teaserArrivedAt}
           position="above"
           part="cards"
+          layout={layout}
+          teaserPending={teasersExpected(props) ? pendingText : null}
         />
       )}
       {renderBody(selection, teasers)}

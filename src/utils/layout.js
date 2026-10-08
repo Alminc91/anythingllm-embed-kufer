@@ -32,6 +32,10 @@ export const COURSE_CARDS_VALUES = ["off", "auto"];
 // Kurskarten über ("above") oder unter ("below", Standard) der Antwort
 export const COURSE_CARDS_POSITION_VALUES = ["below", "above"];
 export const DEFAULT_COURSE_CARDS_POSITION = "below";
+// Kartenlayout: "grid" (Standard, Raster) oder "rows" (je Kurs eine Karte
+// über die volle Breite; schmale Karten < 480 px bleiben Rasterkarten)
+export const COURSE_CARDS_LAYOUT_VALUES = ["grid", "rows"];
+export const DEFAULT_COURSE_CARDS_LAYOUT = "grid";
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
 // nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
 // Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
@@ -96,7 +100,7 @@ export const URL_MAX_LEN = 512;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble:
-      "Hallo! Ich bin Ihr digitaler Berater und arbeite mit künstlicher Intelligenz (KI). Beschreiben Sie, was Sie suchen, und ich finde passende Angebote.",
+      "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
     privacyTitle: "Datenschutz:",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
@@ -111,10 +115,12 @@ export const PANEL_TEXTS = {
     aiDisclaimer:
       "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
     followUps: "Vorschläge für Ihre nächste Frage",
+    // Platzhalter an der Teaser-Stelle, solange der KI-Teaser erwartet wird
+    teaserPending: "KI-Beschreibung wird erstellt …",
   },
   en: {
     greetingBubble:
-      "Hello! I am your digital advisor and work with artificial intelligence (AI). Describe what you are looking for and I will find suitable offers.",
+      "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
     privacyTitle: "Privacy:",
     privacyPoints: [
       "Your requests stay on servers in Germany and are not passed on to third parties.",
@@ -129,6 +135,7 @@ export const PANEL_TEXTS = {
     aiDisclaimer:
       "I am an AI and can make mistakes. Please double-check my answers.",
     followUps: "Suggestions for your next question",
+    teaserPending: "AI description is being written …",
   },
 };
 // Sprache der Panel-Texte: Sprachcode (2 Buchstaben, optional Region wie
@@ -285,6 +292,9 @@ export const layoutValidations = {
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
   // Position der Kurskarten; ungültig -> verworfen -> Standard "below"
   courseCardsPosition: (v) => oneOf(v, COURSE_CARDS_POSITION_VALUES),
+  // Kartenlayout; ungültig -> verworfen -> Standard "grid" (Warnung wie
+  // unten, warnInvalidInlineEnums)
+  courseCardsLayout: (v) => oneOf(v, COURSE_CARDS_LAYOUT_VALUES),
   // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> verworfen,
   // die Warnung (mit dem tatsächlich geltenden Wert) schreibt
   // warnInvalidInlineEnums nach dem Zusammenführen von Script und Server.
@@ -347,6 +357,7 @@ export function warnInvalidInlineEnums(
     ["privacyNotice", PRIVACY_NOTICE_VALUES],
     ["disclaimer", DISCLAIMER_VALUES],
     ["followUps", FOLLOW_UPS_VALUES],
+    ["courseCardsLayout", COURSE_CARDS_LAYOUT_VALUES],
   ]) {
     const valid = (src) => oneOf(raw[src][key], allowed) !== undefined;
     for (const [src, label] of ENUM_SOURCES) {

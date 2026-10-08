@@ -26,6 +26,9 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Kurskarten v3: KI-Teaser blendet ein (.allm-course-teaser-in), nur wenn er
 // nach der schon sichtbaren Karte ankommt (nicht beim Verlauf-Laden, nicht
 // unter der Antwort); ohne Bewegung bei prefers-reduced-motion.
+// Teaser-Platzhalter (.allm-course-teaser-pending, Karten oben im Stream):
+// Opacity 0,45 <-> 0,9 in 1,6 s, ruhig (0,7) bei prefers-reduced-motion.
+// Zeilen-Karten (.allm-course-card-row) nutzen Hover/Fokus der Rasterkarten.
 // Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
 // Tastaturfokus füllen im Akzent, Text ON_ACCENT_TEXT (Farben stehen inline ->
 // !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
@@ -178,6 +181,9 @@ const customCss = `
   @keyframes allm-course-teaser-in{from{opacity:0}to{opacity:1}}
   .allm-course-teaser-in{animation:allm-course-teaser-in .24s ease-out}
   @media (prefers-reduced-motion: reduce){.allm-course-teaser-in{animation:none}}
+  @keyframes allm-teaser-pending{0%,100%{opacity:.45}50%{opacity:.9}}
+  .allm-course-teaser-pending{animation:allm-teaser-pending 1.6s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){.allm-course-teaser-pending{animation:none;opacity:.7}}
 
   /* Inline-Leiste als Eingabefeld (inlineInput): Fokusring um die ganze Pille
      (--allm-focus-ring, sonst 2px Akzent), Platzhalter in Leisten-Textfarbe,
@@ -288,11 +294,14 @@ const customCss = `
      stehen, Einblenden startet bei --allmi-chips-o = Opacity beim
      Umkehren, sonst 0). Ende des Laufs erst nach der längsten Transition
      (Schatten, runMorph). Ohne Seiten-CSS sind die --allmi-* ungültig
-     (utils/theme.js) -> Standardwerte hier. */
+     (utils/theme.js) -> Standardwerte hier. Im Lauf overflow: clip statt
+     hidden (gleiches Bild): kein Scroll-Container — Tippen ins schon
+     fokussierte Chat-Eingabefeld (Tastenübergabe) kann den Inhalt im noch
+     kleinen Fenster nicht verschieben. */
   .allm-morph,.allm-morph-flow,.allm-morph-chips-out{--allmi-fx-d:var(--allmi-effect-duration,720ms);--allmi-fx-e:var(--allmi-effect-easing,cubic-bezier(.16,1,.3,1));--allmi-fx-w:0s}
   .allm-morph-close,.allm-morph-flow-close,.allm-morph-chips-in{--allmi-fx-d:var(--allmi-effect-close-duration,480ms);--allmi-fx-e:var(--allmi-effect-close-easing,cubic-bezier(.65,0,.35,1));--allmi-fx-w:calc(var(--allmi-fx-d)/6)}
   .allm-morph{transition:width var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),height var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),transform var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),border-radius var(--allmi-fx-d) var(--allmi-fx-e) var(--allmi-fx-w),box-shadow calc(var(--allmi-fx-d) + 100ms) ease var(--allmi-fx-w)}
-  .allm-morph,.allm-morph-from{will-change:width,height,transform}
+  .allm-morph,.allm-morph-from{will-change:width,height,transform;overflow:clip!important}
   .allm-morph-from{width:var(--allmi-mw)!important;height:var(--allmi-mh)!important;transform:var(--allmi-mt);border-radius:var(--allmi-mr)!important;box-shadow:var(--allmi-bar-shadow,none)!important}
   .allm-morph>*,.allm-morph-from>*{width:var(--allmi-cw)!important;height:var(--allmi-ch)!important;flex:none;transition:opacity calc(var(--allmi-fx-d)*.5) ease calc(var(--allmi-fx-d)*.22)}
   .allm-morph-from>*{opacity:0}

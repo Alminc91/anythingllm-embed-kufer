@@ -158,6 +158,27 @@ export function courseCardsEnabled(settings = {}) {
   return settings?.courseCards === "auto";
 }
 
+// Kartenlayout: "rows" (Zeilen-Karten) nur ausdrücklich, sonst "grid"
+export function courseCardsLayout(settings = {}) {
+  return settings?.courseCardsLayout === "rows" ? "rows" : "grid";
+}
+
+// Zeilen-Karte: linke Spalte "Di 18:30" bzw. "Mo, Mi 18:30" (Kurzform der
+// Wochentage, Uhrzeit ohne "Uhr"); fehlt beides -> null
+export function rowLead(card) {
+  return [card?.weekdays, card?.time].filter(Boolean).join(" ") || null;
+}
+
+// Zeilen-Karte: Meta-Zeile "ab 22.09.2026 · 6 Termine · Raum 2.11 · 60 €"
+// (Dauer wandert aus der Kopfzeile hierher); fehlt alles -> null
+export function rowMeta(card) {
+  return (
+    [card?.start, card?.sessions, card?.place, card?.price]
+      .filter(Boolean)
+      .join(" · ") || null
+  );
+}
+
 // Karten über der Antwort? Nur mit Kurskarten "auto" und Position "above".
 export function courseCardsAbove(settings = {}) {
   return (

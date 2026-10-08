@@ -27,6 +27,7 @@ import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import {
+  courseCardsLayout,
   HTML_TAG_RX,
   replySpeechText,
   selectCourseCards,
@@ -676,6 +677,7 @@ const HistoricalMessage = forwardRef(
             fallback={courseCardsFinal}
             selection={cardSelection}
             part={courseCardsSelection ? "footer" : "all"}
+            layout={courseCardsLayout(settings)}
           />
         )}
 

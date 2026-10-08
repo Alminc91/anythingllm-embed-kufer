@@ -43,6 +43,15 @@ sichtbar). Nur die neuen Zustände gezielt erzeugen:
   python3 tests/visual/course_cards.py --baseline --new-states \
       --only cc-v3-meta cc-v3-teaser cc-v3-teaser-mobile
 
+Zeilen-Karten (courseCardsLayout "rows") und Teaser-Platzhalter (Issue
+embed-zeilenkarten-tasten-morph-datenschutz): Zustände cc-rows-light/-dark
+(Zeilen-Karten, Kartenbreite 700 px), cc-rows-mobile (390 px: Rasterkarte
+einspaltig), cc-teaser-pending / cc-rows-pending (Platzhalter, Stream wartet
+auf die Teaser) + DOM-Prüfungen check_rows (AK-1, AK-3), rows-teaser-fit
+(AK-2) und teaser-pending-height (AK-4: Kartenhöhe vor/nach dem Teaser).
+  python3 tests/visual/course_cards.py --baseline --new-states \
+      --only cc-rows-light cc-rows-dark cc-rows-mobile cc-teaser-pending cc-rows-pending
+
 Ergebnisse: tests/visual/results/course-cards-*.png, summary-course-cards.json.
 """
 
@@ -218,6 +227,36 @@ CARD_SEL = "[data-course-cards]"
 RADIUS_CSS = ("#anythingllm-embed-widget { --allm-radius: 40px; --allm-radius-card: 14px; "
               "--allm-radius-bubble: 18px; }")
 
+# Zeilen-Karten: Fenster so breit, dass die Karte 700 px misst (Desktop)
+ROWS = {**ABOVE, "course-cards-layout": "rows"}
+# Fenstergröße gibt es nur aus dem Design Center (visual_config windowWidth)
+WIDE = {"windowWidth": "794px"}
+ROWS_WIDE = ROWS
+GRID_WIDE = ABOVE
+MOBILE_390 = {"width": 390, "height": 740}
+# AK-2: drei Teaser à 18–20 Wörter (Stil der Demo-Teaser vom 06.10.)
+TEASERS_FIT = [
+    "Für alle mit etwas Yoga-Erfahrung: kräftigende Haltungen, ruhige Atemübungen und ein entspannter "
+    "Ausklang am Montagabend in kleiner Gruppe.",
+    "Sanfter Einstieg mit etwas Vorerfahrung: Dehnung, Atmung und Entspannung nach der Arbeit, ideal zum "
+    "Abschalten auch mitten in der Woche.",
+    "Praxisnaher Einstieg in KI-Werkzeuge für den Alltag: Texte formulieren, Bilder erstellen und Risiken "
+    "sicher einschätzen lernen, ganz ohne Vorkenntnisse.",
+]
+PENDING_TEXT = "KI-Beschreibung wird erstellt …"
+
+
+def pending_events(teaser_delay=1200, hold=False):
+    """AK-4: courseSources sofort, courseTeasers nach teaser_delay ms, dann
+    Text. hold: Teaser kommen (praktisch) nie — Zustand für Screenshots."""
+    ev = v3_events(parts=3)
+    ev[0]["__delay"] = 150
+    ev[1]["__delay"] = 600000 if hold else teaser_delay
+    for e in ev[2:]:
+        e["__delay"] = 150
+    return ev
+
+
 # ---------------------------------------------------------------------------
 # Testseiten-Helfer: Stream mit Pausen (fetch-Ersatz) + Protokoll der Karten
 # ---------------------------------------------------------------------------
@@ -234,7 +273,7 @@ SLOW_STREAM_JS = r"""
       const body = new ReadableStream({
         async start(ctrl) {
           for (const ev of plan.events) {
-            await new Promise((r) => setTimeout(r, plan.delay));
+            await new Promise((r) => setTimeout(r, ev.__delay ?? plan.delay));
             window.__streamLog.push({ t: performance.now(), type: ev.type, close: !!ev.close });
             ctrl.enqueue(enc.encode("data: " + JSON.stringify(ev) + "\n\n"));
           }
@@ -323,14 +362,38 @@ def pixel_cases():
          "new"),
         ("cc-v3-teaser-mobile", {"attrs": ABOVE}, tv.Mock(config={}, stream=v3_events()), "#message-input", "send",
          SMALL, "new"),
+        # Zeilen-Karten (courseCardsLayout "rows") und Teaser-Platzhalter
+        ("cc-rows-light", {"attrs": ROWS_WIDE}, tv.Mock(config=WIDE, history=v3_history()), CARD_SEL, None, None,
+         "new"),
+        ("cc-rows-dark", {"attrs": {**ROWS_WIDE, "theme": "dark"}}, tv.Mock(config=WIDE, history=v3_history()),
+         CARD_SEL, None, None, "new"),
+        ("cc-rows-mobile", {"attrs": ROWS}, tv.Mock(config={}, history=v3_history()), CARD_SEL, None, MOBILE_390,
+         "new"),
+        ("cc-teaser-pending", {"attrs": ABOVE, "slow": pending_events(hold=True)}, tv.Mock(config={}),
+         "#message-input", "send-pending", None, "new"),
+        ("cc-rows-pending", {"attrs": ROWS_WIDE, "slow": pending_events(hold=True)}, tv.Mock(config=WIDE),
+         "#message-input", "send-pending", None, "new"),
     ]
 
 
 def shoot(browser, base_url, case, out_path):
     name, cfg, m, sel, action, viewport = case[:6]
-    ctx, page = tv.open_page(browser, base_url, cfg, m, viewport=viewport, before_goto=freeze)
+    slow = cfg.get("slow")
+    cfg = {k: v for k, v in cfg.items() if k != "slow"}
+
+    def before(ctx, page):
+        freeze(ctx, page)
+        if slow:
+            ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps({'events': slow, 'delay': 150})};")
+            ctx.add_init_script(SLOW_STREAM_JS)
+
+    ctx, page = tv.open_page(browser, base_url, cfg, m, viewport=viewport, before_goto=before)
     try:
         tv.wait_shadow(page, sel)
+        if action == "send-pending":
+            send(page)
+            page.wait_for_function("() => window.__allmShadow.querySelectorAll('[data-teaser-pending]').length >= 2",
+                                   timeout=10000)
         if action == "send":
             send(page)
             # Antwort fertig (Abschluss-Chunk verarbeitet): Bewertungs-Knöpfe da
@@ -1099,6 +1162,252 @@ def check_teaser_20_words(browser, base_url):
         ctx.close()
 
 
+# ---------------------------------------------------------------------------
+# Zeilen-Karten und Teaser-Platzhalter
+# ---------------------------------------------------------------------------
+ROWS_DOM_JS = r"""() => {
+  const s = window.__allmShadow;
+  const list = s.querySelector('.allm-course-list');
+  const hist = s.querySelector('#chat-history');
+  const cs = (el, p) => el ? getComputedStyle(el).getPropertyValue(p).trim() : null;
+  const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height, r: r.right }; };
+  return {
+    layout: list && list.getAttribute('data-layout'),
+    histScroll: hist ? [hist.scrollWidth, hist.clientWidth] : null,
+    accent: getComputedStyle(document.getElementById('anythingllm-embed-widget')).getPropertyValue('--allmi-accent').trim(),
+    cards: [...s.querySelectorAll('[data-course-cards] .allm-course-card')].map((c) => {
+      const when = c.querySelector('.allm-course-when'), title = c.querySelector('.allm-course-title'),
+            meta = c.querySelector('.allm-course-details'), badge = c.querySelector('.allm-course-status'),
+            teaser = c.querySelector('.allm-course-teaser');
+      return { row: c.hasAttribute('data-course-row'), links: c.querySelectorAll('a').length + (c.matches('a') ? 1 : 0),
+        name: c.getAttribute('aria-label'), card: box(c),
+        when: when && when.textContent, whenColor: cs(when, 'color'), whenNum: cs(when, 'font-variant-numeric'),
+        whenBox: box(when), title: title && title.textContent, titleBox: box(title), titleFs: cs(title, 'font-size'),
+        titleFw: cs(title, 'font-weight'),
+        meta: meta && meta.textContent, metaBox: box(meta), metaFs: cs(meta, 'font-size'),
+        badge: badge && badge.textContent, badgeBox: box(badge), badgeBorder: cs(badge, 'border-top-color'),
+        schedule: !!c.querySelector('.allm-course-schedule'),
+        teaser: teaser && teaser.textContent, teaserBox: box(teaser),
+        clamp: cs(teaser, '-webkit-line-clamp'), border: cs(c, 'border-top-width'), radius: cs(c, 'border-top-left-radius'),
+        pad: cs(c, 'padding') };
+    }),
+  };
+}"""
+
+
+def check_rows(browser, base_url):
+    """AK-1 (Desktop, Kartenbreite 700 px) und AK-3 (390 px: Rasterkarte
+    einspaltig, kein Überlauf) im Browser."""
+    for theme in ("light", "dark"):
+        attrs = {**ROWS_WIDE, "theme": theme}
+        ctx, page = tv.open_page(browser, base_url, {"attrs": attrs}, tv.Mock(config=WIDE, history=v3_history()),
+                                 before_goto=freeze)
+        try:
+            tv.wait_shadow(page, CARD_SEL)
+            tv.settle(page, 300)
+            d = page.evaluate(ROWS_DOM_JS)
+            c = d["cards"][0]
+            accent = page.evaluate("() => { const e = document.createElement('i'); e.style.color = "
+                                   "getComputedStyle(document.getElementById('anythingllm-embed-widget'))"
+                                   ".getPropertyValue('--allmi-accent'); document.body.appendChild(e); "
+                                   "const c = getComputedStyle(e).color; e.remove(); return c; }")
+            ok = (d["layout"] == "rows" and all(x["row"] and x["links"] == 1 for x in d["cards"])
+                  and round(c["card"]["w"]) == 700
+                  and c["when"] == "Mo 18:00" and c["whenColor"] == accent and c["whenNum"] == "tabular-nums"
+                  and c["title"] == V3[0]["title"] and c["name"] == V3[0]["title"]
+                  and c["meta"] == "ab 14.09.2026 · 16 Abende · Realschule · 60 €"
+                  and c["badge"] == "buchbar" and c["badgeBorder"] == accent
+                  and c["whenBox"]["x"] < c["titleBox"]["x"] < c["badgeBox"]["x"]
+                  and abs(c["metaBox"]["x"] - c["titleBox"]["x"]) < 0.5 and c["metaBox"]["y"] > c["titleBox"]["y"]
+                  and c["card"]["r"] - c["badgeBox"]["r"] <= 15 and not c["schedule"]
+                  and c["titleFs"] == "14px" and c["titleFw"] == "600" and c["metaFs"] == "12px"
+                  and c["border"] == "1px" and c["pad"] == "12px 14px")
+            record(f"AK-1 Zeilen-Karte: links Zeit (Akzent), Mitte Titel+Meta, rechts „buchbar“, 1 Link ({theme})", ok,
+                   json.dumps({k: c[k] for k in ("when", "whenColor", "whenNum", "meta", "badge", "card")}
+                              | {"layout": d["layout"], "accent": accent}, ensure_ascii=False))
+            t = d["cards"][0]
+            record(f"AK-1 Teaser unter der Meta-Zeile, Klammer 2 ({theme})",
+                   t["teaser"] == TEASERS_V3[V3[0]["url"]] and t["clamp"] == "2"
+                   and t["teaserBox"]["y"] >= t["metaBox"]["y"] + t["metaBox"]["h"] - 0.5,
+                   f"clamp {t['clamp']}, Teaser y {t['teaserBox']['y']:.1f} / Meta-Unterkante "
+                   f"{t['metaBox']['y'] + t['metaBox']['h']:.1f}")
+        finally:
+            ctx.close()
+
+    ctx, page = tv.open_page(browser, base_url, {"attrs": ROWS}, tv.Mock(config={}, history=v3_history()),
+                             viewport=MOBILE_390, before_goto=freeze)
+    try:
+        tv.wait_shadow(page, CARD_SEL)
+        tv.settle(page, 300)
+        d = page.evaluate(ROWS_DOM_JS)
+        xs = {round(c["card"]["x"]) for c in d["cards"]}
+        ok = (d["layout"] == "rows-narrow" and not any(c["row"] for c in d["cards"])
+              and all(c["schedule"] and c["clamp"] == "3" for c in d["cards"]) and len(xs) == 1
+              and d["histScroll"][0] <= d["histScroll"][1])
+        record("AK-3 390 px: Rasterkarte einspaltig, Teaser bis 3 Zeilen, kein horizontaler Überlauf", ok,
+               json.dumps({"layout": d["layout"], "x": sorted(xs), "w": [round(c["card"]["w"]) for c in d["cards"]],
+                           "histScroll": d["histScroll"]}))
+    finally:
+        ctx.close()
+
+
+ROWS_FIT_JS = """async ([teasers, width]) => { const l = window.__q('.allm-course-list');
+  // Kartenbreite über die Listenbreite (eine Spalte) — der ResizeObserver
+  // des Widgets sieht dieselbe Breite wie bei einem schmaleren Fenster
+  l.style.width = width + 'px';
+  for (let i = 0; i < 3; i++) await new Promise((r) => requestAnimationFrame(r));
+  const cards = [...l.querySelectorAll('[data-course-row]')];
+  return cards.map((c, i) => { const t = c.querySelector('.allm-course-teaser'); t.textContent = teasers[i];
+    const lh = parseFloat(getComputedStyle(t).lineHeight);
+    return { w: Math.round(c.getBoundingClientRect().width), tw: Math.round(t.getBoundingClientRect().width),
+             words: teasers[i].split(/\\s+/).length, lines: Math.round(t.scrollHeight / lh),
+             fits: t.scrollHeight <= t.clientHeight, clamp: getComputedStyle(t).webkitLineClamp }; }); }"""
+
+
+def check_rows_teaser_fit(browser, base_url):
+    """AK-2 rows-teaser-fit: Teaser à 18–20 Wörter passen ohne Kappung —
+    bei 700 px Kartenbreite in höchstens 2 Zeilen (Klammer 2), bei 640 und
+    480 px (Review-Befund 5: unter 680 px 3 Zeilen) in höchstens 3 Zeilen
+    (Klammer 3). Arial-Metrik wie AK-3 des Feinschliffs."""
+    hist = v3_history()
+    extra = {**FIX["donauYoga"][0], "url": V3[0]["url"].replace("262-", "262-9"), "title": "KI-Basics für den Alltag"}
+    hist[1]["courseSources"] = V3 + [extra]
+    hist[1]["courseCardsAnnounced"] = 3
+    hist[1]["courseTeasers"] = {c["url"]: "x" for c in V3 + [extra]}
+    for width, max_lines in ((700, 2), (640, 3), (480, 3)):
+        ctx, page = tv.open_page(browser, base_url,
+                                 {"attrs": ROWS_WIDE, "css": "#anythingllm-embed-widget { --allm-font: Arial; }"},
+                                 tv.Mock(config=WIDE, history=hist), before_goto=freeze)
+        try:
+            tv.wait_shadow(page, CARD_SEL)
+            tv.settle(page, 400)
+            d = page.evaluate(ROWS_FIT_JS, [TEASERS_FIT, width])
+            ok = (len(d) == 3 and all(18 <= x["words"] <= 20 and x["w"] == width and x["fits"]
+                                      and x["lines"] <= max_lines and x["clamp"] == str(max_lines) for x in d))
+            record(f"AK-2 rows-teaser-fit: 3 Teaser à 18–20 Wörter bei {width} px ohne Kappung, "
+                   f"≤ {max_lines} Zeilen", ok, json.dumps(d))
+        finally:
+            ctx.close()
+
+
+PENDING_PROBE_JS = r"""
+(() => {
+  window.__ph = [];
+  const t0 = performance.now();
+  const step = () => {
+    const s = window.__allmShadow;
+    if (s) {
+      const cards = [...s.querySelectorAll('[data-course-cards] .allm-course-card')];
+      if (cards.length) window.__ph.push({ t: Math.round(performance.now() - t0),
+        pending: s.querySelectorAll('[data-teaser-pending]').length,
+        teasers: s.querySelectorAll('[data-course-cards] .allm-course-teaser').length,
+        text: !!(s.querySelector('.allm-reply, .allm-anything-llm-assistant-message') || {}).textContent,
+        h: cards.map((c) => Math.round(c.getBoundingClientRect().height * 10) / 10) });
+    }
+    if (window.__ph.length < 600) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+})();
+"""
+
+
+def check_teaser_pending(browser, base_url):
+    """AK-4 teaser-pending-height: Platzhalter je Karte (gedämpft, pulsierend),
+    nach dem Teaser-Chunk (1.200 ms) steht dort der Teaser, Kartenhöhe vor und
+    nach gleich (± 1 px); Raster reserviert 3, Zeilen-Karte 2 Zeilen. AK-5:
+    Stream ohne Teaser -> Platzhalter weg."""
+    for label, attrs in (("Raster", GRID_WIDE), ("Zeilen", ROWS_WIDE), ("Raster 360 px", ABOVE)):
+        viewport = SMALL if "360" in label else None
+        cfg_mock = {} if "360" in label else WIDE
+        plan = {"events": pending_events(), "delay": 150}
+
+        def before(ctx, page):
+            freeze(ctx, page)
+            ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan)};")
+            ctx.add_init_script(SLOW_STREAM_JS)
+            ctx.add_init_script(PENDING_PROBE_JS)
+
+        ctx, page = tv.open_page(browser, base_url, {"attrs": attrs}, tv.Mock(config=cfg_mock), viewport=viewport,
+                                 before_goto=before)
+        try:
+            tv.wait_shadow(page, "#message-input")
+            send(page)
+            page.wait_for_function("() => window.__allmShadow.querySelectorAll('[data-teaser-pending]').length >= 2",
+                                   timeout=10000)
+            # gedämpft = dieselbe Farbe wie die Meta-Zeile (--allmi-text-muted)
+            info = page.evaluate("""() => { const p = window.__q('[data-teaser-pending]');
+              const muted = getComputedStyle(window.__q('.allm-course-details')).color;
+              const cs = getComputedStyle(p);
+              return { text: p.textContent, color: cs.color, muted, anim: cs.animationName,
+                       dur: cs.animationDuration, iter: cs.animationIterationCount, h: p.getBoundingClientRect().height }; }""")
+            record(f"AK-4 Platzhalter „{PENDING_TEXT}“ gedämpft, Puls 1,6 s ({label})",
+                   info["text"] == PENDING_TEXT and info["color"] == info["muted"]
+                   and info["anim"] == "allm-teaser-pending" and info["dur"] == "1.6s" and info["iter"] == "infinite",
+                   json.dumps(info, ensure_ascii=False))
+            page.wait_for_function("() => window.__streamLog.length >= %d" % len(plan["events"]), timeout=20000)
+            page.wait_for_timeout(600)
+            ph = page.evaluate("() => window.__ph")
+            before_f = [f for f in ph if f["pending"] > 0]
+            after_f = [f for f in ph if f["teasers"] > 0]
+            hb = before_f[-1]["h"] if before_f else None
+            ha = after_f[0]["h"] if after_f else None
+            hend = ph[-1]["h"]
+            same = (hb and ha and len(hb) == len(ha) and all(abs(a - b) <= 1 for a, b in zip(hb, ha))
+                    and all(abs(a - b) <= 1 for a, b in zip(hb, hend)))
+            swap = any(f["pending"] == 0 and f["teasers"] > 0 for f in ph) and not any(
+                f["pending"] > 0 and f["teasers"] > 0 for f in ph)
+            record(f"AK-4 teaser-pending-height: Teaser ersetzt Platzhalter an Ort und Stelle, Höhe gleich ({label})",
+                   bool(same) and swap and len(before_f) > 10,
+                   f"vor {hb}, nach {ha}, Ende {hend}, Frames mit Platzhalter {len(before_f)}")
+        finally:
+            ctx.close()
+
+    # AK-5: Stream ohne Teaser-Chunk -> Platzhalter weg, sobald Text kommt
+    ev = pending_events()
+    del ev[1]
+    plan = {"events": ev, "delay": 150}
+
+    def before2(ctx, page):
+        freeze(ctx, page)
+        ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan)};")
+        ctx.add_init_script(SLOW_STREAM_JS)
+        ctx.add_init_script(PENDING_PROBE_JS)
+
+    ctx, page = tv.open_page(browser, base_url, {"attrs": ROWS_WIDE}, tv.Mock(config=WIDE), before_goto=before2)
+    try:
+        tv.wait_shadow(page, "#message-input")
+        send(page)
+        page.wait_for_function("() => window.__streamLog.length >= %d" % len(ev), timeout=20000)
+        page.wait_for_timeout(500)
+        ph = page.evaluate("() => window.__ph")
+        n = page.evaluate("() => window.__allmShadow.querySelectorAll('[data-teaser-pending]').length")
+        record("AK-5 Stream ohne Teaser: Platzhalter erst sichtbar, am Ende 0 im DOM",
+               n == 0 and any(f["pending"] for f in ph), f"am Ende {n}, Frames mit Platzhalter "
+               f"{sum(1 for f in ph if f['pending'])}")
+    finally:
+        ctx.close()
+
+    # reduzierte Bewegung: kein Puls
+    plan3 = {"events": pending_events(hold=True), "delay": 150}
+
+    def before3(ctx, page):
+        freeze(ctx, page)
+        ctx.add_init_script(f"window.__SLOW_STREAM = {json.dumps(plan3)};")
+        ctx.add_init_script(SLOW_STREAM_JS)
+
+    ctx, page = tv.open_page(browser, base_url, {"attrs": ABOVE}, tv.Mock(config={}), reduced_motion="reduce",
+                             before_goto=before3)
+    try:
+        tv.wait_shadow(page, "#message-input")
+        send(page)
+        page.wait_for_function("() => !!window.__q('[data-teaser-pending]')", timeout=10000)
+        anim = page.evaluate("() => getComputedStyle(window.__q('[data-teaser-pending]')).animationName")
+        record("AK-4 prefers-reduced-motion: Platzhalter ohne Puls", anim == "none", anim)
+    finally:
+        ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", action="store_true")
@@ -1127,6 +1436,9 @@ def main():
                 check_radius_card(browser, base_url)
                 check_v3(browser, base_url)
                 check_teaser_20_words(browser, base_url)
+                check_rows(browser, base_url)
+                check_rows_teaser_fit(browser, base_url)
+                check_teaser_pending(browser, base_url)
             browser.close()
     finally:
         srv.shutdown()

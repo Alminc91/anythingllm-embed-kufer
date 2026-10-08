@@ -660,3 +660,541 @@ describe("Teaser als Untertext (AK-5)", () => {
     expect(teasers).toEqual([TEASER_YOGA]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Zeilen-Karten (courseCardsLayout "rows") und Teaser-Platzhalter
+// (Issue embed-zeilenkarten-tasten-morph-datenschutz, AK-1, AK-4, AK-5,
+// NAK-2, NAK-3, NAK-7). Höhen/Umbrüche im Browser: tests/visual/course_cards.py
+// ---------------------------------------------------------------------------
+import { courseCardsLayout, rowLead, rowMeta } from "../src/utils/courseCards.js";
+import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
+import { PANEL_TEXTS } from "../src/utils/layout.js";
+import { teasersExpected } from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
+
+const KI = {
+  url: `${BASE}/ki-basics-fuer-den-alltag/262-1001`,
+  title: "KI-Basics für den Alltag",
+  start_date: "2026-09-22",
+  start_minutes: 1110,
+  weekdays: ",tue,",
+  price: 60,
+  bookable: true,
+  format: "onsite",
+  sessions: "6 Termine",
+  venue: "Raum 2.11",
+};
+const ROWS_ABOVE = { ...ABOVE, courseCardsLayout: "rows" };
+const PENDING_DE = "KI-Beschreibung wird erstellt …";
+const pendingEls = (el) => [...el.querySelectorAll("[data-teaser-pending]")];
+// Antwort, wie sie direkt nach dem courseSources-Chunk aussieht
+const streaming = (extra = {}) =>
+  answer({
+    uuid: "u",
+    content: "",
+    chatId: undefined,
+    animate: true,
+    pending: true,
+    courseCardsAnnounced: 2,
+    ...extra,
+  });
+
+describe("Zeilen-Karten (AK-1)", () => {
+  it("Setting: Script-Attribut/visual_config grid|rows, sonst grid (mit Warnung)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const load = (dataset, server = {}) =>
+      loadEmbedSettings(
+        { embedId: "e", baseApiUrl: "https://x.test/api/embed", ...dataset },
+        vi.fn(async () => ({ ok: true, json: async () => server })),
+      );
+    expect((await load({})).courseCardsLayout).toBe("grid");
+    expect((await load({ courseCardsLayout: " Rows " })).courseCardsLayout).toBe(
+      "rows",
+    );
+    expect(
+      (await load({}, { courseCardsLayout: "rows" })).courseCardsLayout,
+    ).toBe("rows");
+    expect(
+      (await load({ courseCardsLayout: "rows" }, { courseCardsLayout: "grid" }))
+        .courseCardsLayout,
+    ).toBe("grid");
+    expect(warn).not.toHaveBeenCalled();
+    expect(
+      (await load({ courseCardsLayout: "kacheln" })).courseCardsLayout,
+    ).toBe("grid");
+    expect(warn.mock.calls.flat().join(" ")).toContain("courseCardsLayout");
+    expect(courseCardsLayout({ courseCardsLayout: "list" })).toBe("grid");
+    expect(courseCardsLayout(undefined)).toBe("grid");
+    warn.mockRestore();
+  });
+
+  it("::rows-layout — links „Di 18:30“ (Akzent, Tabellenziffern), Mitte Titel + Meta, rechts „buchbar“, EIN Link", () => {
+    const card = formatCourse(KI);
+    expect(rowLead(card)).toBe("Di 18:30");
+    expect(rowLead(formatCourse({ ...KI, weekdays: ",wed,mon," }))).toBe(
+      "Mo, Mi 18:30",
+    );
+    expect(rowMeta(card)).toBe(
+      "ab 22.09.2026 · 6 Termine · Raum 2.11 · 60 €",
+    );
+    const el = mount(
+      h(ChatHistory, {
+        settings: ROWS_ABOVE,
+        history: [
+          user,
+          answer({
+            content: `Ja: ${link(KI)}.`,
+            courseSources: clone([KI]),
+            courseCardsAnnounced: 1,
+          }),
+        ],
+      }),
+    );
+    const links = [...el.querySelectorAll("[data-course-cards] a")];
+    expect(links).toHaveLength(1);
+    const [row] = links;
+    expect(row.hasAttribute("data-course-row")).toBe(true);
+    expect(row.getAttribute("aria-label")).toBe(KI.title);
+    expect(row.getAttribute("href")).toBe(KI.url);
+    const when = row.querySelector(".allm-course-when");
+    expect(when.textContent).toBe("Di 18:30");
+    expect(when.style.color).toContain("--allmi-accent");
+    expect(when.style.fontVariantNumeric).toBe("tabular-nums");
+    expect(row.querySelector(".allm-course-title").textContent).toBe(KI.title);
+    expect(row.querySelector(".allm-course-details").textContent).toBe(
+      "ab 22.09.2026 · 6 Termine · Raum 2.11 · 60 €",
+    );
+    const badge = row.querySelector(".allm-course-status");
+    expect(badge.textContent).toBe("buchbar");
+    expect(badge.style.border).toContain("--allmi-accent");
+    // Reihenfolge links -> Mitte -> rechts
+    expect(row.firstElementChild).toBe(when);
+    expect(row.lastElementChild).toBe(badge);
+    // Beschreibung = sichtbare Zeilen
+    const described = row.getAttribute("aria-describedby").split(" ");
+    expect(described).toContain(when.id);
+    expect(described).toContain(badge.id);
+    // Karte: 1px-Rahmen, Radius der Karten, 12px 14px
+    expect(row.style.border).toContain("1px solid");
+    expect(row.style.borderRadius).toContain("--allmi-radius-card");
+    expect(row.style.padding).toBe("12px 14px");
+    // nicht buchbar: neutraler Rahmen
+    act(() =>
+      root.render(
+        h(ChatHistory, {
+          settings: ROWS_ABOVE,
+          history: [
+            user,
+            answer({
+              content: `Ja: ${link(KI)}.`,
+              courseSources: clone([{ ...KI, bookable: false }]),
+              courseCardsAnnounced: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    const off = el.querySelector(".allm-course-status");
+    expect(off.textContent).toBe("nicht buchbar");
+    expect(off.style.border).toContain("--allmi-border");
+  });
+
+  it("Teaser in der Zeilen-Karte: unter Meta, höchstens 2 Zeilen; Raster unverändert 3", () => {
+    const el = mount(
+      h(ChatHistory, {
+        settings: ROWS_ABOVE,
+        history: [
+          user,
+          answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+        ],
+      }),
+    );
+    const teaser = el.querySelector("[data-course-row] .allm-course-teaser");
+    expect(teaser.textContent).toBe(TEASER_YOGA);
+    expect(teaser.previousElementSibling.className).toContain(
+      "allm-course-details",
+    );
+    expect(teaser.style.webkitLineClamp || teaser.style.WebkitLineClamp).toBe(
+      "2",
+    );
+    // geladener Verlauf: keine reservierte Höhe
+    expect(teaser.style.minHeight).toBe("");
+  });
+
+  // Review-Befund 5: Teaser-Zeilen nach Kartenbreite (ResizeObserver der
+  // Liste): ab 680 px 2 Zeilen, 480–679 px 3 Zeilen, darunter Rasterkarte
+  for (const [width, layout, lines] of [
+    [700, "rows", 2],
+    [680, "rows", 2],
+    [640, "rows", 3],
+    [480, "rows", 3],
+    [470, "rows-narrow", 3],
+  ])
+    it(`::rows-teaser-lines — Kartenbreite ${width} px: ${layout}, Teaser/Platzhalter ${lines} Zeilen`, () => {
+      const cw = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockImplementation(function () {
+          return this.classList?.contains("allm-course-list") ? width : 0;
+        });
+      try {
+        const el = mount(
+          h(ChatHistory, {
+            settings: ROWS_ABOVE,
+            history: [user, streaming()],
+          }),
+        );
+        expect(
+          el.querySelector(".allm-course-list").getAttribute("data-layout"),
+        ).toBe(layout);
+        for (const p of pendingEls(el))
+          expect(p.style.height).toBe(`${lines * 18}px`);
+        act(() =>
+          root.render(
+            h(ChatHistory, {
+              settings: ROWS_ABOVE,
+              history: [
+                user,
+                streaming({ courseTeasers: TEASERS, teaserArrivedAt: Date.now() }),
+              ],
+            }),
+          ),
+        );
+        const teasers = [...el.querySelectorAll(".allm-course-teaser")];
+        expect(teasers).toHaveLength(2);
+        for (const t of teasers) {
+          expect(t.style.webkitLineClamp || t.style.WebkitLineClamp).toBe(
+            String(lines),
+          );
+          expect(t.style.minHeight).toBe(`${lines * 18}px`);
+        }
+      } finally {
+        cw.mockRestore();
+      }
+    });
+
+  it("ohne Setting: Rasterkarten wie bisher (kein data-course-row, kein data-layout)", () => {
+    const el = mount(
+      h(ChatHistory, {
+        settings: ABOVE,
+        history: [user, answer({ courseCardsAnnounced: 2 })],
+      }),
+    );
+    expect(cards(el)).toHaveLength(2);
+    expect(el.querySelector("[data-course-row]")).toBeNull();
+    expect(
+      el.querySelector(".allm-course-list").hasAttribute("data-layout"),
+    ).toBe(false);
+  });
+
+  it("Fallback-Karte (unter der Antwort) als Zeilen-Karte: nur Titel", () => {
+    const fallbackUrl = `${BASE}/aerobic/262-3208`;
+    const el = mount(
+      h(ChatHistory, {
+        settings: ROWS_ABOVE,
+        history: [
+          user,
+          answer({
+            content: `${link(YOGA)} und [Aerobic](${fallbackUrl})`,
+            courseSources: clone([YOGA]),
+            courseCardsAnnounced: 1,
+          }),
+        ],
+      }),
+    );
+    const fb = el.querySelector("[data-course-fallback]");
+    expect(fb.hasAttribute("data-course-row")).toBe(true);
+    expect(fb.querySelector(".allm-course-when")).toBeNull();
+    expect(fb.querySelector(".allm-course-details")).toBeNull();
+    expect(fb.textContent).toBe("Aerobic");
+  });
+});
+
+describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
+  it("teasersExpected: nur angekündigt + Stream + ohne Teaser-Chunk + ohne Text", () => {
+    expect(teasersExpected(streaming())).toBe(true);
+    expect(teasersExpected(streaming({ courseTeasers: {} }))).toBe(false);
+    expect(teasersExpected(streaming({ content: "Ja" }))).toBe(false);
+    expect(teasersExpected(streaming({ content: "  " }))).toBe(true);
+    expect(
+      teasersExpected(streaming({ animate: false, pending: false })),
+    ).toBe(false);
+    expect(teasersExpected(streaming({ courseCardsAnnounced: undefined }))).toBe(
+      false,
+    );
+    expect(teasersExpected(streaming({ error: "x" }))).toBe(false);
+    expect(teasersExpected(null)).toBe(false);
+  });
+
+  for (const layout of ["grid", "rows"])
+    it(`::teaser-pending (${layout}) — Platzhalter je Karte, Teaser ersetzt ihn an Ort und Stelle (gleiche Knoten, reservierte Höhe)`, () => {
+      const settings = { ...ABOVE, courseCardsLayout: layout };
+      const lines = layout === "rows" ? 2 : 3;
+      const el = mount(
+        h(ChatHistory, { settings, history: [user, streaming()] }),
+      );
+      const before = cards(el);
+      expect(before).toHaveLength(2);
+      const ph = pendingEls(el);
+      expect(ph).toHaveLength(2);
+      for (const p of ph) {
+        expect(p.textContent).toBe(PENDING_DE);
+        expect(p.style.color).toContain("--allmi-text-muted");
+        expect(p.style.height).toBe(`${lines * 18}px`);
+        expect(p.className).toContain("allm-course-teaser-pending");
+      }
+      // Platzhalter sitzt an der Teaser-Stelle (Raster: unter dem Titel;
+      // Zeile: unter der Meta-Zeile)
+      expect(ph[0].previousElementSibling.className).toContain(
+        layout === "rows" ? "allm-course-details" : "allm-course-title",
+      );
+      // nicht Teil der Beschreibung der Karte: jede ID aus aria-describedby
+      // zeigt auf ein vorhandenes Element, keines ist (oder enthält) den
+      // Platzhalter
+      for (const card of before) {
+        const ids = (card.getAttribute("aria-describedby") || "")
+          .split(/\s+/)
+          .filter(Boolean);
+        expect(ids.length).toBeGreaterThan(0);
+        for (const ref of ids) {
+          const target = document.getElementById(ref);
+          expect(target).not.toBeNull();
+          expect(target.closest("[data-teaser-pending]")).toBeNull();
+          expect(target.querySelector("[data-teaser-pending]")).toBeNull();
+        }
+      }
+      act(() =>
+        root.render(
+          h(ChatHistory, {
+            settings,
+            history: [
+              user,
+              streaming({
+                courseTeasers: TEASERS,
+                teaserArrivedAt: Date.now(),
+              }),
+            ],
+          }),
+        ),
+      );
+      expect(pendingEls(el)).toHaveLength(0);
+      expect(cards(el)).toEqual(before);
+      const teasers = [...el.querySelectorAll(".allm-course-teaser")];
+      expect(teasers.map((t) => t.textContent)).toEqual([
+        TEASER_YOGA,
+        TEASER_EN,
+      ]);
+      for (const t of teasers) {
+        expect(t.style.minHeight).toBe(`${lines * 18}px`);
+        expect(t.classList.contains("allm-course-teaser-in")).toBe(true);
+        expect(t.previousElementSibling.className).toContain(
+          layout === "rows" ? "allm-course-details" : "allm-course-title",
+        );
+      }
+      // Text kommt, Stream endet: Teaser bleiben, kein Platzhalter
+      act(() =>
+        root.render(
+          h(ChatHistory, {
+            settings,
+            history: [
+              user,
+              answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+            ],
+          }),
+        ),
+      );
+      expect(pendingEls(el)).toHaveLength(0);
+      expect(el.querySelectorAll(".allm-course-teaser")).toHaveLength(2);
+    });
+
+  it("Stream über handleChat: courseSources -> Platzhalter, courseTeasers -> Teaser (englisch: eigener Text)", () => {
+    const hist = [];
+    let shown = [];
+    const chunk = (c) =>
+      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    const el = mount(
+      h(ChatHistory, { settings: { ...ABOVE, language: "en" }, history: [] }),
+    );
+    const show = () =>
+      act(() =>
+        root.render(
+          h(ChatHistory, {
+            settings: { ...ABOVE, language: "en" },
+            history: [user, ...shown],
+          }),
+        ),
+      );
+    chunk({
+      uuid: "u",
+      type: "courseSources",
+      courseSources: clone([YOGA, ENGLISH]),
+      close: false,
+    });
+    show();
+    expect(pendingEls(el).map((p) => p.textContent)).toEqual([
+      PANEL_TEXTS.en.teaserPending,
+      PANEL_TEXTS.en.teaserPending,
+    ]);
+    expect(PANEL_TEXTS.en.teaserPending).toBe(
+      "AI description is being written …",
+    );
+    chunk({ uuid: "u", type: "courseTeasers", teasers: clone(TEASERS) });
+    show();
+    expect(pendingEls(el)).toHaveLength(0);
+    expect(el.querySelectorAll(".allm-course-teaser")).toHaveLength(2);
+  });
+
+  it("::teaser-pending-end — Stream endet ohne courseTeasers: kein Platzhalter mehr", () => {
+    const hist = [];
+    let shown = [];
+    const chunk = (c) =>
+      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    const el = mount(h(ChatHistory, { settings: ABOVE, history: [] }));
+    const show = () =>
+      act(() =>
+        root.render(
+          h(ChatHistory, { settings: ABOVE, history: [user, ...shown] }),
+        ),
+      );
+    chunk({
+      uuid: "u",
+      type: "courseSources",
+      courseSources: clone([YOGA, ENGLISH]),
+      close: false,
+    });
+    show();
+    expect(pendingEls(el)).toHaveLength(2);
+    chunk({
+      uuid: "u",
+      type: "textResponseChunk",
+      textResponse: reply,
+      close: true,
+      sources: [],
+    });
+    show();
+    expect(pendingEls(el)).toHaveLength(0);
+    chunk({ uuid: "u", type: "finalizeResponseStream", close: true, chatId: 7 });
+    show();
+    expect(pendingEls(el)).toHaveLength(0);
+    expect(cards(el)).toHaveLength(2);
+    // Teaser-Chunk ohne Eintrag für eine Karte beendet deren Platzhalter
+    const partial = mount(
+      h(ChatHistory, {
+        settings: ABOVE,
+        history: [
+          user,
+          streaming({ courseTeasers: { [YOGA.url]: TEASER_YOGA } }),
+        ],
+      }),
+    );
+    expect(pendingEls(partial)).toHaveLength(0);
+    expect(partial.querySelectorAll(".allm-course-teaser")).toHaveLength(1);
+  });
+
+  it("NAK-2: kein Platzhalter bei Karten unten, Fallback-Karten, fertigen Antworten und im geladenen Verlauf", () => {
+    const cases = [
+      // Karten unten, auch mitten im Stream
+      [AUTO, streaming({ content: reply })],
+      [AUTO, streaming()],
+      // geladener Verlauf (kein animate), auch ohne chatId
+      [ABOVE, answer({ courseCardsAnnounced: 2, chatId: undefined })],
+      [ABOVE, answer({ courseCardsAnnounced: 2 })],
+      [ROWS_ABOVE, answer({ courseCardsAnnounced: 2 })],
+    ];
+    for (const [settings, msg] of cases) {
+      const el = mount(h(ChatHistory, { settings, history: [user, msg] }));
+      expect(pendingEls(el)).toHaveLength(0);
+      act(() => root.unmount());
+      container.remove();
+    }
+    // Fallback-Karten gibt es erst bei fertiger Antwort (chatId, Stream zu)
+    // -> nie zusammen mit einem Platzhalter
+    const fallbackUrl = `${BASE}/aerobic/262-3208`;
+    const sel = selectAnnouncedCourseCards(
+      `[Aerobic](${fallbackUrl})`,
+      [],
+      AUTO,
+      { announced: 0, fallback: true, pageHost: "aw.donau.kufer.de" },
+    );
+    expect(sel.cards.length + (sel.footerCards || []).length).toBeGreaterThan(
+      0,
+    );
+    const el = mount(
+      h(ChatHistory, {
+        settings: ABOVE,
+        history: [
+          user,
+          streaming({
+            content: `${link(YOGA)} und [Aerobic](${fallbackUrl})`,
+            courseSources: clone([YOGA]),
+            courseCardsAnnounced: 1,
+            chatId: 5,
+            animate: false,
+            pending: false,
+          }),
+        ],
+      }),
+    );
+    expect(el.querySelector("[data-course-fallback]")).not.toBeNull();
+    expect(pendingEls(el)).toHaveLength(0);
+  });
+
+  it("NAK-3: ohne Ankündigung (fremdsprachige Antwort, [[KARTEN: -]]) keine Karten und kein Platzhalter", () => {
+    const hist = [];
+    let shown = [];
+    const chunk = (c) =>
+      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    chunk({
+      uuid: "u",
+      type: "textResponseChunk",
+      textResponse: "Yes, there are ",
+      close: false,
+      sources: [],
+    });
+    const el = mount(
+      h(ChatHistory, { settings: ROWS_ABOVE, history: [user, ...shown] }),
+    );
+    expect(el.querySelector("[data-course-cards]")).toBeNull();
+    expect(pendingEls(el)).toHaveLength(0);
+    // leere Ankündigung zählt nicht
+    chunk({ uuid: "u", type: "courseSources", courseSources: [], close: false });
+    act(() =>
+      root.render(
+        h(ChatHistory, { settings: ROWS_ABOVE, history: [user, ...shown] }),
+      ),
+    );
+    expect(pendingEls(el)).toHaveLength(0);
+  });
+
+  it("NAK-7: Titel, Meta und Teaser bleiben Text (kein <b>, kein Link aus Markdown)", () => {
+    const evil = {
+      ...KI,
+      title: "<b>Fett</b> [x](https://evil.test)",
+      venue: "<img src=x onerror=alert(1)>Raum",
+    };
+    const el = mount(
+      h(ChatHistory, {
+        settings: ROWS_ABOVE,
+        history: [
+          user,
+          answer({
+            content: "Siehe Karte.",
+            courseSources: clone([evil]),
+            courseCardsAnnounced: 1,
+            courseTeasers: { [KI.url]: "<b>Fett</b> und [Link](https://evil.test)" },
+          }),
+        ],
+      }),
+    );
+    const row = el.querySelector("[data-course-row]");
+    expect(row.querySelector("b")).toBeNull();
+    expect(row.querySelector("img")).toBeNull();
+    expect(row.querySelectorAll("a")).toHaveLength(0);
+    // Tags entfernt (teaserMap), Markdown-Link bleibt sichtbarer Text
+    expect(row.querySelector(".allm-course-teaser").textContent).toBe(
+      "Fett und [Link](https://evil.test)",
+    );
+    // Titel: Tag bleibt sichtbarer Text (React escaped), kein Element
+    expect(row.querySelector(".allm-course-title").textContent).toContain(
+      "Fett",
+    );
+  });
+});

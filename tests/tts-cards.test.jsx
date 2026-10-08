@@ -273,6 +273,36 @@ describe("Vorlesen-Knopf mit Karten (AK-7, NAK-2, NAK-3)", () => {
     for (const f of FU) expect(text).not.toContain(f);
   });
 
+  it("::rows-same-speech — Zeilen-Karten (courseCardsLayout rows) lesen genau wie das Raster vor (AK-12)", async () => {
+    const texts = [];
+    for (const layout of ["grid", "rows"])
+      for (const position of ["above", "below"]) {
+        const el = await mount(
+          h(ChatHistory, {
+            settings: {
+              courseCards: "auto",
+              courseCardsPosition: position,
+              courseCardsLayout: layout,
+            },
+            history: [
+              user,
+              answer(position === "above" ? { courseCardsAnnounced: 2 } : {}),
+            ],
+          }),
+        );
+        expect(el.querySelectorAll(".allm-course-card")).toHaveLength(2);
+        expect(el.querySelectorAll("[data-course-row]")).toHaveLength(
+          layout === "rows" ? 2 : 0,
+        );
+        texts.push(await speak(el));
+        act(() => root.unmount());
+        container.remove();
+        root = null;
+      }
+    expect(texts[0]).toBe(`${clean(REPLY)}\n\n${SAY_YOGA} ${SAY_EN}`);
+    expect(new Set(texts).size).toBe(1);
+  });
+
   it("NAK-2: ohne Karten (Option aus bzw. keine courseSources) Vorlesen-Text wie bisher", async () => {
     for (const [settings, extra] of [
       [{}, {}],
