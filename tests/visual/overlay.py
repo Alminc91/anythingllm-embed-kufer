@@ -1586,9 +1586,17 @@ DEMO_CLOSE_JS = r"""
   const hook = () => {
     const ph = document.getElementById('kufer-assistent');
     if (!ph) return requestAnimationFrame(hook);
-    new MutationObserver(() => document.getElementById('slot').classList.toggle('is-open',
-      ph.getAttribute('data-allm-expanded') === 'true')).observe(ph, { attributes: true,
-      attributeFilter: ['data-allm-expanded'] });
+    // window.__moDelay (Init-Skript, demo_close_page(mo_delay=…)): Seite
+    // reagiert verzögert — "raf" (nächster Frame) bzw. Millisekunden
+    // (setTimeout), wie ein Framework-Scheduler; ohne: sofort im Callback
+    const go = () => document.getElementById('slot').classList.toggle('is-open',
+      ph.getAttribute('data-allm-expanded') === 'true');
+    new MutationObserver(() => {
+      const d = window.__moDelay;
+      if (d === 'raf') requestAnimationFrame(go);
+      else if (typeof d === 'number') setTimeout(go, d);
+      else go();
+    }).observe(ph, { attributes: true, attributeFilter: ['data-allm-expanded'] });
   };
   hook();
   // Zeitpunkt der Nutzeraktion (Klick/Escape), Bezug für den Rekorder
@@ -1617,11 +1625,15 @@ CLOSE_REC_JS = r"""(ms) => { const out = []; window.__rec = null; window.__t0 = 
   requestAnimationFrame(step); return true; }"""
 
 
-def demo_close_page(browser, base_url, viewport, extra_css=""):
+def demo_close_page(browser, base_url, viewport, extra_css="", mo_delay=None):
+    def before(c, p):
+        if mo_delay is not None:
+            c.add_init_script(f"window.__moDelay = {json.dumps(mo_delay)};")
+        c.add_init_script(DEMO_CLOSE_JS)
     ctx, page = tv.open_page(browser, base_url, {"attrs": {**MORPH, **INPUT}, "inline": True,
                                                  "css": DEMO_CLOSE_CSS + extra_css},
                              tv.Mock(config=CFG_NO_MSGS, history=tv.HISTORY_ANSWER), viewport=viewport,
-                             before_goto=lambda c, p: c.add_init_script(DEMO_CLOSE_JS))
+                             before_goto=before)
     ready(page, "#anything-llm-inline-input")
     tv.settle(page, 600)
     return ctx, page
@@ -1727,6 +1739,42 @@ def check_morph_close_after_resize(browser, base_url):
         ctx.close()
 
 
+def check_morph_close_delayed_page(browser, base_url):
+    """Review-Fixrunde, Zuklappen (Escape) nach vollem Aufklappen, Seite ohne
+    Transition reagiert verzögert (MO-Callback per rAF bzw. setTimeout 30 ms):
+    verbreitert/verschiebt die Seite die Fläche erst nach dem Pin-Schritt des
+    Frames, korrigiert der ResizeObserver des Pins vor dem Malen — keine Kante
+    springt (≤ 14 px je Frame), linke Kante nur nach rechts, rechte nur nach
+    links (0,6 px/Frame), letzter Frame = Leiste ± 1 px, danach Ruhe."""
+    for delay in ("raf", 30):
+        ctx, page = demo_close_page(browser, base_url, {"width": 1280, "height": 1400},
+                                    extra_css=NO_PAGE_TRANSITION_CSS, mo_delay=delay)
+        try:
+            bar = pill_rect(page)
+            demo_open(page)
+            page.evaluate(CLOSE_REC_JS, 1500)
+            page.wait_for_timeout(40)
+            page.evaluate("() => window.__q('#message-input').focus()")
+            page.keyboard.press("Escape")
+            page.wait_for_function("() => window.__rec !== null", timeout=5000)
+            run, last, at350, after, host_span = analyse_close(page.evaluate("() => window.__rec"))
+            ls = [f["x"] for f in run]
+            rs = [f["x"] + f["w"] for f in run]
+            step = max((abs(b - a) for xs in (ls, rs) for a, b in zip(xs, xs[1:])), default=0)
+            mono = (all(b >= a - 0.6 for a, b in zip(ls, ls[1:]))
+                    and all(b <= a + 0.6 for a, b in zip(rs, rs[1:])))
+            ok = (bool(run) and step <= 14 and mono and abs(last["w"] - bar["w"]) <= 1
+                  and abs(last["x"] - bar["x"]) <= 1 and abs(last["h"] - bar["h"]) <= 1
+                  and host_span is not None and host_span < 1)
+            record(f"Review morph-close-delayed-page (Seite {'rAF' if delay == 'raf' else 'setTimeout 30 ms'}): "
+                   "kein Sprung, Ende = Leiste", ok,
+                   f"max. Schritt {step:.1f} px/Frame, monoton {mono}; letzter Frame {last['w']:.1f}×{last['h']:.1f} "
+                   f"@ {last['x']:.1f} (Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f}); Host danach "
+                   f"{host_span:.2f} px" if last else "kein Lauf")
+        finally:
+            ctx.close()
+
+
 def check_morph_close_after_scroll(browser, base_url):
     """::morph-close-after-scroll (Review-Befund 1/4) — Panel offen, Seite
     per Mausrad 300 px gescrollt, dann „Einklappen“: der letzte Frame des
@@ -1765,6 +1813,246 @@ def check_morph_close_after_scroll(browser, base_url):
                f"letzter Lauf-Frame {last['w']:.1f}×{last['h']:.1f} @ ({last['x']:.1f}, {last['y']:.1f}); "
                f"Host-Spanne danach {host_span:.2f} px; Leiste ruhig {still}"
                if last else f"kein Lauf: {len(rec['frames'])} Frames")
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Aufklappen wie das Original (Issue embed-morph-aufklappen-kante): erster
+# Frame = Leiste, Kanten monoton — auf der Demo-ähnlichen Seite (Umschalten
+# per MutationObserver, asynchron) mit und ohne Seiten-Transition max-width;
+# Review-Fixrunde: Seite reagiert zusätzlich verzögert (MO-Callback per rAF
+# bzw. setTimeout 30 ms), Fenster-Resize im Lauf — Endlage nachgeführt.
+# Rekorder wie CLOSE_REC_JS: gemessen im Task nach jedem Frame (gemalter
+# Stand), nicht-blockierend (window.__rec).
+# ---------------------------------------------------------------------------
+NO_PAGE_TRANSITION_CSS = " #slot { transition: none; }"
+OPEN_REC_JS = r"""(ms) => { const out = []; window.__rec = null; window.__t0 = null; let t0 = null;
+  // Bezug = Klick (pointerdown), nicht ein späteres Escape (DEMO_CLOSE_JS)
+  document.addEventListener('pointerdown', () => { t0 = performance.now(); }, { capture: true, once: true });
+  const host = document.getElementById('anythingllm-embed-widget');
+  const start = performance.now();
+  const step = () => setTimeout(sample, 0);
+  const sample = () => { const w = window.__q('#anything-llm-chat'); const r = w ? w.getBoundingClientRect() : null;
+    const h = host.getBoundingClientRect();
+    const c = w ? w.querySelector('.allm-inline-content') : null;
+    out.push({ t: performance.now(), x: r ? r.x : null, y: r ? r.y : null, w: r ? r.width : 0, h: r ? r.height : 0,
+      hostW: h.width, hostX: h.x, sy: scrollY, cw: c ? c.getBoundingClientRect().width : null,
+      from: w ? w.classList.contains('allm-morph-from') : false,
+      run: w ? w.classList.contains('allm-morph') : false,
+      close: w ? w.classList.contains('allm-morph-close') : false });
+    if (performance.now() - start < ms) requestAnimationFrame(step);
+    else window.__rec = { frames: out, t0 }; };
+  requestAnimationFrame(step); return true; }"""
+
+
+def record_open(page, ms=1100, during=None):
+    """Aufklappen per „Chatten“ aufzeichnen (ms ab Start des Rekorders);
+    during(page) läuft direkt nach dem Klick (z. B. Escape nach x ms)."""
+    page.evaluate(OPEN_REC_JS, ms)
+    page.wait_for_timeout(40)
+    morph_click(page)
+    if during:
+        during(page)
+    page.wait_for_function("() => window.__rec !== null", timeout=5000)
+    rec = page.evaluate("() => window.__rec")
+    for f in rec["frames"]:
+        f["t"] = f["t"] - rec["t0"]
+    return [f for f in rec["frames"] if f["t"] >= 0]
+
+
+def analyse_open(fr, bar, panel):
+    """Erster Frame mit Leistenform, Lauf-Frames, Ende (erster Frame ohne
+    Morph-Klassen), Monotonie der Kanten (Toleranz 0,6 px/Frame), Ziel-
+    zeitpunkte für Breite/Höhe, scrollY."""
+    first = next((f for f in fr if f["from"]), None)
+    morph = [f for f in fr if f["from"] or f["run"]]
+    end_i = next((i for i, f in enumerate(fr) if morph and f["t"] > morph[-1]["t"]), None)
+    end = fr[end_i] if end_i is not None else None
+    after = fr[end_i:] if end_i is not None else []
+    seq = morph + ([end] if end else [])
+    lefts = [f["x"] for f in seq]
+    rights = [f["x"] + f["w"] for f in seq]
+    hs = [f["h"] for f in seq]
+    tol = 0.6
+    mono = (all(b <= a + tol for a, b in zip(lefts, lefts[1:]))
+            and all(b >= a - tol for a, b in zip(rights, rights[1:]))
+            and all(b >= a - tol for a, b in zip(hs, hs[1:])))
+    first_ok = bool(first) and all(abs(first[k] - bar[k]) <= 1 for k in ("x", "y", "w", "h"))
+    end_ok = bool(end) and all(abs(end[k] - panel[k]) <= 1 for k in ("x", "y", "w", "h"))
+    jump = max((abs(a[k] - b[k]) for a, b in zip(after, after[1:]) for k in ("x", "w", "h")), default=0.0)
+    last = morph[-1] if morph else None
+    end_jump = max((abs(last[k] - end[k]) for k in ("x", "w", "h")), default=0.0) if last and end else None
+
+    def reach(key, target):
+        return next((f["t"] for f in seq if abs(f[key] - target) <= 0.6), None)
+    # größter Schritt einer Kante je Frame (Lauf ≈ 11 px/Frame in der
+    # steilsten Phase; ein Sprung zur nachgeholten Endlage wären 80 px)
+    step = max((abs(b - a) for xs in (lefts, rights) for a, b in zip(xs, xs[1:])), default=0.0)
+    return {"first": first, "morph": morph, "end": end, "mono": mono, "first_ok": first_ok, "end_ok": end_ok,
+            "after_jump": jump, "end_jump": end_jump, "lefts": lefts, "rights": rights, "hs": hs, "step": step,
+            "t_w": reach("w", panel["w"]), "t_h": reach("h", panel["h"]),
+            "sy": sorted({round(f["sy"], 1) for f in seq})}
+
+
+def edge_trace(a, step=3):
+    """Kurzer Verlauf: t:links/rechts/Höhe je step-tem Frame."""
+    seq = a["morph"] + ([a["end"]] if a["end"] else [])
+    return " ".join(f"{f['t']:.0f}:{f['x']:.0f}/{f['x'] + f['w']:.0f}/{f['h']:.0f}" for f in seq[::step])
+
+
+def open_case(browser, base_url, extra_css, mo_delay=None):
+    """Leiste und Endgeometrie messen (einmal auf/zu), dann den Lauf aufzeichnen.
+    panel["cw"] = Breite des Inhalts-Containers in Ruhe (Panel minus Rahmen)."""
+    ctx, page = demo_close_page(browser, base_url, {"width": 1280, "height": 1400}, extra_css=extra_css,
+                                mo_delay=mo_delay)
+    bar = pill_rect(page)
+    demo_open(page)
+    panel = morph_state(page)
+    panel["cw"] = page.evaluate(
+        "() => window.__q('#anything-llm-chat').querySelector('.allm-inline-content').getBoundingClientRect().width")
+    page.evaluate("() => window.__q('#message-input').focus()")
+    page.keyboard.press("Escape")
+    wait_bar_back(page)
+    tv.settle(page, 700)
+    page.mouse.move(1200, 1350)
+    return ctx, page, bar, panel
+
+
+OPEN_CASES = (
+    # (Name, Seiten-CSS, Reaktion der Seite auf das Signal)
+    ("morph-open-geometry", NO_PAGE_TRANSITION_CSS, None),
+    ("morph-open-geometry-page-transition", "", None),
+    ("morph-open-geometry-raf", NO_PAGE_TRANSITION_CSS, "raf"),
+    ("morph-open-geometry-raf-page-transition", "", "raf"),
+    ("morph-open-geometry-timeout30", NO_PAGE_TRANSITION_CSS, 30),
+    ("morph-open-geometry-timeout30-page-transition", "", 30),
+)
+
+
+def check_morph_open_geometry(browser, base_url):
+    """::morph-open-first-frame (AK-1), ::morph-open-geometry (AK-2/AK-4/NAK-1)
+    — Seite ohne Transition: erster Frame mit Leistenform = Leiste ± 1 px,
+    linke Kante monoton fallend, rechte steigend, Höhe steigend (0,6 px/Frame),
+    keine Kante springt (≤ 14 px je Frame), Ende = Panel ± 1 px ohne
+    Nachbewegung (Endsprung ≤ 1 px), Breite/Höhe am Ziel bei 480–780 ms,
+    scrollY konstant. ::morph-open-geometry-page-transition (AK-3) — dasselbe
+    mit .ask-ähnlicher Seiten-Transition max-width 500 ms. Review-Fixrunde:
+    dieselben Prüfungen, wenn die Seite verzögert reagiert (MO-Callback per
+    rAF bzw. setTimeout 30 ms, jeweils mit/ohne Transition). Inhaltsbreite
+    (.allm-inline-content): im ersten Lauf-Frame = Ruhelage (synchron/rAF),
+    ab 150 ms (vor dem Einblenden bei 22 %) in jedem Fall = Ruhelage."""
+    for name, css, delay in OPEN_CASES:
+        ctx, page, bar, panel = open_case(browser, base_url, css, mo_delay=delay)
+        try:
+            fr = record_open(page)
+            a = analyse_open(fr, bar, panel)
+            f0 = a["first"]
+            if name == "morph-open-geometry":
+                record("AK-1 morph-open-first-frame: erster Frame mit Leistenform = Leiste ± 1 px", a["first_ok"],
+                       f"Leiste {bar['w']:.0f}×{bar['h']:.0f} @ ({bar['x']:.0f}, {bar['y']:.0f}); erster Frame "
+                       f"t={f0['t']:.0f} ms {f0['w']:.1f}×{f0['h']:.1f} @ ({f0['x']:.1f}, {f0['y']:.1f})"
+                       if f0 else f"keine Leistenform ({len(fr)} Frames)")
+            ak = ("AK-2" if css else "AK-3") if delay is None else "Review-1"
+            ok = (a["first_ok"] and a["mono"] and a["end_ok"] and a["after_jump"] < 0.5 and a["step"] <= 14
+                  and a["end_jump"] is not None and a["end_jump"] <= 1.0 + 1e-6)
+            record(f"{ak} {name}: Kanten monoton, kein Sprung, Ende = Panel ohne Sprung", ok,
+                   f"Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f} -> Panel {panel['w']:.0f}×{panel['h']:.0f} "
+                   f"@ {panel['x']:.0f}; erster Frame {f0['w']:.1f}×{f0['h']:.1f} @ {f0['x']:.1f}; links "
+                   f"{a['lefts'][0]:.1f}->{a['lefts'][-1]:.1f} (max. Anstieg "
+                   f"{max((b - c for c, b in zip(a['lefts'], a['lefts'][1:])), default=0):.2f}), rechts "
+                   f"{a['rights'][0]:.1f}->{a['rights'][-1]:.1f} (max. Rückgang "
+                   f"{max((c - b for c, b in zip(a['rights'], a['rights'][1:])), default=0):.2f}), max. Schritt "
+                   f"{a['step']:.1f} px/Frame, Höhe {a['hs'][0]:.0f}->{a['hs'][-1]:.0f}; Ende "
+                   f"t={a['end']['t'] if a['end'] else -1:.0f} ms, Sprung letzter Lauf-Frame->Ende "
+                   f"{a['end_jump'] if a['end_jump'] is not None else -1:.2f} px, danach max. {a['after_jump']:.2f} px; "
+                   f"Verlauf {edge_trace(a)}"
+                   if a["morph"] and f0 else f"kein Lauf ({len(fr)} Frames)")
+            # Bezug Klick (pointerdown); main e68b099 auf derselben Seite:
+            # Breite ≈ 535–545 ms, Höhe ≈ 600–611 ms (± 0,6 px am Ziel)
+            ok4 = (a["t_w"] is not None and a["t_h"] is not None and 480 <= a["t_w"] <= 780
+                   and 540 <= a["t_h"] <= 780 and a["end"] is not None and 780 <= a["end"]["t"] <= 960)
+            record(f"AK-4 {name}: Dauer unverändert (Breite/Höhe am Ziel, Laufende nach Schatten)", ok4,
+                   f"Breite am Ziel {a['t_w']:.0f} ms, Höhe {a['t_h']:.0f} ms, Laufende "
+                   f"{a['end']['t'] if a['end'] else -1:.0f} ms" if a["t_w"] is not None and a["t_h"] is not None
+                   else "Ziel nicht erreicht")
+            record(f"NAK-1 {name}: scrollY konstant im Lauf", len(a["sy"]) == 1, f"scrollY {a['sy']}")
+            run1 = next((f for f in a["morph"] if f["run"]), None)
+            late = [f["cw"] for f in a["morph"] if f["t"] >= 150]
+            ok5 = (run1 is not None and bool(late) and all(abs(c - panel["cw"]) <= 0.5 for c in late)
+                   and (delay == 30 or abs(run1["cw"] - panel["cw"]) <= 0.5))
+            record(f"Review-5 {name}: Inhaltsbreite im Lauf = Ruhelage", ok5,
+                   f"Ruhelage {panel['cw']:.1f} px; erster Lauf-Frame t={run1['t']:.0f} ms {run1['cw']:.1f} px; "
+                   f"ab 150 ms {sorted({round(c, 1) for c in late})}" if run1 else "kein Lauf-Frame")
+            page.screenshot(path=str(RESULTS_DIR / f"overlay-{name}-end.png"), caret="hide")
+        finally:
+            ctx.close()
+
+
+def check_morph_open_resize(browser, base_url):
+    """Review-2 morph-open-resize: Fenster 1280 -> 1100 px ≈ 150 ms nach dem
+    Klick (Fläche zentriert, Endlage 260 -> 170), mit/ohne Seiten-Transition:
+    keine Kante springt (≤ 14 px je Frame), Ende = neue Panel-Lage ± 1 px,
+    Endsprung ≤ 1 px, danach Ruhe."""
+    for name, css in (("morph-open-resize", NO_PAGE_TRANSITION_CSS), ("morph-open-resize-page-transition", "")):
+        ctx, page, bar, panel = open_case(browser, base_url, css)
+        try:
+            def resize(p):
+                p.wait_for_timeout(150)
+                p.set_viewport_size({"width": 1100, "height": 1400})
+            fr = record_open(page, 1300, during=resize)
+            tv.settle(page, 400)
+            fin = morph_state(page)
+            a = analyse_open(fr, bar, fin)
+            ok = (bool(a["morph"]) and a["end_ok"] and a["step"] <= 14 and a["after_jump"] < 0.5
+                  and a["end_jump"] is not None and a["end_jump"] <= 1.0 + 1e-6)
+            record(f"Review-2 {name}: Endlage nachgeführt, kein Sprung", ok,
+                   f"Panel vorher {panel['w']:.0f} @ {panel['x']:.0f}, nach Resize {fin['w']:.0f} @ {fin['x']:.0f}; "
+                   f"max. Schritt {a['step']:.1f} px/Frame, Sprung letzter Lauf-Frame->Ende "
+                   f"{a['end_jump'] if a['end_jump'] is not None else -1:.2f} px, danach max. {a['after_jump']:.2f} px; "
+                   f"Verlauf {edge_trace(a)}" if a["morph"] else f"kein Lauf ({len(fr)} Frames)")
+        finally:
+            ctx.close()
+
+
+def check_morph_close_during_open(browser, base_url):
+    """Zuklappen mitten im Aufklappen (Escape ≈ 120 ms nach dem Klick) auf der
+    Seite mit Transition: der Rückweg übernimmt die festgehaltene Lage — kein
+    Frame-Sprung (|Δx|, |Δ rechte Kante| ≤ 14 px je Frame, Lauf ≈ 12 px/Frame
+    in der steilsten Phase), nach der Umkehr linke Kante nur nach rechts,
+    rechte nur nach links (0,6 px/Frame), Ende = Leiste ± 1 px. Review-
+    Fixrunde: dasselbe, wenn die Seite verzögert reagiert (setTimeout 30 ms:
+    Endlage im Lauf nachgeführt, Rückweg führt die Box zurück; rAF ohne
+    Transition)."""
+    for label, css, delay in (("(Seiten-Transition)", "", None),
+                              ("(Seiten-Transition, Seite setTimeout 30 ms)", "", 30),
+                              ("(ohne Transition, Seite setTimeout 30 ms)", NO_PAGE_TRANSITION_CSS, 30),
+                              ("(ohne Transition, Seite rAF)", NO_PAGE_TRANSITION_CSS, "raf")):
+        close_during_open_case(browser, base_url, label, css, delay)
+
+
+def close_during_open_case(browser, base_url, label, css, delay):
+    ctx, page, bar, panel = open_case(browser, base_url, css, mo_delay=delay)
+    try:
+        def esc(p):
+            p.wait_for_timeout(120)
+            p.evaluate("() => window.__q('#anything-llm-key-sink') && window.__q('#anything-llm-key-sink').focus()")
+            p.keyboard.press("Escape")
+        fr = record_open(page, 1300, during=esc)
+        seq = [f for f in fr if f["from"] or f["run"]]
+        dx = max((abs(b["x"] - a["x"]) for a, b in zip(seq, seq[1:])), default=0)
+        dr = max((abs((b["x"] + b["w"]) - (a["x"] + a["w"])) for a, b in zip(seq, seq[1:])), default=0)
+        last = seq[-1] if seq else None
+        rev = any(f["close"] for f in seq)
+        back = [f for f in seq if f["close"]]
+        mono = all(b["x"] >= a["x"] - 0.6 and b["x"] + b["w"] <= a["x"] + a["w"] + 0.6
+                   for a, b in zip(back, back[1:]))
+        ok = (bool(seq) and rev and mono and dx <= 14 and dr <= 14 and last is not None
+              and all(abs(last[k] - bar[k]) <= 1 for k in ("x", "w", "h")))
+        record(f"Zuklappen mitten im Aufklappen {label}: kein Sprung, Ende = Leiste", ok,
+               f"max |Δx| {dx:.1f} px, max |Δ rechts| {dr:.1f} px je Frame; Umkehr {rev}, danach monoton {mono}; letzter Frame "
+               f"{last['w']:.1f}×{last['h']:.1f} @ {last['x']:.1f} (Leiste {bar['w']:.0f}×{bar['h']:.0f} @ {bar['x']:.0f})"
+               if last else "kein Lauf")
     finally:
         ctx.close()
 
@@ -1812,6 +2100,10 @@ def main():
                 check_morph_close_geometry(browser, base_url)
                 check_morph_close_after_resize(browser, base_url)
                 check_morph_close_after_scroll(browser, base_url)
+                check_morph_open_geometry(browser, base_url)
+                check_morph_open_resize(browser, base_url)
+                check_morph_close_during_open(browser, base_url)
+                check_morph_close_delayed_page(browser, base_url)
                 check_morph_chips(browser, base_url)
                 check_morph_chips_reverse(browser, base_url)
                 check_morph_scroll_before(browser, base_url)

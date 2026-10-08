@@ -229,7 +229,8 @@ function hasRunningTransition(el) {
 // Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
 // Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
-// zeigen, dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
+// zeigen (in diesem Frame gegen das Panel nach der Seitenreaktion nachgemessen,
+// siehe pin), dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
 // dann (eigene Dauer/Kurve, Verzögerung per CSS) Transition vom aktuellen
 // Stand zur Leistenform — steht die Leistenform noch
 // an (Zuklappen vor dem ersten Frame des Aufklappens), endet der Lauf sofort.
@@ -241,18 +242,32 @@ function hasRunningTransition(el) {
 // 100 ms); onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein
 // Rücksprung). Schließen, während die Chips noch ausblenden: Einblenden ab
 // der aktuellen Opacity (--allmi-chips-o), kein Sprung.
-// pin (Zuklappen): hält die äußere Box für die Dauer des Laufs fest
-// (pinBox), Rückgabe = Lösen; gelöst wird bei jedem stop, vor onEnd.
+// pin: hält die äußere Box für die Dauer des Laufs fest (pinBox), Rückgabe
+// = Lösen; gelöst wird bei jedem stop, vor onEnd. Zuklappen: beim Start des
+// Laufs. Aufklappen: im ersten Frame, pin(hooks) — misst dort das Panel neu
+// und setzt geom.dx/dy (Leistenform relativ zum Panel nach der
+// Seitenreaktion) sowie geom.panelW (Endbreite der Box); die Startform wird
+// vor dem Malen dieses Frames nachgeführt. Danach führt pin die Endlage je
+// Frame nach (followPage; hooks: Fortschritt/Kurve der Fenster-Transition,
+// Startform neu vor dem Lauf, Inhaltsbreite); am Laufende wartet finish
+// laufende Nachläufe ab (unpin.settle, höchstens 410 ms). finish läuft genau
+// einmal, nach stop nie mehr.
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
 function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
-  // Breite in px oder (Zuklappen nach Fensteränderung) "100%" der Box
-  set(win, "mw", typeof geom.w === "string" ? geom.w : px(geom.w));
-  set(win, "mh", px(geom.h));
-  set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
-  set(win, "mr", px(geom.r));
-  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte)
+  const setForm = () => {
+    // Breite in px oder (Zuklappen nach Fensteränderung) "100%" der Box
+    set(win, "mw", typeof geom.w === "string" ? geom.w : px(geom.w));
+    set(win, "mh", px(geom.h));
+    set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
+    set(win, "mr", px(geom.r));
+  };
+  setForm();
+  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte);
+  // frameW = Rahmen des Fensters (Breite der Box minus Inhaltsbreite)
+  let frameW = null;
   if (!win.style.getPropertyValue("--allmi-cw")) {
+    frameW = win.offsetWidth - win.clientWidth;
     set(win, "cw", px(win.clientWidth));
     set(win, "ch", px(win.clientHeight));
   }
@@ -260,6 +275,36 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   let raf = 0;
   let timer = 0;
   let unpin = null;
+  // Lauf beendet (finish oder Abbruch): finish läuft höchstens einmal
+  let over = false;
+  // Form-Transition des Fensters, gesetzt beim Start des Laufs: ihr
+  // Fortschritt (mit Kurve) führt beim Aufklappen die Endlage nach
+  // (followPage) und beim Zuklappen mitten darin die Box zurück (closeGeom)
+  let anim = null;
+  let started = false;
+  const form = () => {
+    setForm();
+    if (frameW != null && geom.panelW > 0)
+      set(win, "cw", px(Math.max(0, geom.panelW - frameW)));
+  };
+  const hooks = {
+    progress: () => {
+      if (!started) return null;
+      const p = anim?.effect?.getComputedTiming?.().progress;
+      if (p != null) return p;
+      return anim && /^(running|paused)$/.test(anim.playState) ? 0 : 1;
+    },
+    easing: () => anim?.effect?.getTiming?.().easing,
+    // vor dem Lauf: neue Startform, Stil sofort übernehmen (der Lauf startet
+    // im selben Frame von ihr aus, nicht von der alten)
+    form: () => {
+      form();
+      void getComputedStyle(win).opacity;
+    },
+    content: (w) => {
+      if (frameW != null) set(win, "cw", px(Math.max(0, w - frameW)));
+    },
+  };
   const onTransitionEnd = (e) => {
     if (e.target !== win) return;
     if (!isMorphProperty(e.propertyName) && e.propertyName !== "box-shadow")
@@ -267,6 +312,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     if (!hasRunningTransition(win)) finish();
   };
   const stop = (keep = false) => {
+    over = true;
     cancelAnimationFrame(raf);
     clearTimeout(timer);
     win.removeEventListener("transitionend", onTransitionEnd);
@@ -281,12 +327,16 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     box.style.removeProperty("--allmi-bh");
   };
   function finish() {
+    if (over) return;
+    // Aufklappen: Endlage noch nicht erreicht -> erst der Nachlauf (meldet
+    // sich genau einmal, spätestens nach FOLLOW_SETTLE_MS)
+    if (unpin?.settle?.(finish)) return;
     stop(true);
     onEnd?.();
     stop();
   }
   const run = () => {
-    if (pin) unpin = pin();
+    if (pin && !opening) unpin = pin(hooks);
     win.classList.add("allm-morph");
     if (flow) box.classList.add("allm-morph-flow");
     win.classList.toggle("allm-morph-from", !opening);
@@ -307,6 +357,15 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
       chips.classList.add("allm-morph-chips-in");
     }
     const ms = longestTransitionMs(getComputedStyle(win));
+    try {
+      anim =
+        (win.getAnimations?.() || []).find((a) =>
+          isMorphProperty(a.transitionProperty),
+        ) || null;
+    } catch (e) {
+      anim = null;
+    }
+    started = true;
     win.addEventListener("transitionend", onTransitionEnd);
     timer = setTimeout(finish, ms + 100);
   };
@@ -315,6 +374,12 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     if (flow) box.classList.add("allm-morph-flow-from");
     chips?.classList.add("allm-morph-chips-out");
     raf = requestAnimationFrame(() => {
+      // erster Frame, vor dem Malen: Panel nach der Seitenreaktion messen,
+      // Box festhalten, Startform (und Inhaltsbreite) nachführen
+      if (pin) {
+        unpin = pin(hooks);
+        form();
+      }
       raf = requestAnimationFrame(run);
     });
   } else if (
@@ -326,40 +391,271 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   return stop;
 }
 
-// Zuklappen: äußere Box (Panel) für die Dauer des Laufs an ihrer Stelle im
-// Dokument festhalten, auch wenn die Seite die Inline-Fläche gleichzeitig
-// verschiebt oder schmaler macht (Seiten-Transition auf das Signal
-// data-allm-expanded, z. B. .ask { max-width } der Demo): feste Breite und je
-// Frame left/top = Versatz der Inline-Fläche seit dem Start (Seitenkoordinaten,
-// Scrollen zählt nicht). So läuft das Fenster mit eigener Dauer/Kurve von der
-// Panel- zur Leistenform, unabhängig von der Kurve der Seite. root0 = Lage der
-// Inline-Fläche, width = Breite der Box, beide VOR dem Entfernen des Signals
-// gemessen (Seiten-CSS kann synchron reagieren). Rückgabe: Lösen (Stil wie
-// vorher).
-function pinBox(box, root, root0, width) {
+// Zu- und Aufklappen: äußere Box (Panel) für die Dauer des Laufs an ihrer
+// Stelle im Dokument festhalten, auch wenn die Seite die Inline-Fläche
+// gleichzeitig verschiebt, breiter oder schmaler macht (Seiten-Transition auf
+// das Signal data-allm-expanded, z. B. .ask { max-width } der Demo): feste
+// Breite und je Frame left/top = Versatz der Inline-Fläche gegenüber der
+// gewünschten Lage (Seitenkoordinaten, Scrollen zählt nicht; ein
+// getBoundingClientRect je Frame). So läuft das Fenster mit eigener
+// Dauer/Kurve zwischen Panel- und Leistenform, unabhängig von der Kurve der
+// Seite. Zuklappen: root0 = Lage der Inline-Fläche, width = Breite der Box,
+// beide VOR dem Entfernen des Signals gemessen (Seiten-CSS kann synchron
+// reagieren). Aufklappen: root0/width = Endlage nach der Seitenreaktion
+// (readAtPageTransitionEnd); place(rect der Fläche) liefert dann je Frame die
+// nachgeführte Lage { x, y, w } (follow.place, followPage); Zuklappen mitten
+// im nachgeführten Aufklappen: Rückweg zur Bezugslage (closeGeom). Ändert die
+// Seite die Größe der Fläche erst nach dem Pin-Schritt eines Frames (eigener
+// rAF-Callback danach), korrigiert ein ResizeObserver noch vor dem Malen
+// (Layout ist dort schon gerechnet). Stil wird nur bei Änderung geschrieben.
+// Rückgabe: Lösen (Stil wie vorher); mit follow.settle zusätzlich
+// .settle(done) fürs Laufende.
+function pinBox(box, root, root0, width, follow = null) {
   const prev = ["left", "right", "top", "width"].map((k) => [
     k,
     box.style.getPropertyValue(k),
   ]);
   const baseLeft = parseFloat(box.style.left) || 0;
   const baseTop = parseFloat(box.style.top) || 0;
-  box.style.setProperty("width", px(width));
   box.style.setProperty("right", "auto");
   let raf = 0;
-  const step = () => {
+  // gelöst: ein noch zugestellter ResizeObserver-/rAF-Callback schreibt nichts
+  let live = true;
+  const put = (k, v) => {
+    if (box.style.getPropertyValue(k) !== v) box.style.setProperty(k, v);
+  };
+  const tick = () => {
+    if (!live) return;
     const r = root.getBoundingClientRect();
-    const dx = root0.x - (r.left + window.scrollX);
-    const dy = root0.y - (r.top + window.scrollY);
-    box.style.setProperty("left", px(baseLeft + dx));
-    box.style.setProperty("top", px(baseTop + dy));
+    const p = follow ? follow.place(r) : { x: root0.x, y: root0.y, w: width };
+    put("width", px(p.w));
+    put("left", px(baseLeft + p.x - (r.left + window.scrollX)));
+    put("top", px(baseTop + p.y - (r.top + window.scrollY)));
+  };
+  const step = () => {
     raf = requestAnimationFrame(step);
+    tick();
   };
   step();
-  return () => {
+  const ro =
+    typeof ResizeObserver === "function" ? new ResizeObserver(tick) : null;
+  ro?.observe(root);
+  const unpin = () => {
+    if (!live) return;
+    live = false;
     cancelAnimationFrame(raf);
+    ro?.disconnect();
+    follow?.stop?.();
     for (const [k, v] of prev)
       if (v) box.style.setProperty(k, v);
       else box.style.removeProperty(k);
+  };
+  if (follow?.settle)
+    unpin.settle = (done) => {
+      if (!live) return false;
+      tick();
+      return follow.settle(done);
+    };
+  return unpin;
+}
+
+// Laufende CSS-Transitionen an target und seinen Vorfahren (Seiten-
+// Transition auf das Signal data-allm-expanded, z. B. .ask { max-width })
+function pageTransitions(target) {
+  return document
+    .getAnimations()
+    .filter(
+      (a) =>
+        a.transitionProperty != null && a.effect?.target?.contains?.(target),
+    );
+}
+
+// Endlage der Seite lesen: laufende CSS-Transitionen an target und seinen
+// Vorfahren kurz ans Ende spulen, read() ausführen (erzwingt das Layout im
+// Endzustand), zurückspulen — die Transition der Seite läuft unverändert
+// weiter (kein Paint, keine Ereignisse dazwischen). Rückgabe: { value } bzw.
+// null ohne getAnimations (ältere Browser, jsdom) oder wenn read() wirft.
+function readAtPageTransitionEnd(target, read) {
+  if (typeof document.getAnimations !== "function" || !target) return null;
+  const held = [];
+  try {
+    for (const a of pageTransitions(target)) {
+      const end = a.effect.getComputedTiming?.().endTime;
+      const t = a.currentTime;
+      if (t == null || !Number.isFinite(end) || t >= end) continue;
+      a.currentTime = end;
+      held.push([a, t]);
+    }
+    return { value: read() };
+  } catch (e) {
+    return null;
+  } finally {
+    for (const [a, t] of held)
+      try {
+        a.currentTime = t;
+      } catch (e) {
+        // Animation inzwischen beendet/abgebrochen: nichts zurückzuspulen
+      }
+  }
+}
+
+// Aufklappen: Endlage der Inline-Fläche während des Laufs nachführen (place
+// für pinBox, je Frame mit dem Rect der Fläche). Die Endlage ändert sich,
+// wenn die Seite verzögert auf das Signal reagiert (MutationObserver-Callback
+// per rAF/setTimeout/Framework-Scheduler), eine Transition erst später
+// startet oder sich das Fenster ändert: weicht die Fläche vom Ziel ab, gilt
+// als neue Endlage ihre aktuelle Lage (keine Seiten-Transition am
+// Platzhalter/Vorfahren) bzw. das Ende einer neu gestarteten Transition
+// (readAtPageTransitionEnd; bekannte Transitionen und ihr Ende zählen nur
+// einmal, nach einer Fensteränderung neu). Vor dem Lauf (progress() = null):
+// Startform gegen die neue Endlage neu (restart). Im Lauf gleitet das Ziel
+// T (x/y der Fläche, Breite w der Box) über den Rest der Fenster-Kurve:
+// T = von + (nach − von)·g, g = (e − e1)/(1 − e1), e = Fortschritt der
+// Fenster-Transition (mit Kurve), e1 = e beim Umschwenken; die Box steht bei
+// x0 + (T − x0)·e (x0 = Lage, gegen die die Leistenform gemessen ist), ihre
+// Breite = T.w. Die Fensterkanten liegen so bei Leiste·(1 − e) + T·e: kein
+// Sprung, Ende = neue Endlage; Kanten monoton, solange sich das Ziel nicht
+// zur Leiste hin zurückzieht (Fenster schmaler: dann kann eine Kante kurz vor
+// dem Ende wenige px überschwingen, siehe Test „Ziel zieht sich zurück“).
+// Im letzten Rest der
+// Kurve (e ≥ 0,98) bzw. nach ihr: Nachlauf 120 ms mit derselben Kurve
+// (leere Web-Animation als Uhr; ohne animate sofort); höchstens 4 Nachläufe
+// je Lauf, danach gilt das Ziel sofort (Seite bewegt die Fläche je Frame per
+// JS). settle(done) am Laufende: läuft ein Nachlauf, true und done genau
+// einmal, sobald kein Nachlauf mehr läuft (ein neuer Nachlauf übernimmt das
+// Warten), spätestens nach FOLLOW_SETTLE_MS (410 ms).
+const FOLLOW_TAIL_MS = 120;
+const FOLLOW_MAX_TAILS = 4;
+// harte Frist für settle: spätestens dann ist der Lauf fertig, auch wenn ein
+// Nachlauf nie endet
+const FOLLOW_SETTLE_MS = 3 * FOLLOW_TAIL_MS + 50;
+function followPage(target, root, start, offW, hooks, restart) {
+  let x0 = start.x;
+  let y0 = start.y;
+  let from = start;
+  let to = start;
+  let e1 = 0;
+  let tail = null;
+  let tails = 0;
+  // settle: wartendes done, harte Frist, Ende gemeldet
+  let wait = null;
+  let deadline = 0;
+  let settled = false;
+  let vw = window.innerWidth;
+  let vh = window.innerHeight;
+  const known = new Set(pageTransitions(target));
+  const same = (a, b) =>
+    Math.abs(a.x - b.x) <= 0.5 &&
+    Math.abs(a.y - b.y) <= 0.5 &&
+    Math.abs(a.w - b.w) <= 0.5;
+  const release = () => {
+    const done = wait;
+    wait = null;
+    clearTimeout(deadline);
+    if (!done) return;
+    settled = true;
+    done();
+  };
+  // Nachlauf t beobachten: endet er als aktueller Nachlauf, ist der Lauf fertig
+  // (ein abgebrochener Nachlauf meldet nichts, sein Nachfolger übernimmt);
+  // ohne finished-Promise sofort fertig
+  const watch = (t) => {
+    if (!t.finished?.then) return false;
+    t.finished.then(
+      () => {
+        if (tail === t) release();
+      },
+      () => {},
+    );
+    return true;
+  };
+  const goal = (e) => {
+    let g = 1;
+    if (tail) {
+      const p = tail.effect?.getComputedTiming?.().progress;
+      g = p != null ? p : tail.playState === "finished" ? 1 : 0;
+    } else if (e1 < 1) g = Math.min(1, Math.max(0, (e - e1) / (1 - e1)));
+    const at = (k) => from[k] + (to[k] - from[k]) * g;
+    return { x: at("x"), y: at("y"), w: at("w") };
+  };
+  const place = (r) => {
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    const e = hooks.progress();
+    const cur = { x: r.left + sx, y: r.top + sy, w: r.width + offW };
+    let check = !same(cur, to);
+    if (window.innerWidth !== vw || window.innerHeight !== vh) {
+      vw = window.innerWidth;
+      vh = window.innerHeight;
+      known.clear();
+      check = true;
+    }
+    let end = null;
+    if (check) {
+      const running = pageTransitions(target);
+      if (!running.length) end = cur;
+      else if (running.some((a) => !known.has(a))) {
+        running.forEach((a) => known.add(a));
+        const v = readAtPageTransitionEnd(target, () =>
+          root.getBoundingClientRect(),
+        )?.value;
+        if (v) end = { x: v.left + sx, y: v.top + sy, w: v.width + offW };
+      }
+    }
+    if (end && !same(end, to)) {
+      if (e == null) {
+        x0 = end.x;
+        y0 = end.y;
+        from = to = end;
+        restart(end);
+      } else {
+        from = goal(e);
+        to = end;
+        tail?.cancel();
+        tail = null;
+        e1 = e;
+        hooks.content(end.w);
+        if (e >= 0.98) {
+          // höchstens FOLLOW_MAX_TAILS Nachläufe je Lauf; danach (die Seite
+          // bewegt die Fläche je Frame per JS) Ziel sofort übernehmen
+          if (tails < FOLLOW_MAX_TAILS) {
+            tails++;
+            tail =
+              root.animate?.(null, {
+                duration: FOLLOW_TAIL_MS,
+                easing: hooks.easing() || "ease-out",
+              }) || null;
+          }
+          e1 = 1;
+        }
+        // settle wartet: neuer Nachlauf übernimmt das Warten; ohne Nachlauf
+        // ist der Lauf fertig (nach diesem Frame, nicht mitten im Pin-Schritt)
+        if (wait && !(tail && watch(tail))) Promise.resolve().then(release);
+      }
+    }
+    const t = goal(e ?? 0);
+    const k = e ?? 0;
+    return { x: x0 + (t.x - x0) * k, y: y0 + (t.y - y0) * k, w: t.w };
+  };
+  return {
+    place,
+    settle(done) {
+      if (wait) {
+        wait = done;
+        return true;
+      }
+      if (settled || !tail || tail.playState === "finished" || !watch(tail))
+        return false;
+      wait = done;
+      deadline = setTimeout(release, FOLLOW_SETTLE_MS);
+      return true;
+    },
+    stop() {
+      wait = null;
+      clearTimeout(deadline);
+      tail?.cancel();
+      tail = null;
+    },
   };
 }
 
@@ -677,9 +973,11 @@ export default function InlineChat({
     return () => mountTarget.removeAttribute(EXPANDED_ATTR);
   }, [view, mountTarget]);
 
-  // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
-  // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
-  // (auch für den Rückweg) und den Lauf starten. Scroll nach Klick:
+  // "morph" aufklappen: Panel einmal vorläufig messen (nach dem Signal oben;
+  // Seiten-CSS hat die Fläche ggf. schon verbreitert, eine Reaktion per
+  // MutationObserver aber noch nicht), Leistenform relativ dazu ablegen
+  // (auch für den Rückweg) und den Lauf starten; im ersten Frame misst
+  // pinOpen endgültig nach. Scroll nach Klick:
   // schwebend nie (wie das Mockup; die Box darf unten herausragen), im
   // Seitenfluss JETZT (vor dem Paint, ohne Animation), falls die Box in
   // ihrer Endgröße nicht ganz im Viewport läge: Endgeometrie messen, dann
@@ -706,8 +1004,10 @@ export default function InlineChat({
       opening: true,
       flow: !floating,
       chips: morphChips(),
+      pin: (hooks) => pinOpen(g, box, hooks),
       onEnd: () => {
         m.stop = null;
+        g.openPin = null;
         releaseScrollReserve();
         // Bezug fürs Zuklappen (closeGeom): Seitenlage der Inline-Fläche im
         // aufgeklappten, ruhenden Zustand
@@ -1104,6 +1404,64 @@ export default function InlineChat({
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
   };
+  // "morph" aufklappen, erster Frame (vor dem Malen; die Seite hat auf das
+  // Signal reagiert — auch per MutationObserver, der als Microtask nach dem
+  // Klick läuft): Panel in seiner Endlage messen (laufende Seiten-
+  // Transitionen am Platzhalter dafür kurz am Ende, readAtPageTransitionEnd),
+  // Leistenform relativ dazu (Seitenkoordinaten: ein Scroll vor dem Lauf
+  // ändert nichts) und die Box dort für den Lauf festhalten (pinBox). Erster
+  // gemalter Frame = Leiste; danach folgt das Fenster nur der eigenen Kurve,
+  // auch wenn die Seite den Platzhalter mit eigener Transition verbreitert.
+  // Reagiert die Seite erst später (MutationObserver-Callback per rAF/
+  // setTimeout), startet sie eine Transition danach oder ändert sich das
+  // Fenster, führt followPage die Endlage je Frame nach (kein Endsprung).
+  // g.openPin = aktuelle Lage/Breite des Pins und Bezug der Leistenform
+  // (x0/y0) für ein Zuklappen mitten im Lauf. Ohne getAnimations (ältere
+  // Browser): nur nachmessen, die Box folgt der Seite wie bisher. Rückgabe:
+  // Lösen bzw. null.
+  const pinOpen = (g, box, hooks) => {
+    const root = rootRef.current;
+    if (!root) return null;
+    const read = () => [
+      box.getBoundingClientRect(),
+      root.getBoundingClientRect(),
+    ];
+    const end = readAtPageTransitionEnd(mountTarget, read);
+    const [b, r] = end ? end.value : [box.getBoundingClientRect()];
+    g.dx = g.pageX - (b.left + window.scrollX);
+    g.dy = g.pageY - (b.top + window.scrollY);
+    g.panelW = b.width;
+    if (!end) return null;
+    // Box relativ zur Fläche (Lage, Breite) — bleibt im Lauf gleich
+    const off = { x: b.left - r.left, y: b.top - r.top, w: b.width - r.width };
+    const start = {
+      x: r.left + window.scrollX,
+      y: r.top + window.scrollY,
+      w: b.width,
+    };
+    const op = (g.openPin = {
+      root0: { x: start.x, y: start.y },
+      width: start.w,
+      x0: start.x,
+      y0: start.y,
+    });
+    const f = followPage(mountTarget, root, start, off.w, hooks, (p) => {
+      g.dx = g.pageX - (p.x + off.x);
+      g.dy = g.pageY - (p.y + off.y);
+      g.panelW = p.w;
+      op.x0 = p.x;
+      op.y0 = p.y;
+      hooks.form();
+    });
+    const place = f.place;
+    f.place = (rect) => {
+      const p = place(rect);
+      op.root0 = { x: p.x, y: p.y };
+      op.width = p.w;
+      return p;
+    };
+    return pinBox(box, root, start, start.w, f);
+  };
   // Seitenlage der Inline-Fläche (Fensterscroll zählt nicht)
   const rootPagePos = () => {
     const r = rootRef.current?.getBoundingClientRect();
@@ -1157,11 +1515,39 @@ export default function InlineChat({
   // Inline-Fläche -> Ziel = Lage in der Fläche vom Aufklappen, Breite 100 %
   // der (mitlaufenden, nicht festgehaltenen) Box, Höhe/Rundung frisch von der
   // unsichtbaren Leiste (schwebend) bzw. vom Aufklappen (Seitenfluss): endet
-  // genau auf der neuen Leiste. Rückgabe: pin-Funktion für runMorph bzw. null.
-  const closeGeom = (g, box) => {
+  // genau auf der neuen Leiste. openPin = Lage, in der das noch laufende
+  // Aufklappen die Box gerade festhält (pinOpen): der Rückweg hält sie genau
+  // dort weiter fest und behält die Leistenform relativ dazu (dx/dy
+  // unverändert) — kein Sprung zur aktuellen Lage der Seite, gleiche
+  // Startwerte für alle Eigenschaften (der Browser kehrt jede Transition
+  // gleich um). Hat followPage die Box gegenüber dem Bezug x0/y0 der
+  // Leistenform verschoben, führt der Rückweg sie mit seinem Fortschritt
+  // dorthin zurück (Ende genau auf der Leiste).
+  // Rückgabe: pin-Funktion für runMorph bzw. null.
+  const closeGeom = (g, box, openPin = null) => {
     const root = rootRef.current;
     if (!root) return null;
     const sameView = window.innerWidth === g.vw && window.innerHeight === g.vh;
+    if (sameView && openPin) {
+      const { root0, width, x0, y0 } = openPin;
+      Object.assign(g, { w: g.barW, h: g.barH, r: g.barR });
+      if (root0.x === x0 && root0.y === y0)
+        return () => pinBox(box, root, root0, width);
+      // nachgeführt: Box mit dem Fortschritt des Rückwegs zurück zur Lage,
+      // gegen die die Leistenform gemessen ist (alle Transitionen kehren
+      // gleich um, Ende genau auf der Leiste)
+      return (hooks) =>
+        pinBox(box, root, root0, width, {
+          place: () => {
+            const k = 1 - (hooks.progress() ?? 0);
+            return {
+              x: x0 + (root0.x - x0) * k,
+              y: y0 + (root0.y - y0) * k,
+              w: width,
+            };
+          },
+        });
+    }
     // Inline-Fläche seit dem Aufklappen verschoben (Scroll-Container der
     // Seite, Layoutverschiebung): gespeicherte Seitenkoordinaten gelten
     // nicht mehr -> frisch messen wie früher (measureCloseGeom)
@@ -1202,6 +1588,8 @@ export default function InlineChat({
     if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
       if (m.closing) return;
       m.closing = true;
+      // Aufklappen läuft noch und hält die Box (pinOpen)?
+      const openPin = m.stop ? m.geom.openPin : null;
       m.stop?.(true);
       releaseScrollReserve();
       // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
@@ -1210,7 +1598,7 @@ export default function InlineChat({
       // eine Seiten-Transition läuft parallel zum Lauf, nicht danach.
       const pin = win.classList.contains("allm-morph-from")
         ? null
-        : closeGeom(m.geom, box);
+        : closeGeom(m.geom, box, openPin);
       mountTarget?.removeAttribute(EXPANDED_ATTR);
       const stop = runMorph(win, box, m.geom, {
         opening: false,
