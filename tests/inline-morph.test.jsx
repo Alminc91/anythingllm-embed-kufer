@@ -1401,14 +1401,21 @@ describe("Aufklappen: erster Frame = Leiste, Bahn unabhängig von der Seite", ()
         rootOpenRect = { ...panelRect, height: 68 };
       },
     };
-    // unbeteiligte Transition (nicht am Platzhalter/Vorfahren): bleibt stehen
+    // unbeteiligte Transition (nicht am Platzhalter/Vorfahren): bleibt
+    // stehen — jeder Spul-Versuch wird protokolliert
+    const otherSeeks = [];
     const other = {
       transitionProperty: "opacity",
       effect: {
         target: document.createElement("div"),
         getComputedTiming: () => ({ endTime: 600 }),
       },
-      currentTime: 10,
+      get currentTime() {
+        return 10;
+      },
+      set currentTime(t) {
+        otherSeeks.push(t);
+      },
     };
     let running = false;
     document.getAnimations = () => (running ? [anim, other] : []);
@@ -1424,7 +1431,7 @@ describe("Aufklappen: erster Frame = Leiste, Bahn unabhängig von der Seite", ()
     oneFrame();
     // Ende gelesen, danach zurück auf 0 (die Seite läuft unverändert weiter)
     expect(seeks).toEqual([500, 0]);
-    expect(other.currentTime).toBe(10);
+    expect(otherSeeks).toEqual([]);
     // Leiste (100, 50) relativ zum Panel in der Endlage (20, 50)
     expect(v(win, "mt")).toBe("translate(80px, 0px)");
     // Inhalt in Endbreite (jsdom: Rahmen 0)
@@ -1574,13 +1581,591 @@ describe("Aufklappen: erster Frame = Leiste, Bahn unabhängig von der Seite", ()
     expect(box.style.width).toBe("");
   });
 
-  it("prefers-reduced-motion: kein Pin, kein Nachmessen", () => {
+  // NAK-3 (Gate): bei reduzierter Bewegung greift der Morph gar nicht —
+  // Box und Fenster tragen dieselben Inline-Stile (und die Box dieselben
+  // Klassen) wie ohne Morph, vor und nach den Frames; kein Pin, kein
+  // Nachmessen. Das Verhalten im Browser belegt overlay.py
+  // (check_morph_reduced_mobile: Endzustand sofort, keine Morph-Klassen;
+  // Pixel-Referenzen des Bestands innerhalb 0,1 %).
+  it("prefers-reduced-motion: Box und Fenster wie ohne Morph (Inline-Stile), kein Pin, kein Nachmessen", () => {
     reduced = true;
     document.getAnimations = vi.fn(() => []);
+    const snap = (ui) => ({
+      box: ui.box().getAttribute("style"),
+      boxClass: ui.box().className,
+      win: ui.chat().getAttribute("style"),
+      mt: v(ui.chat(), "mt"),
+    });
+    const states = (extra) => {
+      const ui = setup({ inlineLayout: "overlay", ...extra });
+      ui.open();
+      const atClick = snap(ui);
+      nextFrames();
+      const later = snap(ui);
+      act(() => root.unmount());
+      root = createRoot(container);
+      mountTarget.remove();
+      return [atClick, later];
+    };
+    const morph = states({});
+    const plain = states({ inlineEffect: "expand" });
+    expect(morph).toEqual(plain);
+    expect(morph[1].mt).toBe("");
+    expect(document.getAnimations).not.toHaveBeenCalled();
+  });
+});
+
+// Review-Fixrunde: Seite reagiert verzögert (MutationObserver-Callback per
+// rAF/setTimeout), startet ihre Transition erst später oder das Fenster
+// ändert sich — Endlage je Frame nachgeführt (followPage), kein Endsprung.
+// Fensterkanten im jsdom-Modell: Box bei Fläche + left, Fenster =
+// Box + translate(dx)·(1 − e), Breite = mw·(1 − e) + Box·e (CSS-Transitionen
+// von --allmi-mt/--allmi-mw zum Panel, e = Fortschritt mit Kurve).
+describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgeführt", () => {
+  const oneFrame = () =>
+    act(() => {
+      frames.splice(0).forEach((f) => f.fn());
+    });
+  const pageReacts = (after) => {
+    const mo = new MutationObserver(() => {
+      if (mountTarget.getAttribute("data-allm-expanded") === "true") after();
+    });
+    mo.observe(mountTarget, {
+      attributes: true,
+      attributeFilter: ["data-allm-expanded"],
+    });
+    return mo;
+  };
+  // Form-Transition des Fensters (Fortschritt e mit Kurve)
+  const winAnim = (win) => {
+    const a = {
+      transitionProperty: "width",
+      playState: "running",
+      progress: 0,
+      effect: {
+        getComputedTiming: () => ({ progress: a.progress }),
+        getTiming: () => ({ easing: "cubic-bezier(0.16, 1, 0.3, 1)" }),
+      },
+    };
+    win.getAnimations = () => [a];
+    return a;
+  };
+  const START = { left: 100, top: 50, width: 600, height: 520 };
+  const setRects = (r) => {
+    panelRect = r;
+    rootOpenRect = { ...r, height: 68 };
+  };
+  const edges = (ui, e) => {
+    const box = ui.box();
+    const win = ui.chat();
+    const dx = parseFloat(/translate\(([-\d.]+)px/.exec(v(win, "mt"))[1]);
+    const L = rootOpenRect.left + parseFloat(box.style.left) + dx * (1 - e);
+    const W =
+      parseFloat(v(win, "mw")) * (1 - e) + parseFloat(box.style.width) * e;
+    return { L, R: L + W };
+  };
+  const expectMonotonic = (seq) => {
+    for (let i = 1; i < seq.length; i++) {
+      expect(seq[i].L).toBeLessThanOrEqual(seq[i - 1].L + 1e-9);
+      expect(seq[i].R).toBeGreaterThanOrEqual(seq[i - 1].R - 1e-9);
+    }
+  };
+  afterEach(() => {
+    delete document.getAnimations;
+  });
+
+  it("Seite reagiert erst nach dem Laufstart (setTimeout): Ziel gleitet über den Rest der Kurve, Kanten monoton, Ende ohne Sprung", () => {
+    document.getAnimations = () => [];
+    setRects(START);
     const ui = setup({ inlineLayout: "overlay" });
     ui.open();
-    nextFrames();
-    expect(document.getAnimations).not.toHaveBeenCalled();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    oneFrame(); // Pin: Seite hat noch nicht reagiert
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    expect(box.style.width).toBe("600px");
+    oneFrame(); // Lauf startet
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    a.progress = 0.1;
+    oneFrame();
+    const seq = [edges(ui, 0.1)];
+    // jetzt reagiert die Seite: Fläche 760 @ 20
+    setRects(PANEL);
+    for (const e of [0.2, 0.45, 0.7, 0.9, 0.97, 1]) {
+      a.progress = e;
+      oneFrame();
+      seq.push(edges(ui, e));
+    }
+    // im Frame der Reaktion kein Sprung: alte Bahn bei e = 0,2
+    expect(seq[1].L).toBeCloseTo(100, 6);
+    expect(seq[1].R).toBeCloseTo(700, 6);
+    expectMonotonic(seq);
+    expect(seq.at(-1).L).toBeCloseTo(20, 6);
+    expect(seq.at(-1).R).toBeCloseTo(780, 6);
+    expect(box.style.left).toBe("0px");
+    expect(box.style.width).toBe("760px");
+    // Inhalt in der neuen Endbreite
+    expect(v(win, "cw")).toBe("760px");
+    a.playState = "finished";
+    transitionEnd(win);
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    expect(box.style.width).toBe("");
+    expect(box.style.left).toBe("0px");
+  });
+
+  it("Seite reagiert per rAF (nach dem Pin, vor dem Lauf): Startform gegen die neue Endlage, Stil vor dem Laufstart übernommen", () => {
+    document.getAnimations = () => [];
+    setRects(START);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    winAnim(win);
+    const impl = window.getComputedStyle.getMockImplementation();
+    const flushes = [];
+    window.getComputedStyle.mockImplementation((el) => {
+      if (el === win)
+        flushes.push([v(win, "mt"), win.classList.contains("allm-morph")]);
+      return impl(el);
+    });
+    oneFrame();
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    setRects(PANEL); // rAF-Callback der Seite nach unserem
+    oneFrame();
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(v(win, "cw")).toBe("760px");
+    expect(box.style.left).toBe("0px");
+    expect(box.style.width).toBe("760px");
+    // neue Startform per Stil-Abfrage übernommen, BEVOR der Lauf startet
+    expect(flushes[0]).toEqual(["translate(80px, 0px)", false]);
+  });
+
+  it("Seiten-Transition startet erst verzögert: ihr Ende einmal gelesen (zurückgespult), danach nur noch ausgeglichen", () => {
+    const at = (p) => ({
+      left: 100 - 80 * p,
+      top: 50,
+      width: 600 + 160 * p,
+      height: 520,
+    });
+    const seeks = [];
+    const anim = {
+      transitionProperty: "max-width",
+      effect: { target: null, getComputedTiming: () => ({ endTime: 500 }) },
+      t: 0,
+      get currentTime() {
+        return this.t;
+      },
+      set currentTime(t) {
+        seeks.push(t);
+        this.t = t;
+        setRects(at(Math.min(1, t / 500)));
+      },
+    };
+    let running = false;
+    document.getAnimations = () => (running ? [anim] : []);
+    setRects(START);
+    const ui = setup({ inlineLayout: "overlay" });
+    anim.effect.target = mountTarget.parentElement;
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    oneFrame();
+    oneFrame(); // Lauf startet, Seite noch ohne Reaktion
+    expect(seeks).toEqual([]);
+    // Seite startet ihre Transition (setTimeout im MutationObserver)
+    running = true;
+    anim.t = 20;
+    setRects(at(0.04));
+    a.progress = 0.15;
+    oneFrame();
+    expect(seeks).toEqual([500, 20]);
+    const seq = [edges(ui, 0.15)];
+    for (const [t, e] of [
+      [120, 0.4],
+      [250, 0.6],
+      [400, 0.85],
+      [500, 1],
+    ]) {
+      anim.t = t;
+      setRects(at(t / 500));
+      if (t === 500) running = false;
+      a.progress = e;
+      oneFrame();
+      seq.push(edges(ui, e));
+    }
+    expect(seeks).toEqual([500, 20]); // bekannt: nicht erneut gespult
+    expectMonotonic(seq);
+    expect(seq.at(-1).L).toBeCloseTo(20, 6);
+    expect(seq.at(-1).R).toBeCloseTo(780, 6);
+    expect(box.style.width).toBe("760px");
+  });
+
+  it("Reaktion im letzten Rest der Kurve: Nachlauf 120 ms mit derselben Kurve, finish wartet ihn ab (kein Endsprung)", async () => {
+    document.getAnimations = () => [];
+    setRects(START);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    const inline = container.querySelector("#anything-llm-embed-inline");
+    let finishTail;
+    const tail = {
+      playState: "running",
+      p: 0,
+      effect: { getComputedTiming: () => ({ progress: tail.p }) },
+      finished: new Promise((res) => (finishTail = res)),
+      cancel: vi.fn(),
+    };
+    inline.animate = vi.fn(() => tail);
+    oneFrame();
+    oneFrame();
+    a.progress = 0.99;
+    setRects(PANEL);
+    oneFrame();
+    expect(inline.animate).toHaveBeenCalledWith(null, {
+      duration: 120,
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+    });
+    const seq = [edges(ui, 0.99)];
+    expect(seq[0].L).toBeCloseTo(100, 6); // noch die alte Bahn
+    a.progress = 1;
+    a.playState = "finished";
+    for (const p of [0.3, 0.7]) {
+      tail.p = p;
+      oneFrame();
+      seq.push(edges(ui, 1));
+    }
+    // Fenster-Transition zu Ende, Nachlauf läuft noch: finish wartet
+    transitionEnd(win);
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    tail.p = 1;
+    oneFrame();
+    seq.push(edges(ui, 1));
+    expectMonotonic(seq);
+    expect(seq.at(-1)).toEqual({ L: 20, R: 780 });
+    tail.playState = "finished";
+    await act(async () => {
+      finishTail();
+      await Promise.resolve();
+    });
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    expect(box.style.width).toBe("");
+  });
+
+  it("Fenster-Resize im Lauf: bekannte Seiten-Transition neu gelesen, Ziel gleitet zur neuen Endlage", () => {
+    // Endbreite hängt am Fenster: 760 ab 1000 px, sonst 680 (zentriert)
+    const endW = () => (window.innerWidth >= 1000 ? 760 : 680);
+    const at = (p) => {
+      const w = 600 + (endW() - 600) * p;
+      return { left: 400 - w / 2, top: 50, width: w, height: 520 };
+    };
+    const seeks = [];
+    const anim = {
+      transitionProperty: "max-width",
+      effect: { target: null, getComputedTiming: () => ({ endTime: 500 }) },
+      t: 0,
+      get currentTime() {
+        return this.t;
+      },
+      set currentTime(t) {
+        seeks.push(t);
+        this.t = t;
+        setRects(at(Math.min(1, t / 500)));
+      },
+    };
+    let running = false;
+    document.getAnimations = () => (running ? [anim] : []);
+    setRects(at(0));
+    const ui = setup({ inlineLayout: "overlay" });
+    anim.effect.target = mountTarget.parentElement;
+    pageReacts(() => {
+      running = true;
+    });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    return Promise.resolve().then(() => {
+      oneFrame(); // Endlage 760 @ 20 gelesen
+      expect(seeks).toEqual([500, 0]);
+      expect(box.style.width).toBe("760px");
+      oneFrame();
+      anim.t = 100;
+      setRects(at(0.2));
+      a.progress = 0.3;
+      oneFrame();
+      expect(seeks).toEqual([500, 0]);
+      const seq = [edges(ui, 0.3)];
+      resizeTo(900); // bleibt Desktop
+      anim.t = 150;
+      setRects(at(0.3));
+      a.progress = 0.45;
+      oneFrame();
+      expect(seeks).toEqual([500, 0, 500, 150]); // neu gelesen
+      seq.push(edges(ui, 0.45));
+      for (const [t, e] of [
+        [300, 0.75],
+        [500, 1],
+      ]) {
+        anim.t = t;
+        setRects(at(t / 500));
+        if (t === 500) running = false;
+        a.progress = e;
+        oneFrame();
+        seq.push(edges(ui, e));
+      }
+      // kein Sprung im Resize-Frame (< 15 px bei Δe = 0,15), Ende = neue Endlage
+      expect(Math.abs(seq[1].L - seq[0].L)).toBeLessThan(15);
+      expect(Math.abs(seq[1].R - seq[0].R)).toBeLessThan(15);
+      expect(seq.at(-1).L).toBeCloseTo(60, 6);
+      expect(seq.at(-1).R).toBeCloseTo(740, 6);
+      expect(box.style.width).toBe("680px");
+    });
+  });
+
+  it("Fenster-Resize ohne Seiten-Transition: Fläche verschoben -> nachgeführt (innerWidth-Vergleich je Frame)", () => {
+    document.getAnimations = () => [];
+    setRects(PANEL);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    oneFrame();
+    oneFrame();
+    a.progress = 0.5;
+    oneFrame();
+    expect(box.style.left).toBe("0px");
+    resizeTo(900);
+    setRects({ ...PANEL, left: -30 });
+    a.progress = 0.6;
+    oneFrame();
+    const e1 = edges(ui, 0.6);
+    // alte Bahn bei e = 0,6: Leiste 100 -> 20
+    expect(e1.L).toBeCloseTo(100 * 0.4 + 20 * 0.6, 6);
+    a.progress = 1;
+    oneFrame();
+    expect(edges(ui, 1).L).toBeCloseTo(-30, 6);
+    expect(box.style.left).toBe("0px");
+  });
+
+  it("ResizeObserver: Seite ändert die Fläche nach dem Pin-Schritt im selben Frame -> vor dem Malen korrigiert", () => {
+    const observers = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb) {
+          this.cb = cb;
+          this.els = [];
+          observers.push(this);
+        }
+        observe(el) {
+          this.els.push(el);
+        }
+        disconnect() {
+          this.els = [];
+        }
+      },
+    );
+    document.getAnimations = () => [];
+    setRects(START);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    const before = observers.length; // eigener RO der Komponente (Breite)
+    oneFrame();
+    const inline = container.querySelector("#anything-llm-embed-inline");
+    const ro = observers.slice(before).find((o) => o.els.includes(inline));
+    expect(ro).toBeTruthy();
+    // rAF-Callback der Seite nach dem Pin-Schritt: Fläche 760 @ 20
+    setRects(PANEL);
+    act(() => ro.cb([]));
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(box.style.left).toBe("0px");
+    expect(box.style.width).toBe("760px");
+    oneFrame();
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    a.playState = "finished";
+    transitionEnd(win);
+    expect(ro.els).toEqual([]); // gelöst
+  });
+
+  it("Zuklappen mitten im nachgeführten Aufklappen: Box mit dem Fortschritt des Rückwegs zurück zum Bezug, Leistenform unverändert", () => {
+    document.getAnimations = () => [];
+    setRects(START);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    const a = winAnim(win);
+    oneFrame();
+    oneFrame();
+    a.progress = 0.2;
+    setRects(PANEL);
+    oneFrame();
+    a.progress = 0.6;
+    oneFrame();
+    // Box nachgeführt: x = 100 + (60 − 100)·0,6 = 76
+    expect(box.style.left).toBe("56px");
+    const width = box.style.width;
+    // Schließen: die Seite baut (verzögert) noch nicht zurück
+    a.progress = 0;
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    expect(box.style.left).toBe("56px");
+    expect(box.style.width).toBe(width);
+    a.progress = 0.5;
+    oneFrame();
+    expect(box.style.left).toBe("68px"); // 76 + (100 − 76)·0,5 − 20
+    a.progress = 1;
+    oneFrame();
+    expect(box.style.left).toBe("80px"); // Bezug 100 = Leiste
+    a.playState = "finished";
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+    expect(box.style.width).toBe("");
+  });
+});
+
+describe("readAtPageTransitionEnd: Negativfälle", () => {
+  const oneFrame = () =>
+    act(() => {
+      frames.splice(0).forEach((f) => f.fn());
+    });
+  afterEach(() => {
+    delete document.getAnimations;
+  });
+
+  it("Animation ohne transitionProperty am Vorfahren (CSS-Animation/Web-Animation) wird nicht gespult", () => {
+    const seeks = [];
+    const anim = {
+      effect: { target: null, getComputedTiming: () => ({ endTime: 500 }) },
+      get currentTime() {
+        return 0;
+      },
+      set currentTime(t) {
+        seeks.push(t);
+      },
+    };
+    document.getAnimations = () => [anim];
+    const ui = setup({ inlineLayout: "overlay" });
+    anim.effect.target = mountTarget.parentElement;
+    ui.open();
+    oneFrame();
+    oneFrame();
+    expect(seeks).toEqual([]);
+    expect(ui.box().style.width).toBe("760px"); // Pin wie ohne Seiten-Transition
+  });
+
+  it("read() wirft: trotzdem zurückgespult, kein Pin, Startform aus der Messung danach", () => {
+    const seeks = [];
+    const anim = {
+      transitionProperty: "max-width",
+      effect: { target: null, getComputedTiming: () => ({ endTime: 500 }) },
+      t: 0,
+      get currentTime() {
+        return this.t;
+      },
+      set currentTime(t) {
+        seeks.push(t);
+        this.t = t;
+      },
+    };
+    document.getAnimations = () => [anim];
+    const gbcr =
+      Element.prototype.getBoundingClientRect.getMockImplementation();
+    Element.prototype.getBoundingClientRect.mockImplementation(function () {
+      if (anim.t === 500)
+        throw new Error("Layout im Endzustand fehlgeschlagen");
+      return gbcr.call(this);
+    });
+    const ui = setup({ inlineLayout: "overlay" });
+    anim.effect.target = mountTarget.parentElement;
+    ui.open();
+    oneFrame();
+    expect(seeks).toEqual([500, 0]);
+    expect(anim.t).toBe(0);
+    // pin liefert null: Box nicht festgehalten
     expect(ui.box().style.width).toBe("");
+    expect(ui.box().style.right).toBe("0px");
+    expect(v(ui.chat(), "mt")).toBe("translate(80px, 0px)");
+    oneFrame();
+    expect(ui.chat().classList.contains("allm-morph")).toBe(true);
+    transitionEnd(ui.chat());
+    expect(ui.chat().classList.contains("allm-morph")).toBe(false);
+  });
+});
+
+describe("Inhaltsbreite im ersten Frame (Rahmen des Fensters)", () => {
+  const oneFrame = () =>
+    act(() => {
+      frames.splice(0).forEach((f) => f.fn());
+    });
+  afterEach(() => {
+    delete document.getAnimations;
+  });
+  const frame2px = () => {
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function () {
+        return this.id === "anything-llm-chat" ? 762 : 0;
+      },
+    );
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(
+      function () {
+        return this.id === "anything-llm-chat" ? 760 : 0;
+      },
+    );
+  };
+
+  it("cw = Endbreite − Rahmen (762/760 -> 758 px), auch nach Nachmessen im ersten Frame", async () => {
+    frame2px();
+    document.getAnimations = () => [];
+    panelRect = { left: 100, top: 50, width: 600, height: 520 };
+    const ui = setup({ inlineLayout: "overlay" });
+    const mo = new MutationObserver(() => {
+      panelRect = PANEL;
+    });
+    mo.observe(mountTarget, { attributes: true });
+    ui.open();
+    const win = ui.chat();
+    // vorläufig (vor der Seitenreaktion): Inhaltsbreite = clientWidth
+    expect(v(win, "cw")).toBe("760px");
+    await Promise.resolve();
+    oneFrame();
+    expect(v(win, "cw")).toBe("758px");
+    mo.disconnect();
+  });
+
+  it("nachgeführte Endbreite: cw = neue Endbreite − Rahmen", () => {
+    frame2px();
+    document.getAnimations = () => [];
+    panelRect = { left: 100, top: 50, width: 600, height: 520 };
+    rootOpenRect = { left: 100, top: 50, width: 600, height: 68 };
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    const a = {
+      transitionProperty: "width",
+      playState: "running",
+      effect: {
+        getComputedTiming: () => ({ progress: 0.3 }),
+        getTiming: () => ({ easing: "ease" }),
+      },
+    };
+    win.getAnimations = () => [a];
+    oneFrame();
+    expect(v(win, "cw")).toBe("598px");
+    oneFrame();
+    panelRect = PANEL;
+    rootOpenRect = { ...PANEL, height: 68 };
+    oneFrame();
+    expect(v(win, "cw")).toBe("758px");
   });
 });
