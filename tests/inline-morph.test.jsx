@@ -737,6 +737,7 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
   let belowPx;
   let protoBefore;
   let scrollToBefore;
+  let scrollYBefore;
   const de = document.documentElement;
   const inlineRoot = () =>
     container.querySelector("#anything-llm-embed-inline");
@@ -775,6 +776,7 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
       });
       sy = y;
     };
+    scrollYBefore = Object.getOwnPropertyDescriptor(window, "scrollY");
     Object.defineProperty(window, "scrollY", {
       configurable: true,
       get: () => sy,
@@ -791,7 +793,10 @@ describe("Morph flüssiger: Scroll vor dem Lauf", () => {
   afterEach(() => {
     Element.prototype.scrollIntoView = protoBefore;
     window.scrollTo = scrollToBefore;
-    delete window.scrollY;
+    // jsdom-Eigenschaft zurück (delete allein ließe scrollY undefined für
+    // alle folgenden Tests)
+    if (scrollYBefore) Object.defineProperty(window, "scrollY", scrollYBefore);
+    else delete window.scrollY;
     delete de.scrollHeight;
     delete de.clientHeight;
     de.style.removeProperty("scroll-behavior");
@@ -1315,3 +1320,267 @@ function openAndSettleClose(ui, spy) {
   // Zuklappen: Schatten 580 + 80 ms Verzögerung + 100
   expect(spy.mock.calls.map((c) => c[1])).toContain(760);
 }
+
+// Issue embed-morph-aufklappen-kante: Leistenform gegen das Panel NACH der
+// Seitenreaktion (erster Frame), Box für den Lauf in der Endlage festgehalten
+describe("Aufklappen: erster Frame = Leiste, Bahn unabhängig von der Seite", () => {
+  // nur den nächsten Frame laufen lassen
+  const oneFrame = () =>
+    act(() => {
+      frames.splice(0).forEach((f) => f.fn());
+    });
+  // Seite reagiert wie die Demo asynchron (MutationObserver) auf das Signal
+  const pageReacts = (after) => {
+    const mo = new MutationObserver(() => {
+      if (mountTarget.getAttribute("data-allm-expanded") === "true") after();
+    });
+    mo.observe(mountTarget, {
+      attributes: true,
+      attributeFilter: ["data-allm-expanded"],
+    });
+    return mo;
+  };
+  afterEach(() => {
+    delete document.getAnimations;
+  });
+
+  it("::morph-open-first-frame — Host verschiebt sich NACH dem Attribut (Microtask): dx = +80 im ersten Frame", async () => {
+    // eingeklappt: Fläche 600 px bei 100 (Leiste = Fläche); die Seite
+    // verbreitert sie erst im MutationObserver auf 760 px bei 20
+    panelRect = { left: 100, top: 50, width: 600, height: 520 };
+    const ui = setup({ inlineLayout: "overlay" });
+    pageReacts(() => {
+      panelRect = PANEL;
+    });
+    ui.open();
+    const win = ui.chat();
+    // vorläufig (synchron im Klick, Seite hat noch nicht reagiert): dx = 0
+    expect(v(win, "mt")).toBe("translate(0px, 0px)");
+    await Promise.resolve(); // Microtask: Seite reagiert
+    oneFrame(); // erster Frame, vor dem Malen
+    expect(win.classList.contains("allm-morph-from")).toBe(true);
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(v(win, "mw")).toBe("600px");
+    expect(v(win, "mh")).toBe("56px");
+    oneFrame();
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    transitionEnd(win);
+    expect(win.classList.contains("allm-morph")).toBe(false);
+  });
+
+  it("Seiten-Transition läuft: Panel in der ENDlage gemessen (Transition kurz am Ende), Box dort festgehalten, Transition zurückgespult", async () => {
+    // Fläche (root) und Panel: Start 600 @ 100, Ende 760 @ 20; die Seite
+    // transitioniert max-width am Elternelement des Platzhalters (500 ms)
+    const START = { left: 100, top: 50, width: 600, height: 520 };
+    const at = (p) => ({
+      left: 100 - 80 * p,
+      top: 50,
+      width: 600 + 160 * p,
+      height: 520,
+    });
+    panelRect = START;
+    rootRect = { left: 100, top: 50, width: 600, height: 68 };
+    rootOpenRect = { ...START, height: 68 };
+    const seeks = [];
+    const anim = {
+      transitionProperty: "max-width",
+      effect: {
+        target: null,
+        getComputedTiming: () => ({ endTime: 500 }),
+      },
+      t: 0,
+      get currentTime() {
+        return this.t;
+      },
+      set currentTime(t) {
+        seeks.push(t);
+        this.t = t;
+        panelRect = at(Math.min(1, t / 500));
+        rootOpenRect = { ...panelRect, height: 68 };
+      },
+    };
+    // unbeteiligte Transition (nicht am Platzhalter/Vorfahren): bleibt stehen
+    const other = {
+      transitionProperty: "opacity",
+      effect: {
+        target: document.createElement("div"),
+        getComputedTiming: () => ({ endTime: 600 }),
+      },
+      currentTime: 10,
+    };
+    let running = false;
+    document.getAnimations = () => (running ? [anim, other] : []);
+    const ui = setup({ inlineLayout: "overlay" });
+    pageReacts(() => {
+      running = true;
+    });
+    anim.effect.target = mountTarget.parentElement; // body enthält den Platzhalter
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    await Promise.resolve();
+    oneFrame();
+    // Ende gelesen, danach zurück auf 0 (die Seite läuft unverändert weiter)
+    expect(seeks).toEqual([500, 0]);
+    expect(other.currentTime).toBe(10);
+    // Leiste (100, 50) relativ zum Panel in der Endlage (20, 50)
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    // Inhalt in Endbreite (jsdom: Rahmen 0)
+    expect(v(win, "cw")).toBe("760px");
+    // Box: feste Endbreite, Versatz = Endlage - aktuelle Lage der Fläche
+    expect(box.style.width).toBe("760px");
+    expect(box.style.right).toBe("auto");
+    expect(box.style.left).toBe("-80px");
+    // die Seite bewegt die Fläche weiter: der Pin gleicht je Frame aus
+    anim.t = 250;
+    panelRect = at(0.5);
+    rootOpenRect = { ...panelRect, height: 68 };
+    oneFrame(); // Lauf startet + Pin-Schritt
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    expect(box.style.left).toBe("-40px");
+    expect(box.style.width).toBe("760px");
+    anim.t = 500;
+    panelRect = at(1);
+    rootOpenRect = { ...panelRect, height: 68 };
+    oneFrame();
+    expect(box.style.left).toBe("0px");
+    // Ende des Laufs: Pin gelöst, Stil wie vorher (left 0, right 0, keine Breite)
+    transitionEnd(win);
+    expect(win.classList.contains("allm-morph")).toBe(false);
+    expect(box.style.width).toBe("");
+    expect(box.style.left).toBe("0px");
+    expect(box.style.right).toBe("0px");
+    const n = frames.length;
+    oneFrame();
+    expect(box.style.width).toBe(""); // kein Pin-Schritt mehr
+    expect(frames.length).toBeLessThanOrEqual(n);
+  });
+
+  it("ohne getAnimations (ältere Browser): Startform nachgemessen, Box nicht festgehalten", async () => {
+    panelRect = { left: 100, top: 50, width: 600, height: 520 };
+    const ui = setup({ inlineLayout: "overlay" });
+    pageReacts(() => {
+      panelRect = PANEL;
+    });
+    ui.open();
+    await Promise.resolve();
+    oneFrame();
+    expect(v(ui.chat(), "mt")).toBe("translate(80px, 0px)");
+    expect(ui.box().style.width).toBe("");
+  });
+
+  it("Seite ohne Reaktion: Startform und Box unverändert (dx wie bisher, Pin ohne Versatz)", () => {
+    document.getAnimations = () => [];
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    const win = ui.chat();
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    oneFrame();
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(ui.box().style.left).toBe("0px");
+    expect(ui.box().style.width).toBe("760px");
+    nextFrames();
+    transitionEnd(win);
+    expect(ui.box().style.width).toBe("");
+  });
+
+  it("NAK-2: Zuklappen nach dem ersten Frame, vor dem Lauf: sofort zu, Pin gelöst", () => {
+    document.getAnimations = () => [];
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    oneFrame();
+    expect(ui.box().style.width).toBe("760px");
+    escapeOnPage();
+    expect(visible(ui)).toBe(false);
+    expect(ui.box().style.width).toBe("");
+    nextFrames();
+    expect(ui.chat().classList.contains("allm-morph")).toBe(false);
+  });
+
+  it("Zuklappen mitten im Aufklappen: Rückweg-Pin übernimmt die Box an ihrer festgehaltenen Lage", () => {
+    document.getAnimations = () => [];
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    const win = ui.chat();
+    expect(win.classList.contains("allm-morph")).toBe(true);
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    // Rückweg hält die Box (Breite des Panels) und zielt auf die Leiste
+    expect(ui.box().style.width).toBe("760px");
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+    expect(ui.box().style.width).toBe("");
+  });
+
+  it("Zuklappen mitten im Aufklappen bei Seiten-Transition: Box bleibt in der Endlage des Aufklappens, Leistenform unverändert", async () => {
+    const at = (p) => ({
+      left: 100 - 80 * p,
+      top: 50,
+      width: 600 + 160 * p,
+      height: 520,
+    });
+    panelRect = at(0);
+    rootOpenRect = { ...at(0), height: 68 };
+    const anim = {
+      transitionProperty: "max-width",
+      effect: { target: null, getComputedTiming: () => ({ endTime: 500 }) },
+      t: 0,
+      get currentTime() {
+        return this.t;
+      },
+      set currentTime(t) {
+        this.t = t;
+        panelRect = at(Math.min(1, t / 500));
+        rootOpenRect = { ...panelRect, height: 68 };
+      },
+    };
+    let running = false;
+    document.getAnimations = () => (running ? [anim] : []);
+    const ui = setup({ inlineLayout: "overlay" });
+    anim.effect.target = mountTarget.parentElement;
+    pageReacts(() => {
+      running = true;
+    });
+    ui.open();
+    const win = ui.chat();
+    const box = ui.box();
+    await Promise.resolve();
+    oneFrame();
+    anim.t = 100;
+    panelRect = at(0.25);
+    rootOpenRect = { ...panelRect, height: 68 };
+    oneFrame(); // Lauf + Pin-Schritt
+    expect(box.style.left).toBe("-60px");
+    // Schließen: die Seite baut zurück (hier: Fläche steht noch bei 0,25)
+    running = false;
+    act(() => chatWindowProps.current.closeChat());
+    expect(win.classList.contains("allm-morph-close")).toBe(true);
+    // gleiche Endlage wie beim Aufklappen (20, Breite 760), nicht die aktuelle Lage
+    expect(box.style.width).toBe("760px");
+    expect(box.style.left).toBe("-60px");
+    expect(v(win, "mt")).toBe("translate(80px, 0px)");
+    expect(v(win, "mw")).toBe("600px");
+    // Seite läuft zurück: Pin gleicht weiter gegen dieselbe Endlage aus
+    panelRect = at(0.1);
+    rootOpenRect = { ...panelRect, height: 68 };
+    oneFrame();
+    expect(box.style.left).toBe("-72px");
+    transitionEnd(win);
+    expect(visible(ui)).toBe(false);
+    expect(box.style.width).toBe("");
+  });
+
+  it("prefers-reduced-motion: kein Pin, kein Nachmessen", () => {
+    reduced = true;
+    document.getAnimations = vi.fn(() => []);
+    const ui = setup({ inlineLayout: "overlay" });
+    ui.open();
+    nextFrames();
+    expect(document.getAnimations).not.toHaveBeenCalled();
+    expect(ui.box().style.width).toBe("");
+  });
+});

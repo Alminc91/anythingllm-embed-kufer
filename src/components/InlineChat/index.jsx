@@ -229,7 +229,8 @@ function hasRunningTransition(el) {
 // Ein Morph-Lauf am Chat-Fenster win (und im Seitenfluss an der äußeren Box,
 // deren Höhe den nachfolgenden Inhalt schiebt). geom = Leistenform relativ zum
 // Panel: { dx, dy, w, h, r, rootH }. Aufklappen: Leistenform einen Frame lang
-// zeigen, dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
+// zeigen (in diesem Frame gegen das Panel nach der Seitenreaktion nachgemessen,
+// siehe pin), dann Transition zum Panel; Zuklappen: Inhalt blendet zuerst aus,
 // dann (eigene Dauer/Kurve, Verzögerung per CSS) Transition vom aktuellen
 // Stand zur Leistenform — steht die Leistenform noch
 // an (Zuklappen vor dem ersten Frame des Aufklappens), endet der Lauf sofort.
@@ -241,18 +242,28 @@ function hasRunningTransition(el) {
 // 100 ms); onEnd läuft vor dem Aufräumen (Zuklappen: erst einklappen, kein
 // Rücksprung). Schließen, während die Chips noch ausblenden: Einblenden ab
 // der aktuellen Opacity (--allmi-chips-o), kein Sprung.
-// pin (Zuklappen): hält die äußere Box für die Dauer des Laufs fest
-// (pinBox), Rückgabe = Lösen; gelöst wird bei jedem stop, vor onEnd.
+// pin: hält die äußere Box für die Dauer des Laufs fest (pinBox), Rückgabe
+// = Lösen; gelöst wird bei jedem stop, vor onEnd. Zuklappen: beim Start des
+// Laufs. Aufklappen: im ersten Frame (die Seite hat dann auf das Signal
+// reagiert) — pin misst dort das Panel neu und setzt geom.dx/dy (Leistenform
+// relativ zum Panel nach der Seitenreaktion) sowie geom.panelW (Endbreite der
+// Box); die Startform wird vor dem Malen dieses Frames nachgeführt.
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
 function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
-  // Breite in px oder (Zuklappen nach Fensteränderung) "100%" der Box
-  set(win, "mw", typeof geom.w === "string" ? geom.w : px(geom.w));
-  set(win, "mh", px(geom.h));
-  set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
-  set(win, "mr", px(geom.r));
-  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte)
+  const setForm = () => {
+    // Breite in px oder (Zuklappen nach Fensteränderung) "100%" der Box
+    set(win, "mw", typeof geom.w === "string" ? geom.w : px(geom.w));
+    set(win, "mh", px(geom.h));
+    set(win, "mt", `translate(${px(geom.dx)}, ${px(geom.dy)})`);
+    set(win, "mr", px(geom.r));
+  };
+  setForm();
+  // Inhalt in Panelgröße (nur zu Beginn messen, ein Rückweg erbt die Werte);
+  // frameW = Rahmen des Fensters (Breite der Box minus Inhaltsbreite)
+  let frameW = null;
   if (!win.style.getPropertyValue("--allmi-cw")) {
+    frameW = win.offsetWidth - win.clientWidth;
     set(win, "cw", px(win.clientWidth));
     set(win, "ch", px(win.clientHeight));
   }
@@ -286,7 +297,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     stop();
   }
   const run = () => {
-    if (pin) unpin = pin();
+    if (pin && !opening) unpin = pin();
     win.classList.add("allm-morph");
     if (flow) box.classList.add("allm-morph-flow");
     win.classList.toggle("allm-morph-from", !opening);
@@ -315,6 +326,14 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     if (flow) box.classList.add("allm-morph-flow-from");
     chips?.classList.add("allm-morph-chips-out");
     raf = requestAnimationFrame(() => {
+      // erster Frame, vor dem Malen: Panel nach der Seitenreaktion messen,
+      // Box festhalten, Startform (und Inhaltsbreite) nachführen
+      if (pin) {
+        unpin = pin();
+        setForm();
+        if (frameW != null && geom.panelW > 0)
+          set(win, "cw", px(Math.max(0, geom.panelW - frameW)));
+      }
       raf = requestAnimationFrame(run);
     });
   } else if (
@@ -326,16 +345,19 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   return stop;
 }
 
-// Zuklappen: äußere Box (Panel) für die Dauer des Laufs an ihrer Stelle im
-// Dokument festhalten, auch wenn die Seite die Inline-Fläche gleichzeitig
-// verschiebt oder schmaler macht (Seiten-Transition auf das Signal
-// data-allm-expanded, z. B. .ask { max-width } der Demo): feste Breite und je
-// Frame left/top = Versatz der Inline-Fläche seit dem Start (Seitenkoordinaten,
-// Scrollen zählt nicht). So läuft das Fenster mit eigener Dauer/Kurve von der
-// Panel- zur Leistenform, unabhängig von der Kurve der Seite. root0 = Lage der
-// Inline-Fläche, width = Breite der Box, beide VOR dem Entfernen des Signals
-// gemessen (Seiten-CSS kann synchron reagieren). Rückgabe: Lösen (Stil wie
-// vorher).
+// Zu- und Aufklappen: äußere Box (Panel) für die Dauer des Laufs an ihrer
+// Stelle im Dokument festhalten, auch wenn die Seite die Inline-Fläche
+// gleichzeitig verschiebt, breiter oder schmaler macht (Seiten-Transition auf
+// das Signal data-allm-expanded, z. B. .ask { max-width } der Demo): feste
+// Breite und je Frame left/top = Versatz der Inline-Fläche gegenüber root0
+// (Seitenkoordinaten, Scrollen zählt nicht; ein getBoundingClientRect je
+// Frame). So läuft das Fenster mit eigener Dauer/Kurve zwischen Panel- und
+// Leistenform, unabhängig von der Kurve der Seite. Zuklappen: root0 = Lage
+// der Inline-Fläche, width = Breite der Box, beide VOR dem Entfernen des
+// Signals gemessen (Seiten-CSS kann synchron reagieren). Aufklappen: root0/
+// width = Endlage nach der Seitenreaktion (readAtPageTransitionEnd), die Box
+// steht also vom ersten Frame an dort, wo die Seite sie am Ende hinlegt.
+// Rückgabe: Lösen (Stil wie vorher).
 function pinBox(box, root, root0, width) {
   const prev = ["left", "right", "top", "width"].map((k) => [
     k,
@@ -361,6 +383,38 @@ function pinBox(box, root, root0, width) {
       if (v) box.style.setProperty(k, v);
       else box.style.removeProperty(k);
   };
+}
+
+// Endlage der Seite lesen: laufende CSS-Transitionen an target und seinen
+// Vorfahren (z. B. .ask { transition: max-width } auf das Signal
+// data-allm-expanded) kurz ans Ende spulen, read() ausführen (erzwingt das
+// Layout im Endzustand), zurückspulen — die Transition der Seite läuft
+// unverändert weiter (kein Paint, keine Ereignisse dazwischen). Rückgabe:
+// { value } bzw. null ohne getAnimations (ältere Browser, jsdom).
+function readAtPageTransitionEnd(target, read) {
+  if (typeof document.getAnimations !== "function" || !target) return null;
+  const held = [];
+  try {
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target;
+      if (a.transitionProperty == null || !el?.contains?.(target)) continue;
+      const end = a.effect.getComputedTiming?.().endTime;
+      const t = a.currentTime;
+      if (t == null || !Number.isFinite(end) || t >= end) continue;
+      a.currentTime = end;
+      held.push([a, t]);
+    }
+    return { value: read() };
+  } catch (e) {
+    return null;
+  } finally {
+    for (const [a, t] of held)
+      try {
+        a.currentTime = t;
+      } catch (e) {
+        // Animation inzwischen beendet/abgebrochen: nichts zurückzuspulen
+      }
+  }
 }
 
 // Fenster sofort (nie animiert, auch bei scroll-behavior: smooth der Seite)
@@ -677,9 +731,11 @@ export default function InlineChat({
     return () => mountTarget.removeAttribute(EXPANDED_ATTR);
   }, [view, mountTarget]);
 
-  // "morph" aufklappen: Panel einmal messen (nach dem Signal oben, Seiten-CSS
-  // hat die Fläche ggf. schon verbreitert), Leistenform relativ dazu ablegen
-  // (auch für den Rückweg) und den Lauf starten. Scroll nach Klick:
+  // "morph" aufklappen: Panel einmal vorläufig messen (nach dem Signal oben;
+  // Seiten-CSS hat die Fläche ggf. schon verbreitert, eine Reaktion per
+  // MutationObserver aber noch nicht), Leistenform relativ dazu ablegen
+  // (auch für den Rückweg) und den Lauf starten; im ersten Frame misst
+  // pinOpen endgültig nach. Scroll nach Klick:
   // schwebend nie (wie das Mockup; die Box darf unten herausragen), im
   // Seitenfluss JETZT (vor dem Paint, ohne Animation), falls die Box in
   // ihrer Endgröße nicht ganz im Viewport läge: Endgeometrie messen, dann
@@ -706,8 +762,10 @@ export default function InlineChat({
       opening: true,
       flow: !floating,
       chips: morphChips(),
+      pin: () => pinOpen(g, box),
       onEnd: () => {
         m.stop = null;
+        g.openPin = null;
         releaseScrollReserve();
         // Bezug fürs Zuklappen (closeGeom): Seitenlage der Inline-Fläche im
         // aufgeklappten, ruhenden Zustand
@@ -1104,6 +1162,33 @@ export default function InlineChat({
       !a || a === document.body || a === document.documentElement || a === host;
     if (focus !== "if-free" || free) focusBar();
   };
+  // "morph" aufklappen, erster Frame (vor dem Malen; die Seite hat auf das
+  // Signal reagiert — auch per MutationObserver, der als Microtask nach dem
+  // Klick läuft): Panel in seiner Endlage messen (laufende Seiten-
+  // Transitionen am Platzhalter dafür kurz am Ende, readAtPageTransitionEnd),
+  // Leistenform relativ dazu (Seitenkoordinaten: ein Scroll vor dem Lauf
+  // ändert nichts) und die Box dort für den Lauf festhalten (pinBox). Erster
+  // gemalter Frame = Leiste; danach folgt das Fenster nur der eigenen Kurve,
+  // auch wenn die Seite den Platzhalter mit eigener Transition verbreitert.
+  // Ohne getAnimations (ältere Browser): nur nachmessen, die Box folgt der
+  // Seite wie bisher. Rückgabe: Lösen bzw. null.
+  const pinOpen = (g, box) => {
+    const root = rootRef.current;
+    if (!root) return null;
+    const read = () => [
+      box.getBoundingClientRect(),
+      root.getBoundingClientRect(),
+    ];
+    const end = readAtPageTransitionEnd(mountTarget, read);
+    const [b, r] = end ? end.value : [box.getBoundingClientRect()];
+    g.dx = g.pageX - (b.left + window.scrollX);
+    g.dy = g.pageY - (b.top + window.scrollY);
+    g.panelW = b.width;
+    if (!end) return null;
+    const root0 = { x: r.left + window.scrollX, y: r.top + window.scrollY };
+    g.openPin = { root0, width: b.width };
+    return pinBox(box, root, root0, b.width);
+  };
   // Seitenlage der Inline-Fläche (Fensterscroll zählt nicht)
   const rootPagePos = () => {
     const r = rootRef.current?.getBoundingClientRect();
@@ -1157,11 +1242,20 @@ export default function InlineChat({
   // Inline-Fläche -> Ziel = Lage in der Fläche vom Aufklappen, Breite 100 %
   // der (mitlaufenden, nicht festgehaltenen) Box, Höhe/Rundung frisch von der
   // unsichtbaren Leiste (schwebend) bzw. vom Aufklappen (Seitenfluss): endet
-  // genau auf der neuen Leiste. Rückgabe: pin-Funktion für runMorph bzw. null.
-  const closeGeom = (g, box) => {
+  // genau auf der neuen Leiste. openPin = Endlage, in der das noch laufende
+  // Aufklappen die Box festhält (pinOpen): der Rückweg hält sie genau dort
+  // weiter fest und behält die Leistenform relativ dazu (dx/dy unverändert)
+  // — kein Sprung zur aktuellen Lage der Seite, gleiche Startwerte für alle
+  // Eigenschaften (der Browser kehrt jede Transition gleich um).
+  // Rückgabe: pin-Funktion für runMorph bzw. null.
+  const closeGeom = (g, box, openPin = null) => {
     const root = rootRef.current;
     if (!root) return null;
     const sameView = window.innerWidth === g.vw && window.innerHeight === g.vh;
+    if (sameView && openPin) {
+      Object.assign(g, { w: g.barW, h: g.barH, r: g.barR });
+      return () => pinBox(box, root, openPin.root0, openPin.width);
+    }
     // Inline-Fläche seit dem Aufklappen verschoben (Scroll-Container der
     // Seite, Layoutverschiebung): gespeicherte Seitenkoordinaten gelten
     // nicht mehr -> frisch messen wie früher (measureCloseGeom)
@@ -1202,6 +1296,8 @@ export default function InlineChat({
     if (view === "box" && m?.geom && win && box && !prefersReducedMotion()) {
       if (m.closing) return;
       m.closing = true;
+      // Aufklappen läuft noch und hält die Box (pinOpen)?
+      const openPin = m.stop ? m.geom.openPin : null;
       m.stop?.(true);
       releaseScrollReserve();
       // vor dem ersten Frame des Aufklappens liegt die Leistenform noch an
@@ -1210,7 +1306,7 @@ export default function InlineChat({
       // eine Seiten-Transition läuft parallel zum Lauf, nicht danach.
       const pin = win.classList.contains("allm-morph-from")
         ? null
-        : closeGeom(m.geom, box);
+        : closeGeom(m.geom, box, openPin);
       mountTarget?.removeAttribute(EXPANDED_ATTR);
       const stop = runMorph(win, box, m.geom, {
         opening: false,
