@@ -1670,6 +1670,13 @@ describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgefüh
       expect(seq[i].R).toBeGreaterThanOrEqual(seq[i - 1].R - 1e-9);
     }
   };
+  // Fensterbreite R − L je Frame: dir = +1 wachsend, −1 schrumpfend
+  const expectWidthMonotonic = (seq, dir = 1) => {
+    for (let i = 1; i < seq.length; i++)
+      expect(
+        dir * (seq[i].R - seq[i].L - (seq[i - 1].R - seq[i - 1].L)),
+      ).toBeGreaterThanOrEqual(-1e-9);
+  };
   afterEach(() => {
     delete document.getAnimations;
   });
@@ -1908,7 +1915,12 @@ describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgefüh
       expect(seeks).toEqual([500, 0, 500, 150]); // neu gelesen
       seq.push(edges(ui, 0.45));
       for (const [t, e] of [
+        [200, 0.55],
+        [250, 0.65],
         [300, 0.75],
+        [350, 0.82],
+        [400, 0.9],
+        [450, 0.96],
         [500, 1],
       ]) {
         anim.t = t;
@@ -1917,6 +1929,15 @@ describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgefüh
         a.progress = e;
         oneFrame();
         seq.push(edges(ui, e));
+      }
+      // je Frame bis zum Resize-Frame: L nur nach links, R nur nach rechts,
+      // Breite wachsend; danach kein Sprung (< 15 px je Frame) — monoton erst
+      // mit offenem Befund, siehe „Ziel zieht sich zurück“
+      expectMonotonic(seq.slice(0, 2));
+      expectWidthMonotonic(seq.slice(0, 2));
+      for (let i = 1; i < seq.length; i++) {
+        expect(Math.abs(seq[i].L - seq[i - 1].L)).toBeLessThan(15);
+        expect(Math.abs(seq[i].R - seq[i - 1].R)).toBeLessThan(15);
       }
       // kein Sprung im Resize-Frame (< 15 px bei Δe = 0,15), Ende = neue Endlage
       expect(Math.abs(seq[1].L - seq[0].L)).toBeLessThan(15);
@@ -1937,21 +1958,79 @@ describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgefüh
     const a = winAnim(win);
     oneFrame();
     oneFrame();
-    a.progress = 0.5;
-    oneFrame();
+    const seq = [];
+    for (const e of [0.2, 0.35, 0.5]) {
+      a.progress = e;
+      oneFrame();
+      seq.push(edges(ui, e));
+    }
     expect(box.style.left).toBe("0px");
     resizeTo(900);
     setRects({ ...PANEL, left: -30 });
     a.progress = 0.6;
     oneFrame();
     const e1 = edges(ui, 0.6);
+    seq.push(e1);
     // alte Bahn bei e = 0,6: Leiste 100 -> 20
     expect(e1.L).toBeCloseTo(100 * 0.4 + 20 * 0.6, 6);
-    a.progress = 1;
-    oneFrame();
+    for (const e of [0.7, 0.8, 0.9, 0.96, 1]) {
+      a.progress = e;
+      oneFrame();
+      seq.push(edges(ui, e));
+    }
+    // je Frame: L nur nach links, Breite nur wachsend (760); R bis zum
+    // Resize nach rechts, danach (Ziel 730 < 748) nur noch nach links zum
+    // Ziel — kein Überschwingen
+    expectMonotonic(seq.map((q) => ({ L: q.L, R: 0 })));
+    expectWidthMonotonic(seq);
+    const at = seq.indexOf(e1);
+    expectMonotonic(seq.slice(0, at + 1));
+    for (let i = at + 1; i < seq.length; i++) {
+      expect(seq[i].R).toBeLessThanOrEqual(seq[i - 1].R + 1e-9);
+      expect(seq[i].R).toBeGreaterThanOrEqual(730 - 1e-9);
+    }
     expect(edges(ui, 1).L).toBeCloseTo(-30, 6);
     expect(box.style.left).toBe("0px");
   });
+
+  // Offener Befund (Fix-Runde 2): zieht sich das Ziel im Lauf zurück, liegt
+  // aber noch vor der aktuellen Kante (Fenster schmaler: Fläche 760 @ 20 ->
+  // 700 @ 50 zwischen e = 0,45 und 0,55), schwingt die Kante mit
+  // g = (e − e1)/(1 − e1) über: L 56 -> 49 -> 50, Breite 688 -> 702 -> 700
+  // (Seiten-Transition + Resize, Test oben: L 64 -> 56,4 -> 60, Breite
+  // 672 -> 687 -> 680). Monoton wäre die in e lineare Bahn
+  // g = (e − e1)/((1 − e1)·e) (Kante = K1 + (Ziel − K1)·(e − e1)/(1 − e1)),
+  // die im Browser aber den größten Schritt je Frame von 13,8 auf 16,8 px
+  // hebt (Grenze 14 px, overlay.py Review-2 morph-open-resize).
+  it.fails(
+    "Ziel zieht sich zurück (Fenster schmaler im Lauf): L/R/Breite je Frame monoton",
+    () => {
+      document.getAnimations = () => [];
+      setRects(PANEL);
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      const a = winAnim(ui.chat());
+      oneFrame();
+      oneFrame();
+      const seq = [];
+      for (const e of [0.2, 0.45]) {
+        a.progress = e;
+        oneFrame();
+        seq.push(edges(ui, e));
+      }
+      resizeTo(900);
+      setRects({ ...PANEL, left: 50, width: 700 });
+      for (const e of [0.55, 0.65, 0.75, 0.82, 0.9, 0.96, 1]) {
+        a.progress = e;
+        oneFrame();
+        seq.push(edges(ui, e));
+      }
+      expect(seq.at(-1).L).toBeCloseTo(50, 6);
+      expect(seq.at(-1).R).toBeCloseTo(750, 6);
+      expectMonotonic(seq);
+      expectWidthMonotonic(seq);
+    },
+  );
 
   it("ResizeObserver: Seite ändert die Fläche nach dem Pin-Schritt im selben Frame -> vor dem Malen korrigiert", () => {
     const observers = [];
@@ -2031,6 +2110,290 @@ describe("Aufklappen: verzögerte Seitenreaktion und Fensteränderung nachgefüh
     transitionEnd(win);
     expect(visible(ui)).toBe(false);
     expect(box.style.width).toBe("");
+  });
+  // Laufende des nachgeführten Aufklappens (settle): Nachläufe als
+  // gemockte Web-Animationen (playState, finished, cancel), ResizeObserver
+  // und Chatfeld (unter dem Viewport: Fokus erst im onEnd) verfolgt
+  describe("Laufende im Nachlauf (settle)", () => {
+    let observers;
+    let input;
+    let shadowHost;
+    let focusSpy;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      observers = [];
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          constructor(cb) {
+            this.cb = cb;
+            this.els = [];
+            observers.push(this);
+          }
+          observe(el) {
+            this.els.push(el);
+          }
+          disconnect() {
+            this.els = [];
+          }
+        },
+      );
+      shadowHost = document.createElement("div");
+      document.body.appendChild(shadowHost);
+      const sr = shadowHost.attachShadow({ mode: "open" });
+      input = document.createElement("textarea");
+      input.id = "message-input";
+      sr.appendChild(input);
+      embedderSettings.shadowRoot = sr;
+      inputRect = { left: 20, top: 1060, width: 760, height: 40 };
+      focusSpy = vi.spyOn(input, "focus");
+    });
+    afterEach(() => {
+      embedderSettings.shadowRoot = null;
+      shadowHost.remove();
+    });
+    // Nachläufe: root.animate liefert steuerbare Uhren
+    const tailClock = (inline) => {
+      const tails = [];
+      inline.animate = vi.fn(() => {
+        let res;
+        let rej;
+        const t = {
+          playState: "running",
+          p: 0,
+          effect: { getComputedTiming: () => ({ progress: t.p }) },
+          finished: new Promise((a, b) => {
+            res = a;
+            rej = b;
+          }),
+          cancel: vi.fn(() => {
+            if (t.playState !== "running") return;
+            t.playState = "idle";
+            rej(new DOMException("abgebrochen", "AbortError"));
+          }),
+          end() {
+            if (t.playState !== "running") return;
+            t.p = 1;
+            t.playState = "finished";
+            res(t);
+          },
+        };
+        t.finished.catch(() => {});
+        tails.push(t);
+        return t;
+      });
+      return tails;
+    };
+    // Aufklappen bis zum Ende der Fenster-Transition; die Seite reagiert im
+    // letzten Rest der Kurve -> Nachlauf A läuft
+    const prelude = () => {
+      document.getAnimations = () => [];
+      setRects(START);
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      const win = ui.chat();
+      const box = ui.box();
+      const a = winAnim(win);
+      const inline = container.querySelector("#anything-llm-embed-inline");
+      const tails = tailClock(inline);
+      const ro0 = observers.length;
+      oneFrame(); // Pin
+      oneFrame(); // Lauf startet
+      const pinRO = observers.slice(ro0).find((o) => o.els.includes(inline));
+      a.progress = 0.99;
+      setRects(PANEL);
+      oneFrame();
+      a.progress = 1;
+      a.playState = "finished";
+      oneFrame();
+      expect(tails.length).toBe(1);
+      const removes = vi.spyOn(win.classList, "remove");
+      // Aufräumen des Laufs (stop ohne keep) = Ende bzw. Abbruch
+      const morphEnds = () =>
+        removes.mock.calls.filter((c) => c.includes("allm-morph")).length;
+      return { ui, win, box, a, inline, tails, pinRO, ro0, morphEnds };
+    };
+    const flush = () =>
+      act(async () => {
+        for (let i = 0; i < 4; i++) await Promise.resolve();
+      });
+    // nichts läuft mehr: kein rAF, kein ResizeObserver an der Fläche, kein
+    // Nachlauf, kein Timer
+    const expectIdle = (t) => {
+      expect(frames).toEqual([]);
+      expect(
+        observers.slice(t.ro0).filter((o) => o.els.includes(t.inline)),
+      ).toEqual([]);
+      expect(t.tails.filter((x) => x.playState === "running")).toEqual([]);
+      // 0-ms-Timer von jsdom (Selection beim Fokus; im Tick gesetzt = 1 ms)
+      // zählen nicht
+      act(() => vi.advanceTimersByTime(1));
+      expect(vi.getTimerCount()).toBe(0);
+    };
+
+    it("neues Ziel während settle: neuer Nachlauf übernimmt das Warten, finish genau einmal, onEnd, alles gelöst", async () => {
+      const t = prelude();
+      transitionEnd(t.win); // finish -> settle wartet auf Nachlauf A
+      expect(t.win.classList.contains("allm-morph")).toBe(true);
+      // zweite Lageänderung im Nachlauf (Bild lädt oberhalb, CLS +40 px)
+      setRects({ ...PANEL, top: 90 });
+      oneFrame();
+      expect(t.tails.length).toBe(2);
+      expect(t.tails[0].cancel).toHaveBeenCalled();
+      await flush(); // Abbruch von A meldet nichts
+      expect(t.win.classList.contains("allm-morph")).toBe(true);
+      expect(focusSpy).not.toHaveBeenCalled();
+      t.tails[1].p = 1;
+      oneFrame();
+      expect(t.box.style.top).toBe("0px"); // Ziel erreicht
+      t.tails[1].end();
+      await flush();
+      expect(t.win.classList.contains("allm-morph")).toBe(false);
+      expect(t.morphEnds()).toBe(1);
+      expect(t.box.style.width).toBe("");
+      expect(focusSpy).toHaveBeenCalledTimes(1); // onEnd: Übergabe
+      expectIdle(t);
+      // spätere Signale ändern nichts mehr
+      transitionEnd(t.win);
+      act(() => vi.advanceTimersByTime(2000));
+      oneFrame();
+      await flush();
+      expect(t.morphEnds()).toBe(1);
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("Frist: Nachlauf endet nie -> finish per Timer nach 410 ms, genau einmal", async () => {
+      const t = prelude();
+      transitionEnd(t.win);
+      act(() => vi.advanceTimersByTime(409));
+      expect(t.win.classList.contains("allm-morph")).toBe(true);
+      act(() => vi.advanceTimersByTime(1));
+      expect(t.win.classList.contains("allm-morph")).toBe(false);
+      expect(t.morphEnds()).toBe(1);
+      expect(t.box.style.width).toBe("");
+      expect(t.tails[0].cancel).toHaveBeenCalled();
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+      expectIdle(t);
+      // Sicherheits-Timer, spätes Ende des Nachlaufs: nichts mehr
+      act(() => vi.advanceTimersByTime(2000));
+      t.tails[0].end();
+      await flush();
+      expect(t.morphEnds()).toBe(1);
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("Nachlauf ohne finished-Promise: settle wartet nicht, Ende sofort", () => {
+      const t = prelude();
+      delete t.tails[0].finished;
+      transitionEnd(t.win);
+      expect(t.win.classList.contains("allm-morph")).toBe(false);
+      expect(t.morphEnds()).toBe(1);
+      expectIdle(t);
+    });
+
+    it("Deckel: Seite bewegt die Fläche je Frame per JS (ohne Transition) -> höchstens 4 Nachläufe, danach Ziel sofort", () => {
+      const t = prelude();
+      let top = PANEL.top;
+      for (let i = 0; i < 10; i++) {
+        top += 3;
+        setRects({ ...PANEL, top });
+        oneFrame();
+      }
+      expect(t.inline.animate).toHaveBeenCalledTimes(4);
+      // Box steht genau an der Fläche (Ziel = aktuelle Lage)
+      expect(t.box.style.top).toBe("0px");
+      expect(t.box.style.left).toBe("0px");
+      expect(t.box.style.width).toBe("760px");
+      // Ende: kein Nachlauf mehr -> sofort fertig
+      transitionEnd(t.win);
+      expect(t.win.classList.contains("allm-morph")).toBe(false);
+      expect(t.morphEnds()).toBe(1);
+      expectIdle(t);
+    });
+
+    it("Deckel nach settle: 10 Frames JS-Bewegung -> höchstens 4 Nachläufe, Ziel am Ende erreicht, finish genau einmal", async () => {
+      const t = prelude();
+      const tops = [];
+      const set = t.box.style.setProperty.bind(t.box.style);
+      vi.spyOn(t.box.style, "setProperty").mockImplementation((k, val, p) => {
+        if (k === "top") tops.push(val);
+        return set(k, val, p);
+      });
+      transitionEnd(t.win); // wartet auf Nachlauf A
+      let top = PANEL.top;
+      for (let i = 0; i < 10; i++) {
+        top += 3;
+        setRects({ ...PANEL, top });
+        await act(async () => {
+          frames.splice(0).forEach((f) => f.fn());
+          await Promise.resolve();
+        });
+      }
+      expect(t.inline.animate.mock.calls.length).toBeLessThanOrEqual(4);
+      // letzter geschriebener Stand: Box genau an der Fläche
+      expect(tops.at(-1)).toBe("0px");
+      expect(t.win.classList.contains("allm-morph")).toBe(false);
+      expect(t.morphEnds()).toBe(1);
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+      expectIdle(t);
+    });
+
+    it("Unmount im Nachlauf: alles aufgeräumt, kein onEnd", async () => {
+      const t = prelude();
+      transitionEnd(t.win);
+      act(() => root.unmount());
+      expect(t.tails[0].cancel).toHaveBeenCalled();
+      expectIdle(t);
+      act(() => vi.advanceTimersByTime(2000));
+      t.tails[0].end();
+      await flush();
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(frames).toEqual([]);
+    });
+
+    it("Zuklappen im Nachlauf: Rückweg übernimmt, alter Pin schreibt nichts mehr, kein onEnd des Aufklappens", async () => {
+      const t = prelude();
+      transitionEnd(t.win);
+      act(() => chatWindowProps.current.closeChat());
+      expect(t.tails[0].cancel).toHaveBeenCalled();
+      expect(t.pinRO.els).toEqual([]);
+      expect(t.win.classList.contains("allm-morph-close")).toBe(true);
+      // verspäteter Callback des alten ResizeObservers: kein Stil
+      const style = t.box.getAttribute("style");
+      setRects({ ...PANEL, top: 140 });
+      act(() => t.pinRO.cb([]));
+      expect(t.box.getAttribute("style")).toBe(style);
+      transitionEnd(t.win);
+      expect(visible(t.ui)).toBe(false);
+      expect(t.box.style.width).toBe("");
+      await flush();
+      expectIdle(t);
+      expect(focusSpy).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(2000));
+      t.tails[0].end();
+      await flush();
+      expect(focusSpy).not.toHaveBeenCalled();
+    });
+
+    it("Zuklappen synchron (vor dem Lauf): ResizeObserver-Callback des gelösten Pins schreibt keinen Stil", () => {
+      document.getAnimations = () => [];
+      setRects(START);
+      const ui = setup({ inlineLayout: "overlay" });
+      ui.open();
+      const inline = container.querySelector("#anything-llm-embed-inline");
+      const ro0 = observers.length;
+      oneFrame(); // Pin
+      const pinRO = observers.slice(ro0).find((o) => o.els.includes(inline));
+      expect(pinRO).toBeTruthy();
+      escapeOnPage(); // sofort zu, Pin gelöst
+      expect(visible(ui)).toBe(false);
+      const box = ui.box();
+      const style = box.getAttribute("style");
+      setRects(PANEL);
+      act(() => pinRO.cb([]));
+      expect(box.getAttribute("style")).toBe(style);
+      expect(pinRO.els).toEqual([]);
+    });
   });
 });
 

@@ -250,7 +250,8 @@ function hasRunningTransition(el) {
 // vor dem Malen dieses Frames nachgeführt. Danach führt pin die Endlage je
 // Frame nach (followPage; hooks: Fortschritt/Kurve der Fenster-Transition,
 // Startform neu vor dem Lauf, Inhaltsbreite); am Laufende wartet finish
-// einen Nachlauf ab (unpin.settle).
+// laufende Nachläufe ab (unpin.settle, höchstens 410 ms). finish läuft genau
+// einmal, nach stop nie mehr.
 // Rückgabe: stop(keep) — keep = Klassen stehen lassen (Rückweg übernimmt).
 function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   const set = (el, k, v) => el.style.setProperty(`--allmi-${k}`, v);
@@ -274,6 +275,8 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
   let raf = 0;
   let timer = 0;
   let unpin = null;
+  // Lauf beendet (finish oder Abbruch): finish läuft höchstens einmal
+  let over = false;
   // Form-Transition des Fensters, gesetzt beim Start des Laufs: ihr
   // Fortschritt (mit Kurve) führt beim Aufklappen die Endlage nach
   // (followPage) und beim Zuklappen mitten darin die Box zurück (closeGeom)
@@ -309,6 +312,7 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     if (!hasRunningTransition(win)) finish();
   };
   const stop = (keep = false) => {
+    over = true;
     cancelAnimationFrame(raf);
     clearTimeout(timer);
     win.removeEventListener("transitionend", onTransitionEnd);
@@ -323,7 +327,9 @@ function runMorph(win, box, geom, { opening, flow, chips, onEnd, pin }) {
     box.style.removeProperty("--allmi-bh");
   };
   function finish() {
-    // Aufklappen: Endlage noch nicht erreicht -> erst der Nachlauf
+    if (over) return;
+    // Aufklappen: Endlage noch nicht erreicht -> erst der Nachlauf (meldet
+    // sich genau einmal, spätestens nach FOLLOW_SETTLE_MS)
     if (unpin?.settle?.(finish)) return;
     stop(true);
     onEnd?.();
@@ -413,10 +419,13 @@ function pinBox(box, root, root0, width, follow = null) {
   const baseTop = parseFloat(box.style.top) || 0;
   box.style.setProperty("right", "auto");
   let raf = 0;
+  // gelöst: ein noch zugestellter ResizeObserver-/rAF-Callback schreibt nichts
+  let live = true;
   const put = (k, v) => {
     if (box.style.getPropertyValue(k) !== v) box.style.setProperty(k, v);
   };
   const tick = () => {
+    if (!live) return;
     const r = root.getBoundingClientRect();
     const p = follow ? follow.place(r) : { x: root0.x, y: root0.y, w: width };
     put("width", px(p.w));
@@ -432,6 +441,8 @@ function pinBox(box, root, root0, width, follow = null) {
     typeof ResizeObserver === "function" ? new ResizeObserver(tick) : null;
   ro?.observe(root);
   const unpin = () => {
+    if (!live) return;
+    live = false;
     cancelAnimationFrame(raf);
     ro?.disconnect();
     follow?.stop?.();
@@ -441,6 +452,7 @@ function pinBox(box, root, root0, width, follow = null) {
   };
   if (follow?.settle)
     unpin.settle = (done) => {
+      if (!live) return false;
       tick();
       return follow.settle(done);
     };
@@ -502,11 +514,21 @@ function readAtPageTransitionEnd(target, read) {
 // Fenster-Transition (mit Kurve), e1 = e beim Umschwenken; die Box steht bei
 // x0 + (T − x0)·e (x0 = Lage, gegen die die Leistenform gemessen ist), ihre
 // Breite = T.w. Die Fensterkanten liegen so bei Leiste·(1 − e) + T·e: kein
-// Sprung, beide Kanten monoton, Ende = neue Endlage. Im letzten Rest der
+// Sprung, Ende = neue Endlage; Kanten monoton, solange sich das Ziel nicht
+// zur Leiste hin zurückzieht (Fenster schmaler: dann kann eine Kante kurz vor
+// dem Ende wenige px überschwingen, siehe Test „Ziel zieht sich zurück“).
+// Im letzten Rest der
 // Kurve (e ≥ 0,98) bzw. nach ihr: Nachlauf 120 ms mit derselben Kurve
-// (leere Web-Animation als Uhr; ohne animate sofort). settle(done) am
-// Laufende: läuft ein Nachlauf, done danach (höchstens 3 Nachläufe) und true.
+// (leere Web-Animation als Uhr; ohne animate sofort); höchstens 4 Nachläufe
+// je Lauf, danach gilt das Ziel sofort (Seite bewegt die Fläche je Frame per
+// JS). settle(done) am Laufende: läuft ein Nachlauf, true und done genau
+// einmal, sobald kein Nachlauf mehr läuft (ein neuer Nachlauf übernimmt das
+// Warten), spätestens nach FOLLOW_SETTLE_MS (410 ms).
 const FOLLOW_TAIL_MS = 120;
+const FOLLOW_MAX_TAILS = 4;
+// harte Frist für settle: spätestens dann ist der Lauf fertig, auch wenn ein
+// Nachlauf nie endet
+const FOLLOW_SETTLE_MS = 3 * FOLLOW_TAIL_MS + 50;
 function followPage(target, root, start, offW, hooks, restart) {
   let x0 = start.x;
   let y0 = start.y;
@@ -515,7 +537,10 @@ function followPage(target, root, start, offW, hooks, restart) {
   let e1 = 0;
   let tail = null;
   let tails = 0;
+  // settle: wartendes done, harte Frist, Ende gemeldet
   let wait = null;
+  let deadline = 0;
+  let settled = false;
   let vw = window.innerWidth;
   let vh = window.innerHeight;
   const known = new Set(pageTransitions(target));
@@ -523,6 +548,27 @@ function followPage(target, root, start, offW, hooks, restart) {
     Math.abs(a.x - b.x) <= 0.5 &&
     Math.abs(a.y - b.y) <= 0.5 &&
     Math.abs(a.w - b.w) <= 0.5;
+  const release = () => {
+    const done = wait;
+    wait = null;
+    clearTimeout(deadline);
+    if (!done) return;
+    settled = true;
+    done();
+  };
+  // Nachlauf t beobachten: endet er als aktueller Nachlauf, ist der Lauf fertig
+  // (ein abgebrochener Nachlauf meldet nichts, sein Nachfolger übernimmt);
+  // ohne finished-Promise sofort fertig
+  const watch = (t) => {
+    if (!t.finished?.then) return false;
+    t.finished.then(
+      () => {
+        if (tail === t) release();
+      },
+      () => {},
+    );
+    return true;
+  };
   const goal = (e) => {
     let g = 1;
     if (tail) {
@@ -570,14 +616,21 @@ function followPage(target, root, start, offW, hooks, restart) {
         e1 = e;
         hooks.content(end.w);
         if (e >= 0.98) {
-          tails++;
-          tail =
-            root.animate?.(null, {
-              duration: FOLLOW_TAIL_MS,
-              easing: hooks.easing() || "ease-out",
-            }) || null;
+          // höchstens FOLLOW_MAX_TAILS Nachläufe je Lauf; danach (die Seite
+          // bewegt die Fläche je Frame per JS) Ziel sofort übernehmen
+          if (tails < FOLLOW_MAX_TAILS) {
+            tails++;
+            tail =
+              root.animate?.(null, {
+                duration: FOLLOW_TAIL_MS,
+                easing: hooks.easing() || "ease-out",
+              }) || null;
+          }
           e1 = 1;
         }
+        // settle wartet: neuer Nachlauf übernimmt das Warten; ohne Nachlauf
+        // ist der Lauf fertig (nach diesem Frame, nicht mitten im Pin-Schritt)
+        if (wait && !(tail && watch(tail))) Promise.resolve().then(release);
       }
     }
     const t = goal(e ?? 0);
@@ -587,20 +640,19 @@ function followPage(target, root, start, offW, hooks, restart) {
   return {
     place,
     settle(done) {
-      if (!tail || tail.playState === "finished" || tails > 3) return false;
+      if (wait) {
+        wait = done;
+        return true;
+      }
+      if (settled || !tail || tail.playState === "finished" || !watch(tail))
+        return false;
       wait = done;
-      tail.finished.then(
-        () => {
-          if (wait !== done) return;
-          wait = null;
-          done();
-        },
-        () => {},
-      );
+      deadline = setTimeout(release, FOLLOW_SETTLE_MS);
       return true;
     },
     stop() {
       wait = null;
+      clearTimeout(deadline);
       tail?.cancel();
       tail = null;
     },
