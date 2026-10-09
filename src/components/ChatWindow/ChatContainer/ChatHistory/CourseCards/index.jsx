@@ -1,11 +1,4 @@
-import {
-  memo,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   MORE_COURSES_TEXT,
   rowLead,
@@ -93,15 +86,21 @@ export const ROW_CARD_MIN_PX = 480;
 // ≈ 500 px Textbreite für zwei Zeilen (Karte ≈ 680 px abzüglich Zeit-Spalte,
 // Pille, Polsterung); schmaler 3 Zeilen. Raster immer 3.
 export const ROW_TEASER_2_LINES_MIN_PX = 680;
-const rowTeaserLines = (width) =>
-  width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3;
+const rowTeaserLines = (width) => (width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3);
 const GRID_TEASER_LINES = 3;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
 // "einblenden" fällt einmal beim Erscheinen (kein erneutes Einblenden bei
 // späteren Renders). reserve = Zeilen, die vorher der Platzhalter belegt hat
 // (min-height, die Karte wird beim Ersetzen nicht kleiner oder größer).
-function Teaser({ id, text, arrivedAt = null, lines, reserve = 0 }) {
+function Teaser({
+  id,
+  text,
+  arrivedAt = null,
+  lines,
+  reserve = 0,
+  placement = null,
+}) {
   const [fadeIn] = useState(() => teaserFadeIn(arrivedAt));
   return (
     <span
@@ -114,6 +113,7 @@ function Teaser({ id, text, arrivedAt = null, lines, reserve = 0 }) {
       data-course-teaser=""
       style={{
         ...teaserStyle,
+        ...(placement || {}),
         WebkitLineClamp: lines,
         ...(reserve > 0 && { minHeight: `${reserve * TEASER_LINE_PX}px` }),
       }}
@@ -127,7 +127,7 @@ function Teaser({ id, text, arrivedAt = null, lines, reserve = 0 }) {
 // pulsierend (CSS allm-course-teaser-pending in main.jsx, ruhig bei
 // prefers-reduced-motion), reserviert die Höhe des Teasers (lines Zeilen).
 // Immer Text (React escaped), nie HTML.
-function TeaserPending({ text, lines }) {
+function TeaserPending({ text, lines, placement = null }) {
   return (
     <span
       className="allm-course-teaser-pending"
@@ -140,6 +140,7 @@ function TeaserPending({ text, lines }) {
         height: `${lines * TEASER_LINE_PX}px`,
         overflow: "hidden",
         overflowWrap: "anywhere",
+        ...(placement || {}),
       }}
     >
       {text}
@@ -167,12 +168,7 @@ function joinParts(parts) {
 // Teaser). teaser = KI-Teaser (Kurskarten v3), sonst null; teaserArrivedAt
 // = Ankunft des Teasers im Stream (nur Karten oben, sonst null).
 // pending = Teaser erwartet (Platzhalter, nur Karten oben im Stream)
-function Card({
-  card,
-  teaser = null,
-  teaserArrivedAt = null,
-  pending = null,
-}) {
+function Card({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
   const { showTeaser, showPending, reserve } = useTeaserSlot({
@@ -289,7 +285,7 @@ const statusStyle = (bookable) => ({
 // Zeilen-Karte (courseCardsLayout "rows", Kartenbreite >= 480 px): links
 // Wochentag + Uhrzeit in Akzentfarbe (Tabellenziffern), Mitte Titel, Meta-
 // Zeile und Teaser (höchstens 2 Zeilen) bzw. Platzhalter, rechts die
-// Status-Pille. Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
+// Status-Pille; Zeit und Pille mittig zum Kopfblock Titel + Meta (Variante C). Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
 // sichtbare Zeilen; Hover/Fokus über .allm-course-card (main.jsx).
 function CardRow({
   card,
@@ -315,6 +311,17 @@ function CardRow({
   ]
     .filter(Boolean)
     .join(" ");
+  // Variante C (Entwurf der Designerin): Zeit und Status-Pille sitzen auf der
+  // Mitte des Kopfblocks aus Titel + Metazeile; der Teaser (oder Platzhalter)
+  // hängt als eigene Zeile darunter. Raster statt Flex, damit die Spalten die
+  // Kopfzeilen überspannen können; ohne Metazeile zentriert auf den Titel.
+  const headRows = meta ? 2 : 1;
+  const contentCol = lead ? 2 : 1;
+  const statusCol = contentCol + 1;
+  const sideCell = {
+    alignSelf: "center",
+    gridRow: `1 / ${headRows + 1}`,
+  };
   return (
     <li style={itemStyle}>
       <a
@@ -336,9 +343,13 @@ function CardRow({
           border: `1px solid ${BORDER}`,
           borderRadius: RADIUS,
           padding: "12px 14px",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: "14px",
+          display: "grid",
+          gridTemplateColumns: `${lead ? "auto " : ""}minmax(0, 1fr)${
+            card.status ? " auto" : ""
+          }`,
+          columnGap: "14px",
+          rowGap: "2px",
+          alignItems: "start",
           fontSize: "13px",
           lineHeight: "18px",
         }}
@@ -348,7 +359,8 @@ function CardRow({
             id={`${id}-s`}
             className="allm-course-when"
             style={{
-              flex: "none",
+              ...sideCell,
+              gridColumn: 1,
               minWidth: "4.5em",
               color: ACCENT,
               fontWeight: 600,
@@ -362,55 +374,73 @@ function CardRow({
           </span>
         )}
         <span
+          className="allm-course-title"
           style={{
-            flex: "1 1 auto",
+            gridColumn: contentCol,
+            gridRow: 1,
             minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: "2px",
+            color: TEXT,
+            fontWeight: 600,
+            fontSize: "14px",
+            lineHeight: "19px",
+            display: "-webkit-box",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: 2,
+            overflow: "hidden",
+            overflowWrap: "anywhere",
           }}
         >
+          {card.title}
+        </span>
+        {meta && (
           <span
-            className="allm-course-title"
+            id={`${id}-d`}
+            className="allm-course-details"
             style={{
-              color: TEXT,
-              fontWeight: 600,
-              fontSize: "14px",
-              lineHeight: "19px",
-              display: "-webkit-box",
-              WebkitBoxOrient: "vertical",
-              WebkitLineClamp: 2,
-              overflow: "hidden",
+              ...mutedStyle,
+              gridColumn: contentCol,
+              gridRow: 2,
+              minWidth: 0,
               overflowWrap: "anywhere",
             }}
           >
-            {card.title}
+            {meta}
           </span>
-          {meta && (
-            <span
-              id={`${id}-d`}
-              className="allm-course-details"
-              style={{ ...mutedStyle, overflowWrap: "anywhere" }}
-            >
-              {meta}
-            </span>
-          )}
-          {showTeaser && (
-            <Teaser
-              id={`${id}-t`}
-              text={teaser}
-              arrivedAt={teaserArrivedAt}
-              lines={lines}
-              reserve={reserve}
-            />
-          )}
-          {showPending && <TeaserPending text={pending} lines={lines} />}
-        </span>
+        )}
+        {showTeaser && (
+          <Teaser
+            id={`${id}-t`}
+            text={teaser}
+            arrivedAt={teaserArrivedAt}
+            lines={lines}
+            reserve={reserve}
+            placement={{
+              gridColumn: contentCol,
+              gridRow: headRows + 1,
+              minWidth: 0,
+            }}
+          />
+        )}
+        {showPending && (
+          <TeaserPending
+            text={pending}
+            lines={lines}
+            placement={{
+              gridColumn: contentCol,
+              gridRow: headRows + (showTeaser ? 2 : 1),
+              minWidth: 0,
+            }}
+          />
+        )}
         {card.status && (
           <span
             id={`${id}-b`}
             className="allm-course-status"
-            style={{ ...statusStyle(card.bookable), flex: "none" }}
+            style={{
+              ...statusStyle(card.bookable),
+              ...sideCell,
+              gridColumn: statusCol,
+            }}
           >
             {card.status}
           </span>
