@@ -23,9 +23,10 @@ export function resolveChatIcon(name, fallback = Plus) {
 }
 
 export default function OpenButton({ settings, isOpen, toggleOpen }) {
-  // Default welcome messages - can be customized via settings
+  // Standard-Willkommensblasen, solange keine eigenen gespeichert sind –
+  // wortgleich mit dem Vorschlag im Design Center (DEFAULT_WELCOME_BUBBLES).
   const defaultBubbleMessages = [
-    "Hallo! Ich bin Kuno, Ihr Online-Berater!",
+    "Hallo! Ich bin Ihr KI-Berater.",
     "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!",
   ];
 
