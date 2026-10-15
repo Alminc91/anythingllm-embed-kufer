@@ -48,7 +48,11 @@ export default function ChatHistory({
   const chatHistoryRef = useRef(null);
   const arrowSlot = useContext(ScrollArrowSlotContext);
   const cardsAbove = courseCardsAbove(settings);
-  // Kurskarten oben: Nachführen zum Anker je Turn (length = Verlaufslänge des
+  // Mit Kurskarten (oben wie unten, KIE-567): beim Antworten höchstens so weit
+  // nachführen, dass die Frage oben steht (Anker je Turn). Ohne Karten ("Nur
+  // Text mit Links") wie früher immer ans Ende.
+  const anchorScroll = courseCardsEnabled(settings);
+  // Kurskarten an: Nachführen zum Anker je Turn (length = Verlaufslänge des
   // Turns, follow = noch nachführen, top = zuletzt selbst gesetzte Position,
   // scrolled = Nutzer hat in diesem Turn selbst gescrollt, pillsAt = schon ins
   // Bild geholte Folgefragen)
@@ -78,7 +82,7 @@ export default function ChatHistory({
   const pillsAt = followUps.length > 0 ? last.followUpsArrivedAt : undefined;
 
   useEffect(() => {
-    if (!cardsAbove) {
+    if (!anchorScroll) {
       scrollToBottom();
       return;
     }
@@ -93,18 +97,33 @@ export default function ChatHistory({
     if (a.follow) a.follow = scrollToLatestTurn();
   }, [history]);
 
-  // Kurskarten oben: Folgefragen kommen nach der (oft langen) Antwort und
-  // lägen unter dem sichtbaren Bereich -> sanft ans Ende scrollen, aber nur,
-  // wenn der Nutzer seit Beginn der Antwort nicht selbst gescrollt hat.
+  // Kurskarten an (oben oder unten): Folgefragen kommen nach der (oft
+  // langen) Antwort und lägen unter dem sichtbaren Bereich -> sanft ans Ende
+  // scrollen, aber nur, wenn der Nutzer seit Beginn der Antwort nicht selbst
+  // gescrollt hat. Karten unten (Text zuerst): Karten und Folgefragen kommen
+  // am Ende, die Frage bleibt oben stehen, der Pfeil führt weiter nach unten.
   // Antwort mit Kurskarten (KIE-565, K-1): höchstens so weit, dass die Frage
   // oben steht. Der Antwortbeginn (Frage, Karten) bleibt im Blick, wie im
   // Inline-Panel; passt der ganze Turn, kommen die Folgefragen trotzdem ins
   // Bild. Nie nach oben scrollen.
+  // Ohne Kurskarten („Nur Text mit Links“, KIE-567): Die Pillen erscheinen
+  // erst, wenn die Antwort fertig ist (canSend), also nach dem letzten
+  // Scrollen ans Ende -> einmal ans Ende nachziehen (ohne Animation, wie
+  // der Verlauf in diesem Modus sonst auch).
   useEffect(() => {
     const a = anchorRef.current;
     const el = chatHistoryRef.current;
-    if (!cardsAbove || !pillsAt || !el || a.scrolled || a.pillsAt === pillsAt)
+    if (!pillsAt || !el || a.pillsAt === pillsAt) return;
+    if (!anchorScroll) {
+      a.pillsAt = pillsAt;
+      scrollToBottom();
       return;
+    }
+    if (a.scrolled) return;
+    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth";
     a.pillsAt = pillsAt;
     a.follow = false;
     const anchorTop = latestTurnHasCards(el) ? latestTurnAnchorTop(el) : null;
@@ -113,13 +132,8 @@ export default function ChatHistory({
         ? el.scrollHeight
         : Math.min(el.scrollHeight, Math.max(0, anchorTop - 8));
     if (anchorTop !== null && top <= el.scrollTop + 1) return;
-    el.scrollTo({
-      top,
-      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
-  }, [pillsAt, cardsAbove]);
+    el.scrollTo({ top, behavior });
+  }, [pillsAt, anchorScroll]);
 
   // Eigenes Scrollen des Nutzers (Rad, Wischen, Tastatur, Pfeil) beendet das
   // Nachführen für diesen Turn — kein Zurückspringen mehr.
@@ -238,7 +252,7 @@ export default function ChatHistory({
       className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-pt-4 allm-pb-2 allm-flex allm-flex-col allm-justify-start allm-no-scroll"
       id="chat-history"
       ref={chatHistoryRef}
-      {...(cardsAbove && {
+      {...(anchorScroll && {
         onScroll: handleUserScroll,
         onWheel: stopFollow,
         onTouchMove: stopFollow,
@@ -290,6 +304,8 @@ export default function ChatHistory({
                 courseTeaserMap={teasers}
                 courseCards={settings?.courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
+                // Karten unten: angekündigte Kurse wie oben auswählen
+                courseCardsAnnounced={above ? null : props.courseCardsAnnounced}
                 courseCardsSelection={selection}
                 chatId={props.chatId}
                 feedbackScore={props.feedbackScore}
@@ -304,7 +320,16 @@ export default function ChatHistory({
               />
             );
 
-          if (!above) return renderBody();
+          // Karten unten (Text zuerst): Antwort als Turn markieren (Anker
+          // für das Nachführen, latestTurn); Aufbau sonst wie bisher
+          if (!above)
+            return anchorScroll && props.role === "assistant" ? (
+              <div key={index} data-answer-turn="below">
+                {renderBody()}
+              </div>
+            ) : (
+              renderBody()
+            );
           return (
             <AssistantTurnAbove
               key={index}
@@ -323,10 +348,13 @@ export default function ChatHistory({
   );
 }
 
-// Position der letzten Frage (Anker des letzten Assistenten-Turns bei Karten
-// oben) im Inhalt des Scroll-Containers in px, null ohne Turn.
+// Position der letzten Frage (Anker des letzten Assistenten-Turns bei
+// Kurskarten oben oder unten) im Inhalt des Scroll-Containers in px, null
+// ohne Turn.
 function latestTurn(el) {
-  const turns = el.querySelectorAll("[data-assistant-turn]");
+  const turns = el.querySelectorAll(
+    "[data-assistant-turn], [data-answer-turn]",
+  );
   return turns[turns.length - 1] || null;
 }
 function latestTurnAnchorTop(el) {
@@ -339,7 +367,7 @@ function latestTurnAnchorTop(el) {
     el.scrollTop
   );
 }
-// Zeigt der letzte Turn Kurskarten (über der Antwort)?
+// Zeigt der letzte Turn Kurskarten (über oder unter der Antwort)?
 function latestTurnHasCards(el) {
   return !!latestTurn(el)?.querySelector("[data-course-cards]");
 }

@@ -30,7 +30,7 @@ import {
   courseCardsLayout,
   HTML_TAG_RX,
   replySpeechText,
-  selectCourseCards,
+  selectBelowCourseCards,
   SPEECH_STRIP_RX,
   teaserMap,
 } from "@/utils/courseCards";
@@ -484,6 +484,9 @@ const HistoricalMessage = forwardRef(
       // Antwort fertig (chatId da) -> Fallback-Karten für Kursseiten ohne
       // Serverdaten
       courseCardsFinal = false,
+      // Karten unten (KIE-567): Anzahl der vom Server angekündigten Kurse
+      // (Marker) -> Auswahl wie bei Karten oben (selectBelowCourseCards)
+      courseCardsAnnounced = null,
       // Name steht schon im umgebenden Block (Kurskarten "above")
       nameInWrapper = false,
       error = false,
@@ -530,11 +533,11 @@ const HistoricalMessage = forwardRef(
         !showCards
           ? null
           : courseCardsSelection ||
-            selectCourseCards(
+            selectBelowCourseCards(
               responseContent,
               courseSources,
               { courseCards },
-              { fallback: courseCardsFinal },
+              { fallback: courseCardsFinal, announced: courseCardsAnnounced },
             ),
       [
         showCards,
@@ -543,6 +546,7 @@ const HistoricalMessage = forwardRef(
         courseSources,
         courseCards,
         courseCardsFinal,
+        courseCardsAnnounced,
       ],
     );
     // Teaser einmal je Antwort prüfen (Karten unten und Sprachausgabe)

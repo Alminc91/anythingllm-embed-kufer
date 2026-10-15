@@ -124,13 +124,15 @@ export const DEFAULT_SETTINGS = {
   inheritFont: false,
   // Kurskarten zu Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
-  // Standard seit Design Center vereinfacht: "auto" in Chatblase und Inline
-  // (Entscheidung D1, KIE-565; der Server liefert "auto" für beide
-  // Darstellungen, unabhängig vom gespeicherten displayMode).
+  // Standard "auto" in Chatblase und Inline (Entscheidung D1, KIE-565);
+  // seit KIE-567 im Design Center wählbar („Kurse anzeigen als“ Kurskarten /
+  // Nur Text mit Links), der Server liefert immer einen gültigen Wert.
   courseCards: "auto",
   // Kurskarten über ("above", Standard: Karten zuerst, danach der kurze Text)
-  // oder unter ("below") der Antwort. Bei "above" erscheinen vom Server
-  // angekündigte Kurse schon vor dem Text (Fork >= 7.10).
+  // oder unter ("below", Text zuerst, danach Karten und Folgefragen) der
+  // Antwort (KIE-567 „Reihenfolge“). Vom Server angekündigte Kurse erscheinen
+  // bei "above" schon vor dem Text (Fork >= 7.10), bei "below" unter der
+  // fertigen Antwort (utils/courseCards.js selectBelowCourseCards).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
   // Kartenlayout "grid" (Raster) | "rows" (Standard, Zeilen-Karten über die
   // volle Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
