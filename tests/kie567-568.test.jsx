@@ -36,7 +36,11 @@ import {
 import { isPhoneViewport } from "../src/utils/platform.js";
 import { selectBelowCourseCards } from "../src/utils/courseCards.js";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
-import OpenButton from "../src/components/OpenButton/index.jsx";
+import OpenButton, {
+  BUBBLES_SHOWN_AFTER_MS,
+  resetPhoneAtLoad,
+} from "../src/components/OpenButton/index.jsx";
+import { resetShownOnThisPage } from "../src/hooks/useBubbleDismissal.js";
 
 const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
@@ -420,13 +424,23 @@ const button = (extra = {}) =>
     toggleOpen: () => {},
   });
 const bubbles = (el) => el.querySelector("[data-welcome-bubbles]");
-// neue Seite (Unterseite im selben Tab): Widget neu laden
+// neue Seite (Unterseite im selben Tab): Widget neu laden (Gerät und „auf
+// dieser Seite gezeigt“ gelten je Seitenaufruf, Modulebene)
 function reload(el) {
   unmount();
+  resetPhoneAtLoad();
+  resetShownOnThisPage();
   return mount(el);
 }
 
 describe("KIE-568 Willkommensblasen je Gerät", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetPhoneAtLoad();
+    resetShownOnThisPage();
+  });
+  afterEach(() => vi.useRealTimers());
+
   it("Aus: keine Blasen, nur der Chat-Button (auch ohne eigene Blasentexte)", () => {
     setWidth(1440);
     const el = mount(
@@ -459,7 +473,7 @@ describe("KIE-568 Willkommensblasen je Gerät", () => {
     // Schließen -> gespeichert, auch neuer Tab (sessionStorage leer) ohne
     act(() =>
       el
-        .querySelector('[aria-label="Close all chat bubbles"]')
+        .querySelector('[aria-label="Willkommensblasen schließen"]')
         .dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
     expect(bubbles(el)).toBeNull();
@@ -481,6 +495,8 @@ describe("KIE-568 Willkommensblasen je Gerät", () => {
     let el = mount(button(settings));
     expect(bubbles(el)).not.toBeNull();
     expect(bubbles(el).getAttribute("data-welcome-bubbles")).toBe("every");
+    // als gezeigt gemerkt, sobald sie kurz zu sehen waren
+    act(() => vi.advanceTimersByTime(BUBBLES_SHOWN_AFTER_MS));
     expect(window.localStorage.getItem(KEY)).toBeNull();
     expect(JSON.parse(window.sessionStorage.getItem(KEY)).shown).toBe(true);
     // Unterseite im selben Tab: nicht erneut

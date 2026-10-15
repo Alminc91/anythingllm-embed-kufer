@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 const STORAGE_KEY = "anythingllm-embed-bubbles-dismissed";
 
@@ -12,10 +12,17 @@ const STORAGE_KEY = "anythingllm-embed-bubbles-dismissed";
 //   einmal zu sehen waren, erscheinen sie auf Unterseiten im selben Tab nicht
 //   erneut (shown); ein neuer Tab bzw. ein späterer Besuch zeigt sie wieder.
 // - "off": keine Blasen, nur der Chat-Button.
+// Auf dieser Seite schon als gezeigt gemerkt (je Widget): dann blendet
+// "shown" sie hier nicht wieder aus (erst auf der nächsten Seite im selben
+// Tab). Auf Modulebene, weil OpenButton beim Öffnen und Schließen des Chats
+// neu eingehängt wird (Fixliste 7.22-rc7 Nr. 19).
+const shownOnThisPage = new Set();
+export function resetShownOnThisPage() {
+  shownOnThisPage.clear();
+}
+
 export default function useBubbleDismissal(settings = {}, mode = "first") {
-  // Auf dieser Seite schon als gezeigt gemerkt: dann blendet "shown" sie hier
-  // nicht wieder aus (erst auf der nächsten Seite im selben Tab).
-  const shownHere = useRef(false);
+  const pageKey = settings.embedId || "default";
 
   const getStorageType = () => {
     try {
@@ -102,7 +109,8 @@ export default function useBubbleDismissal(settings = {}, mode = "first") {
     if (mode === "off") return false;
     const state = getDismissalState();
     if (state.manuallyDismissed || state.chatOpened) return false;
-    if (mode === "every" && state.shown && !shownHere.current) return false;
+    if (mode === "every" && state.shown && !shownOnThisPage.has(pageKey))
+      return false;
     return true;
   };
 
@@ -137,8 +145,8 @@ export default function useBubbleDismissal(settings = {}, mode = "first") {
   // Blasen sind jetzt zu sehen (OpenButton): im Modus "every" für diesen Tab
   // merken, damit Unterseiten sie nicht erneut zeigen.
   const markBubblesShown = () => {
-    if (mode !== "every" || shownHere.current) return;
-    shownHere.current = true;
+    if (mode !== "every" || shownOnThisPage.has(pageKey)) return;
+    shownOnThisPage.add(pageKey);
     const currentState = getDismissalState();
     if (currentState.shown) return;
     saveDismissalState({ ...currentState, shown: true });

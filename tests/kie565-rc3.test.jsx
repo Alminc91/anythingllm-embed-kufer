@@ -34,7 +34,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k) => k }),
   I18nextProvider: ({ children }) => children,
 }));
-vi.mock("@/i18n", () => ({ default: {} }));
+vi.mock("@/i18n", () => ({ default: {}, syncI18nLanguage: () => {} }));
 // Chatfenster der Blase: schlanker Ersatz mit Eingabefeld (Fokus-Test)
 vi.mock("@/components/ChatWindow", () => ({
   default: () => (
@@ -269,7 +269,9 @@ describe("Altlisten der Begrüßung (Nr. 19, W08)", () => {
 
 // ---------------------------------------------------------------------------
 describe("Feste Randabstände und Max. Breite, inheritFont Inline (Nr. 15, 18)", () => {
-  it("data-offset-x/-y und data-inline-max-width wirken nicht mehr; inlineTheme bleibt", async () => {
+  // inlineTheme seit Fixliste 7.22-rc7 Nr. 21 ebenfalls fest (Leiste folgt dem
+  // Farbschema aus dem Design Center)
+  it("data-offset-x/-y, data-inline-max-width und data-inline-theme wirken nicht mehr", async () => {
     const s = await loadEmbedSettings(
       {
         ...BASE,
@@ -284,7 +286,7 @@ describe("Feste Randabstände und Max. Breite, inheritFont Inline (Nr. 15, 18)",
     expect(s.offsetX).toBe(null);
     expect(s.offsetY).toBe(null);
     expect(s.inlineMaxWidth).toBe(null);
-    expect(s.inlineTheme).toBe("dark");
+    expect(s.inlineTheme).toBe(null);
   });
 
   it("Inline ohne Angabe: Seitenschrift (inheritFont true), Chatblase nicht", async () => {
@@ -320,7 +322,7 @@ describe("„Kopiert!“ je Sprache (Nr. 34, B-09)", () => {
         setChatHistory={() => {}}
       />,
     );
-    act(() => $('[aria-label="Options"]').click());
+    act(() => $('[aria-label="Optionen"], [aria-label="Options"]').click());
     const button = [...container.querySelectorAll("button")].find(
       (b) => b.textContent === "Chat-ID",
     );

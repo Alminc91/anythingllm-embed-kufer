@@ -42,6 +42,8 @@ import {
   LOGO_RADIUS,
   ON_ACCENT_TEXT,
 } from "@/utils/theme";
+import { uiTexts } from "@/utils/layout";
+import { useEscapeLayer } from "@/utils/escape";
 
 const ThoughtBubble = ({ thought }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -226,6 +228,7 @@ const TTSButton = ({ text, size = 14 }) => {
   // No auto-play needed - streaming handles playback directly
 
   if (!ttsAvailable || !text) return null;
+  const ui = uiTexts(embedderSettings.settings);
 
   return (
     <div className="allm-flex allm-justify-end allm-mt-1">
@@ -233,8 +236,8 @@ const TTSButton = ({ text, size = 14 }) => {
         onClick={handleClick}
         disabled={isLoading}
         className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] disabled:allm-opacity-50 allm-p-0"
-        aria-label={isPlaying ? "Stop speaking" : "Speak message"}
-        title={isPlaying ? "Stop" : "Speak"}
+        aria-label={isPlaying ? ui.stopSpeaking : ui.speak}
+        title={isPlaying ? ui.stopTitle : ui.speakTitle}
       >
         {isLoading ? (
           <CircleNotch size={size} className="allm-animate-spin" />
@@ -350,6 +353,10 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     setReason(null);
     setComment("");
   };
+  // Escape schließt nur das Kommentarfeld (wie „Überspringen“), nicht das
+  // ganze Fenster; der Entwurf im Eingabefeld bleibt (utils/escape.js).
+  useEscapeLayer(showComment, dismissComment);
+  const ui = uiTexts(embedderSettings.settings);
 
   const btnBase =
     "allm-bg-transparent allm-border-none allm-cursor-pointer allm-p-1.5 allm-flex allm-items-center allm-transition-colors disabled:allm-opacity-60";
@@ -368,8 +375,8 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           type="button"
           onClick={() => submit(true)}
           disabled={busy}
-          aria-label="Antwort war hilfreich"
-          title="Hilfreich"
+          aria-label={ui.helpful}
+          title={ui.helpfulTitle}
           className={`${btnBase} ${
             score === true
               ? "allm-text-green-600"
@@ -382,8 +389,8 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           type="button"
           onClick={() => submit(false)}
           disabled={busy}
-          aria-label="Antwort war nicht hilfreich"
-          title="Nicht hilfreich"
+          aria-label={ui.notHelpful}
+          title={ui.notHelpfulTitle}
           className={`${btnBase} ${
             score === false
               ? "allm-text-red-600"

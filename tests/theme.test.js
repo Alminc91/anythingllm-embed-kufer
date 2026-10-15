@@ -252,30 +252,29 @@ describe("theme.test.js", () => {
     expect(dark["--allm-bar-text"]).toBe(BAR_THEMES.dark.text);
   });
 
-  it("inlineTheme explizit: Standard null folgt dem Fenster-Theme, light/dark gewinnt", async () => {
+  // Fixliste 7.22-rc7 Nr. 21: inlineTheme ist fest null (Leiste folgt dem
+  // Farbschema aus dem Design Center), Script und Server wirken nicht mehr.
+  // resolveBarTheme selbst kennt den expliziten Wert weiter (Werkzeug).
+  it("inlineTheme: Leiste folgt immer dem Fenster-Theme, data-inline-theme wirkt nicht", async () => {
     expect(DEFAULT_SETTINGS.inlineTheme).toBeNull();
     expect((await finalVars({})).settings.inlineTheme).toBeNull();
-    // ohne inlineTheme: Leiste = Fenster-Theme
     expect(resolveBarTheme({ inlineTheme: null }, "light")).toBe("light");
     expect(resolveBarTheme({ inlineTheme: null }, "dark")).toBe("dark");
-    // AK-8 Bestand: data-inline-theme="dark" ohne data-theme -> dunkle Leiste
+    // Bestand data-inline-theme="dark" im hellen Fenster: helle Leiste
     const legacy = await finalVars({ inlineTheme: "dark" });
+    expect(legacy.settings.inlineTheme).toBeNull();
     expect(legacy.mode).toBe("light");
-    expect(legacy.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
-    expect(legacy.vars["--allm-surface"]).toBe("#FFFFFF");
-    // explizit hell im dunklen Theme -> helle Leiste, Fenster dunkel
+    expect(legacy.vars["--allm-bar-bg"]).toBe(BAR_THEMES.light.bg);
+    // data-inline-theme="light" im dunklen Fenster: dunkle Leiste
     const lightBar = await finalVars({ theme: "dark", inlineTheme: "light" });
-    expect(lightBar.vars["--allm-bar-bg"]).toBe(BAR_THEMES.light.bg);
+    expect(lightBar.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
     expect(lightBar.vars["--allm-surface"]).toBe(DARK.surface);
-    expect(buildThemeCss(lightBar.settings, "dark")).not.toContain(
-      "--allmi-bar-backdrop",
-    );
-    // Server-Wert gewinnt wie bei allen Settings
+    // auch ein Serverwert wirkt nicht
     const server = await finalVars(
-      { theme: "dark", inlineTheme: "light" },
+      { theme: "light", inlineTheme: "light" },
       { inlineTheme: "dark" },
     );
-    expect(server.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
+    expect(server.vars["--allm-bar-bg"]).toBe(BAR_THEMES.light.bg);
   });
 
   it("brand-header-dark: headerBgColor ohne headerTextColor -> Text folgt dem dunklen Satz (Kontrast >= 4,5:1)", async () => {
@@ -420,7 +419,6 @@ describe("theme.test.js", () => {
         noHeader: "true",
         inheritFont: "",
         displayMode: "Inline",
-        inlineTheme: "dark",
         buttonColor: "#123456",
       },
       fetchConfig({}),
@@ -430,7 +428,6 @@ describe("theme.test.js", () => {
     expect(s.noHeader).toBe("true");
     expect(s.inheritFont).toBe(true);
     expect(s.displayMode).toBe("inline");
-    expect(s.inlineTheme).toBe("dark");
     expect(s.buttonColor).toBe("#123456");
     expect(s.theme).toBe("light");
   });

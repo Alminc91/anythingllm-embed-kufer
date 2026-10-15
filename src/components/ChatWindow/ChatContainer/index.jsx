@@ -1,3 +1,4 @@
+import { isImeEscape } from "@/utils/escape";
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
@@ -70,7 +71,7 @@ export default function ChatContainer({
     if (!escapeCloses) return;
     const doc = rootRef.current?.ownerDocument || document;
     const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
       e.preventDefault();
       onCloseRef.current?.();
     };
@@ -357,22 +358,33 @@ export function appendDraft(current, draft) {
 // Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
 // disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
 // Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
-// sonst deutsch). Eine dezente Zeile, nur Text, nicht anklickbar.
+// sonst deutsch). Eine dezente Zeile, nur Text, nicht anklickbar. Immer
+// genau eine Zeile (Fixliste 7.22-rc7 Nr. 22): kein Umbruch. In schmalen
+// Fenstern (Chatblase bei 1280 px: 304 px Platz, der Text braucht bei 11 px
+// etwa 330 px) wird die Schrift bis 10 px kleiner (Containerabfrage,
+// .allm-ai-disclaimer in main.jsx); reicht auch das nicht, endet die Zeile
+// mit „…“ (voller Text im title und für Screenreader).
 function AiDisclaimer({ settings }) {
+  const text = panelTexts(settings || {}).aiDisclaimer;
   return (
-    <p
-      id="anything-llm-ai-disclaimer"
-      role="note"
-      className="allm-font-sans"
-      style={{
-        margin: "4px 8px 0",
-        fontSize: "11px",
-        lineHeight: 1.4,
-        textAlign: "center",
-        color: "var(--allmi-text-muted, #6b7280)",
-      }}
-    >
-      {panelTexts(settings || {}).aiDisclaimer}
-    </p>
+    <div className="allm-ai-disclaimer-box">
+      <p
+        id="anything-llm-ai-disclaimer"
+        role="note"
+        title={text}
+        className="allm-ai-disclaimer allm-font-sans"
+        style={{
+          margin: "4px 8px 0",
+          lineHeight: 1.4,
+          textAlign: "center",
+          color: "var(--allmi-text-muted, #6b7280)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {text}
+      </p>
+    </div>
   );
 }

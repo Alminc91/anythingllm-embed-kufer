@@ -15,11 +15,17 @@ import {
   warnInvalidInlineEnums,
 } from "@/utils/layout";
 import { applyTheme, userTextColorFor } from "@/utils/theme";
+import { syncI18nLanguage } from "@/i18n";
 
 // Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
 // / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
 const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
+// Gruppen, die als Ganzes dem Server gehören, sobald er einen Wert der Gruppe
+// liefert: Die Begrüßung aus dem Design Center (greeting) verdrängt auch ein
+// data-greeting-bubble-text bzw. data-greeting am Skript (Fixliste 7.22-rc7
+// Nr. 9). Ohne Serverwert bleiben die Script-Attribute wirksam.
+const SERVER_GROUPS = [["greeting", "greetingBubbleText"]];
 // Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“)
 const EMPTY_MEANS_NONE = ["privacyTitle"];
 
@@ -169,9 +175,13 @@ export const DEFAULT_SETTINGS = {
   // (PANEL_TEXTS.inputPlaceholder „Ihre Frage eingeben“)
   sendMessageText: null,
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
-  resetBurgerText: "Chat zurücksetzen", // override text for reset option in burger menu
-  emailBurgerText: "E-Mail Support", // override text for email support option in burger menu
-  sessionBurgerText: "Chat-ID", // override text for chat ID option in burger menu (copies conversationId)
+  // Menütexte (Burger-Menü): null = Text in der Sprache des Widgets
+  // (utils/layout.js uiTexts: „Chat zurücksetzen“, „E-Mail Support“,
+  // „Chat-ID“, „Frühere Chats“ bzw. englisch); eigener Text per Attribut
+  resetBurgerText: null,
+  emailBurgerText: null,
+  sessionBurgerText: null, // kopiert die conversationId
+  historyBurgerText: null,
 
   // behaviors
   openOnLoad: "off", // or "on"
@@ -232,6 +242,9 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   const server = dropLegacyDefaults(
     parseAndValidateEmbedSettings(mergedServerConfig),
   );
+  for (const group of SERVER_GROUPS)
+    if (group.some((key) => server[key] !== undefined))
+      for (const key of group) delete script[key];
   const given = new Set([...Object.keys(script), ...Object.keys(server)]);
   const resolved = applyFixedStandards(
     { ...DEFAULT_SETTINGS, ...script, ...server, loaded: true },
@@ -288,6 +301,8 @@ export default function useGetScriptAttributes() {
       // Theme entsteht. Ersetzt die frühere Link-Farb-Injektion.
       if (embedderSettings.themeStyle)
         applyTheme(embedderSettings.themeStyle, finalSettings);
+      // i18next-Texte in der Sprache des Widgets (Script bzw. Server)
+      syncI18nLanguage(finalSettings);
 
       setSettings(finalSettings);
     }

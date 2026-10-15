@@ -1471,8 +1471,9 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     const note = $("#anything-llm-ai-disclaimer");
     expect(note.getAttribute("role")).toBe("note");
     expect(note.textContent).toBe(PANEL_TEXTS.de.aiDisclaimer);
-    // dezent wie im Mockup (11 px, eine Zeile)
-    expect(note.style.fontSize).toBe("11px");
+    // dezent wie im Mockup (11 px, eine Zeile); Größe per Klasse, in
+    // schmalen Fenstern bis 10 px (Fixliste 7.22-rc7 Nr. 22, main.jsx)
+    expect(note.classList.contains("allm-ai-disclaimer")).toBe(true);
     expect(note.style.textAlign).toBe("center");
     expect(note.style.color).toContain("--allmi-text-muted");
     expect(note.querySelector("a, button")).toBe(null);

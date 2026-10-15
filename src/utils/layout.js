@@ -186,6 +186,83 @@ export function panelLanguage(settings = {}) {
 export function panelTexts(settings = {}) {
   return PANEL_TEXTS[panelLanguage(settings)];
 }
+
+// Bedientexte des Widgets je Sprache (Fixliste 7.22-rc7 Nr. 35, E3, Teil von
+// KIE-571): Menüeinträge, Standard-Willkommensblasen neben dem Chat-Button
+// und die Beschriftungen für Screenreader (aria-label, title). Gleiche
+// Sprachwahl wie die Panel-Texte (panelLanguage: "en" englisch, sonst
+// deutsch). Ein eigener Menütext (resetBurgerText, emailBurgerText,
+// sessionBurgerText, historyBurgerText) und eigene Willkommensblasen
+// (chatbotBubblesMessages) gewinnen.
+export const UI_TEXTS = {
+  de: {
+    menuReset: "Chat zurücksetzen",
+    menuHistory: "Frühere Chats",
+    menuEmail: "E-Mail Support",
+    menuChatId: "Chat-ID",
+    mailSubject: (name, host) => `Anfrage zum Chatbot "${name}" von ${host}`,
+    // wortgleich mit dem Vorschlag im Design Center (DEFAULT_WELCOME_BUBBLES)
+    welcomeBubbles: [
+      "Hallo! Ich bin Ihr KI-Berater.",
+      "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!",
+    ],
+    openChat: "Chat öffnen",
+    closeWelcomeBubbles: "Willkommensblasen schließen",
+    options: "Optionen",
+    close: "Schließen",
+    collapse: "Einklappen",
+    backToChat: "Zurück zum Chat",
+    send: "Nachricht senden",
+    startRecording: "Aufnahme starten",
+    stopRecording: "Aufnahme beenden",
+    scrollToBottom: "Nach unten scrollen",
+    speak: "Antwort vorlesen",
+    stopSpeaking: "Vorlesen beenden",
+    speakTitle: "Vorlesen",
+    stopTitle: "Stopp",
+    helpful: "Antwort war hilfreich",
+    helpfulTitle: "Hilfreich",
+    notHelpful: "Antwort war nicht hilfreich",
+    notHelpfulTitle: "Nicht hilfreich",
+    courses: "Genannte Kurse",
+    moreCourses: "Weitere genannte Kurse",
+  },
+  en: {
+    menuReset: "Reset chat",
+    menuHistory: "Previous chats",
+    menuEmail: "Email support",
+    menuChatId: "Chat ID",
+    mailSubject: (name, host) =>
+      `Question about the chatbot "${name}" from ${host}`,
+    welcomeBubbles: [
+      "Hello! I am your AI advisor.",
+      "Would you like to learn more about what we offer? I am happy to help!",
+    ],
+    openChat: "Open chat",
+    closeWelcomeBubbles: "Close welcome messages",
+    options: "Options",
+    close: "Close",
+    collapse: "Collapse",
+    backToChat: "Back to chat",
+    send: "Send message",
+    startRecording: "Start recording",
+    stopRecording: "Stop recording",
+    scrollToBottom: "Scroll to bottom",
+    speak: "Read answer aloud",
+    stopSpeaking: "Stop reading aloud",
+    speakTitle: "Read aloud",
+    stopTitle: "Stop",
+    helpful: "Answer was helpful",
+    helpfulTitle: "Helpful",
+    notHelpful: "Answer was not helpful",
+    notHelpfulTitle: "Not helpful",
+    courses: "Courses mentioned",
+    moreCourses: "More courses mentioned",
+  },
+};
+export function uiTexts(settings = {}) {
+  return UI_TEXTS[panelLanguage(settings)];
+}
 export const DEFAULT_GREETING_BUBBLE_TEXT = PANEL_TEXTS.de.greetingBubble;
 export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
 export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
@@ -228,6 +305,12 @@ export const LEGACY_DEFAULT_TEXTS = {
   privacyTitle: ["Datenschutz:", "Privacy:"],
   // alter Platzhalter = dieselbe Frage wie die neue Begrüßung
   sendMessageText: ["Wie kann ich Ihnen helfen?"],
+  // frühere feste Menütexte (Widget-Standard bzw. Einbau-Beispiel): gelten
+  // als nicht gesetzt, damit die Sprache des Widgets greift (uiTexts)
+  resetBurgerText: ["Chat zurücksetzen", "Reset Chat"],
+  emailBurgerText: ["E-Mail Support", "Email Support"],
+  sessionBurgerText: ["Chat-ID"],
+  historyBurgerText: ["Frühere Chats"],
 };
 export function dropLegacyDefaults(settings = {}) {
   const out = { ...settings };
@@ -243,12 +326,32 @@ export function dropLegacyDefaults(settings = {}) {
 // Sprache. Begründung: wer die Blase eigens beschriftet hat, hat diesen Text
 // zuletzt für die Blase gewählt; greeting war bis dahin oft nur der kleine
 // Satz unter der Blase bzw. der Datenschutzsatz.
+// Längere Texte (alte Begrüßung ohne Längengrenze) werden gekürzt, nicht
+// verworfen (shortenGreeting, Fixliste 7.22-rc7 Nr. 9).
 export function greetingText(settings = {}) {
   for (const key of ["greetingBubbleText", "greeting"]) {
     const v = settings[key];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+    if (typeof v === "string" && v.trim().length > 0)
+      return shortenGreeting(v.trim());
   }
   return panelTexts(settings).greetingBubble;
+}
+
+// Begrüßung für die Blase: bis GREETING_BUBBLE_TEXT_MAX_LEN Zeichen
+// unverändert, länger auf ein Wortende gekürzt (ab GREETING_WORD_CUT_MIN,
+// davor hart) mit „…“. Wörtlich dieselbe Regel wie greetingBubbleText() im
+// Fork (server/utils/chats/embedStandards.js) und previewGreetingBubble()
+// im Design Center.
+export const GREETING_WORD_CUT_MIN = 200;
+export function shortenGreeting(text) {
+  if (typeof text !== "string") return text;
+  if (text.length <= GREETING_BUBBLE_TEXT_MAX_LEN) return text;
+  let cut = text.slice(0, GREETING_BUBBLE_TEXT_MAX_LEN - 1);
+  const space = cut.search(/\s\S*$/);
+  if (space >= GREETING_WORD_CUT_MIN) cut = cut.slice(0, space);
+  // kein halbes Ersatzpaar (Emoji) am Ende
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return `${cut.replace(/[\s.,;:!?]+$/u, "")}…`;
 }
 
 // Überschrift der Datenschutz-Blase: "" = bewusst keine Überschrift (aus dem
@@ -326,8 +429,11 @@ export function privacyPoints(settings = {}) {
 // Inline-Box (inlineMaxWidth) sind ebenfalls fest (Standard 16 px bzw. volle
 // Breite des Platzhalters); der Server liefert sie nicht mehr aus, ein
 // Script-Attribut (data-offset-x, data-inline-max-width …) wirkt nicht mehr.
-// Bewusst weiter wirksam (Rückwärtskompatibilität, eigener Text bzw. Stil):
-// inlineTheme, inlineCollapsedText, inlineSendText, inlineInputPlaceholder,
+// Ebenso der Stil der Inline-Leiste (inlineTheme, Fixliste 7.22-rc7 Nr. 21):
+// Die Leiste folgt dem Farbschema aus dem Design Center (D5), ein
+// data-inline-theme am Skript wirkt nicht mehr.
+// Bewusst weiter wirksam (Rückwärtskompatibilität, eigener Text):
+// inlineCollapsedText, inlineSendText, inlineInputPlaceholder,
 // greetingBubbleText, privacyButtonText.
 export const FIXED_STANDARDS = {
   greetingStyle: "bubble",
@@ -339,6 +445,7 @@ export const FIXED_STANDARDS = {
   offsetX: null,
   offsetY: null,
   inlineMaxWidth: null,
+  inlineTheme: null,
 };
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
@@ -409,14 +516,22 @@ export function applyFixedStandards(
   // Willkommensblasen: nur der Server-Wert zählt. Ohne gültigen Server-Wert
   // (älterer Server, keine Antwort) "first" wie bisher; dann bleibt auch ein
   // altes data-bubble-persistence="sessionStorage" wirksam. Mit Server-Wert
-  // gilt allein er ("first" = localStorage), das Altattribut fällt weg.
+  // (ab 7.22 liefert der Server ihn immer, Standard "first") gilt allein er
+  // ("first" = localStorage): Das Altattribut ist dann wirkungslos, eine
+  // Warnzeile nennt den Ersatz („Bei jedem Besuch“ im Design Center).
   let serverGaveWelcome = false;
   for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"]) {
     const value = welcomeBubblesSetting(server?.[key]);
     if (value) serverGaveWelcome = true;
     out[key] = value || DEFAULT_WELCOME_BUBBLES;
   }
-  if (serverGaveWelcome) delete out.bubblePersistence;
+  if (serverGaveWelcome && out.bubblePersistence !== undefined) {
+    if (out.bubblePersistence === "sessionStorage")
+      console.warn(
+        "[AnythingLLM Embed] data-bubble-persistence wirkt nicht mehr. Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
+      );
+    delete out.bubblePersistence;
+  }
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
       if (!given.has(key)) out[key] = value;
@@ -538,7 +653,8 @@ export const layoutValidations = {
   inlineMaxWidth: (v) => cssLength(v, ["px"]),
   inlineStartState: (v) => oneOf(v, ["collapsed", "expanded"]),
   // explizit "light" | "dark"; leer/ungültig -> verworfen -> Standard null
-  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme)
+  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme). Seit
+  // der Fixliste 7.22-rc7 fest null (FIXED_STANDARDS), Wert ohne Wirkung.
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
   // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
@@ -562,7 +678,11 @@ export const layoutValidations = {
   // (zu lang -> verworfen, nicht gekürzt), gerendert immer als Text.
   suggestionStyle: (v) => oneOf(v, SUGGESTION_STYLE_VALUES),
   greetingStyle: (v) => oneOf(v, GREETING_STYLE_VALUES),
-  greetingBubbleText: (v) => shortText(v, GREETING_BUBBLE_TEXT_MAX_LEN),
+  // zu lang: gekürzt statt verworfen (shortenGreeting)
+  greetingBubbleText: (v) => {
+    if (typeof v !== "string" || v.trim().length === 0) return undefined;
+    return shortenGreeting(v.trim());
+  },
   assistantSubtitle: (v) => shortText(v, ASSISTANT_SUBTITLE_MAX_LEN),
   onlineDot: bool,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),

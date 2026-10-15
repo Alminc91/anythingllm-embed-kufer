@@ -504,8 +504,12 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
       /\s+/g,
       " ",
     );
+    // Hover nur mit echtem Zeiger (Fixliste 7.22-rc7 Nr. 34), Fokus immer
     expect(css).toContain(
-      ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
+      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; } }",
+    );
+    expect(css).toContain(
+      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
     );
     // Textfarbe aus utils/theme.js (ON_ACCENT_TEXT = --allm-on-accent,
     // ohne Variable weiß), nicht fest

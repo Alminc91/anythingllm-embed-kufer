@@ -1,3 +1,4 @@
+import { closeTopEscapeLayer, isImeEscape } from "@/utils/escape";
 import {
   forwardRef,
   useCallback,
@@ -16,6 +17,7 @@ import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
 import { BAR_THEMES, INLINE_RADIUS_VARS, ON_ACCENT_TEXT } from "@/utils/theme";
+import { PILL_CLASS } from "@/components/ChatWindow/ChatContainer/ChatHistory/Pill";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   findClippingAncestor,
@@ -1632,7 +1634,12 @@ export default function InlineChat({
     const root = embedderSettings.shadowRoot;
     if (!root || view === "bar") return;
     const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
+      // offener Zwischenschritt (Kommentarfeld, „Frühere Chats“) zuerst
+      if (closeTopEscapeLayer()) {
+        e.preventDefault();
+        return;
+      }
       collapseRef.current();
     };
     root.addEventListener("keydown", onKeyDown);
@@ -1704,9 +1711,13 @@ export default function InlineChat({
       if (awaitingClick) collapseSoon(0);
     };
     const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
       // aus dem Widget: Listener am Shadow Root (oben)
       if (host && e.composedPath?.().includes(host)) return;
+      if (closeTopEscapeLayer()) {
+        e.preventDefault();
+        return;
+      }
       // Fokus in einem Feld der Seite bleibt dort
       collapseRef.current("if-free");
     };
@@ -1943,15 +1954,22 @@ const InlineBar = forwardRef(function InlineBar(
 // Chat-Icon links — der Absende-Knopf ist der Chat-Einstieg); darunter
 // die defaultMessages als Chips. Farben/Rundung nur über --allmi-* (wie die
 // Klick-Leiste); Fokusring/Platzhalter/Hover per CSS in main.jsx.
-// Wunschfragen-Chips: Fläche/Text/Rundung der Leiste über --allmi-bar-*
+// Startvorschläge unter der eingeklappten Leiste: dieselbe Pille wie die
+// Startvorschläge und Folgefragen im Panel (KIE-565 Nachtrag 4, Fixliste
+// 7.22-rc7 Nr. 20): Rand in Kundenfarbe, Text in Kundenfarbe mit mindestens
+// 4,5:1 (--allmi-pill-accent-text), Hover und Tastaturfokus füllen in
+// Kundenfarbe mit der Schrift auf der Kundenfarbe (.allm-pill-accent,
+// main.jsx). Fläche: hell Weiß, dunkel der dunkle Fensterton
+// (--allmi-chip-bg, utils/theme.js), weil die Chips auf der Webseite stehen
+// und nicht auf der Panelfläche.
 const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
   padding: "6px 14px",
-  border: `1px solid var(--allmi-bar-border, ${BAR_THEMES.light.border})`,
-  borderRadius: "var(--allmi-bar-radius, 16px)",
-  backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
-  color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
+  border: "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
+  borderRadius: "var(--allmi-bar-radius, 999px)",
+  backgroundColor: "var(--allmi-chip-bg, #FFFFFF)",
+  color: "var(--allmi-pill-accent-text, var(--allmi-accent, #01a5a9))",
   lineHeight: 1.3,
   textAlign: "center",
   overflowWrap: "anywhere",
@@ -2099,7 +2117,7 @@ const InlineInputBar = forwardRef(function InlineInputBar(
             <button
               key={i}
               type="button"
-              className="allm-inline-chip allm-font-sans allm-cursor-pointer"
+              className={PILL_CLASS}
               onClick={(e) => pickChip(e, chip)}
               style={{ ...CHIP_STYLE, fontSize: narrow ? "13px" : "14px" }}
             >

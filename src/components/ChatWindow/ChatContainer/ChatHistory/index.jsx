@@ -25,7 +25,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
-import { panelTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
 import debounce from "lodash.debounce";
 import { sendSuggestion } from "..";
 
@@ -160,15 +160,39 @@ export default function ChatHistory({
   };
 
   const debouncedScroll = debounce(handleScroll, 100);
+  // Scroll-Listener am Verlauf. Den Scroll-Container gibt es erst ab der
+  // ersten Nachricht (leerer Chat: Begrüßung ohne #chat-history); früher hing
+  // der Listener nur beim ersten Einhängen an und fehlte deshalb in jedem
+  // neu begonnenen Chat (Pfeil verschwand nach dem Scrollen nicht).
+  const hasHistory = history.length > 0;
   useEffect(() => {
-    function watchScrollEvent() {
-      if (!chatHistoryRef.current) return null;
-      const chatHistoryElement = chatHistoryRef.current;
-      if (!chatHistoryElement) return null;
-      chatHistoryElement.addEventListener("scroll", debouncedScroll);
-    }
-    watchScrollEvent();
-  }, []);
+    const el = chatHistoryRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", debouncedScroll);
+    return () => {
+      el.removeEventListener("scroll", debouncedScroll);
+      debouncedScroll.cancel?.();
+    };
+  }, [hasHistory]);
+
+  // Der Pfeil richtet sich nicht nur nach dem Scrollen des Nutzers: Wächst
+  // der Inhalt unter dem sichtbaren Bereich, ohne dass gescrollt wird (Text
+  // zuerst: die Frage bleibt oben stehen, darunter kommen Text, Karten und
+  // Folgefragen; Teaser, Bilder), muss er ebenfalls erscheinen (Fixliste
+  // 7.22-rc7 Nr. 36). Darum nach jeder Änderung des Verlaufs und bei jeder
+  // Größenänderung des Inhalts neu prüfen.
+  const contentRef = useRef(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => handleScroll());
+    return () => cancelAnimationFrame(id);
+  }, [history, followUps]);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => debouncedScroll());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasHistory]);
 
   const scrollToBottom = () => {
     if (chatHistoryRef.current) {
@@ -194,21 +218,26 @@ export default function ChatHistory({
     return el.scrollTop < top - 1;
   };
 
+  // Klickfläche ist der ganze Kreis (32 px), nicht nur das Icon
   const scrollArrow = (
     <div className="allm-absolute allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse">
       <div className="allm-flex allm-flex-col allm-items-center">
-        <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
+        <button
+          type="button"
+          id="scroll-to-bottom-button"
+          aria-label={uiTexts(settings).scrollToBottom}
+          onClick={() => {
+            stopFollow();
+            scrollToBottom();
+          }}
+          className="allm-p-0 allm-m-0 allm-cursor-pointer allm-rounded-full allm-border-none allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center"
+        >
           <ArrowDown
             weight="bold"
             className="allm-text-white/50 allm-w-4 allm-h-4"
-            onClick={() => {
-              stopFollow();
-              scrollToBottom();
-            }}
-            id="scroll-to-bottom-button"
-            aria-label="Scroll to bottom"
+            aria-hidden="true"
           />
-        </div>
+        </button>
       </div>
     </div>
   );
@@ -258,7 +287,7 @@ export default function ChatHistory({
         onTouchMove: stopFollow,
       })}
     >
-      <div className="allm-flex allm-flex-col allm-gap-y-4">
+      <div ref={contentRef} className="allm-flex allm-flex-col allm-gap-y-4">
         {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
             Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
             darunter gibt es nur im leeren Chat. Mit greetingStyle "text"

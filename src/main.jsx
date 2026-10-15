@@ -216,19 +216,46 @@ const customCss = `
   .allm-inline-chip {
     transition: border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
   }
-  .allm-inline-chip:hover {
-    border-color: var(--allmi-accent);
+  @media (hover: hover) {
+    .allm-inline-chip:hover {
+      border-color: var(--allmi-accent);
+    }
   }
   .allm-inline-chip.allm-pill-accent {
     transition: background-color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
       color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
       border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
   }
-  .allm-pill-accent:hover,
+  /* Füllung beim Hover nur mit echtem Zeiger: auf Touch-Geräten bliebe der
+     Hover nach dem Tippen kleben (Fixliste 7.22-rc7 Nr. 34) */
+  @media (hover: hover) {
+    .allm-pill-accent:hover {
+      background-color: var(--allmi-accent, #01a5a9) !important;
+      border-color: var(--allmi-accent, #01a5a9) !important;
+      color: ${ON_ACCENT_TEXT} !important;
+    }
+  }
   .allm-pill-accent:focus-visible {
     background-color: var(--allmi-accent, #01a5a9) !important;
     border-color: var(--allmi-accent, #01a5a9) !important;
     color: ${ON_ACCENT_TEXT} !important;
+  }
+  /* KI-Hinweis unter der Eingabe: eine Zeile, 11 px; in schmalen Fenstern
+     bis 10 px kleiner, damit der ganze Satz passt (Fixliste 7.22-rc7 Nr. 22).
+     Ohne Containerabfragen gilt die erste Angabe (11 px). */
+  .allm-ai-disclaimer-box {
+    container-type: inline-size;
+  }
+  .allm-ai-disclaimer {
+    font-size: 11px;
+    font-size: clamp(10px, calc((100cqi - 16px) / 30), 11px);
+  }
+  /* Schließen-X der Willkommensblasen: ohne Hover-Zeiger (Touch) immer
+     sichtbar, sonst wie bisher erst beim Hover über die Blasen */
+  @media (hover: none) {
+    .allm-welcome-close {
+      opacity: 1 !important;
+    }
   }
   .allm-pill-accent:focus-visible {
     outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;

@@ -18,7 +18,7 @@ import {
   headerButtonClass,
   LOGO_RADIUS,
 } from "@/utils/theme";
-import { panelTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -213,7 +213,7 @@ export default function ChatWindowHeader({
             onClick={() => setShowOptions(!showingOptions)}
             className={iconButtonClass}
             style={HEADER_ICON_STYLE}
-            aria-label="Options"
+            aria-label={uiTexts(settings).options}
           >
             <DotsThreeOutlineVertical size={20} weight="fill" />
           </button>
@@ -287,14 +287,15 @@ export function CloseButton({ onClick, className, color, style }) {
   const { inline, overlay } = useEmbedMode();
   const collapse = inline && !overlay;
   const Icon = collapse ? CaretUp : X;
+  const ui = uiTexts(embedderSettings.settings);
   return (
     <button
       type="button"
       onClick={onClick}
       className={className}
       style={style}
-      aria-label={collapse ? "Einklappen" : "Close"}
-      title={collapse ? "Einklappen" : undefined}
+      aria-label={collapse ? ui.collapse : ui.close}
+      title={collapse ? ui.collapse : undefined}
     >
       <Icon size={20} weight="bold" color={color} />
     </button>
@@ -324,7 +325,7 @@ function OptionsMenu({
       >
         <ArrowCounterClockwise size={24} />
         <p className="allm-text-[14px] allm-font-sans">
-          {settings.resetBurgerText || "Reset Chat"}
+          {settings.resetBurgerText || uiTexts(settings).menuReset}
         </p>
       </button>
       {openHistory && (
@@ -334,7 +335,7 @@ function OptionsMenu({
         >
           <ClockCounterClockwise size={24} />
           <p className="allm-text-[14px] allm-font-sans">
-            {settings.historyBurgerText || "Frühere Chats"}
+            {settings.historyBurgerText || uiTexts(settings).menuHistory}
           </p>
         </button>
       )}
@@ -383,7 +384,7 @@ function SessionID({ sessionId, conversationId, settings }) {
     >
       <Copy size={24} />
       <p className="allm-text-[14px] allm-font-sans">
-        {settings.sessionBurgerText || "Chat-ID"}
+        {settings.sessionBurgerText || uiTexts(settings).menuChatId}
       </p>
     </button>
   );
@@ -392,7 +393,10 @@ function SessionID({ sessionId, conversationId, settings }) {
 function ContactSupport({ email = null, settings, sessionId, conversationId }) {
   if (!email) return null;
 
-  const subject = `Anfrage zum Chatbot "${settings.brandText}" von ${window.location.hostname}`;
+  const subject = uiTexts(settings).mailSubject(
+    settings.brandText,
+    window.location.hostname,
+  );
   const body = `\n\n---\nChat-ID: ${conversationId || sessionId || "-"}`;
   return (
     <a
@@ -401,7 +405,7 @@ function ContactSupport({ email = null, settings, sessionId, conversationId }) {
     >
       <Envelope size={24} />
       <p className="allm-text-[14px] allm-font-sans">
-        {settings.emailBurgerText || "Email Support"}
+        {settings.emailBurgerText || uiTexts(settings).menuEmail}
       </p>
     </a>
   );

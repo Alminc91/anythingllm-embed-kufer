@@ -11,6 +11,7 @@ import ConversationHistory from "./ConversationHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
 import { panelTexts } from "@/utils/layout";
+import { useEscapeLayer } from "@/utils/escape";
 import useEmbedMode from "@/hooks/useEmbedMode";
 import { useEffect, useState } from "react";
 
@@ -41,6 +42,8 @@ export default function ChatWindow({
     settings?.historyEnabled !== false &&
     String(settings?.historyEnabled) !== "false";
   const openHistory = historyEnabled ? () => setShowHistory(true) : null;
+  // Escape in „Frühere Chats“: zurück zum Chat statt das Fenster zu schließen
+  useEscapeLayer(showHistory, () => setShowHistory(false));
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,

@@ -20,6 +20,11 @@ import {
   warnIfInlineInputIgnored,
   whenDomReady,
 } from "@/utils/layout";
+import {
+  closeTopEscapeLayer,
+  focusInPageField,
+  isImeEscape,
+} from "@/utils/escape";
 
 // Fensterfläche über CSS-Variablen (utils/theme.js); Fallback = bisherige
 // Werte (bg-white, border-gray-300, Schatten). Inline-Style statt Klasse, damit
@@ -31,16 +36,6 @@ const BUBBLE_WINDOW_STYLE = {
   borderColor: "var(--allmi-border, #d1d5db)",
   boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.25))",
 };
-
-// Escape aus einem Eingabefeld der Webseite (nicht aus dem Widget): gehört dem
-// Feld, schließt die Chatblase nicht.
-function focusInPageField(e) {
-  const host = embedderSettings.hostElement;
-  if (host && e.composedPath?.().includes(host)) return false;
-  const el = e.target;
-  if (!el || el.nodeType !== 1) return false;
-  return !!el.closest?.("input, textarea, select, [contenteditable]");
-}
 
 export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
@@ -118,16 +113,22 @@ export default function App() {
 
   // Chatblase: Escape schließt das Fenster (KIE-565, D7), auch wenn der Fokus
   // auf der Webseite liegt (keydown aus dem Shadow DOM ist composed und kommt
-  // ebenfalls am document an). Ausnahmen: ein anderes Element hat die Taste
-  // schon verarbeitet (defaultPrevented), oder der Fokus steht in einem
-  // Eingabefeld der Seite (dort bleibt Escape beim Feld). Danach Fokus auf
-  // den Chat-Knopf, damit Tastaturnutzer nicht auf <body> landen.
+  // ebenfalls am document an). Ausnahmen (utils/escape.js): ein anderes
+  // Element hat die Taste schon verarbeitet (defaultPrevented), IME-Eingabe,
+  // der Fokus steht in einem Texteingabefeld der Seite (dort bleibt Escape
+  // beim Feld), oder ein verschachtelter Schritt ist offen (Kommentarfeld,
+  // „Frühere Chats“: nur dieser schließt). Danach Fokus auf den Chat-Knopf,
+  // damit Tastaturnutzer nicht auf <body> landen.
   const restoreFocusRef = useRef(false);
   useEffect(() => {
     if (!isChatOpen || mountTarget !== null) return;
     const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (focusInPageField(e)) return;
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
+      if (focusInPageField(e, embedderSettings.hostElement)) return;
+      if (closeTopEscapeLayer()) {
+        e.preventDefault();
+        return;
+      }
       restoreFocusRef.current = true;
       toggleOpenChat(false);
     };

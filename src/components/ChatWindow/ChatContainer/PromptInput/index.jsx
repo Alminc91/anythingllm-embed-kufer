@@ -10,7 +10,7 @@ import ChatService from "@/models/chatService";
 import { isIOS, isTouchDevice } from "@/utils/platform";
 import useEmbedMode from "@/hooks/useEmbedMode";
 import { embedderSettings } from "@/main";
-import { panelTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
 
 // iOS-only: sticky-Eingabezeile auf eigene Compositing-Ebene zwingen (WebKit-Fix).
 // Auf Desktop weggelassen, da es dort ein Paint-Flackern beim Streaming verursacht.
@@ -285,7 +285,9 @@ export default function PromptInput({
                   disabled={inputDisabled || isTranscribing}
                   className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
                   aria-label={
-                    isRecording ? "Stop recording" : "Start recording"
+                    isRecording
+                      ? uiTexts(settings).stopRecording
+                      : uiTexts(settings).startRecording
                   }
                   title={
                     isRecording
@@ -320,7 +322,7 @@ export default function PromptInput({
                 disabled={buttonDisabled}
                 className="allm-bg-transparent allm-border-none allm-inline-flex allm-justify-center allm-rounded-2xl allm-cursor-pointer allm-text-[color:var(--allmi-input-text,#000)] allm-group allm-flex-shrink-0"
                 id="send-message-button"
-                aria-label="Send message"
+                aria-label={uiTexts(settings).send}
               >
                 {buttonDisabled ? (
                   <CircleNotch className="allm-w-4 allm-h-4 allm-animate-spin" />
@@ -331,7 +333,7 @@ export default function PromptInput({
                     weight="fill"
                   />
                 )}
-                <span className="allm-sr-only">Send message</span>
+                <span className="allm-sr-only">{uiTexts(settings).send}</span>
               </button>
             </div>
           </div>

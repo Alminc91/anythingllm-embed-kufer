@@ -11,13 +11,17 @@
 //   c <= 0,04045 ? c / 12,92 : ((c + 0,055) / 1,055) ^ 2,4,
 //   L = 0,2126 R + 0,7152 G + 0,0722 B
 // - Kontrast (L1 + 0,05) / (L2 + 0,05), L1 die hellere Farbe
-// - Empfehlung: Kontrast der Kundenfarbe zu #FFFFFF und zu #000000, der
-//   höhere gewinnt, bei Gleichstand Weiß. Ungültige Farbe: Weiß (bisheriger
-//   Standard).
+// - Empfehlung: Kontrast der Kundenfarbe zu den tatsächlich gezeigten
+//   Schriftfarben, Weiß #FFFFFF und „Schwarz“ #222628 (SHOWN_BLACK: so
+//   speichert das Design Center „Schwarz“, so liefert der Server es aus,
+//   Entscheidung E1 der Fixliste 7.22-rc7), der höhere gewinnt, bei
+//   Gleichstand Weiß. Ungültige Farbe: Weiß (bisheriger Standard).
 // Farben: #rgb, #rrggbb, #rrggbbaa (Alpha wird ignoriert), rgb()/rgba().
 
 export const WHITE = "#FFFFFF";
 export const BLACK = "#000000";
+// „Schwarz“, wie es gezeigt wird (Design Center und Widget gleich, E1)
+export const SHOWN_BLACK = "#222628";
 export const MIN_TEXT_CONTRAST = 4.5;
 
 // "#01a5a9" -> [1, 165, 169]; ungültig -> null
@@ -67,12 +71,20 @@ export function contrastRatio(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-// Schrift auf der Kundenfarbe: "#FFFFFF" oder "#000000", der höhere
-// Kontrast gewinnt, bei Gleichstand Weiß; ungültige Farbe -> Weiß.
+// Schrift auf der Kundenfarbe: "#FFFFFF" oder "#222628" (SHOWN_BLACK), der
+// höhere Kontrast gewinnt, bei Gleichstand Weiß; ungültige Farbe -> Weiß.
 export function recommendedTextColor(background) {
   const white = contrastRatio(background, WHITE);
-  const black = contrastRatio(background, BLACK);
+  const black = contrastRatio(background, SHOWN_BLACK);
   if (white === null || black === null) return WHITE;
+  return white >= black ? WHITE : SHOWN_BLACK;
+}
+
+// Richtung zum Abdunkeln bzw. Aufhellen (accessibleTextColor): reines
+// Schwarz für helle Flächen, Weiß für dunkle (nach WCAG wie bisher).
+function extremeFor(background) {
+  const white = contrastRatio(background, WHITE);
+  const black = contrastRatio(background, BLACK);
   return white >= black ? WHITE : BLACK;
 }
 
@@ -91,7 +103,7 @@ export function accessibleTextColor(
   if (!rgb || list.length === 0 || list.some((bg) => !parseColor(bg)))
     return null;
   // helle Fläche -> Richtung Schwarz, dunkle -> Richtung Weiß
-  const target = parseColor(recommendedTextColor(list[0]));
+  const target = parseColor(extremeFor(list[0]));
   for (let step = 0; step <= 100; step++) {
     const t = step / 100;
     const hex = toHex(rgb.map((v, i) => v * (1 - t) + target[i] * t));

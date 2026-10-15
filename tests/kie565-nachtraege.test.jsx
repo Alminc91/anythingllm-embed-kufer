@@ -113,13 +113,15 @@ describe("Punkt 2: Kontrast nach WCAG 2.x (utils/contrast.js)", () => {
     expect(contrastRatio("blau", "#FFFFFF")).toBe(null);
   });
 
+  // Entscheidung E1 (Fixliste 7.22-rc7): „Schwarz“ ist die gezeigte Farbe
+  // #222628, Empfehlung und Kontrast rechnen damit
   it("Empfehlung: höherer Kontrast gewinnt, Gleichstand Weiß, ungültig Weiß", async () => {
     const { recommendedTextColor, contrastRatio } = await contrastModule();
-    expect(recommendedTextColor("#01a5a9")).toBe("#000000");
+    expect(recommendedTextColor("#01a5a9")).toBe("#222628");
     expect(recommendedTextColor("#0b5f8a")).toBe("#FFFFFF");
-    expect(recommendedTextColor("#FFFFFF")).toBe("#000000");
+    expect(recommendedTextColor("#FFFFFF")).toBe("#222628");
     expect(recommendedTextColor("#000000")).toBe("#FFFFFF");
-    expect(recommendedTextColor("#ffd400")).toBe("#000000");
+    expect(recommendedTextColor("#ffd400")).toBe("#222628");
     expect(recommendedTextColor("#7a1f5c")).toBe("#FFFFFF");
     expect(recommendedTextColor(null)).toBe("#FFFFFF");
     expect(recommendedTextColor("url(x)")).toBe("#FFFFFF");
@@ -127,8 +129,8 @@ describe("Punkt 2: Kontrast nach WCAG 2.x (utils/contrast.js)", () => {
     for (let v = 0; v <= 255; v++) {
       const hex = `#${v.toString(16).padStart(2, "0").repeat(3)}`;
       const w = contrastRatio(hex, "#FFFFFF");
-      const b = contrastRatio(hex, "#000000");
-      expect(recommendedTextColor(hex)).toBe(w >= b ? "#FFFFFF" : "#000000");
+      const b = contrastRatio(hex, "#222628");
+      expect(recommendedTextColor(hex)).toBe(w >= b ? "#FFFFFF" : "#222628");
     }
   });
 
@@ -167,9 +169,9 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
         expect(vars["--allm-user-text"]).toBe(recommendedTextColor(c));
         expect(vars["--allm-on-accent"]).toBe(recommendedTextColor(c));
       }
-    // Kufer-Standard ohne jede Angabe: Schwarz (6,96:1 statt 3,02:1)
-    expect(resolveThemeVars({}, "light")["--allm-user-text"]).toBe("#000000");
-    expect(resolveThemeVars({}, "light")["--allm-on-accent"]).toBe("#000000");
+    // Kufer-Standard ohne jede Angabe: Schwarz #222628 (5,06:1 statt 3,02:1)
+    expect(resolveThemeVars({}, "light")["--allm-user-text"]).toBe("#222628");
+    expect(resolveThemeVars({}, "light")["--allm-on-accent"]).toBe("#222628");
   });
 
   it("gewählter Wert gilt wie gewählt, auch unter 4,5:1 (Weiß, Schwarz, #222628 vom Server)", () => {
@@ -201,8 +203,8 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
     );
     expect(neu.userTextColor ?? null).toBe(null);
     const css = buildThemeCss(neu, "light");
-    expect(css).toContain("--allmi-user-text: var(--allm-user-text, #000000);");
-    expect(css).toContain("--allmi-on-accent: var(--allm-on-accent, #000000);");
+    expect(css).toContain("--allmi-user-text: var(--allm-user-text, #222628);");
+    expect(css).toContain("--allmi-on-accent: var(--allm-on-accent, #222628);");
     const alt = await loadEmbedSettings(
       BASE,
       fetchConfig({
@@ -241,7 +243,11 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
     );
     const main = src("src/main.jsx").replace(/\s+/g, " ");
     expect(main).toContain(
-      ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
+      // Hover nur mit echtem Zeiger (Fixliste 7.22-rc7 Nr. 34), Fokus immer
+      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; } }",
+    );
+    expect(main).toContain(
+      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
     );
   });
 });
@@ -330,7 +336,10 @@ describe("Punkt 4: Startvorschlag-Pillen = Folgefragen-Pillen", () => {
     expect(vars["--allm-on-accent"]).toBe("#000000");
     const main = src("src/main.jsx").replace(/\s+/g, " ");
     expect(main).toMatch(
-      /\.allm-pill-accent:hover, \.allm-pill-accent:focus-visible \{ background-color: var\(--allmi-accent/,
+      /@media \(hover: hover\) \{ \.allm-pill-accent:hover \{ background-color: var\(--allmi-accent/,
+    );
+    expect(main).toMatch(
+      /\.allm-pill-accent:focus-visible \{ background-color: var\(--allmi-accent/,
     );
     expect(ON_ACCENT_TEXT).toContain("--allmi-on-accent");
   });
