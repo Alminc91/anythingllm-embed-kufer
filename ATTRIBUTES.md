@@ -71,13 +71,14 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 
 | Attribut | Default | Beschreibung |
 |----------|---------|--------------|
-| `data-language` | `de` | Sprache: `de`, `en`, etc. |
+| `data-language` | `de` | Sprache: `de`, `en`, etc. Ohne Angabe deutsch, auch die i18n-Texte (kein `allm_embed_language` im `localStorage` mehr). Panel-, Menü- und Bedientexte (`aria-label`) gibt es deutsch und englisch, andere Sprachen nutzen dafür Deutsch. |
 | `data-greeting` | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` (en: englisch) | Begrüßungstext = Text der Begrüßungsblase (`data-greeting-bubble-text` hat Vorrang). Frühere Standardtexte gelten als nicht gesetzt |
 | `data-send-message-text` | `Ihre Frage eingeben` (en: `Enter your question`) | Placeholder im Input-Feld (der frühere Standard „Wie kann ich Ihnen helfen?“ gilt als nicht gesetzt) |
 | `data-reset-chat-text` | `Chat zurücksetzen` | Text für Reset-Link |
-| `data-reset-burger-text` | `Chat zurücksetzen` | Text im Burger-Menü |
-| `data-email-burger-text` | `E-Mail Support` | E-Mail Option im Menü |
-| `data-session-burger-text` | `Sitzungs-ID` | Session-ID Option im Menü |
+| `data-reset-burger-text` | Sprache (`Chat zurücksetzen` / `Reset chat`) | Text im Burger-Menü. Der frühere feste Text gilt als nicht gesetzt (die Sprache des Widgets greift) |
+| `data-email-burger-text` | Sprache (`E-Mail Support` / `Email support`) | E-Mail Option im Menü |
+| `data-session-burger-text` | Sprache (`Chat-ID` / `Chat ID`) | Option im Menü, kopiert die Chat-ID |
+| `data-history-burger-text` | Sprache (`Frühere Chats` / `Previous chats`) | Option „Frühere Chats“ im Menü |
 
 ---
 
@@ -92,11 +93,11 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste), in Chatblase und Inline (Entscheidung D1, KIE-565). `off`: Nur Text mit Links (KIE-567, Design Center „Kurse anzeigen als“; der Server liefert immer einen gültigen Wert, der ein Script-Attribut überstimmt). In der Chatblase Teaser ganz (ohne Zeilenbegrenzung), Inline bis 3 Zeilen. Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
 | `data-course-cards-position` | `above` | `below` \| `above`: Kurskarten unter bzw. über der Antwort (KIE-567, Design Center „Reihenfolge“: Text zuerst bzw. Karten zuerst). Bei `below` erscheinen Text, dann die vom Server angekündigten Kurse als Karten, dann die Folgefragen. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
 | `data-suggestion-style` | `pills` (fest) | Seit Design Center vereinfacht (10/2026) fest `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt); Attribut und `visual_config` wirken nicht mehr |
-| `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, max. 300 Zeichen, sonst `data-greeting`, sonst Standard) |
+| `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, sonst `data-greeting`, sonst Standard; über 300 Zeichen auf ein Wortende gekürzt). Eine Begrüßung aus dem Design Center gewinnt gegen beide Attribute |
 | `data-assistant-subtitle` | – | Untertitel unter dem Namen in der Kopfzeile (max. 60 Zeichen) |
 | `data-online-dot` | `false` (fest) | Entfällt: kein Online-Punkt mehr, der Wert wird ignoriert |
-| `data-privacy-notice` | `bubble` (fest) | Datenschutz-Hinweis immer als eigene zweite Blase unter der Begrüßungsblase (`modal`/`none` wirken nicht mehr). Texte: `data-privacy-title` (leer = keine Überschrift, Standard „Datenschutz“), `data-privacy-text` (freier Text, ≤ 12 Zeilen × 500 Zeichen: Zeilen mit „•“ oder „-“ werden Aufzählungspunkte, andere Absätze; ohne solche Zeilen altes Format, ein Punkt je Zeile bzw. `\|`), `data-privacy-url` (Link „Datenschutzerklärung“) |
-| `data-disclaimer` | `footer` (fest) | KI-Hinweis immer unter dem Eingabefeld, Text fest „KI kann Fehler machen. Bitte überprüfen Sie die Antworten.“ (`en` englisch); `data-disclaimer-text` wird ignoriert |
+| `data-privacy-notice` | `bubble` (nur Design Center) | Datenschutz-Hinweis als eigene zweite Blase unter der Begrüßungsblase. Das Attribut wirkt nicht: Ein- und ausgeschaltet wird der Hinweis nur im Design Center (Schalter „Datenschutz-Hinweis anzeigen“, `visual_config.privacyNotice` `none` = aus, jeder andere Wert und das frühere `modal` = Blase). Texte: `data-privacy-title` (leer = keine Überschrift, Standard „Datenschutz“), `data-privacy-text` (freier Text, ≤ 12 Zeilen × 500 Zeichen: Zeilen mit „•“ oder „-“ werden Aufzählungspunkte, andere Absätze; ohne solche Zeilen altes Format, ein Punkt je Zeile bzw. `\|`), `data-privacy-url` (Link „Datenschutzerklärung“) |
+| `data-disclaimer` | `footer` (fest) | KI-Hinweis immer unter dem Eingabefeld, genau eine Zeile (11 px; in sehr schmalen Fenstern mit „…“ gekürzt, voller Text im Tooltip), Text fest „KI kann Fehler machen. Bitte überprüfen Sie die Antworten.“ (`en` englisch); `data-disclaimer-text` wird ignoriert |
 
 ---
 
@@ -120,7 +121,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 |----------|---------|--------------|
 | `data-display-chatbot-bubbles` | `true` | Welcome-Bubbles anzeigen |
 | `data-chatbot-bubbles-messages` | `[]` | Bubble-Texte (kommagetrennt) |
-| `data-bubble-persistence` | `localStorage` | Speicherart: `localStorage` (1x pro Browser) oder `sessionStorage` (1x pro Tab). Wirkt nur, solange der Server keine `welcomeBubbles*`-Werte liefert |
+| `data-bubble-persistence` | `localStorage` | **Ohne Wirkung** mit einem Server ab 7.22 (er liefert `welcomeBubbles*` immer, Standard „Beim ersten Besuch“). Ersatz für `sessionStorage` (1x pro Tab): im Design Center „Bei jedem Besuch“ wählen. Das Widget schreibt dann eine `console.warn`-Zeile. Nur bei einem älteren Server bzw. ohne Antwort vom Server wirkt es noch |
 
 **Willkommensblasen je Gerät (KIE-568, nur Design Center):** `visual_config.welcomeBubblesDesktop` und `visual_config.welcomeBubblesMobile`, je `off` (keine Blasen, nur der Chat-Button) \| `first` (Standard, beim ersten Besuch: `localStorage`, nach Schließen der Blasen oder Öffnen des Chats nicht mehr) \| `every` (bei jedem Besuch: einmal je Browser-Tab per `sessionStorage`, Unterseiten im selben Tab zeigen sie nicht erneut). Fehlend oder ungültig = `first`. Handy = Fensterbreite < 768 px beim Laden. Kein Script-Attribut: allein der Server-Wert zählt.
 
