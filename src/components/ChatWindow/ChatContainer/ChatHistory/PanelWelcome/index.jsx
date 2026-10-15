@@ -14,7 +14,7 @@ import Pill from "../Pill";
 
 // Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B; seit Design Center
 // vereinfacht fester Standard: suggestionStyle "pills", greetingStyle
-// "bubble", privacyNotice "bubble"); Vorschläge nur im leeren Chat, die
+// "bubble"; privacyNotice "bubble" oder "none"); Vorschläge nur im leeren Chat, die
 // Begrüßungs- und Datenschutz-Blase bleiben auch im Verlauf (PanelGreeting).
 // Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
 // Theme); Texte immer als Text, nie als HTML.
@@ -54,9 +54,12 @@ export function SuggestedPills({ settings, align = "center" }) {
 
 // greetingStyle "bubble": Begrüßung als Assistenten-Blase mit Avatar, darunter
 // die Vorschläge (Pillen links eingerückt, Balken wie bisher mittig).
-// privacyNotice "bubble" (fester Standard): der Datenschutz-Hinweis steht als
+// privacyNotice "bubble" (Standard): der Datenschutz-Hinweis steht als
 // eigene zweite Blase direkt unter der Begrüßungsblase (Design Center
 // vereinfacht, 15.10.2026), nicht mehr als Absatz in derselben Blase.
+// privacyNotice "none" (im Design Center ausgeschaltet, KIE-565 Nachtrag):
+// keine zweite Blase, auch kein leerer Rahmen oder Abstand; die Spalte
+// enthält dann nur die Begrüßungsblase.
 // Beim Öffnen (ohne Animation): Die Begrüßungsblase muss sichtbar sein
 // (KIE-565, Browser-Fund B-02: bei 700 px Fensterhöhe stand sie über dem
 // sichtbaren Bereich). Bei Überlauf wird deshalb höchstens so weit Richtung

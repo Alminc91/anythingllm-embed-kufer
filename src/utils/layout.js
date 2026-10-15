@@ -313,8 +313,9 @@ export function privacyPoints(settings = {}) {
 // Feste Standards (Design Center vereinfacht, 15.10.2026): gelten unabhängig
 // von Script-Attributen und gespeicherter Konfiguration (alte Werte bleiben
 // gespeichert, werden aber ignoriert). Der Server erzwingt dieselben Werte;
-// das Widget sichert sie zusätzlich selbst ab (kein Widget ohne KI-Hinweis,
-// ohne Datenschutz-Blase oder mit Online-Punkt, auch nicht per data-*).
+// das Widget sichert sie zusätzlich selbst ab (kein Widget ohne KI-Hinweis
+// oder mit Online-Punkt, auch nicht per data-*). Der Datenschutz-Hinweis ist
+// nicht mehr fest: privacyNoticeSetting() unten.
 // Randabstände der Chatblase (offsetX/offsetY) und die Max. Breite der
 // Inline-Box (inlineMaxWidth) sind ebenfalls fest (Standard 16 px bzw. volle
 // Breite des Platzhalters); der Server liefert sie nicht mehr aus, ein
@@ -326,7 +327,6 @@ export const FIXED_STANDARDS = {
   greetingStyle: "bubble",
   suggestionStyle: "pills",
   followUps: "pills",
-  privacyNotice: "bubble",
   disclaimer: "footer",
   disclaimerText: null,
   onlineDot: false,
@@ -353,12 +353,35 @@ export const INLINE_STANDARDS = {
   inheritFont: true,
 };
 
+// Datenschutz-Hinweis (KIE-565 Nachtrag, Nutzer 15.10.2026): im Design
+// Center abschaltbar (Schalter „Datenschutz-Hinweis anzeigen“). Allein der
+// Wert vom Server zählt (wie D5 beim Farbschema gewinnt das Design Center):
+// "none" = keine zweite Blase, jeder andere und ein fehlender Wert = "bubble",
+// auch das frühere "modal" (Einmal-Hinweis entfällt). Ein Script-Attribut
+// (data-privacy-notice) kann den Hinweis weder ab- noch einschalten; ohne
+// Antwort vom Server bleibt er an.
+export function privacyNoticeSetting(serverValue) {
+  return oneOf(serverValue, PRIVACY_NOTICE_VALUES) === "none"
+    ? "none"
+    : "bubble";
+}
+
 // Einmal beim Laden (loadEmbedSettings): Inline-Standards ergänzen, feste
-// Standards setzen, ohne eigenen Namen den Standardnamen der Sprache
-// (brandText im Kopf, assistantName über den Antworten; „KI-Berater“ bzw.
-// „AI Advisor“). given = Schlüssel, die Script oder Server geliefert haben.
-export function applyFixedStandards(settings = {}, given = new Set()) {
-  const out = { ...settings, ...FIXED_STANDARDS };
+// Standards setzen, Datenschutz-Hinweis aus dem Server-Wert (server =
+// geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
+// Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
+// bzw. „AI Advisor“). given = Schlüssel, die Script oder Server geliefert
+// haben.
+export function applyFixedStandards(
+  settings = {},
+  given = new Set(),
+  server = {},
+) {
+  const out = {
+    ...settings,
+    ...FIXED_STANDARDS,
+    privacyNotice: privacyNoticeSetting(server?.privacyNotice),
+  };
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
       if (!given.has(key)) out[key] = value;

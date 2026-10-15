@@ -135,7 +135,8 @@ export const DEFAULT_SETTINGS = {
   // FIXED_STANDARDS, in loadEmbedSettings gesetzt, egal was Script oder
   // Server liefern): Vorschläge als Pillen, Begrüßung als Blase, darunter die
   // Datenschutz-Blase, Folgefragen als Pillen, KI-Hinweis fest unter der
-  // Eingabe, kein Online-Punkt. Icon-Bild = brandImageUrl (Kopfzeile) bzw.
+  // Eingabe, kein Online-Punkt. Die Datenschutz-Blase schaltet allein der
+  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting). Icon-Bild = brandImageUrl (Kopfzeile) bzw.
   // assistantIcon (Blase), im Design Center per Logo gesetzt.
   suggestionStyle: "pills",
   greetingStyle: "bubble",
@@ -222,6 +223,7 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   const resolved = applyFixedStandards(
     { ...DEFAULT_SETTINGS, ...script, ...server, loaded: true },
     given,
+    server,
   );
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
   warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
