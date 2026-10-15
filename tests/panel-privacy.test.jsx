@@ -506,10 +506,19 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(sent).toEqual(["Direkt", "KI-Basics"]);
   });
 
-  it("bubble: lange Begrüßung -> beim Öffnen ans Ende gescrollt (Pillen sichtbar), ohne Animation", () => {
+  // KIE-565 (Browser-Fund B-02, Fixliste Nr. 28): die Begrüßungsblase muss
+  // beim Öffnen sichtbar sein; bisher wurde ans Ende gescrollt (Pillen
+  // sichtbar), bei 700 px Fensterhöhe lag die Begrüßung dann über dem
+  // sichtbaren Bereich. Jetzt höchstens bis 8 px über der Begrüßung.
+  it("bubble: Überlauf -> Begrüßung bleibt beim Öffnen oben im Blick (Pillen dürfen darunter liegen), ohne Animation", () => {
     const proto = HTMLElement.prototype;
     const sets = [];
     const scrollTo = vi.fn();
+    const rect = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function () {
+        return { top: this.id === "anything-llm-greeting-bubble" ? 16 : 0 };
+      });
     Object.defineProperty(proto, "scrollHeight", {
       configurable: true,
       get: () => 900,
@@ -540,9 +549,12 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
         />,
       );
       const scroller = $("#anything-llm-panel-welcome").parentElement;
-      expect(sets).toEqual([[scroller, 900]]);
+      // Begrüßung bei 16 px (Polsterung) -> 8 px, nicht ans Ende (600/900)
+      expect(sets).toEqual([[scroller, 8]]);
       expect(scrollTo).not.toHaveBeenCalled(); // kein smooth-Scrollen
+      expect(scroller.className).toContain("allm-box-border");
     } finally {
+      rect.mockRestore();
       delete proto.scrollHeight;
       delete proto.clientHeight;
       delete proto.scrollTop;

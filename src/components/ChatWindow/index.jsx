@@ -10,6 +10,7 @@ import {
 import ConversationHistory from "./ConversationHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
+import { panelTexts } from "@/utils/layout";
 import useEmbedMode from "@/hooks/useEmbedMode";
 import { useEffect, useState } from "react";
 
@@ -167,7 +168,8 @@ function copyCodeSnippet(uuid) {
 
   target.classList.add("allm-text-green-500");
   const originalText = target.innerHTML;
-  target.innerText = "Copied!";
+  // Sprache des Widgets („Kopiert!“ bzw. „Copied!“)
+  target.innerText = panelTexts(embedderSettings.settings).copied;
   target.setAttribute("disabled", true);
 
   setTimeout(() => {

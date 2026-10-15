@@ -96,6 +96,10 @@ export default function ChatHistory({
   // Kurskarten oben: Folgefragen kommen nach der (oft langen) Antwort und
   // lägen unter dem sichtbaren Bereich -> sanft ans Ende scrollen, aber nur,
   // wenn der Nutzer seit Beginn der Antwort nicht selbst gescrollt hat.
+  // Antwort mit Kurskarten (KIE-565, K-1): höchstens so weit, dass die Frage
+  // oben steht. Der Antwortbeginn (Frage, Karten) bleibt im Blick, wie im
+  // Inline-Panel; passt der ganze Turn, kommen die Folgefragen trotzdem ins
+  // Bild. Nie nach oben scrollen.
   useEffect(() => {
     const a = anchorRef.current;
     const el = chatHistoryRef.current;
@@ -103,8 +107,14 @@ export default function ChatHistory({
       return;
     a.pillsAt = pillsAt;
     a.follow = false;
+    const anchorTop = latestTurnHasCards(el) ? latestTurnAnchorTop(el) : null;
+    const top =
+      anchorTop === null
+        ? el.scrollHeight
+        : Math.min(el.scrollHeight, Math.max(0, anchorTop - 8));
+    if (anchorTop !== null && top <= el.scrollTop + 1) return;
     el.scrollTo({
-      top: el.scrollHeight,
+      top,
       behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
         ? "auto"
         : "smooth",
@@ -162,17 +172,9 @@ export default function ChatHistory({
   const scrollToLatestTurn = () => {
     const el = chatHistoryRef.current;
     if (!el) return false;
-    const turns = el.querySelectorAll("[data-assistant-turn]");
-    const turn = turns[turns.length - 1];
-    const anchor = turn?.previousElementSibling || turn;
     let top = el.scrollHeight;
-    if (anchor) {
-      const anchorTop =
-        anchor.getBoundingClientRect().top -
-        el.getBoundingClientRect().top +
-        el.scrollTop;
-      top = Math.min(top, Math.max(0, anchorTop - 8));
-    }
+    const anchorTop = latestTurnAnchorTop(el);
+    if (anchorTop !== null) top = Math.min(top, Math.max(0, anchorTop - 8));
     el.scrollTo({ top, behavior: "auto" });
     anchorRef.current.top = el.scrollTop;
     return el.scrollTop < top - 1;
@@ -214,7 +216,7 @@ export default function ChatHistory({
     if (bubble)
       return <PanelWelcome settings={settings} suggestions={suggestions} />;
     return (
-      <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
+      <div className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
           <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
             {settings?.greeting ?? "Send a chat to get started."}
@@ -225,9 +227,15 @@ export default function ChatHistory({
     );
   }
 
+  // allm-box-border: Höhe inklusive Polsterung (im Shadow DOM gilt kein
+  // globales box-sizing). Sonst ragte der Verlauf um die Polsterung (48 px)
+  // unter die Eingabe, und die Zeitstempelzeile der letzten Antwort lag am
+  // Scroll-Ende teils darunter (Browser-Fund B-08). Unten 8 px statt 32 px:
+  // der Abstand zur Eingabe kommt jetzt sichtbar aus dem Rand des Verlaufs
+  // (allm-mb-8 im ChatContainer), nicht mehr aus verdeckter Polsterung.
   return (
     <div
-      className="allm-h-full allm-overflow-y-auto allm-px-2 allm-pt-4 allm-pb-8 allm-flex allm-flex-col allm-justify-start allm-no-scroll"
+      className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-pt-4 allm-pb-2 allm-flex allm-flex-col allm-justify-start allm-no-scroll"
       id="chat-history"
       ref={chatHistoryRef}
       {...(cardsAbove && {
@@ -313,6 +321,27 @@ export default function ChatHistory({
         (arrowSlot ? createPortal(scrollArrow, arrowSlot) : scrollArrow)}
     </div>
   );
+}
+
+// Position der letzten Frage (Anker des letzten Assistenten-Turns bei Karten
+// oben) im Inhalt des Scroll-Containers in px, null ohne Turn.
+function latestTurn(el) {
+  const turns = el.querySelectorAll("[data-assistant-turn]");
+  return turns[turns.length - 1] || null;
+}
+function latestTurnAnchorTop(el) {
+  const turn = latestTurn(el);
+  const anchor = turn?.previousElementSibling || turn;
+  if (!anchor) return null;
+  return (
+    anchor.getBoundingClientRect().top -
+    el.getBoundingClientRect().top +
+    el.scrollTop
+  );
+}
+// Zeigt der letzte Turn Kurskarten (über der Antwort)?
+function latestTurnHasCards(el) {
+  return !!latestTurn(el)?.querySelector("[data-course-cards]");
 }
 
 // Antwort fertig (Abschluss-Chunk mit chatId verarbeitet bzw. aus dem

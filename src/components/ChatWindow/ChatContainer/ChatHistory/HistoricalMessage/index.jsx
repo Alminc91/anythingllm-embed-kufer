@@ -39,6 +39,7 @@ import {
   BUBBLE_SHADOW,
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
+  LOGO_RADIUS,
 } from "@/utils/theme";
 
 const ThoughtBubble = ({ thought }) => {
@@ -579,6 +580,7 @@ const HistoricalMessage = forwardRef(
                 }
                 alt="Anything LLM Icon"
                 className="allm-w-9 allm-h-9 allm-object-contain"
+                style={{ borderRadius: LOGO_RADIUS }}
                 id="anything-llm-icon"
               />
               {/* TTS Button under avatar (icon-left position) */}

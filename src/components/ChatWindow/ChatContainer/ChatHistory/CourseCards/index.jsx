@@ -1,4 +1,5 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import useEmbedMode from "@/hooks/useEmbedMode";
 import {
   MORE_COURSES_TEXT,
   rowLead,
@@ -87,7 +88,11 @@ export const ROW_CARD_MIN_PX = 480;
 // Pille, Polsterung); schmaler 3 Zeilen. Raster immer 3.
 export const ROW_TEASER_2_LINES_MIN_PX = 680;
 const rowTeaserLines = (width) => (width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3);
-const GRID_TEASER_LINES = 3;
+// Rasterkarte: 3 Zeilen; in der Chatblase 2 (KIE-565, Kurskarten in der
+// Chatblase: Karten im schmalen Fenster kompakter, vier Karten passten sonst
+// mit ≈ 160 bis 200 px je Karte nicht annähernd ins Fenster)
+export const GRID_TEASER_LINES = 3;
+export const BUBBLE_GRID_TEASER_LINES = 2;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
 // "einblenden" fällt einmal beim Erscheinen (kein erneutes Einblenden bei
@@ -168,14 +173,20 @@ function joinParts(parts) {
 // Teaser). teaser = KI-Teaser (Kurskarten v3), sonst null; teaserArrivedAt
 // = Ankunft des Teasers im Stream (nur Karten oben, sonst null).
 // pending = Teaser erwartet (Platzhalter, nur Karten oben im Stream)
-function Card({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
+function Card({
+  card,
+  teaser = null,
+  teaserArrivedAt = null,
+  pending = null,
+  lines = GRID_TEASER_LINES,
+}) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
   const { showTeaser, showPending, reserve } = useTeaserSlot({
     teaser,
     pending,
     fallback: card.fallback,
-    lines: GRID_TEASER_LINES,
+    lines,
   });
   // Beschreibung = die sichtbaren Zeilen (Name = Titel per aria-label)
   const describedBy = [
@@ -231,13 +242,11 @@ function Card({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
             id={`${id}-t`}
             text={teaser}
             arrivedAt={teaserArrivedAt}
-            lines={GRID_TEASER_LINES}
+            lines={lines}
             reserve={reserve}
           />
         )}
-        {showPending && (
-          <TeaserPending text={pending} lines={GRID_TEASER_LINES} />
-        )}
+        {showPending && <TeaserPending text={pending} lines={lines} />}
         {details && (
           <span
             id={`${id}-d`}
@@ -537,6 +546,8 @@ function CardList({
   const width = useListWidth(ref, rows);
   const wide = width >= ROW_CARD_MIN_PX;
   const Item = rows && wide ? CardRow : Card;
+  const { inline } = useEmbedMode();
+  const gridLines = inline ? GRID_TEASER_LINES : BUBBLE_GRID_TEASER_LINES;
   return (
     <ul
       ref={ref}
@@ -558,7 +569,7 @@ function CardList({
           teaser={teasers?.get(card.key)}
           teaserArrivedAt={teaserArrivedAt}
           pending={pending}
-          {...(Item === CardRow && { lines: rowTeaserLines(width) })}
+          lines={Item === CardRow ? rowTeaserLines(width) : gridLines}
         />
       ))}
     </ul>

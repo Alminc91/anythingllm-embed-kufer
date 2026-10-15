@@ -6,10 +6,8 @@ import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_EFFECT,
   DEFAULT_INLINE_HEIGHT,
-  DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_LAYOUT,
   DEFAULT_INLINE_OPEN_ON,
-  DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
   applyFixedStandards,
   dropLegacyDefaults,
@@ -25,6 +23,15 @@ const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
 // Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“)
 const EMPTY_MEANS_NONE = ["privacyTitle"];
 
+// Rohe Script-Attribute (data-*), wie die Seite sie gesetzt hat, bevor
+// embedderSettings.settings mit den aufgelösten Werten überschrieben wird.
+// Für Hinweise, die nur bei einem Attribut der Seite gelten
+// (warnIfInlineInputIgnored), nicht bei festen Standards des Servers.
+let scriptDataset = {};
+export function scriptAttributes() {
+  return scriptDataset;
+}
+
 export const DEFAULT_SETTINGS = {
   embedId: null, //required
   baseApiUrl: null, // required
@@ -39,7 +46,9 @@ export const DEFAULT_SETTINGS = {
   chatIcon: "chatBubble",
   brandImageUrl:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // will be forced into 100x50px container
-  brandText: "KI-Berater", // Name im Kopf (Standard wie PANEL_TEXTS.de.assistantName)
+  // Name im Kopf; null = Standardname der Sprache (PANEL_TEXTS
+  // assistantName „KI-Berater“ bzw. „AI Advisor“, applyFixedStandards)
+  brandText: null,
   // Begrüßungstext = Text der Begrüßungsblase (utils/layout.js greetingText:
   // greetingBubbleText > greeting > Standard der Sprache). null = Standard.
   // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
@@ -58,7 +67,7 @@ export const DEFAULT_SETTINGS = {
   sponsorText: "Ein Dienst der Kufer Software GmbH", // default sponsor textNo
   sponsorLink: "https://kufer.de", // default sponsor link
   position: "bottom-left", // position of chat button/window
-  assistantName: "KI-Berater", // default assistant name
+  assistantName: null, // Name über den Antworten; null wie brandText
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
   // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
@@ -90,8 +99,12 @@ export const DEFAULT_SETTINGS = {
   // defaultMessages als Chips (max. 6). false = Klickfläche wie bisher.
   // Nur Inline-Modus (Blase: ignoriert, eine Warnung).
   inlineInput: false,
-  inlineInputPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER, // max. 120 Zeichen
-  inlineSendText: DEFAULT_INLINE_SEND_TEXT, // Knopf, max. 40 Zeichen
+  // Platzhalter (max. 120 Zeichen) und Knopf (max. 40 Zeichen) der
+  // Eingabe-Leiste; null = Demo-Texte der Sprache („Stellen Sie hier Ihre
+  // Frage …“/„Chatten“, englisch „Ask your question here …“/„Chat“;
+  // utils/layout.js inlineBarTexts). Nicht der Platzhalter im Chat-Feld.
+  inlineInputPlaceholder: null,
+  inlineSendText: null,
   // Eingabe-Leiste: "submit" = öffnet erst beim Absenden (bisher) | "focus" =
   // schon beim Klick/Tippen ins Feld (nur Zeiger/Touch, nie per Tab-Fokus).
   inlineOpenOn: DEFAULT_INLINE_OPEN_ON,
@@ -102,10 +115,14 @@ export const DEFAULT_SETTINGS = {
   // prefers-color-scheme). Setzt den Standard-Satz der CSS-Variablen
   // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
   theme: "light",
-  inheritFont: false, // Inline: Schrift der Webseite übernehmen
+  // Inline: Schrift der Webseite übernehmen. Im Inline-Modus ohne Angabe an
+  // (INLINE_STANDARDS, wie die Demo); in der Chatblase ohne Wirkung.
+  inheritFont: false,
   // Kurskarten zu Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
-  // Standard seit Design Center vereinfacht: "auto" (Server erzwingt es).
+  // Standard seit Design Center vereinfacht: "auto" in Chatblase und Inline
+  // (Entscheidung D1, KIE-565; der Server liefert "auto" für beide
+  // Darstellungen, unabhängig vom gespeicherten displayMode).
   courseCards: "auto",
   // Kurskarten über ("above", Standard: Karten zuerst, danach der kurze Text)
   // oder unter ("below") der Antwort. Bei "above" erscheinen vom Server
@@ -228,6 +245,7 @@ export default function useGetScriptAttributes() {
           "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!",
         );
 
+      scriptDataset = { ...embedderSettings.settings };
       const finalSettings = await loadEmbedSettings(embedderSettings.settings);
 
       // Update module-level settings so components that read embedderSettings

@@ -312,16 +312,16 @@ def check_ak2(browser, base_url):
                f"Chips jetzt {chips_h:.0f} px hoch), #below Δ {dy:+.1f} px")
     finally:
         ctx.close()
-    # inlineMaxWidth: Breite = inlineMaxWidth, zentriert
+    # inlineMaxWidth: seit KIE-565 (Fixliste Nr. 18) fest, das Attribut wirkt
+    # nicht mehr -> Box so breit wie der Platzhalter
     ctx, page = tv.open_page(browser, base_url,
                              {"attrs": {**FLOAT, "inline-max-width": "520"}, "inline": True}, tv.Mock())
     try:
         ready(page)
         open_settled(page)
         g = geom(page)
-        centered = abs((g["chat"]["x"] - g["mount"]["x"]) - (g["mount"]["x"] + g["mount"]["w"] - g["chat"]["x"] - g["chat"]["w"])) <= 1
-        record("AK-2 Breite = inlineMaxWidth", abs(g["chat"]["w"] - 520) <= 1 and centered,
-               f"Box {g['chat']['w']:.0f} px (inlineMaxWidth 520), zentriert: {centered}")
+        record("AK-2 inlineMaxWidth ohne Wirkung (volle Breite)", abs(g["chat"]["w"] - g["mount"]["w"]) <= 1,
+               f"Box {g['chat']['w']:.0f} px, Platzhalter {g['mount']['w']:.0f} px (inlineMaxWidth 520 ignoriert)")
     finally:
         ctx.close()
 

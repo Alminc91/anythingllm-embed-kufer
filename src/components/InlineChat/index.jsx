@@ -15,15 +15,14 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
-import { BAR_THEMES, ON_ACCENT_TEXT } from "@/utils/theme";
+import { BAR_THEMES, INLINE_RADIUS_VARS, ON_ACCENT_TEXT } from "@/utils/theme";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
-  DEFAULT_INLINE_INPUT_PLACEHOLDER,
-  DEFAULT_INLINE_SEND_TEXT,
   findClippingAncestor,
   inlineBoxHeightPx,
   inlineBoxStyle,
   inlineChips,
+  inlineBarTexts,
   inlineEffectClass,
   inlineMaxWidth,
   isInlineOverlay,
@@ -897,7 +896,7 @@ export default function InlineChat({
       } catch (e) {
         // z. B. Platzhalter inzwischen ungeeignet/entfernt -> Blase
         console.warn(
-          "[AnythingLLM Embed] Inline-Modus: Einhängen fehlgeschlagen — Chat-Blase wird verwendet.",
+          "[AnythingLLM Embed] Inline-Modus: Einhängen fehlgeschlagen. Die Chat-Blase wird verwendet.",
           e,
         );
         if (host.parentNode !== document.body) document.body.appendChild(host);
@@ -934,7 +933,7 @@ export default function InlineChat({
     if (clipper && !warnedClipRef.current) {
       warnedClipRef.current = true;
       console.warn(
-        '[AnythingLLM Embed] inlineLayout "overlay": ein Vorfahre des Platzhalters schneidet die Box ab (overflow hidden/clip) — die Box klappt im Seitenfluss auf (flow).',
+        '[AnythingLLM Embed] inlineLayout "overlay": ein Vorfahre des Platzhalters schneidet die Box ab (overflow hidden/clip). Die Box klappt im Seitenfluss auf (flow).',
         clipper,
       );
     }
@@ -1778,7 +1777,13 @@ export default function InlineChat({
         ref={rootRef}
         id="anything-llm-embed-inline"
         className={`allm-relative allm-w-full allm-font-sans ${inheritFont ? "allm-inherit-font" : ""}`}
-        style={{ ...TEXT_RESET, maxWidth: inlineMaxWidth(settings) }}
+        // Rundungen wie die Demo (Panel 40, Karten 14, Blasen 18, Leiste und
+        // Pillen 999 px; Seiten-CSS --allm-* gewinnt), nur im Inline-Modus
+        style={{
+          ...TEXT_RESET,
+          ...INLINE_RADIUS_VARS,
+          maxWidth: inlineMaxWidth(settings),
+        }}
       >
         {view === "bar" && bar}
         {/* schwebende Box: Leiste bleibt unsichtbar im Seitenfluss (Höhe) */}
@@ -1965,10 +1970,9 @@ const InlineInputBar = forwardRef(function InlineInputBar(
   ref,
 ) {
   const accent = barAccent(settings);
-  // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings.
-  const placeholder =
-    settings.inlineInputPlaceholder || DEFAULT_INLINE_INPUT_PLACEHOLDER;
-  const sendText = settings.inlineSendText || DEFAULT_INLINE_SEND_TEXT;
+  // Werte kommen validiert (getrimmt, Längen-Grenzen) aus loadEmbedSettings;
+  // ohne eigenen Text die Demo-Texte in der Sprache des Widgets.
+  const { placeholder, sendText } = inlineBarTexts(settings);
   const chips = inlineChips(settings);
   // inlineOpenOn "focus": nur ein Zeiger-Klick (pointerdown mit
   // mouse/touch/pen, Maus nur linke Taste) öffnet; der click danach klappt

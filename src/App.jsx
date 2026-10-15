@@ -1,4 +1,6 @@
-import useGetScriptAttributes from "@/hooks/useScriptAttributes";
+import useGetScriptAttributes, {
+  scriptAttributes,
+} from "@/hooks/useScriptAttributes";
 import useSessionId from "@/hooks/useSessionId";
 import useConversationId from "@/hooks/useConversationId";
 import useOpenChat from "@/hooks/useOpen";
@@ -29,6 +31,16 @@ const BUBBLE_WINDOW_STYLE = {
   borderColor: "var(--allmi-border, #d1d5db)",
   boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.25))",
 };
+
+// Escape aus einem Eingabefeld der Webseite (nicht aus dem Widget): gehört dem
+// Feld, schließt die Chatblase nicht.
+function focusInPageField(e) {
+  const host = embedderSettings.hostElement;
+  if (host && e.composedPath?.().includes(host)) return false;
+  const el = e.target;
+  if (!el || el.nodeType !== 1) return false;
+  return !!el.closest?.("input, textarea, select, [contenteditable]");
+}
 
 export default function App() {
   const { isChatOpen, toggleOpenChat } = useOpenChat();
@@ -94,13 +106,41 @@ export default function App() {
   }, [embedSettings.loaded]);
 
   // Blase: inlineInput hat keine Wirkung -> eine Warnzeile, sobald die
-  // Darstellung feststeht. Nicht bei Inline ohne Platzhalter: dort ist
-  // inlineInput Standard (INLINE_STANDARDS) und findMountTarget nennt den
-  // Grund für die Blase schon selbst.
+  // Darstellung feststeht, aber nur bei einem Script-Attribut der Seite
+  // (data-inline-input), nicht beim festen Inline-Standard des Servers. Nicht
+  // bei Inline ohne Platzhalter: dort ist inlineInput Standard
+  // (INLINE_STANDARDS) und findMountTarget nennt den Grund für die Blase
+  // schon selbst.
   useEffect(() => {
     if (mountTarget === null && embedSettings.displayMode !== "inline")
-      warnIfInlineInputIgnored(embedSettings, false);
+      warnIfInlineInputIgnored(scriptAttributes(), false);
   }, [mountTarget]);
+
+  // Chatblase: Escape schließt das Fenster (KIE-565, D7), auch wenn der Fokus
+  // auf der Webseite liegt (keydown aus dem Shadow DOM ist composed und kommt
+  // ebenfalls am document an). Ausnahmen: ein anderes Element hat die Taste
+  // schon verarbeitet (defaultPrevented), oder der Fokus steht in einem
+  // Eingabefeld der Seite (dort bleibt Escape beim Feld). Danach Fokus auf
+  // den Chat-Knopf, damit Tastaturnutzer nicht auf <body> landen.
+  const restoreFocusRef = useRef(false);
+  useEffect(() => {
+    if (!isChatOpen || mountTarget !== null) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (focusInPageField(e)) return;
+      restoreFocusRef.current = true;
+      toggleOpenChat(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isChatOpen, mountTarget]);
+  useEffect(() => {
+    if (isChatOpen || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    embedderSettings.shadowRoot
+      ?.getElementById?.("anything-llm-embed-chat-button")
+      ?.focus({ preventScroll: true });
+  }, [isChatOpen]);
 
   useEffect(() => {
     // Inline: kein Auto-Öffnen der Blase (und kein sessionStorage-Offen-Flag,

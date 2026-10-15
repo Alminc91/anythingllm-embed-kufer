@@ -11,6 +11,7 @@ import {
   BUBBLE_SHADOW,
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
+  LOGO_RADIUS,
 } from "@/utils/theme";
 
 // Antwortblase über CSS-Variablen (Fallback = bisherige Werte)
@@ -82,6 +83,7 @@ const ReplyFrame = ({ nameInWrapper, rowRef, children, after }) => (
         }
         alt="Anything LLM Icon"
         className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
+        style={{ borderRadius: LOGO_RADIUS }}
       />
       {children}
     </div>

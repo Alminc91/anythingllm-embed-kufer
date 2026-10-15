@@ -231,6 +231,22 @@ export const THEME_VARIABLES = [
   // Rand der Wunschfragen-Pillen im Panel (suggestionStyle "pills");
   // Standard = Rand der Leiste/Chips
   { name: "pill-border", chain: "bar-border", light: null, dark: null },
+  // Fläche der Pillen im Panel (Startvorschläge und Folgefragen): hell wie
+  // die Leiste (unverändert), dunkel im Panelton (transparent auf der
+  // Fensterfläche) statt der blau-schwarzen Glasfläche der Leiste
+  { name: "pill-bg", light: "var(--allmi-bar-bg)", dark: "transparent" },
+  // Text der Folgefragen-Pillen: hell in der Kundenfarbe (Mockup), dunkel im
+  // Text des dunklen Satzes (Kundenfarben wie #607D8B hätten auf dem dunklen
+  // Panel nur etwa 4:1); Rand bleibt die Kundenfarbe
+  {
+    name: "pill-accent-text",
+    light: "var(--allmi-accent)",
+    dark: DARK.text,
+  },
+  // Rundung von Logo und Avatar: hell keine (wie bisher), dunkel eine
+  // abgerundete Kachel, damit ein Logo mit weißem Hintergrund (z. B. das
+  // Standard-Logo) nicht als harter weißer Kasten wirkt
+  { name: "logo-radius", light: null, dark: "22%" },
   { name: "bar-shadow", bar: "shadow" },
   {
     name: "bar-radius",
@@ -368,6 +384,28 @@ export function applyTheme(styleEl, settings = {}) {
   render();
 }
 
+// Inline-Modus: Rundungen wie die Demo-Seite (/var/docker/demo/site/app.js,
+// Mockup: Panel 40 px, Kurskarten 14 px, Sprechblasen 18 px, Leiste und
+// Pillen 999 px). Als Inline-Style auf der Inline-Fläche gesetzt (InlineChat),
+// also nur im Inline-Modus; Seiten-CSS (--allm-*) gewinnt weiter. Die
+// abgeleiteten Werte stehen hier ausdrücklich, weil ein var() in :host (z. B.
+// --allmi-radius-bubble = calc(--allmi-radius × 1,125)) dort ausgewertet wird
+// und eine neue --allmi-radius weiter unten nicht mehr sähe.
+export const INLINE_RADIUS = {
+  panel: "40px",
+  card: "14px",
+  bubble: "18px",
+  bar: "999px",
+};
+export const INLINE_RADIUS_VARS = {
+  "--allmi-radius": `var(--allm-radius, ${INLINE_RADIUS.panel})`,
+  "--allmi-radius-card": `var(--allm-radius-card, ${INLINE_RADIUS.card})`,
+  "--allmi-radius-bubble": `var(--allm-radius-bubble, ${INLINE_RADIUS.bubble})`,
+  "--allmi-radius-bubble-small":
+    "min(4px, calc(var(--allmi-radius-bubble) / 4.5))",
+  "--allmi-bar-radius": `var(--allm-bar-radius, ${INLINE_RADIUS.bar})`,
+};
+
 // --- Bausteine für Komponenten (Inline-Styles, Fallback = bisheriger Wert) ---
 const BUBBLE_R = "var(--allmi-radius-bubble, 18px)";
 const BUBBLE_S = "var(--allmi-radius-bubble-small, 4px)";
@@ -379,6 +417,10 @@ export const BUBBLE_RADIUS = {
 };
 export const BUBBLE_SHADOW =
   "var(--allmi-bubble-shadow, 0 4px 14px rgba(0, 0, 0, 0.25))";
+
+// Logo im Kopf und Avatar neben den Blasen: Rundung --allmi-logo-radius
+// (nur dunkel gesetzt; hell ungültig -> keine Rundung wie bisher)
+export const LOGO_RADIUS = "var(--allmi-logo-radius)";
 
 // Schriftgröße der Antworttexte — streamend (PromptReply) und im Verlauf
 // (HistoricalMessage) identisch, damit nach dem Stream nichts umbricht.

@@ -11,6 +11,7 @@ export const DEFAULT_INLINE_COLLAPSED_TEXT =
   "Jetzt mit unserem KI-Assistenten schreiben";
 export const DEFAULT_INLINE_HEIGHT = "600px";
 // Inline-Leiste als Eingabefeld (inlineInput): Platzhalter + Text des Knopfs
+// wie die Demo (deutsch; englisch PANEL_TEXTS.en, inlineBarTexts)
 export const DEFAULT_INLINE_INPUT_PLACEHOLDER = "Stellen Sie hier Ihre Frage …";
 export const DEFAULT_INLINE_SEND_TEXT = "Chatten";
 // Wunschfragen-Chips unter der Leiste und Pillen im Panel (aus
@@ -129,6 +130,13 @@ export const PANEL_TEXTS = {
     followUps: "Vorschläge für Ihre nächste Frage",
     // Platzhalter an der Teaser-Stelle, solange der KI-Teaser erwartet wird
     teaserPending: "KI-Beschreibung wird erstellt …",
+    // Eingeklappte Inline-Leiste: Platzhalter und Knopf wie die Demo (das
+    // Chat-Eingabefeld nutzt inputPlaceholder bzw. den Platzhalter aus dem
+    // Design Center)
+    inlineBarPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER,
+    inlineSendText: DEFAULT_INLINE_SEND_TEXT,
+    // Rückmeldung nach dem Kopieren (Chat-ID, Codeblock)
+    copied: "Kopiert!",
   },
   en: {
     greetingBubble: "Hello! I am your AI advisor. How can I help you?",
@@ -148,6 +156,9 @@ export const PANEL_TEXTS = {
     inputPlaceholder: "Enter your question",
     followUps: "Suggestions for your next question",
     teaserPending: "AI description is being written …",
+    inlineBarPlaceholder: "Ask your question here …",
+    inlineSendText: "Chat",
+    copied: "Copied!",
   },
 };
 // Standard-Datenschutztext als freier Text (privacyText-Format): je Punkt eine
@@ -174,24 +185,39 @@ export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
 export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
 export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 
+// Eingeklappte Inline-Leiste (inlineInput): Platzhalter und Knopftext. Ein
+// eigener Text (inlineInputPlaceholder bzw. inlineSendText, z. B. früher im
+// Design Center gespeichert oder per Script-Attribut) gewinnt, sonst die
+// Demo-Texte in der Sprache des Widgets. Der Platzhalter im Chat-Eingabefeld
+// (sendMessageText bzw. inputPlaceholder) gilt hier bewusst nicht.
+export function inlineBarTexts(settings = {}) {
+  const t = panelTexts(settings);
+  return {
+    placeholder: settings.inlineInputPlaceholder || t.inlineBarPlaceholder,
+    sendText: settings.inlineSendText || t.inlineSendText,
+  };
+}
+
 // Frühere Standardtexte (Widget- bzw. Design-Center-Vorbelegung), die als
 // Wert gespeichert sein können, obwohl der Kunde nie eigenen Text geschrieben
 // hat. Sie gelten beim Laden als „nicht gesetzt“ (loadEmbedSettings ->
 // dropLegacyDefaults je Quelle: Schlüssel entfällt, der nächstniedrigere Wert
 // greift), damit der neue Standard greift. Gespeichert bleibt alles
 // unverändert (nur die Anzeige ändert sich).
+// Begrüßung: dieselben vier Texte für greeting und greetingBubbleText wie im
+// Fork (server/utils/chats/embedStandards.js LEGACY_DEFAULT_GREETINGS): alter
+// Widget-Standard von greeting (Datenschutzsatz, steht jetzt in der eigenen
+// Datenschutz-Blase), alte Design-Center-Vorbelegung und der bisherige
+// Standard der Begrüßungsblase (de/en).
+const LEGACY_DEFAULT_GREETINGS = [
+  "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.",
+  "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gestützten Antworten.",
+  "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
+  "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
+];
 export const LEGACY_DEFAULT_TEXTS = {
-  // alter Widget-Standard von greeting (Datenschutzsatz, steht jetzt in der
-  // eigenen Datenschutz-Blase) und alte Design-Center-Vorbelegung
-  greeting: [
-    "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.",
-    "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gestützten Antworten.",
-  ],
-  // bisheriger Standard der Begrüßungsblase (Design Center „Standardtexte“)
-  greetingBubbleText: [
-    "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
-    "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
-  ],
+  greeting: LEGACY_DEFAULT_GREETINGS,
+  greetingBubbleText: LEGACY_DEFAULT_GREETINGS,
   // bisherige Überschrift mit Doppelpunkt
   privacyTitle: ["Datenschutz:", "Privacy:"],
   // alter Platzhalter = dieselbe Frage wie die neue Begrüßung
@@ -289,6 +315,13 @@ export function privacyPoints(settings = {}) {
 // gespeichert, werden aber ignoriert). Der Server erzwingt dieselben Werte;
 // das Widget sichert sie zusätzlich selbst ab (kein Widget ohne KI-Hinweis,
 // ohne Datenschutz-Blase oder mit Online-Punkt, auch nicht per data-*).
+// Randabstände der Chatblase (offsetX/offsetY) und die Max. Breite der
+// Inline-Box (inlineMaxWidth) sind ebenfalls fest (Standard 16 px bzw. volle
+// Breite des Platzhalters); der Server liefert sie nicht mehr aus, ein
+// Script-Attribut (data-offset-x, data-inline-max-width …) wirkt nicht mehr.
+// Bewusst weiter wirksam (Rückwärtskompatibilität, eigener Text bzw. Stil):
+// inlineTheme, inlineCollapsedText, inlineSendText, inlineInputPlaceholder,
+// greetingBubbleText, privacyButtonText.
 export const FIXED_STANDARDS = {
   greetingStyle: "bubble",
   suggestionStyle: "pills",
@@ -297,13 +330,17 @@ export const FIXED_STANDARDS = {
   disclaimer: "footer",
   disclaimerText: null,
   onlineDot: false,
+  offsetX: null,
+  offsetY: null,
+  inlineMaxWidth: null,
 };
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
 // loadWidgetScript: data-inline-input "true", data-inline-open-on "focus",
 // data-inline-layout "overlay", data-inline-effect "morph",
-// data-inline-height "520px", data-inline-start-state "collapsed"; Leisten-
-// Stil folgt dem Fenster-Theme, Breite = Platzhalter). Nur im Inline-Modus und
+// data-inline-height "520px", data-inline-start-state "collapsed",
+// data-inherit-font "true"; Leisten-Stil folgt dem Fenster-Theme, Breite =
+// Platzhalter). Nur im Inline-Modus und
 // nur, wo weder Script noch Server einen Wert liefern (der Server erzwingt
 // die Werte ohnehin); in der Chatblase wirkungslos.
 export const INLINE_STANDARDS = {
@@ -313,15 +350,21 @@ export const INLINE_STANDARDS = {
   inlineEffect: "morph",
   inlineHeight: "520px",
   inlineStartState: "collapsed",
+  inheritFont: true,
 };
 
 // Einmal beim Laden (loadEmbedSettings): Inline-Standards ergänzen, feste
-// Standards setzen. given = Schlüssel, die Script oder Server geliefert haben.
+// Standards setzen, ohne eigenen Namen den Standardnamen der Sprache
+// (brandText im Kopf, assistantName über den Antworten; „KI-Berater“ bzw.
+// „AI Advisor“). given = Schlüssel, die Script oder Server geliefert haben.
 export function applyFixedStandards(settings = {}, given = new Set()) {
   const out = { ...settings, ...FIXED_STANDARDS };
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
       if (!given.has(key)) out[key] = value;
+  const name = panelTexts(out).assistantName;
+  for (const key of ["brandText", "assistantName"])
+    if (typeof out[key] !== "string" || out[key].trim() === "") out[key] = name;
   return out;
 }
 
@@ -480,7 +523,7 @@ export const layoutValidations = {
     const t = oneOf(v, THEME_VALUES);
     if (t === undefined)
       console.warn(
-        `[AnythingLLM Embed] Ungültiger theme-Wert ${JSON.stringify(v)} — erlaubt: ${THEME_VALUES.join(", ")}. Es gilt der Standard "light".`,
+        `[AnythingLLM Embed] Ungültiger theme-Wert ${JSON.stringify(v)}. Erlaubt: ${THEME_VALUES.join(", ")}. Es gilt der Standard "light".`,
       );
     return t;
   },
@@ -529,7 +572,7 @@ export function warnInvalidInlineEnums(
             ? `"${resolveInlineEffect(settings)}"`
             : "keine Animation";
       console.warn(
-        `[AnythingLLM Embed] Ungültiger ${key}-Wert ${JSON.stringify(value)} (${label}) — erlaubt: ${allowed.join(", ")}. Wert wird verworfen, es gilt ${effective} (${origin}).`,
+        `[AnythingLLM Embed] Ungültiger ${key}-Wert ${JSON.stringify(value)} (${label}). Erlaubt: ${allowed.join(", ")}. Wert wird verworfen, es gilt ${effective} (${origin}).`,
       );
     }
   }
@@ -537,11 +580,15 @@ export function warnInvalidInlineEnums(
 
 // inlineInput gilt nur im Inline-Modus. Wird das Widget als Blase gezeigt
 // (displayMode "bubble" oder Platzhalter fehlt), bleibt die Blase unverändert;
-// eine Warnzeile weist auf das ignorierte Attribut hin. Rückgabe: gewarnt?
-export function warnIfInlineInputIgnored(settings = {}, isInline = false) {
-  if (isInline || settings.inlineInput !== true) return false;
+// eine Warnzeile weist auf das ignorierte Attribut hin, aber nur, wenn die
+// Seite data-inline-input selbst gesetzt hat (script = rohe Script-
+// Attribute). Der Server liefert inlineInput als festen Inline-Standard an
+// jedes Widget; das ist keine Fehlkonfiguration der Seite. Rückgabe: gewarnt?
+export function warnIfInlineInputIgnored(script = {}, isInline = false) {
+  if (isInline || layoutValidations.inlineInput(script?.inlineInput) !== true)
+    return false;
   console.warn(
-    "[AnythingLLM Embed] inlineInput (data-inline-input) wirkt nur im Inline-Modus — wird in der Chat-Blase ignoriert.",
+    "[AnythingLLM Embed] inlineInput (data-inline-input) wirkt nur im Inline-Modus und wird in der Chat-Blase ignoriert.",
   );
   return true;
 }
@@ -735,24 +782,24 @@ export function findMountTarget(selector, host = null) {
     matches = document.querySelectorAll(sel);
   } catch (e) {
     console.warn(
-      `[AnythingLLM Embed] Ungültiger data-mount-Selektor "${sel}" — Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Ungültiger data-mount-Selektor "${sel}". Die Chat-Blase wird verwendet.`,
     );
     return null;
   }
   if (matches.length === 0) {
     console.warn(
-      `[AnythingLLM Embed] Inline-Modus: Platzhalter "${sel}" nicht gefunden — Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Inline-Modus: Platzhalter "${sel}" nicht gefunden. Die Chat-Blase wird verwendet.`,
     );
     return null;
   }
   if (matches.length > 1)
     console.warn(
-      `[AnythingLLM Embed] Platzhalter "${sel}" ${matches.length}x gefunden — der erste wird verwendet.`,
+      `[AnythingLLM Embed] Platzhalter "${sel}" ${matches.length}x gefunden, der erste wird verwendet.`,
     );
   const target = matches[0];
   if (!isSuitableMountTarget(target, host)) {
     console.warn(
-      `[AnythingLLM Embed] Platzhalter "${sel}" ist als Einhängeort ungeeignet (<${target.tagName.toLowerCase()}>) — Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Platzhalter "${sel}" ist als Einhängeort ungeeignet (<${target.tagName.toLowerCase()}>). Die Chat-Blase wird verwendet.`,
     );
     return null;
   }

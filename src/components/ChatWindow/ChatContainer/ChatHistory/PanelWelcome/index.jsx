@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { embedderSettings } from "@/main";
-import { BUBBLE_RADIUS, BUBBLE_SHADOW } from "@/utils/theme";
+import { BUBBLE_RADIUS, BUBBLE_SHADOW, LOGO_RADIUS } from "@/utils/theme";
 import {
   greetingText,
   panelPills,
@@ -21,6 +21,8 @@ import Pill from "../Pill";
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
+// Abstand der Begrüßungsblase zur Oberkante beim Öffnen mit Überlauf
+const GREETING_MARGIN_PX = 8;
 
 // Wunschfragen als kleine Pillen (Pill, Standard-Variante: Rand über
 // --allmi-pill-border), umbrechend, höchstens 6, lange Texte gekürzt.
@@ -55,20 +57,34 @@ export function SuggestedPills({ settings, align = "center" }) {
 // privacyNotice "bubble" (fester Standard): der Datenschutz-Hinweis steht als
 // eigene zweite Blase direkt unter der Begrüßungsblase (Design Center
 // vereinfacht, 15.10.2026), nicht mehr als Absatz in derselben Blase.
-// Beim Öffnen ans Ende gescrollt (ohne Animation): lange Blasen (z. B. der
-// Datenschutz-Hinweis im kleinen Blasenfenster) schöben die Vorschläge
-// sonst unter den sichtbaren Bereich. Ohne Überlauf bleibt alles stehen.
+// Beim Öffnen (ohne Animation): Die Begrüßungsblase muss sichtbar sein
+// (KIE-565, Browser-Fund B-02: bei 700 px Fensterhöhe stand sie über dem
+// sichtbaren Bereich). Bei Überlauf wird deshalb höchstens so weit Richtung
+// Vorschläge gescrollt, dass die Begrüßung oben ganz im Blick bleibt;
+// passen nicht beide, liegen die Pillen darunter (erreichbar per Scrollen).
+// allm-box-border: Höhe inklusive Polsterung (im Shadow DOM gilt kein
+// globales box-sizing), sonst ragte die Fläche unter die Eingabe.
 export default function PanelWelcome({ settings = {}, suggestions = null }) {
   const scrollRef = useRef(null);
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el && el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
+    if (!el || el.scrollHeight <= el.clientHeight) return;
+    const greeting = el.querySelector("#anything-llm-greeting-bubble");
+    const greetingTop = greeting
+      ? greeting.getBoundingClientRect().top -
+        el.getBoundingClientRect().top +
+        el.scrollTop
+      : 0;
+    el.scrollTop = Math.min(
+      el.scrollHeight - el.clientHeight,
+      Math.max(0, greetingTop - GREETING_MARGIN_PX),
+    );
   }, []);
   const pills = settings.suggestionStyle === "pills";
   return (
     <div
       ref={scrollRef}
-      className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-no-scroll"
+      className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-no-scroll"
     >
       <WelcomeBlock settings={settings}>
         {suggestions && (
@@ -140,6 +156,7 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
             objectFit: "contain",
             flex: "none",
             marginBottom: "2px",
+            borderRadius: LOGO_RADIUS,
           }}
         />
         <div

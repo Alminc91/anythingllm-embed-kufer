@@ -16,7 +16,9 @@ import {
   HEADER_ICON_STYLE,
   HEADER_STYLE,
   headerButtonClass,
+  LOGO_RADIUS,
 } from "@/utils/theme";
+import { panelTexts } from "@/utils/layout";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -184,6 +186,7 @@ export default function ChatWindowHeader({
               maxWidth: compact ? "28px" : "40px",
               maxHeight: compact ? "28px" : "40px",
               objectFit: "contain",
+              borderRadius: LOGO_RADIUS,
               transition:
                 "max-width var(--allmi-transition, 200ms), max-height var(--allmi-transition, 200ms)",
             }}
@@ -366,7 +369,9 @@ function SessionID({ sessionId, conversationId, settings }) {
     return (
       <div className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4">
         <Check size={24} />
-        <p className="allm-text-[14px] allm-font-sans">Copied!</p>
+        <p className="allm-text-[14px] allm-font-sans">
+          {panelTexts(settings).copied}
+        </p>
       </div>
     );
   }

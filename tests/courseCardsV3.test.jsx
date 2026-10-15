@@ -36,6 +36,7 @@ import {
 import handleChat from "../src/utils/chat/index.js";
 import HistoricalMessage from "../src/components/ChatWindow/ChatContainer/ChatHistory/HistoricalMessage/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
+import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
 const AUTO = { courseCards: "auto" };
 const ABOVE = { courseCards: "auto", courseCardsPosition: "above" };
@@ -438,6 +439,17 @@ afterEach(() => {
   root = null;
 });
 
+// Inline-Modus (Rasterkarte: Teaser bis zu 3 Zeilen); ohne Kontext gilt die
+// Chatblase (Rasterkarte 2 Zeilen, KIE-565)
+const inl = (element) =>
+  h(
+    EmbedModeContext.Provider,
+    {
+      value: { inline: true, overlay: false, consumeFocusRequest: () => false },
+    },
+    element,
+  );
+
 function mount(element) {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -461,14 +473,17 @@ const cards = (el) => [...el.querySelectorAll(".allm-course-card")];
 
 describe("Teaser als Untertext (AK-5)", () => {
   it("::v3-teaser — unter dem Titel, 13 px, Textfarbe, bis zu 3 Zeilen, in der Beschreibung", () => {
+    // Inline-Modus: Rasterkarte bis zu 3 Zeilen (Chatblase: 2, Test unten)
     const el = mount(
-      h(ChatHistory, {
-        settings: ABOVE,
-        history: [
-          user,
-          answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-        ],
-      }),
+      inl(
+        h(ChatHistory, {
+          settings: ABOVE,
+          history: [
+            user,
+            answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+          ],
+        }),
+      ),
     );
     const [first] = cards(el);
     const teaser = first.querySelector(".allm-course-teaser");
@@ -842,11 +857,14 @@ describe("Zeilen-Karten (AK-1)", () => {
           return this.classList?.contains("allm-course-list") ? width : 0;
         });
       try {
+        // Inline-Modus (unter 480 px Rasterkarte mit 3 Zeilen)
         const el = mount(
-          h(ChatHistory, {
-            settings: ROWS_ABOVE,
-            history: [user, streaming()],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings: ROWS_ABOVE,
+              history: [user, streaming()],
+            }),
+          ),
         );
         expect(
           el.querySelector(".allm-course-list").getAttribute("data-layout"),
@@ -855,13 +873,18 @@ describe("Zeilen-Karten (AK-1)", () => {
           expect(p.style.height).toBe(`${lines * 18}px`);
         act(() =>
           root.render(
-            h(ChatHistory, {
-              settings: ROWS_ABOVE,
-              history: [
-                user,
-                streaming({ courseTeasers: TEASERS, teaserArrivedAt: Date.now() }),
-              ],
-            }),
+            inl(
+              h(ChatHistory, {
+                settings: ROWS_ABOVE,
+                history: [
+                  user,
+                  streaming({
+                    courseTeasers: TEASERS,
+                    teaserArrivedAt: Date.now(),
+                  }),
+                ],
+              }),
+            ),
           ),
         );
         const teasers = [...el.querySelectorAll(".allm-course-teaser")];
@@ -934,8 +957,9 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
     it(`::teaser-pending (${layout}) — Platzhalter je Karte, Teaser ersetzt ihn an Ort und Stelle (gleiche Knoten, reservierte Höhe)`, () => {
       const settings = { ...ABOVE, courseCardsLayout: layout };
       const lines = layout === "rows" ? 2 : 3;
+      // Inline-Modus (Rasterkarte 3 Zeilen; Chatblase 2, eigener Test)
       const el = mount(
-        h(ChatHistory, { settings, history: [user, streaming()] }),
+        inl(h(ChatHistory, { settings, history: [user, streaming()] })),
       );
       const before = cards(el);
       expect(before).toHaveLength(2);
@@ -969,16 +993,18 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
       }
       act(() =>
         root.render(
-          h(ChatHistory, {
-            settings,
-            history: [
-              user,
-              streaming({
-                courseTeasers: TEASERS,
-                teaserArrivedAt: Date.now(),
-              }),
-            ],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings,
+              history: [
+                user,
+                streaming({
+                  courseTeasers: TEASERS,
+                  teaserArrivedAt: Date.now(),
+                }),
+              ],
+            }),
+          ),
         ),
       );
       expect(pendingEls(el)).toHaveLength(0);
@@ -998,13 +1024,15 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
       // Text kommt, Stream endet: Teaser bleiben, kein Platzhalter
       act(() =>
         root.render(
-          h(ChatHistory, {
-            settings,
-            history: [
-              user,
-              answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-            ],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings,
+              history: [
+                user,
+                answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+              ],
+            }),
+          ),
         ),
       );
       expect(pendingEls(el)).toHaveLength(0);

@@ -38,8 +38,8 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
 | `data-icon-style` | `rounded` | Icon-Hintergrund im Header. Optionen: `none`, `rounded`, `circle`, `border`, `border-dark`, `soft`, `glass`, `adaptive`, `shadow`, `pill`. Nur aktiv wenn `header-bg-color` gesetzt. Siehe Tabelle unten. |
 | `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
-| `data-brand-text` | `KI-Berater` | Text neben dem Logo |
-| `data-assistant-name` | `KI-Berater` | Name des Assistenten |
+| `data-brand-text` | `KI-Berater` (`en`: `AI Advisor`) | Text neben dem Logo |
+| `data-assistant-name` | `KI-Berater` (`en`: `AI Advisor`) | Name des Assistenten |
 | `data-assistant-icon` | Kufer Logo | Avatar-Icon des Assistenten |
 | `data-chat-icon` | `chatBubble` | Icon für den Chat-Button |
 | `data-position` | `bottom-left` | Position: `bottom-left`, `bottom-right`, `top-left`, `top-right` |
@@ -47,7 +47,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-window-width` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterbreite). |
 | `data-text-size` | `14` | Textgröße in px (nur Zahl) |
 | `data-no-header` | `null` | Header ausblenden wenn gesetzt |
-| `data-theme` | `light` | Theme des ganzen Chatfensters: `light`, `dark`, `auto` (folgt `prefers-color-scheme`). Auch per Design Center (`visual_config.theme`) — wirkt erst mit der Fork-Version, die diesen Schlüssel ausliefert (Image ≥ 7.9); bis dahin nur Script-Attribut bzw. Seiten-CSS. Feinsteuerung per Seiten-CSS über `--allm-*`-Variablen, siehe README „Styling per CSS-Variablen“. |
+| `data-theme` | `light` | Theme des ganzen Chatfensters: `light`, `dark`, `auto` (folgt `prefers-color-scheme`). Ein im Design Center gespeichertes Farbschema gewinnt gegen das Attribut (alle Einstellungen kommen aus dem Design Center). Auch per Design Center (`visual_config.theme`) — wirkt erst mit der Fork-Version, die diesen Schlüssel ausliefert (Image ≥ 7.9); bis dahin nur Script-Attribut bzw. Seiten-CSS. Feinsteuerung per Seiten-CSS über `--allm-*`-Variablen, siehe README „Styling per CSS-Variablen“. |
 
 ### Icon Style Optionen
 
@@ -88,7 +88,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-support-email` | `info@kufer.de` | E-Mail für Support-Anfragen |
 | `data-username` | `null` | Anzeigename des Benutzers |
 | `data-default-messages` | `[]` | Vordefinierte Schnellantworten (kommagetrennt) |
-| `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste). Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
+| `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste), in Chatblase und Inline (Entscheidung D1, KIE-565; der Server liefert `auto` für beide Darstellungen). In der Chatblase Teaser höchstens 2 Zeilen. Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
 | `data-course-cards-position` | `above` | `below` \| `above`: Kurskarten unter bzw. über der Antwort. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
 | `data-suggestion-style` | `pills` (fest) | Seit Design Center vereinfacht (10/2026) fest `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt); Attribut und `visual_config` wirken nicht mehr |
 | `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, max. 300 Zeichen, sonst `data-greeting`, sonst Standard) |
