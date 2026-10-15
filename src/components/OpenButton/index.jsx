@@ -7,6 +7,7 @@ import {
   MagicWand,
 } from "@phosphor-icons/react";
 import useBubbleDismissal from "@/hooks/useBubbleDismissal";
+import { ON_ACCENT_TEXT } from "@/utils/theme";
 
 const CHAT_ICONS = {
   plus: Plus,
@@ -109,6 +110,8 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       <button
         style={{
           backgroundColor: `var(--allmi-accent, ${settings.buttonColor})`,
+          // Icon in der Schrift auf der Kundenfarbe (--allm-on-accent)
+          color: ON_ACCENT_TEXT,
           ...(settings.buttonOutline === "white" && {
             border: "2px solid rgba(255, 255, 255, 0.8)",
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
@@ -123,10 +126,10 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           dismissBubblesOnChatOpen();
           toggleOpen();
         }}
-        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] hover:allm-scale-105`}
+        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] hover:allm-scale-105`}
         aria-label="Toggle Menu"
       >
-        <ChatIcon weight="fill" className="text-white" />
+        <ChatIcon weight="fill" />
       </button>
 
       {/* Custom styles for animations */}

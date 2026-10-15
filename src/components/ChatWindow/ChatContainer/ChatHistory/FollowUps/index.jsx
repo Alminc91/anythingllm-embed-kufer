@@ -8,7 +8,7 @@ import Pill from "../Pill";
 // B). Ob sie erscheinen (letzte Antwort, fertig, Eingabe frei) und welche
 // (geprüft mit followUpsList), entscheidet ChatHistory. Ein Klick sendet den
 // Text als nächste Frage (sendSuggestion); danach verschwinden die Pillen
-// sofort, weitere Klicks senden nichts. Pill-Variante "accent"; Einzug wie
+// sofort, weitere Klicks senden nichts. Pill wie die Startvorschläge; Einzug wie
 // die Kurskarten (bündig mit der Antwortblase).
 export default function FollowUps({ items, settings }) {
   const [sent, setSent] = useState(false);
@@ -32,7 +32,6 @@ export default function FollowUps({ items, settings }) {
         <Pill
           key={i}
           text={text}
-          variant="accent"
           onClick={(e) => send(text, e.currentTarget)}
         />
       ))}

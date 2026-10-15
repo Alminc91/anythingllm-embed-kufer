@@ -40,6 +40,7 @@ import {
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
   LOGO_RADIUS,
+  ON_ACCENT_TEXT,
 } from "@/utils/theme";
 
 const ThoughtBubble = ({ thought }) => {
@@ -446,8 +447,11 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
                   type="button"
                   onClick={sendComment}
                   disabled={sending}
-                  style={{ backgroundColor: `var(--allmi-accent, ${accent})` }}
-                  className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-text-white allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
+                  style={{
+                    backgroundColor: `var(--allmi-accent, ${accent})`,
+                    color: ON_ACCENT_TEXT,
+                  }}
+                  className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
                 >
                   {sending ? "Senden…" : "Senden"}
                 </button>

@@ -24,8 +24,9 @@ const BUBBLE_INSET = "46px";
 // Abstand der Begrüßungsblase zur Oberkante beim Öffnen mit Überlauf
 const GREETING_MARGIN_PX = 8;
 
-// Wunschfragen als kleine Pillen (Pill, Standard-Variante: Rand über
-// --allmi-pill-border), umbrechend, höchstens 6, lange Texte gekürzt.
+// Wunschfragen als kleine Pillen (Pill, dieselbe Komponente wie die
+// Folgefragen: Rand und Text in Kundenfarbe, Hover/Fokus gefüllt),
+// umbrechend, höchstens 6, lange Texte gekürzt.
 export function SuggestedPills({ settings, align = "center" }) {
   const pills = panelPills(settings);
   if (pills.length === 0) return null;

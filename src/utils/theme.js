@@ -27,6 +27,12 @@
 // Bestandskunden pixelgleich, obwohl dort heute mehrere Grautöne/Rahmenfarben
 // nebeneinander existieren.
 
+import {
+  accessibleTextColor,
+  parseColor,
+  recommendedTextColor,
+} from "./contrast.js";
+
 export const THEME_STYLE_ID = "allm-theme-vars";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -46,8 +52,11 @@ export const BAR_THEMES = {
   },
 };
 
-// Schrift/Icon auf Akzent-Flächen der Leiste (Icon-Kreis, Absende-Knopf).
-export const ON_ACCENT_TEXT = "#FFFFFF";
+// Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
+// Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,
+// Button der Rückmeldung): --allm-on-accent, ohne Variable Weiß wie bisher.
+// Wert: onAccentTextColor (KIE-565 Nachtrag, „Schrift auf der Kundenfarbe“).
+export const ON_ACCENT_TEXT = "var(--allmi-on-accent, #FFFFFF)";
 
 // Dunkler Satz (Kontrast geprüft, siehe README/Test AK-4): Text auf Fenster
 // 15,0:1, Antworttext auf Blase 12,8:1, Link auf Blase 7,2:1, gedämpft auf
@@ -71,7 +80,6 @@ export const DARK = {
 const DEFAULTS = {
   accent: "#01a5a9",
   userBg: "#01a5a9",
-  userText: "#FFFFFF",
   assistantBg: "#FFFFFF",
   link: "#01a5a9",
 };
@@ -85,6 +93,48 @@ export function cssValue(value, fallback = null) {
   if (!SAFE_CSS_VALUE.test(v) || /url\s*\(|expression/i.test(v))
     return fallback;
   return v;
+}
+
+// --- Schrift auf der Kundenfarbe (KIE-565 Nachtrag, Punkt 2 und 4) ---
+// userTextColor ist die Wahl im Design Center (Weiß oder Schwarz; der Server
+// liefert Schwarz als #222628). Sie gilt wie gewählt für die Nutzer-
+// Sprechblasen UND alle Flächen in Kundenfarbe. Ohne Wert gilt die
+// Empfehlung nach WCAG-Kontrast (utils/contrast.js recommendedTextColor):
+// für die Nutzerblase aus deren Fläche (userBgColor), für die übrigen
+// Flächen aus der Kundenfarbe (buttonColor); im Design Center sind beide
+// dieselbe Farbe (accentColor).
+export function userTextColorFor(settings = {}) {
+  return (
+    cssValue(settings.userTextColor) ||
+    recommendedTextColor(
+      cssValue(settings.userBgColor) ||
+        cssValue(settings.buttonColor, DEFAULTS.userBg),
+    )
+  );
+}
+export function onAccentTextColor(settings = {}) {
+  return (
+    cssValue(settings.userTextColor) ||
+    recommendedTextColor(cssValue(settings.buttonColor, DEFAULTS.accent))
+  );
+}
+
+// Text der Pillen (Startvorschläge und Folgefragen) in Kundenfarbe mit
+// mindestens 4,5:1 zur Fläche: hell auf der weißen Pille (abgedunkelt, wenn
+// nötig), dunkel auf dem Panelton (Fenster DARK.bg und Fläche DARK.surface,
+// aufgehellt, wenn nötig). Reicht die Kundenfarbe schon, bleibt es
+// var(--allmi-accent) (folgt dann auch einem --allm-accent der Seite);
+// nicht auswertbare Farbe: hell der Akzent, dunkel der Text des dunklen
+// Satzes (bisher).
+export const PILL_BG_LIGHT = "#FFFFFF";
+export function pillTextColor(settings = {}, mode = "light") {
+  const accent = cssValue(settings.buttonColor, DEFAULTS.accent);
+  const backgrounds =
+    mode === "dark" ? [DARK.bg, DARK.surface] : [PILL_BG_LIGHT];
+  const text = accessibleTextColor(accent, backgrounds);
+  if (!text) return mode === "dark" ? DARK.text : "var(--allmi-accent)";
+  const same = parseColor(text).every((v, i) => v === parseColor(accent)[i]);
+  return same ? "var(--allmi-accent)" : text;
 }
 
 // textSize: bisher Klasse `allm-text-[${textSize}px]` — die gab es im Build nur
@@ -120,8 +170,14 @@ export const THEME_VARIABLES = [
   },
   {
     name: "user-text",
-    light: (s) => cssValue(s.userTextColor, DEFAULTS.userText),
-    dark: (s) => cssValue(s.userTextColor, DEFAULTS.userText),
+    light: (s) => userTextColorFor(s),
+    dark: (s) => userTextColorFor(s),
+  },
+  // Schrift auf allen Flächen in Kundenfarbe (ON_ACCENT_TEXT)
+  {
+    name: "on-accent",
+    light: (s) => onAccentTextColor(s),
+    dark: (s) => onAccentTextColor(s),
   },
   {
     name: "assistant-bg",
@@ -228,20 +284,20 @@ export const THEME_VARIABLES = [
   { name: "bar-bg", bar: "bg" },
   { name: "bar-text", bar: "text" },
   { name: "bar-border", bar: "border" },
-  // Rand der Wunschfragen-Pillen im Panel (suggestionStyle "pills");
-  // Standard = Rand der Leiste/Chips
-  { name: "pill-border", chain: "bar-border", light: null, dark: null },
-  // Fläche der Pillen im Panel (Startvorschläge und Folgefragen): hell wie
-  // die Leiste (unverändert), dunkel im Panelton (transparent auf der
-  // Fensterfläche) statt der blau-schwarzen Glasfläche der Leiste
-  { name: "pill-bg", light: "var(--allmi-bar-bg)", dark: "transparent" },
-  // Text der Folgefragen-Pillen: hell in der Kundenfarbe (Mockup), dunkel im
-  // Text des dunklen Satzes (Kundenfarben wie #607D8B hätten auf dem dunklen
-  // Panel nur etwa 4:1); Rand bleibt die Kundenfarbe
+  // Pillen im Panel, Startvorschläge und Folgefragen gleich (KIE-565
+  // Nachtrag, Punkt 4): Rand in Kundenfarbe (folgt --allm-accent)
+  { name: "pill-border", chain: "accent", light: null, dark: null },
+  // Fläche: hell Weiß (fest, damit der Kontrast des Texts sicher ist, auch
+  // bei dunkler Leiste im hellen Fenster), dunkel im Panelton (transparent
+  // auf der Fensterfläche)
+  { name: "pill-bg", light: PILL_BG_LIGHT, dark: "transparent" },
+  // Text in Kundenfarbe mit mindestens 4,5:1 zur Fläche (pillTextColor: hell
+  // ggf. abgedunkelt, dunkel ggf. aufgehellt); Hover/Fokus füllt die Pille
+  // in Kundenfarbe, Text dann --allm-on-accent (main.jsx)
   {
     name: "pill-accent-text",
-    light: "var(--allmi-accent)",
-    dark: DARK.text,
+    light: (s) => pillTextColor(s, "light"),
+    dark: (s) => pillTextColor(s, "dark"),
   },
   // Rundung von Logo und Avatar: hell keine (wie bisher), dunkel eine
   // abgerundete Kachel, damit ein Logo mit weißem Hintergrund (z. B. das

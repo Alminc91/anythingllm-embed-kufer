@@ -14,7 +14,7 @@ import {
   layoutValidations,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
-import { applyTheme } from "@/utils/theme";
+import { applyTheme, userTextColorFor } from "@/utils/theme";
 
 // Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
@@ -57,7 +57,11 @@ export const DEFAULT_SETTINGS = {
   buttonColor: "#01a5a9", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#01a5a9", // user text bubble color
-  userTextColor: "#FFFFFF", // user text bubble text color (only "#FFFFFF" or "#000000" via admin)
+  // Schrift auf der Kundenfarbe (Nutzerblasen und alle Flächen in
+  // Kundenfarbe): Wahl im Design Center (Weiß oder Schwarz); null = Empfehlung
+  // nach WCAG-Kontrast aus der Kundenfarbe (utils/theme.js userTextColorFor,
+  // onAccentTextColor; KIE-565 Nachtrag)
+  userTextColor: null,
   assistantBgColor: "#FFFFFF", // assistant text bubble color
   linkColor: "#01a5a9", // color for links in assistant messages (Kufer accent)
   headerBgColor: null, // header background color (default: white)
@@ -265,8 +269,7 @@ export default function useGetScriptAttributes() {
       // Update module-level styles so chat bubbles use live colors
       if (finalSettings.userBgColor)
         embedderSettings.USER_STYLES.msgBg = finalSettings.userBgColor;
-      if (finalSettings.userTextColor)
-        embedderSettings.USER_STYLES.msgText = finalSettings.userTextColor;
+      embedderSettings.USER_STYLES.msgText = userTextColorFor(finalSettings);
       if (finalSettings.assistantBgColor)
         embedderSettings.ASSISTANT_STYLES.msgBg =
           finalSettings.assistantBgColor;

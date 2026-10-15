@@ -474,8 +474,9 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const pills = $$("#anything-llm-suggestion-pills button");
     expect(pills.map((b) => b.textContent)).toEqual(MSGS);
     expect($$(".msg-suggestion")).toHaveLength(0);
+    // KIE-565 Nachtrag Punkt 4: Rand in Kundenfarbe wie die Folgefragen
     expect(pills[0].style.border).toBe(
-      "1px solid var(--allmi-pill-border, #d1d5db)",
+      "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
     );
     expect(pills[0].style.borderRadius).toBe("var(--allmi-bar-radius, 999px)");
     expect($("#anything-llm-suggestion-pills").style.flexWrap).toBe("wrap");
@@ -484,14 +485,16 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(sent).toEqual(["Yoga"]);
   });
 
-  it("--allm-pill-border: eigene Variable, Standard = --allm-bar-border (hell/dunkel)", () => {
+  // KIE-565 Nachtrag Punkt 4: Standard jetzt die Kundenfarbe (vorher
+  // --allm-bar-border)
+  it("--allm-pill-border: eigene Variable, Standard = --allm-accent (hell/dunkel)", () => {
     expect(THEME_VARIABLES.some((v) => v.name === "pill-border")).toBe(true);
     for (const mode of ["light", "dark"]) {
       expect(buildThemeCss({}, mode)).toContain(
-        "--allmi-pill-border: var(--allm-pill-border, var(--allmi-bar-border));",
+        "--allmi-pill-border: var(--allm-pill-border, var(--allmi-accent));",
       );
       const vars = resolveThemeVars({}, mode);
-      expect(vars["--allm-pill-border"]).toBe(vars["--allm-bar-border"]);
+      expect(vars["--allm-pill-border"]).toBe(vars["--allm-accent"]);
     }
   });
 

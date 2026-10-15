@@ -351,15 +351,24 @@ describe("Dunkel: Pillen im Panelton, Folgefragen lesbar, Logo-Kachel (Nr. 30, B
     return (x + 0.05) / (y + 0.05);
   };
 
-  it("Theme: dunkel Pillen transparent, Folgefragen-Text im Text des dunklen Satzes (≥ 4,5:1), Logo gerundet; hell unverändert", () => {
+  // KIE-565 Nachtrag Punkt 4: Pillen-Text in Kundenfarbe mit ≥ 4,5:1 (vorher
+  // dunkel fest DARK.text, hell der Akzent auch unter 4,5:1); hell Weiß als
+  // Fläche (vorher die Leistenfläche)
+  it("Theme: dunkel Pillen transparent, Pillen-Text in Kundenfarbe ≥ 4,5:1, Logo gerundet", () => {
     const dark = resolveThemeVars({}, "dark");
     expect(dark["--allm-pill-bg"]).toBe("transparent");
-    expect(dark["--allm-pill-accent-text"]).toBe(DARK.text);
-    expect(contrast(DARK.text, DARK.surface)).toBeGreaterThanOrEqual(4.5);
+    // Standard #01a5a9 reicht auf dem dunklen Panel
+    expect(dark["--allm-pill-accent-text"]).toBe("var(--allmi-accent)");
+    const slate = resolveThemeVars({ buttonColor: "#607D8B" }, "dark");
+    expect(
+      contrast(slate["--allm-pill-accent-text"], DARK.surface),
+    ).toBeGreaterThanOrEqual(4.5);
     expect(dark["--allm-logo-radius"]).toBe("22%");
     const light = resolveThemeVars({}, "light");
-    expect(light["--allm-pill-bg"]).toBe("var(--allmi-bar-bg)");
-    expect(light["--allm-pill-accent-text"]).toBe("var(--allmi-accent)");
+    expect(light["--allm-pill-bg"]).toBe("#FFFFFF");
+    expect(
+      contrast(light["--allm-pill-accent-text"], "#FFFFFF"),
+    ).toBeGreaterThanOrEqual(4.5);
     expect(light["--allm-logo-radius"]).toBe(null);
     expect(buildThemeCss({}, "light")).toContain(
       "--allmi-logo-radius: var(--allm-logo-radius);",
@@ -370,7 +379,7 @@ describe("Dunkel: Pillen im Panelton, Folgefragen lesbar, Logo-Kachel (Nr. 30, B
     render(
       <div>
         <Pill text="Start" onClick={() => {}} />
-        <Pill text="Folge" variant="accent" onClick={() => {}} />
+        <Pill text="Folge" onClick={() => {}} />
       </div>,
     );
     const [start, follow] = [...container.querySelectorAll("button")];
@@ -454,13 +463,17 @@ const answer = (extra = {}) => ({
   ...extra,
 });
 
-describe("Kurskarten in der Chatblase: Teaser 2 Zeilen (Nr. 35, K-1)", () => {
-  it("Chatblase (ohne Inline-Kontext): Rasterkarte mit Teaser höchstens 2 Zeilen; Inline 3", () => {
+// KIE-565 Nachtrag Punkt 5: in der Chatblase keine Zeilenklammer mehr
+// (vorher 2 Zeilen, Teaser endete in jeder gemessenen Größe mit „…“)
+describe("Kurskarten in der Chatblase: Teaser ganz (Nr. 35, K-1, Nachtrag 5)", () => {
+  it("Chatblase (ohne Inline-Kontext): Rasterkarte mit ganzem Teaser; Inline 3", () => {
     render(<ChatHistory settings={ABOVE} history={[user, answer()]} />);
     const t = [...container.querySelectorAll(".allm-course-teaser")];
     expect(t).toHaveLength(2);
     for (const el of t)
-      expect(el.style.webkitLineClamp || el.style.WebkitLineClamp).toBe("2");
+      expect(el.style.webkitLineClamp || el.style.WebkitLineClamp).toBe(
+        "none",
+      );
     act(() => root.unmount());
     root = createRoot(container);
     render(

@@ -32,6 +32,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-button-color` | `#607D8B` | Farbe des Chat-Buttons (Hex) |
 | `data-button-outline` | `null` | Rahmen um Chat-Button: `none`, `white`, `black`. Nützlich wenn Button-Farbe dem Hintergrund ähnelt. |
 | `data-user-bg-color` | `#607D8B` | Hintergrundfarbe User-Nachrichten |
+| `data-user-text-color` | `null` | Schrift auf der Kundenfarbe: `#FFFFFF` oder `#000000` (Design Center). Gilt wie gewählt für Nutzer-Sprechblasen und alle Flächen in Kundenfarbe (Chat-Button, Senden-Button, gefüllte Pillen beim Hover). Ohne Wert die Empfehlung nach WCAG-Kontrast aus der Kundenfarbe (höherer Kontrast zu Weiß bzw. Schwarz, Gleichstand Weiß) |
 | `data-assistant-bg-color` | `#2563eb` | Hintergrundfarbe Bot-Nachrichten |
 | `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |
 | `data-header-bg-color` | `null` | Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
@@ -88,7 +89,7 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-support-email` | `info@kufer.de` | E-Mail für Support-Anfragen |
 | `data-username` | `null` | Anzeigename des Benutzers |
 | `data-default-messages` | `[]` | Vordefinierte Schnellantworten (kommagetrennt) |
-| `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste), in Chatblase und Inline (Entscheidung D1, KIE-565; der Server liefert `auto` für beide Darstellungen). In der Chatblase Teaser höchstens 2 Zeilen. Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
+| `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste), in Chatblase und Inline (Entscheidung D1, KIE-565; der Server liefert `auto` für beide Darstellungen). In der Chatblase Teaser ganz (ohne Zeilenbegrenzung), Inline bis 3 Zeilen. Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
 | `data-course-cards-position` | `above` | `below` \| `above`: Kurskarten unter bzw. über der Antwort. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
 | `data-suggestion-style` | `pills` (fest) | Seit Design Center vereinfacht (10/2026) fest `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt); Attribut und `visual_config` wirken nicht mehr |
 | `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, max. 300 Zeichen, sonst `data-greeting`, sonst Standard) |

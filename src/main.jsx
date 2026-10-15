@@ -4,7 +4,11 @@ import App from "./App.jsx";
 import "./index.css";
 import { parseStylesSrc } from "./utils/constants.js";
 import { initI18n } from "./i18n.js";
-import { ON_ACCENT_TEXT, THEME_STYLE_ID } from "./utils/theme.js";
+import {
+  ON_ACCENT_TEXT,
+  THEME_STYLE_ID,
+  userTextColorFor,
+} from "./utils/theme.js";
 
 // CSS Strings für Shadow DOM (von Head.jsx übernommen)
 const hljsCss = `
@@ -29,10 +33,12 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Teaser-Platzhalter (.allm-course-teaser-pending, Karten oben im Stream):
 // Opacity 0,45 <-> 0,9 in 1,6 s, ruhig (0,7) bei prefers-reduced-motion.
 // Zeilen-Karten (.allm-course-card-row) nutzen Hover/Fokus der Rasterkarten.
-// Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
-// Tastaturfokus füllen im Akzent, Text ON_ACCENT_TEXT (Farben stehen inline ->
-// !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
-// sonst 2px Akzent (!important gegen die allgemeine Fokus-Regel mit ID).
+// Pillen im Panel (.allm-pill-accent, Startvorschläge und Folgefragen, eine
+// Komponente Pill): Hover und Tastaturfokus füllen in Kundenfarbe, Text
+// ON_ACCENT_TEXT = --allm-on-accent (Schrift auf der Kundenfarbe; Farben
+// stehen inline -> !important), Übergang --allm-transition; Fokusring
+// --allm-focus-ring, sonst 2px Akzent (!important gegen die allgemeine
+// Fokus-Regel mit ID).
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
 const customCss = `
   /**
@@ -404,7 +410,7 @@ export const embedderSettings = {
   themeStyle, // <style> mit den CSS-Variablen (utils/theme.js)
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
-    msgText: scriptSettings?.userTextColor ?? "#FFFFFF",
+    msgText: userTextColorFor(scriptSettings || {}),
     // Rundung/Textfarbe kommen aus den CSS-Variablen (bubbleRadius in utils/theme.js)
     base: `allm-mx-[20px]`,
   },

@@ -88,11 +88,16 @@ export const ROW_CARD_MIN_PX = 480;
 // Pille, Polsterung); schmaler 3 Zeilen. Raster immer 3.
 export const ROW_TEASER_2_LINES_MIN_PX = 680;
 const rowTeaserLines = (width) => (width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3);
-// Rasterkarte: 3 Zeilen; in der Chatblase 2 (KIE-565, Kurskarten in der
-// Chatblase: Karten im schmalen Fenster kompakter, vier Karten passten sonst
-// mit ≈ 160 bis 200 px je Karte nicht annähernd ins Fenster)
+// Rasterkarte: 3 Zeilen (Inline). In der Chatblase OHNE Zeilenklammer
+// (KIE-565 Nachtrag, Punkt 5): Die Karten sind dort nur 200 bis 390 px
+// breit (Fenster 25 % bzw. mobil volle Breite), ein Teaser von 15 bis 20
+// Wörtern braucht 3 bis 7 Zeilen; die frühere Klammer auf 2 Zeilen zeigte
+// deshalb in jeder gemessenen Größe nur den Anfang mit „…“. Die Länge
+// begrenzt der Server bzw. teaserMap (TEASER_MAX_LEN, 200 Zeichen). Der
+// Platzhalter reserviert in der Chatblase 3 Zeilen.
 export const GRID_TEASER_LINES = 3;
-export const BUBBLE_GRID_TEASER_LINES = 2;
+export const BUBBLE_TEASER_LINES = null;
+export const BUBBLE_TEASER_PENDING_LINES = 3;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
 // "einblenden" fällt einmal beim Erscheinen (kein erneutes Einblenden bei
@@ -119,7 +124,10 @@ function Teaser({
       style={{
         ...teaserStyle,
         ...(placement || {}),
-        WebkitLineClamp: lines,
+        // lines null (Chatblase): ganzer Teaser, keine Klammer
+        ...(lines
+          ? { WebkitLineClamp: lines }
+          : { display: "block", WebkitLineClamp: "none", overflow: "visible" }),
         ...(reserve > 0 && { minHeight: `${reserve * TEASER_LINE_PX}px` }),
       }}
     >
@@ -179,6 +187,7 @@ function Card({
   teaserArrivedAt = null,
   pending = null,
   lines = GRID_TEASER_LINES,
+  pendingLines = lines,
 }) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
@@ -186,7 +195,7 @@ function Card({
     teaser,
     pending,
     fallback: card.fallback,
-    lines,
+    lines: pendingLines,
   });
   // Beschreibung = die sichtbaren Zeilen (Name = Titel per aria-label)
   const describedBy = [
@@ -246,7 +255,7 @@ function Card({
             reserve={reserve}
           />
         )}
-        {showPending && <TeaserPending text={pending} lines={lines} />}
+        {showPending && <TeaserPending text={pending} lines={pendingLines} />}
         {details && (
           <span
             id={`${id}-d`}
@@ -302,6 +311,7 @@ function CardRow({
   teaserArrivedAt = null,
   pending = null,
   lines = 2,
+  pendingLines = lines,
 }) {
   const id = useId();
   const lead = rowLead(card);
@@ -310,7 +320,7 @@ function CardRow({
     teaser,
     pending,
     fallback: card.fallback,
-    lines,
+    lines: pendingLines,
   });
   const describedBy = [
     lead && `${id}-s`,
@@ -433,7 +443,7 @@ function CardRow({
         {showPending && (
           <TeaserPending
             text={pending}
-            lines={lines}
+            lines={pendingLines}
             placement={{
               gridColumn: contentCol,
               gridRow: headRows + (showTeaser ? 2 : 1),
@@ -547,7 +557,13 @@ function CardList({
   const wide = width >= ROW_CARD_MIN_PX;
   const Item = rows && wide ? CardRow : Card;
   const { inline } = useEmbedMode();
-  const gridLines = inline ? GRID_TEASER_LINES : BUBBLE_GRID_TEASER_LINES;
+  // Inline: Klammer nach Kartenart/-breite; Chatblase: ganzer Teaser
+  const lines = !inline
+    ? BUBBLE_TEASER_LINES
+    : Item === CardRow
+      ? rowTeaserLines(width)
+      : GRID_TEASER_LINES;
+  const pendingLines = lines ?? BUBBLE_TEASER_PENDING_LINES;
   return (
     <ul
       ref={ref}
@@ -569,7 +585,8 @@ function CardList({
           teaser={teasers?.get(card.key)}
           teaserArrivedAt={teaserArrivedAt}
           pending={pending}
-          lines={Item === CardRow ? rowTeaserLines(width) : gridLines}
+          lines={lines}
+          pendingLines={pendingLines}
         />
       ))}
     </ul>

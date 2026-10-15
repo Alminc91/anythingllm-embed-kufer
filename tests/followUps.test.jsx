@@ -456,7 +456,9 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     expect($$("#anything-llm-follow-ups")).toHaveLength(0);
   });
 
-  it("Befund 5: gemeinsame Pill — Folgefragen im Akzent mit Umbruch, Panel-Pillen neutral mit …", () => {
+  // KIE-565 Nachtrag Punkt 4: Startvorschläge sehen aus wie die Folgefragen
+  // (vorher: Panel-Pillen neutral, einzeilig mit …)
+  it("Befund 5: gemeinsame Pill, Folgefragen und Panel-Pillen im Akzent mit Umbruch", () => {
     render(<ChatHistory settings={PILLS} history={HISTORY} />);
     for (const b of pills()) {
       expect(b.className).toContain("allm-inline-chip");
@@ -473,12 +475,13 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     const [p] = $$("#anything-llm-suggestion-pills button");
     expect(p.className).toContain("allm-inline-chip");
     expect(p.style.border).toContain("--allmi-pill-border");
-    expect(p.style.color).toContain("--allmi-bar-text");
-    expect(p.style.textOverflow).toBe("ellipsis");
-    expect(p.style.whiteSpace).toBe("nowrap");
+    expect(p.style.border).toContain("--allmi-accent");
+    expect(p.style.color).toContain("--allmi-pill-accent-text");
+    expect(p.style.wordBreak).toBe("break-word");
+    expect(p.style.textOverflow).toBe("");
   });
 
-  it("AK-1: Hover/Fokus füllt im Akzent, Text weiß — Klasse nur an Folgefragen-Pillen, Regel im Widget-CSS", async () => {
+  it("AK-1: Hover/Fokus füllt im Akzent, Text in der Schrift auf der Kundenfarbe, Klasse an allen Panel-Pillen, Regel im Widget-CSS", async () => {
     render(<ChatHistory settings={PILLS} history={HISTORY} />);
     for (const b of pills())
       expect(b.className.split(" ")).toEqual(
@@ -489,9 +492,10 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
         settings={{ suggestionStyle: "pills", defaultMessages: ["Kurse?"] }}
       />,
     );
+    // KIE-565 Nachtrag Punkt 4: auch die Startvorschläge
     expect(
       $$("#anything-llm-suggestion-pills button")[0].className,
-    ).not.toContain("allm-pill-accent");
+    ).toContain("allm-pill-accent");
     // CSS-Regel (main.jsx, customCss im Shadow DOM): Hover + Tastaturfokus
     // Hintergrund/Rand Akzent, Text weiß, Übergang --allmi-transition,
     // Fokusring sichtbar
@@ -503,11 +507,12 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     expect(css).toContain(
       ".allm-pill-accent:hover, .allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
     );
-    // Textfarbe aus utils/theme.js (ON_ACCENT_TEXT, weiß), nicht fest
+    // Textfarbe aus utils/theme.js (ON_ACCENT_TEXT = --allm-on-accent,
+    // ohne Variable weiß), nicht fest
     const { ON_ACCENT_TEXT } = await import("../src/utils/theme.js");
-    expect(ON_ACCENT_TEXT).toBe("#FFFFFF");
-    expect(css).toContain(
-      'import { ON_ACCENT_TEXT, THEME_STYLE_ID } from "./utils/theme.js";',
+    expect(ON_ACCENT_TEXT).toBe("var(--allmi-on-accent, #FFFFFF)");
+    expect(css).toMatch(
+      /import \{ ON_ACCENT_TEXT, THEME_STYLE_ID,[^}]*\} from "\.\/utils\/theme\.js";/,
     );
     expect(css).toMatch(
       /\.allm-inline-chip\.allm-pill-accent \{ transition: background-color var\(--allmi-transition, 200ms\)[^}]*color var\(--allmi-transition, 200ms\)/,

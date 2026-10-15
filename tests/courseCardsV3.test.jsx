@@ -820,14 +820,17 @@ describe("Zeilen-Karten (AK-1)", () => {
   });
 
   it("Teaser in der Zeilen-Karte: unter Meta, höchstens 2 Zeilen; Raster unverändert 3", () => {
+    // Inline-Modus (Chatblase: Teaser ohne Klammer, KIE-565 Nachtrag Punkt 5)
     const el = mount(
-      h(ChatHistory, {
-        settings: ROWS_ABOVE,
-        history: [
-          user,
-          answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-        ],
-      }),
+      inl(
+        h(ChatHistory, {
+          settings: ROWS_ABOVE,
+          history: [
+            user,
+            answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+          ],
+        }),
+      ),
     );
     const teaser = el.querySelector("[data-course-row] .allm-course-teaser");
     expect(teaser.textContent).toBe(TEASER_YOGA);
