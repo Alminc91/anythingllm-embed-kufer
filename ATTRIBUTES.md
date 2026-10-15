@@ -120,7 +120,9 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 |----------|---------|--------------|
 | `data-display-chatbot-bubbles` | `true` | Welcome-Bubbles anzeigen |
 | `data-chatbot-bubbles-messages` | `[]` | Bubble-Texte (kommagetrennt) |
-| `data-bubble-persistence` | `localStorage` | Speicherart: `localStorage` (1x pro Browser) oder `sessionStorage` (1x pro Tab) |
+| `data-bubble-persistence` | `localStorage` | Speicherart: `localStorage` (1x pro Browser) oder `sessionStorage` (1x pro Tab). Wirkt nur, solange der Server keine `welcomeBubbles*`-Werte liefert |
+
+**Willkommensblasen je Gerät (KIE-568, nur Design Center):** `visual_config.welcomeBubblesDesktop` und `visual_config.welcomeBubblesMobile`, je `off` (keine Blasen, nur der Chat-Button) \| `first` (Standard, beim ersten Besuch: `localStorage`, nach Schließen der Blasen oder Öffnen des Chats nicht mehr) \| `every` (bei jedem Besuch: einmal je Browser-Tab per `sessionStorage`, Unterseiten im selben Tab zeigen sie nicht erneut). Fehlend oder ungültig = `first`. Handy = Fensterbreite < 768 px beim Laden. Kein Script-Attribut: allein der Server-Wert zählt.
 
 ---
 

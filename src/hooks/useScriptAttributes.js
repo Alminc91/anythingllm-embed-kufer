@@ -180,6 +180,13 @@ export const DEFAULT_SETTINGS = {
   defaultMessages: [], // list of strings for default messages.
   displayChatbotBubbles: true, // controls whether welcome message bubbles are shown
   chatbotBubblesMessages: [], // messages to display in welcome bubbles
+  // Willkommensblasen je Gerät (KIE-568, Design Center „Willkommensblasen
+  // anzeigen“): "off" | "first" (beim ersten Besuch, localStorage) | "every"
+  // (bei jedem Besuch, einmal je Browser-Tab). Allein der Server-Wert zählt
+  // (utils/layout.js applyFixedStandards), Handy = Viewport < 768 px beim
+  // Laden (utils/platform.js isPhoneViewport).
+  welcomeBubblesDesktop: "first",
+  welcomeBubblesMobile: "first",
 
   // audio features
   enableStt: true, // true/false - show STT microphone if server supports it

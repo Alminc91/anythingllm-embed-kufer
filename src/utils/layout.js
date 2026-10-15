@@ -75,6 +75,12 @@ export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
 // (Fork >= 7.14) liefert sie als Chunk "followUps" bzw. im Verlauf.
 export const FOLLOW_UPS_VALUES = ["none", "pills"];
+// Willkommensblasen neben dem geschlossenen Chat-Button (nur Chatblase), je
+// Gerät (KIE-568): "off" = keine Blasen, "first" = beim ersten Besuch
+// (localStorage, wie bisher), "every" = bei jedem Besuch (einmal je
+// Browser-Tab, sessionStorage)
+export const WELCOME_BUBBLES_VALUES = ["off", "first", "every"];
+export const DEFAULT_WELCOME_BUBBLES = "first";
 export const PANEL_PILL_TEXT_MAX = 60; // längere Wunschfragen: gekürzt mit …
 export const GREETING_BUBBLE_TEXT_MAX_LEN = 300;
 export const ASSISTANT_SUBTITLE_MAX_LEN = 60;
@@ -366,6 +372,24 @@ export function privacyNoticeSetting(serverValue) {
     : "bubble";
 }
 
+// Willkommensblasen je Gerät (KIE-568, Nutzer 15.10.2026): wie der
+// Datenschutz-Hinweis zählt allein der Wert vom Server (Design Center
+// gewinnt, ein Script-Attribut data-welcome-bubbles-* wirkt nicht).
+// Fehlend oder ungültig = "first" (bisheriges Verhalten). undefined, wenn der
+// Server keinen gültigen Wert geliefert hat (applyFixedStandards).
+export function welcomeBubblesSetting(serverValue) {
+  return oneOf(serverValue, WELCOME_BUBBLES_VALUES);
+}
+
+// Wirksamer Modus der Willkommensblasen für das beim Laden erkannte Gerät
+// (phone = Viewport < 768 px, utils/platform.js isPhoneViewport).
+export function welcomeBubblesMode(settings = {}, phone = false) {
+  const value = phone
+    ? settings?.welcomeBubblesMobile
+    : settings?.welcomeBubblesDesktop;
+  return oneOf(value, WELCOME_BUBBLES_VALUES) || DEFAULT_WELCOME_BUBBLES;
+}
+
 // Einmal beim Laden (loadEmbedSettings): Inline-Standards ergänzen, feste
 // Standards setzen, Datenschutz-Hinweis aus dem Server-Wert (server =
 // geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
@@ -382,6 +406,17 @@ export function applyFixedStandards(
     ...FIXED_STANDARDS,
     privacyNotice: privacyNoticeSetting(server?.privacyNotice),
   };
+  // Willkommensblasen: nur der Server-Wert zählt. Ohne gültigen Server-Wert
+  // (älterer Server, keine Antwort) "first" wie bisher; dann bleibt auch ein
+  // altes data-bubble-persistence="sessionStorage" wirksam. Mit Server-Wert
+  // gilt allein er ("first" = localStorage), das Altattribut fällt weg.
+  let serverGaveWelcome = false;
+  for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"]) {
+    const value = welcomeBubblesSetting(server?.[key]);
+    if (value) serverGaveWelcome = true;
+    out[key] = value || DEFAULT_WELCOME_BUBBLES;
+  }
+  if (serverGaveWelcome) delete out.bubblePersistence;
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
       if (!given.has(key)) out[key] = value;
@@ -539,6 +574,10 @@ export const layoutValidations = {
   // Folgefragen-Pillen: ungültig -> verworfen (Standard "none"), Warnung wie
   // oben (warnInvalidInlineEnums)
   followUps: (v) => oneOf(v, FOLLOW_UPS_VALUES),
+  // Willkommensblasen je Gerät: ungültig -> verworfen -> "first"
+  // (wirksam nur der Server-Wert, applyFixedStandards)
+  welcomeBubblesDesktop: (v) => oneOf(v, WELCOME_BUBBLES_VALUES),
+  welcomeBubblesMobile: (v) => oneOf(v, WELCOME_BUBBLES_VALUES),
   disclaimerText: (v) => shortText(v, DISCLAIMER_TEXT_MAX_LEN),
   // Theme des ganzen Fensters (CSS-Variablen, utils/theme.js). Ungültig ->
   // eine Warnung, Feld fällt weg -> nächstniedrigerer Wert (Standard "light").

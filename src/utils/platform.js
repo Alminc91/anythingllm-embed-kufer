@@ -48,3 +48,15 @@ export function isCoarsePointer() {
     return false;
   }
 }
+
+/**
+ * Handy nach Fensterbreite (KIE-568, Willkommensblasen je Gerät): schmaler
+ * Viewport < 768 px wie die Mobil-Breakpoints des Widgets (Vollbild-Chat,
+ * isTouchDevice). Wird einmal beim Laden ausgewertet; ein späteres Drehen
+ * oder Verkleinern ändert den Modus nicht.
+ */
+export const PHONE_MAX_WIDTH_PX = 767;
+export function isPhoneViewport() {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth <= PHONE_MAX_WIDTH_PX;
+}

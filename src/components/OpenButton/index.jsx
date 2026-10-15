@@ -6,8 +6,11 @@ import {
   MagnifyingGlass,
   MagicWand,
 } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import useBubbleDismissal from "@/hooks/useBubbleDismissal";
 import { ON_ACCENT_TEXT } from "@/utils/theme";
+import { welcomeBubblesMode } from "@/utils/layout";
+import { isPhoneViewport } from "@/utils/platform";
 
 const CHAT_ICONS = {
   plus: Plus,
@@ -35,8 +38,25 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
     settings?.chatbotBubblesMessages?.length > 0
       ? settings.chatbotBubblesMessages
       : defaultBubbleMessages;
-  const { bubblesVisible, dismissBubbles, dismissBubblesOnChatOpen } =
-    useBubbleDismissal(settings);
+  // Willkommensblasen je Gerät (KIE-568): Handy/Desktop einmal beim Laden
+  // nach der Fensterbreite bestimmt, Modus off/first/every vom Server
+  const [phone] = useState(isPhoneViewport);
+  const bubbleMode = welcomeBubblesMode(settings, phone);
+  const {
+    bubblesVisible,
+    dismissBubbles,
+    dismissBubblesOnChatOpen,
+    markBubblesShown,
+  } = useBubbleDismissal(settings, bubbleMode);
+  const showBubbles =
+    !isOpen &&
+    bubbleMode !== "off" &&
+    !!settings.displayChatbotBubbles &&
+    bubblesVisible;
+  // "Bei jedem Besuch": gezeigt -> im selben Tab nicht erneut
+  useEffect(() => {
+    if (showBubbles) markBubblesShown();
+  }, [showBubbles]);
 
   // Auto-detect bubble direction based on button position to prevent overflow
   const position = settings?.position || "bottom-right";
@@ -63,8 +83,9 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
   return (
     <div className="allm-relative">
       {/* Welcome message bubbles */}
-      {settings.displayChatbotBubbles && bubblesVisible && (
+      {showBubbles && (
         <div
+          data-welcome-bubbles={bubbleMode}
           className={bubbleContainerClasses}
           onClick={() => {
             dismissBubblesOnChatOpen();
