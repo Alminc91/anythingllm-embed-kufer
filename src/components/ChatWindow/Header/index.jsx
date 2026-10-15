@@ -17,7 +17,6 @@ import {
   HEADER_STYLE,
   headerButtonClass,
 } from "@/utils/theme";
-import { panelTexts } from "@/utils/layout";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -176,11 +175,7 @@ export default function ChatWindowHeader({
       >
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
-          style={
-            settings.onlineDot === true
-              ? { ...getIconContainerStyle(), position: "relative" }
-              : getIconContainerStyle()
-          }
+          style={getIconContainerStyle()}
         >
           <img
             src={iconUrl ?? AnythingLLMIcon}
@@ -193,9 +188,6 @@ export default function ChatWindowHeader({
                 "max-width var(--allmi-transition, 200ms), max-height var(--allmi-transition, 200ms)",
             }}
           />
-          {settings.onlineDot === true && (
-            <OnlineDot label={panelTexts(settings).online} />
-          )}
         </div>
         {settings.assistantSubtitle ? (
           <BrandWithSubtitle settings={settings} compact={compact} />
@@ -249,32 +241,9 @@ export default function ChatWindowHeader({
   );
 }
 
-// Online-Punkt (onlineDot): rein dekorativ, kein Status-Abruf; für
-// Screenreader verborgen, Tooltip „online“ für Maus-Nutzer. Der Ring trennt
-// den Punkt vom Icon in der Farbe der Kopfzeile: --allmi-header-bg über
-// --allmi-surface (erster Schatten liegt oben) — ohne Header-Farbe
-// (transparent) also die Fensterfläche, mit Header-Farbe bzw. dunklem Theme
-// deren Farbe.
-function OnlineDot({ label }) {
-  return (
-    <span
-      aria-hidden="true"
-      title={label}
-      data-online-dot=""
-      style={{
-        position: "absolute",
-        right: "0px",
-        bottom: "0px",
-        width: "8px",
-        height: "8px",
-        borderRadius: "999px",
-        backgroundColor: "#3BB273",
-        boxShadow:
-          "0 0 0 2px var(--allmi-header-bg, transparent), 0 0 0 2px var(--allmi-surface, #FFFFFF)",
-      }}
-    />
-  );
-}
+// Kein Online-Punkt mehr (Design Center vereinfacht, 15.10.2026): er wirkte
+// wie ein menschlicher Live-Chat; onlineDot aus Script/Konfiguration wird
+// ignoriert (utils/layout.js FIXED_STANDARDS).
 
 // Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
 // ohne Untertitel bleibt die bisherige einzeilige Darstellung.

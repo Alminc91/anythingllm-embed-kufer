@@ -10,6 +10,7 @@ import ChatService from "@/models/chatService";
 import { isIOS, isTouchDevice } from "@/utils/platform";
 import useEmbedMode from "@/hooks/useEmbedMode";
 import { embedderSettings } from "@/main";
+import { panelTexts } from "@/utils/layout";
 
 // iOS-only: sticky-Eingabezeile auf eigene Compositing-Ebene zwingen (WebKit-Fix).
 // Auf Desktop weggelassen, da es dort ein Paint-Flackern beim Streaming verursacht.
@@ -269,7 +270,10 @@ export default function PromptInput({
                   margin: "0",
                 }}
                 className="allm-font-sans allm-border-none allm-cursor-text allm-max-h-[100px] allm-text-[16px] allm-w-full allm-text-[color:var(--allmi-input-text,#000)] allm-bg-transparent placeholder:allm-text-[color:var(--allmi-text-muted,#1e293b99)] allm-resize-none active:allm-outline-none focus:allm-outline-none allm-flex-grow"
-                placeholder={settings.sendMessageText || t("chat.send-message")}
+                placeholder={
+                  settings.sendMessageText ||
+                  panelTexts(settings).inputPlaceholder
+                }
                 id="message-input"
               />
 

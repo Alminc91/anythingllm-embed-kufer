@@ -699,17 +699,23 @@ const streaming = (extra = {}) =>
   });
 
 describe("Zeilen-Karten (AK-1)", () => {
-  it("Setting: Script-Attribut/visual_config grid|rows, sonst grid (mit Warnung)", async () => {
+  // Standard seit Design Center vereinfacht (15.10.2026) "rows" statt "grid"
+  // (bewusste Änderung, wie die Demo); die Komponente selbst fällt ohne Wert
+  // weiter auf "grid" zurück (courseCardsLayout()).
+  it("Setting: Script-Attribut/visual_config grid|rows, sonst rows (mit Warnung)", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const load = (dataset, server = {}) =>
       loadEmbedSettings(
         { embedId: "e", baseApiUrl: "https://x.test/api/embed", ...dataset },
         vi.fn(async () => ({ ok: true, json: async () => server })),
       );
-    expect((await load({})).courseCardsLayout).toBe("grid");
-    expect((await load({ courseCardsLayout: " Rows " })).courseCardsLayout).toBe(
-      "rows",
-    );
+    expect((await load({})).courseCardsLayout).toBe("rows");
+    expect(
+      (await load({ courseCardsLayout: " Grid " })).courseCardsLayout,
+    ).toBe("grid");
+    expect(
+      (await load({ courseCardsLayout: " Rows " })).courseCardsLayout,
+    ).toBe("rows");
     expect(
       (await load({}, { courseCardsLayout: "rows" })).courseCardsLayout,
     ).toBe("rows");
@@ -720,7 +726,7 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(warn).not.toHaveBeenCalled();
     expect(
       (await load({ courseCardsLayout: "kacheln" })).courseCardsLayout,
-    ).toBe("grid");
+    ).toBe("rows");
     expect(warn.mock.calls.flat().join(" ")).toContain("courseCardsLayout");
     expect(courseCardsLayout({ courseCardsLayout: "list" })).toBe("grid");
     expect(courseCardsLayout(undefined)).toBe("grid");

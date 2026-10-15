@@ -172,19 +172,21 @@ describe("Karten-Marker im Text (Abwehr in der Tiefe)", () => {
 
 describe("Settings: courseCardsPosition", () => {
   const ok = (json) => ({ ok: true, json: async () => json });
-  it("Standard below; data-course-cards-position=above; visual_config gewinnt; ungültig verworfen", async () => {
+  // Standard seit Design Center vereinfacht (15.10.2026) "above" statt
+  // "below" (bewusste Änderung: Karten zuerst, danach der kurze Text)
+  it("Standard above; data-course-cards-position=below; visual_config gewinnt; ungültig verworfen", async () => {
     const base = { embedId: "e", baseApiUrl: "https://x/api/embed" };
     expect(
       (await loadEmbedSettings(base, async () => ok({}))).courseCardsPosition,
-    ).toBe("below");
+    ).toBe("above");
     expect(
       (
         await loadEmbedSettings(
-          { ...base, courseCardsPosition: "above" },
+          { ...base, courseCardsPosition: "below" },
           async () => ok({}),
         )
       ).courseCardsPosition,
-    ).toBe("above");
+    ).toBe("below");
     expect(
       (
         await loadEmbedSettings(
@@ -200,7 +202,7 @@ describe("Settings: courseCardsPosition", () => {
           async () => ok({}),
         )
       ).courseCardsPosition,
-    ).toBe("below");
+    ).toBe("above");
   });
 });
 

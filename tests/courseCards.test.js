@@ -58,10 +58,17 @@ describe("Settings: courseCards", () => {
   });
   const base = { embedId: "e", baseApiUrl: "https://x.test/api/embed" };
 
-  it("Standard off; data-course-cards=auto; visual_config gewinnt; ungültig verworfen", async () => {
+  // Standard seit Design Center vereinfacht (15.10.2026) "auto" statt "off"
+  // (bewusste Änderung: Kurskarten sind fester Standard, der Server erzwingt
+  // sie); Script und Server können weiterhin "off" liefern.
+  it("Standard auto; data-course-cards=auto; visual_config gewinnt; ungültig verworfen", async () => {
     expect((await loadEmbedSettings(base, fetchJson({}))).courseCards).toBe(
-      "off",
+      "auto",
     );
+    expect(
+      (await loadEmbedSettings({ ...base, courseCards: "off" }, fetchJson({})))
+        .courseCards,
+    ).toBe("off");
     expect(
       (await loadEmbedSettings({ ...base, courseCards: "AUTO" }, fetchJson({})))
         .courseCards,
@@ -81,7 +88,7 @@ describe("Settings: courseCards", () => {
     expect(
       (await loadEmbedSettings({ ...base, courseCards: "yes" }, fetchJson({})))
         .courseCards,
-    ).toBe("off");
+    ).toBe("auto");
   });
 });
 

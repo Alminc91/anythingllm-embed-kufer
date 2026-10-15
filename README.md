@@ -78,6 +78,18 @@ REQUIRED data attributes:
 
 ## `<script>` Customization Options
 
+**Feste Standards (Design Center vereinfacht, 10/2026)**
+
+Das neue Design ist fest eingebaut; Script-Attribute und `visual_config` ändern daran nichts mehr (alte Werte bleiben gespeichert, wirken aber nicht; der Server erzwingt dieselben Werte, das Widget sichert sie zusätzlich ab, `src/utils/layout.js` `FIXED_STANDARDS`):
+
+- Begrüßung immer als Blase (`greetingStyle` `bubble`), Text: `greetingBubbleText`, sonst `greeting`, sonst Standard „Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?“.
+- Datenschutz-Hinweis immer als eigene zweite Blase darunter (`privacyNotice` `bubble`): Überschrift `privacyTitle` (leer = keine, Standard „Datenschutz“), freier Text `privacyText` (Zeilen mit „•“ oder „-“ werden Aufzählungspunkte, andere Zeilen Absätze; Text ohne solche Zeilen = altes Format, ein Punkt je Zeile bzw. `|`), Link `privacyUrl` („Datenschutzerklärung“).
+- Startvorschläge und Folgefragen als Pillen (`suggestionStyle`/`followUps` `pills`).
+- KI-Hinweis immer unter der Eingabe, Text fest „KI kann Fehler machen. Bitte überprüfen Sie die Antworten.“ (`en`: „AI can make mistakes. Please double-check the answers.“).
+- Kein Online-Punkt (`onlineDot` wird ignoriert).
+- Standard (überschreibbar, der Server liefert die festen Werte): Kurskarten `auto`, zuerst die Karten, danach der kurze Text (`courseCardsPosition` `above`), Zeilen-Karten (`courseCardsLayout` `rows`). Inline ohne eigene Angabe wie die Demo: Eingabe-Leiste (`inlineInput`), Öffnen beim Klick (`inlineOpenOn` `focus`), schwebend (`inlineLayout` `overlay`), Effekt `morph`, Höhe `520px`, eingeklappt.
+- Frühere Standardtexte (alter Datenschutzsatz bzw. Design-Center-Begrüßung in `greeting`, alter Text der Begrüßungsblase, „Datenschutz:“, Platzhalter „Wie kann ich Ihnen helfen?“) gelten als nicht gesetzt (`LEGACY_DEFAULT_TEXTS`); der neue Standard greift.
+
 **LLM Overrides**
 
 - `data-prompt` — Override the chat window with a custom system prompt. This is not visible to the user. If undefined it will use the embeds attached workspace system prompt.

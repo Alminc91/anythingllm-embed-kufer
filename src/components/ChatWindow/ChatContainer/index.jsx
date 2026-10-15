@@ -320,9 +320,7 @@ export default function ChatContainer({
           buttonDisabled={loadingResponse || privacyLocked}
           suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
-        {settings?.disclaimer === "footer" && (
-          <AiDisclaimer settings={settings} />
-        )}
+        <AiDisclaimer settings={settings} />
       </div>
     </div>
   );
@@ -355,26 +353,26 @@ export function appendDraft(current, draft) {
   return `${current.replace(/\s+$/, "")} ${draft}`;
 }
 
-// Fester KI-Hinweis unter dem Eingabefeld (disclaimer "footer"), in allen
-// Modi. Text: disclaimerText, sonst der Standard der Panel-Texte
-// (utils/layout.js panelTexts: "en" englisch, sonst deutsch — dieselbe Regel
-// wie Begrüßungsblase und Datenschutz-Hinweis). Nur Text, nicht anklickbar.
+// Fester KI-Hinweis unter dem Eingabefeld, in allen Modi und immer (Design
+// Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
+// disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
+// Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
+// sonst deutsch). Eine dezente Zeile, nur Text, nicht anklickbar.
 function AiDisclaimer({ settings }) {
-  const text = settings.disclaimerText || panelTexts(settings).aiDisclaimer;
   return (
     <p
       id="anything-llm-ai-disclaimer"
       role="note"
       className="allm-font-sans"
       style={{
-        margin: "6px 12px 0",
-        fontSize: "11.5px",
+        margin: "4px 8px 0",
+        fontSize: "11px",
         lineHeight: 1.4,
         textAlign: "center",
         color: "var(--allmi-text-muted, #6b7280)",
       }}
     >
-      {text}
+      {panelTexts(settings || {}).aiDisclaimer}
     </p>
   );
 }

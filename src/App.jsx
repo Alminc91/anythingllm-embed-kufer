@@ -93,10 +93,13 @@ export default function App() {
     };
   }, [embedSettings.loaded]);
 
-  // Blase (auch Inline ohne Platzhalter): inlineInput hat keine Wirkung ->
-  // eine Warnzeile, sobald die Darstellung feststeht.
+  // Blase: inlineInput hat keine Wirkung -> eine Warnzeile, sobald die
+  // Darstellung feststeht. Nicht bei Inline ohne Platzhalter: dort ist
+  // inlineInput Standard (INLINE_STANDARDS) und findMountTarget nennt den
+  // Grund für die Blase schon selbst.
   useEffect(() => {
-    if (mountTarget === null) warnIfInlineInputIgnored(embedSettings, false);
+    if (mountTarget === null && embedSettings.displayMode !== "inline")
+      warnIfInlineInputIgnored(embedSettings, false);
   }, [mountTarget]);
 
   useEffect(() => {

@@ -430,7 +430,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
                 rows={3}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Optional: kurz beschreiben – z. B. die richtige Antwort…"
+                placeholder="Optional: kurz beschreiben, z. B. die richtige Antwort …"
                 className="allm-box-border allm-w-full allm-resize-none allm-text-[13px] allm-px-2 allm-py-1.5 allm-rounded-md allm-border allm-border-gray-200 allm-bg-white allm-text-gray-700 allm-outline-none focus:allm-border-gray-300"
               />
               <div className="allm-flex allm-justify-end allm-items-center allm-gap-x-3 allm-mt-2">

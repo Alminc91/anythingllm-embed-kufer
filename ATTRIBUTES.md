@@ -38,8 +38,8 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
 | `data-icon-style` | `rounded` | Icon-Hintergrund im Header. Optionen: `none`, `rounded`, `circle`, `border`, `border-dark`, `soft`, `glass`, `adaptive`, `shadow`, `pill`. Nur aktiv wenn `header-bg-color` gesetzt. Siehe Tabelle unten. |
 | `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
-| `data-brand-text` | `Ihr Online-Berater` | Text neben dem Logo |
-| `data-assistant-name` | `Ihr Online-Berater` | Name des Assistenten |
+| `data-brand-text` | `KI-Berater` | Text neben dem Logo |
+| `data-assistant-name` | `KI-Berater` | Name des Assistenten |
 | `data-assistant-icon` | Kufer Logo | Avatar-Icon des Assistenten |
 | `data-chat-icon` | `chatBubble` | Icon für den Chat-Button |
 | `data-position` | `bottom-left` | Position: `bottom-left`, `bottom-right`, `top-left`, `top-right` |
@@ -71,8 +71,8 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | Attribut | Default | Beschreibung |
 |----------|---------|--------------|
 | `data-language` | `de` | Sprache: `de`, `en`, etc. |
-| `data-greeting` | Willkommensnachricht | Begrüßungstext im Chat |
-| `data-send-message-text` | `Wie kann ich Ihnen helfen?` | Placeholder im Input-Feld |
+| `data-greeting` | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` (en: englisch) | Begrüßungstext = Text der Begrüßungsblase (`data-greeting-bubble-text` hat Vorrang). Frühere Standardtexte gelten als nicht gesetzt |
+| `data-send-message-text` | `Ihre Frage eingeben` (en: `Enter your question`) | Placeholder im Input-Feld (der frühere Standard „Wie kann ich Ihnen helfen?“ gilt als nicht gesetzt) |
 | `data-reset-chat-text` | `Chat zurücksetzen` | Text für Reset-Link |
 | `data-reset-burger-text` | `Chat zurücksetzen` | Text im Burger-Menü |
 | `data-email-burger-text` | `E-Mail Support` | E-Mail Option im Menü |
@@ -88,14 +88,14 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 | `data-support-email` | `info@kufer.de` | E-Mail für Support-Anfragen |
 | `data-username` | `null` | Anzeigename des Benutzers |
 | `data-default-messages` | `[]` | Vordefinierte Schnellantworten (kommagetrennt) |
-| `data-course-cards` | `off` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste). Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
-| `data-course-cards-position` | `below` | `below` \| `above`: Kurskarten unter bzw. über der Antwort. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
-| `data-suggestion-style` | `bars` | `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt). Auch `visual_config`. Details: README „Panel-Optik“ |
-| `data-greeting-style` | `text` | `bubble`: Begrüßung als Assistenten-Blase (`data-greeting-bubble-text`, max. 300 Zeichen), `greeting` klein darunter |
+| `data-course-cards` | `auto` | `auto`: Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste). Auch `visual_config.courseCards`. Server-Teil ab Image ≥ 7.9 (Server liefert `courseSources` nur bei `visual_config.courseCards = "auto"`). Details: README |
+| `data-course-cards-position` | `above` | `below` \| `above`: Kurskarten unter bzw. über der Antwort. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
+| `data-suggestion-style` | `pills` (fest) | Seit Design Center vereinfacht (10/2026) fest `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt); Attribut und `visual_config` wirken nicht mehr |
+| `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, max. 300 Zeichen, sonst `data-greeting`, sonst Standard) |
 | `data-assistant-subtitle` | – | Untertitel unter dem Namen in der Kopfzeile (max. 60 Zeichen) |
-| `data-online-dot` | `false` | `true`: dekorativer grüner Online-Punkt am Kopfzeilen-Icon |
-| `data-privacy-notice` | `none` | `bubble`: Datenschutz-Punkte in der Begrüßungsblase (ohne Bestätigung); `modal`: einmalige Karte beim ersten Öffnen (Knopf „Start“, Bestätigung in `localStorage`). Texte: `data-privacy-text` (Punkte je Zeile bzw. `\|`, ≤ 5 × 160 Zeichen), `data-privacy-title`, `data-privacy-button-text`, `data-privacy-url` |
-| `data-disclaimer` | `none` | `footer`: fester KI-Hinweis unter dem Eingabefeld (`data-disclaimer-text`, ≤ 160 Zeichen; Standard je Sprache: `en` englisch, sonst deutsch) |
+| `data-online-dot` | `false` (fest) | Entfällt: kein Online-Punkt mehr, der Wert wird ignoriert |
+| `data-privacy-notice` | `bubble` (fest) | Datenschutz-Hinweis immer als eigene zweite Blase unter der Begrüßungsblase (`modal`/`none` wirken nicht mehr). Texte: `data-privacy-title` (leer = keine Überschrift, Standard „Datenschutz“), `data-privacy-text` (freier Text, ≤ 12 Zeilen × 500 Zeichen: Zeilen mit „•“ oder „-“ werden Aufzählungspunkte, andere Absätze; ohne solche Zeilen altes Format, ein Punkt je Zeile bzw. `\|`), `data-privacy-url` (Link „Datenschutzerklärung“) |
+| `data-disclaimer` | `footer` (fest) | KI-Hinweis immer unter dem Eingabefeld, Text fest „KI kann Fehler machen. Bitte überprüfen Sie die Antworten.“ (`en` englisch); `data-disclaimer-text` wird ignoriert |
 
 ---
 

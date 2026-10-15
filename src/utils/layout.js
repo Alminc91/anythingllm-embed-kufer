@@ -29,13 +29,16 @@ export const INLINE_SEND_TEXT_MAX_LEN = 40; // Knopf neben dem Eingabefeld
 export const THEME_VALUES = ["light", "dark", "auto"];
 // Kurskarten unter Antworten (utils/courseCards.js): "off" | "auto"
 export const COURSE_CARDS_VALUES = ["off", "auto"];
-// Kurskarten über ("above") oder unter ("below", Standard) der Antwort
+// Kurskarten über ("above") oder unter ("below") der Antwort
 export const COURSE_CARDS_POSITION_VALUES = ["below", "above"];
-export const DEFAULT_COURSE_CARDS_POSITION = "below";
-// Kartenlayout: "grid" (Standard, Raster) oder "rows" (je Kurs eine Karte
+// Standard seit Design Center vereinfacht: Karten zuerst, danach der kurze
+// Text (wie Demo-Variante 4 „Suche“)
+export const DEFAULT_COURSE_CARDS_POSITION = "above";
+// Kartenlayout: "grid" (Raster) oder "rows" (je Kurs eine Karte
 // über die volle Breite; schmale Karten < 480 px bleiben Rasterkarten)
 export const COURSE_CARDS_LAYOUT_VALUES = ["grid", "rows"];
-export const DEFAULT_COURSE_CARDS_LAYOUT = "grid";
+// Standard seit Design Center vereinfacht: Zeilen (wie die Demo)
+export const DEFAULT_COURSE_CARDS_LAYOUT = "rows";
 // Inline-Box: im Seitenfluss (flow, Standard) oder schwebend über dem
 // nachfolgenden Inhalt (overlay); Aufklapp-Effekt nur auf ausdrücklichen
 // Wunsch: ohne Angabe (null) klappt die Box im Seitenfluss ohne Animation auf
@@ -75,33 +78,37 @@ export const PANEL_PILL_TEXT_MAX = 60; // längere Wunschfragen: gekürzt mit �
 export const GREETING_BUBBLE_TEXT_MAX_LEN = 300;
 export const ASSISTANT_SUBTITLE_MAX_LEN = 60;
 export const PRIVACY_TITLE_MAX_LEN = 120;
-// privacyText: ein Stichpunkt je Zeile (Zeilenumbruch oder "|"), höchstens
-// 5 Punkte mit je höchstens 160 Zeichen; Rohtext höchstens 1000 Zeichen.
-export const PRIVACY_POINTS_MAX = 5;
-export const PRIVACY_POINT_MAX_LEN = 160;
+// privacyText: freier Text (Zeilen mit „•“/„-“ = Aufzählungspunkte, sonst
+// Absätze; altes Format ein Punkt je Zeile bzw. "|"), höchstens 12 Zeilen
+// mit je höchstens 500 Zeichen; Rohtext höchstens 1000 Zeichen.
+export const PRIVACY_LINES_MAX = 12;
+export const PRIVACY_LINE_MAX_LEN = 500;
 export const PRIVACY_TEXT_MAX_LEN = 1000;
 export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
-// erzeugt; Text disclaimerText (max. 160 Zeichen) bzw. PANEL_TEXTS.aiDisclaimer.
+// erzeugt; Text fest PANEL_TEXTS.aiDisclaimer (disclaimerText wird seit dem
+// vereinfachten Design Center ignoriert, FIXED_STANDARDS).
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
 
-// Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises —
+// Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises:
 // EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
 // (settings.language) "en" -> englisch, alles andere (fehlend, ungültig, eine
 // Sprache ohne eigene Texte wie "fr") -> deutsch. Absichtlich nicht über
 // i18next: ohne data-language stünde dort Englisch, und Sprachen ohne diese
 // Texte fielen auf Englisch zurück (gemischte Sprachen im Panel).
 // Neutral für alle Kundenarten (VHS, Bildungsträger, …), kurz, ohne
-// Speicherdauer, sachlich, keine Rechtsberatung; Kunden ersetzen die Punkte
+// Speicherdauer, sachlich, keine Rechtsberatung; Kunden ersetzen den Text
 // über privacyText und tragen ihre Erklärung als privacyUrl ein (Standard:
-// kein Link).
+// kein Link). Design Center vereinfacht (15.10.2026): keine Gedankenstriche
+// in sichtbaren Texten. Wörtliche Kopie im Fork:
+// server/utils/chats/embedDefaults.js (Jest-Test vergleicht beide).
 export const PANEL_TEXTS = {
   de: {
-    greetingBubble:
-      "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
-    privacyTitle: "Datenschutz:",
+    greetingBubble: "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
+    // Überschrift der Datenschutz-Blase; leerer privacyTitle = keine
+    privacyTitle: "Datenschutz",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
       "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
@@ -110,18 +117,22 @@ export const PANEL_TEXTS = {
     privacyButton: "Start",
     privacyMoreLead: "Weitere Informationen in der ",
     privacyMoreLink: "Erklärung zum Datenschutz",
-    privacyBubbleLink: "Datenschutz",
-    online: "online",
-    aiDisclaimer:
-      "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten.",
+    // Link am Ende der Datenschutz-Blase (nur mit privacyUrl)
+    privacyBubbleLink: "Datenschutzerklärung",
+    // fest, nicht änderbar (disclaimerText wird ignoriert)
+    aiDisclaimer: "KI kann Fehler machen. Bitte überprüfen Sie die Antworten.",
+    // Vorschläge für leere Felder (Name im Kopf, Platzhalter im Eingabefeld);
+    // der Untertitel ist optional und wird nie automatisch gezeigt
+    assistantName: "KI-Berater",
+    assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
+    inputPlaceholder: "Ihre Frage eingeben",
     followUps: "Vorschläge für Ihre nächste Frage",
     // Platzhalter an der Teaser-Stelle, solange der KI-Teaser erwartet wird
     teaserPending: "KI-Beschreibung wird erstellt …",
   },
   en: {
-    greetingBubble:
-      "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
-    privacyTitle: "Privacy:",
+    greetingBubble: "Hello! I am your AI advisor. How can I help you?",
+    privacyTitle: "Privacy",
     privacyPoints: [
       "Your requests stay on servers in Germany and are not passed on to third parties.",
       "Staff of the institution may view conversations for quality assurance.",
@@ -130,14 +141,23 @@ export const PANEL_TEXTS = {
     privacyButton: "Start",
     privacyMoreLead: "More information in our ",
     privacyMoreLink: "privacy statement",
-    privacyBubbleLink: "Privacy",
-    online: "online",
-    aiDisclaimer:
-      "I am an AI and can make mistakes. Please double-check my answers.",
+    privacyBubbleLink: "Privacy statement",
+    aiDisclaimer: "AI can make mistakes. Please double-check the answers.",
+    assistantName: "AI Advisor",
+    assistantSubtitle: "Online advisor powered by artificial intelligence",
+    inputPlaceholder: "Enter your question",
     followUps: "Suggestions for your next question",
     teaserPending: "AI description is being written …",
   },
 };
+// Standard-Datenschutztext als freier Text (privacyText-Format): je Punkt eine
+// Zeile mit „• “ (so trägt ihn das Design Center als Vorbelegung ein).
+export const PRIVACY_BULLET_PREFIX = "• ";
+for (const lang of Object.keys(PANEL_TEXTS))
+  PANEL_TEXTS[lang].privacyText = PANEL_TEXTS[lang].privacyPoints
+    .map((p) => `${PRIVACY_BULLET_PREFIX}${p}`)
+    .join("\n");
+
 // Sprache der Panel-Texte: Sprachcode (2 Buchstaben, optional Region wie
 // "en-GB"/"en_US"), nur Sprachen mit eigenen Texten; sonst "de".
 export function panelLanguage(settings = {}) {
@@ -154,31 +174,155 @@ export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
 export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
 export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 
-// privacyText -> Stichpunkte (Zeilenumbruch oder "|"), leere verworfen.
+// Frühere Standardtexte (Widget- bzw. Design-Center-Vorbelegung), die als
+// Wert gespeichert sein können, obwohl der Kunde nie eigenen Text geschrieben
+// hat. Sie gelten beim Laden als „nicht gesetzt“ (loadEmbedSettings ->
+// dropLegacyDefaults je Quelle: Schlüssel entfällt, der nächstniedrigere Wert
+// greift), damit der neue Standard greift. Gespeichert bleibt alles
+// unverändert (nur die Anzeige ändert sich).
+export const LEGACY_DEFAULT_TEXTS = {
+  // alter Widget-Standard von greeting (Datenschutzsatz, steht jetzt in der
+  // eigenen Datenschutz-Blase) und alte Design-Center-Vorbelegung
+  greeting: [
+    "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.",
+    "Hallo und herzlich willkommen! Ich helfe Ihnen gerne weiter und beantworte Ihre Fragen mit intelligenten, KI-gestützten Antworten.",
+  ],
+  // bisheriger Standard der Begrüßungsblase (Design Center „Standardtexte“)
+  greetingBubbleText: [
+    "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
+    "Hello! I am your digital advisor powered by artificial intelligence (AI). Just describe what you are looking for.",
+  ],
+  // bisherige Überschrift mit Doppelpunkt
+  privacyTitle: ["Datenschutz:", "Privacy:"],
+  // alter Platzhalter = dieselbe Frage wie die neue Begrüßung
+  sendMessageText: ["Wie kann ich Ihnen helfen?"],
+};
+export function dropLegacyDefaults(settings = {}) {
+  const out = { ...settings };
+  for (const [key, olds] of Object.entries(LEGACY_DEFAULT_TEXTS)) {
+    const v = out[key];
+    if (typeof v === "string" && olds.includes(v.trim())) delete out[key];
+  }
+  return out;
+}
+
+// Begrüßungsblase: EIN Text. greetingBubbleText (früheres eigenes Feld der
+// Blase) hat Vorrang vor greeting (Begrüßungstext), danach der Standard der
+// Sprache. Begründung: wer die Blase eigens beschriftet hat, hat diesen Text
+// zuletzt für die Blase gewählt; greeting war bis dahin oft nur der kleine
+// Satz unter der Blase bzw. der Datenschutzsatz.
+export function greetingText(settings = {}) {
+  for (const key of ["greetingBubbleText", "greeting"]) {
+    const v = settings[key];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return panelTexts(settings).greetingBubble;
+}
+
+// Überschrift der Datenschutz-Blase: "" = bewusst keine Überschrift (aus dem
+// Design Center: Feld geleert), null/undefined = Standard der Sprache.
+export function privacyTitleText(settings = {}) {
+  if (settings.privacyTitle === "") return "";
+  if (typeof settings.privacyTitle === "string" && settings.privacyTitle.trim())
+    return settings.privacyTitle.trim();
+  return panelTexts(settings).privacyTitle;
+}
+
+// Datenschutz-Text (privacyText), Regel seit Design Center vereinfacht:
+//  - Zeilen, die mit „•“, „-“ oder „–“ beginnen, werden Aufzählungspunkte
+//    (Zeichen entfernt), alle anderen Zeilen Absätze.
+//  - Rückwärtskompatibel: enthält KEINE Zeile ein solches Zeichen, ist es das
+//    alte Format „ein Punkt je Zeile (bzw. "|")“ -> bei mehr als einer Zeile
+//    werden alle Zeilen Aufzählungspunkte wie bisher; eine einzelne Zeile ist
+//    ein Absatz.
+// Leere Zeilen verworfen. Rückgabe: [{ type: "bullet" | "paragraph", text }].
+const PRIVACY_BULLET_RE = /^[•\-–]\s*/;
+function privacyLines(text) {
+  const clean = (parts) =>
+    parts.map((l) => l.trim()).filter((l) => l.length > 0);
+  if (typeof text !== "string") return { marked: false, lines: [] };
+  const lines = clean(text.split(/\r?\n/));
+  if (lines.some((l) => PRIVACY_BULLET_RE.test(l)))
+    return { marked: true, lines };
+  return { marked: false, lines: clean(text.split(/\r?\n|\|/)) };
+}
+export function parsePrivacyText(text) {
+  const { marked, lines } = privacyLines(text);
+  if (lines.length === 0) return [];
+  if (!marked)
+    return lines.length === 1
+      ? [{ type: "paragraph", text: lines[0] }]
+      : lines.map((t) => ({ type: "bullet", text: t }));
+  return lines
+    .map((l) =>
+      PRIVACY_BULLET_RE.test(l)
+        ? { type: "bullet", text: l.replace(PRIVACY_BULLET_RE, "").trim() }
+        : { type: "paragraph", text: l },
+    )
+    .filter((b) => b.text.length > 0);
+}
+
+// Wirksame Blöcke der Datenschutz-Blase: privacyText bzw. Standard der Sprache.
+export function privacyBlocks(settings = {}) {
+  const own = parsePrivacyText(settings.privacyText);
+  return own.length > 0
+    ? own
+    : panelTexts(settings).privacyPoints.map((text) => ({
+        type: "bullet",
+        text,
+      }));
+}
+
+// privacyText -> Stichpunkte (Text ohne Aufzählungszeichen), leere verworfen
+// (für den früheren Einmal-Hinweis „modal“, der nicht mehr ausgeliefert wird).
 export function splitPrivacyPoints(text) {
-  if (typeof text !== "string") return [];
-  return text
-    .split(/\r?\n|\|/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+  return parsePrivacyText(text).map((b) => b.text);
 }
 
 // Wirksame Datenschutz-Punkte: privacyText bzw. Standard der Sprache.
 export function privacyPoints(settings = {}) {
-  const own = splitPrivacyPoints(settings.privacyText);
-  return own.length > 0 ? own : panelTexts(settings).privacyPoints;
+  return privacyBlocks(settings).map((b) => b.text);
 }
 
-// Datenschutz in der Blase (privacyNotice "bubble") setzt die Begrüßungsblase
-// voraus: einmal beim Laden normalisiert (loadEmbedSettings), danach gilt
-// überall nur greetingStyle.
-export function normalizePanelSettings(settings = {}) {
-  if (
-    settings.privacyNotice === "bubble" &&
-    settings.greetingStyle !== "bubble"
-  )
-    return { ...settings, greetingStyle: "bubble" };
-  return settings;
+// Feste Standards (Design Center vereinfacht, 15.10.2026): gelten unabhängig
+// von Script-Attributen und gespeicherter Konfiguration (alte Werte bleiben
+// gespeichert, werden aber ignoriert). Der Server erzwingt dieselben Werte;
+// das Widget sichert sie zusätzlich selbst ab (kein Widget ohne KI-Hinweis,
+// ohne Datenschutz-Blase oder mit Online-Punkt, auch nicht per data-*).
+export const FIXED_STANDARDS = {
+  greetingStyle: "bubble",
+  suggestionStyle: "pills",
+  followUps: "pills",
+  privacyNotice: "bubble",
+  disclaimer: "footer",
+  disclaimerText: null,
+  onlineDot: false,
+};
+
+// Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
+// loadWidgetScript: data-inline-input "true", data-inline-open-on "focus",
+// data-inline-layout "overlay", data-inline-effect "morph",
+// data-inline-height "520px", data-inline-start-state "collapsed"; Leisten-
+// Stil folgt dem Fenster-Theme, Breite = Platzhalter). Nur im Inline-Modus und
+// nur, wo weder Script noch Server einen Wert liefern (der Server erzwingt
+// die Werte ohnehin); in der Chatblase wirkungslos.
+export const INLINE_STANDARDS = {
+  inlineInput: true,
+  inlineOpenOn: "focus",
+  inlineLayout: "overlay",
+  inlineEffect: "morph",
+  inlineHeight: "520px",
+  inlineStartState: "collapsed",
+};
+
+// Einmal beim Laden (loadEmbedSettings): Inline-Standards ergänzen, feste
+// Standards setzen. given = Schlüssel, die Script oder Server geliefert haben.
+export function applyFixedStandards(settings = {}, given = new Set()) {
+  const out = { ...settings, ...FIXED_STANDARDS };
+  if (out.displayMode === "inline")
+    for (const [key, value] of Object.entries(INLINE_STANDARDS))
+      if (!given.has(key)) out[key] = value;
+  return out;
 }
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
@@ -231,19 +375,28 @@ function shortText(value, maxLen = INLINE_TEXT_MAX_LEN) {
   return v;
 }
 
-// Datenschutz-Stichpunkte: 1–5 Punkte mit je höchstens 160 Zeichen, sonst
-// verworfen (nicht gekürzt). Rückgabe normalisiert: ein Punkt je Zeile.
+// Datenschutz-Text: 1–12 Zeilen mit je höchstens 500 Zeichen, sonst
+// verworfen (nicht gekürzt). Rückgabe normalisiert: getrimmte Zeilen, leere
+// verworfen; altes Format (keine Zeile mit Aufzählungszeichen) wie bisher ein
+// Punkt je Zeile ("|" wird zum Zeilenumbruch).
 function privacyTextValue(value) {
   const v = shortText(value, PRIVACY_TEXT_MAX_LEN);
   if (v === undefined) return undefined;
-  const points = splitPrivacyPoints(v);
+  const { lines } = privacyLines(v);
   if (
-    points.length === 0 ||
-    points.length > PRIVACY_POINTS_MAX ||
-    points.some((p) => p.length > PRIVACY_POINT_MAX_LEN)
+    lines.length === 0 ||
+    lines.length > PRIVACY_LINES_MAX ||
+    lines.some((l) => l.length > PRIVACY_LINE_MAX_LEN)
   )
     return undefined;
-  return points.join("\n");
+  return lines.join("\n");
+}
+
+// Überschrift der Datenschutz-Blase: leer (nur Leerraum) = bewusst keine
+// Überschrift ("" bleibt erhalten), sonst Text bis 120 Zeichen.
+function privacyTitleValue(value) {
+  if (typeof value === "string" && value.trim() === "") return "";
+  return shortText(value, PRIVACY_TITLE_MAX_LEN);
 }
 
 // Link (Datenschutz): absolute https-URL oder Pfad der eigenen Seite ("/…",
@@ -312,7 +465,7 @@ export const layoutValidations = {
   assistantSubtitle: (v) => shortText(v, ASSISTANT_SUBTITLE_MAX_LEN),
   onlineDot: bool,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
-  privacyTitle: (v) => shortText(v, PRIVACY_TITLE_MAX_LEN),
+  privacyTitle: privacyTitleValue,
   privacyText: privacyTextValue,
   privacyButtonText: (v) => shortText(v, PRIVACY_BUTTON_TEXT_MAX_LEN),
   privacyUrl: safeUrl,

@@ -89,41 +89,39 @@ const PILLS = { followUps: "pills" };
 
 // ---------------------------------------------------------------------------
 describe("Settings (AK-6, NAK-4)", () => {
-  it("Standard none; Script-Attribut und Design Center wirken", async () => {
+  // Bewusste Änderung (Design Center vereinfacht, 15.10.2026): Folgefragen
+  // sind fester Standard "pills" in beiden Stilen; "none" aus Script-Attribut
+  // oder Design Center wirkt nicht mehr (FIXED_STANDARDS).
+  it("fest pills: ohne Angabe, per Script-Attribut und Design Center", async () => {
     expect((await loadEmbedSettings(BASE, fetchConfig({}))).followUps).toBe(
-      "none",
+      "pills",
     );
     expect(
-      (
-        await loadEmbedSettings(
-          { ...BASE, followUps: "Pills" },
-          fetchConfig({}),
-        )
-      ).followUps,
+      (await loadEmbedSettings({ ...BASE, followUps: "none" }, fetchConfig({})))
+        .followUps,
     ).toBe("pills");
-    // visual_config (Design Center) gewinnt über das Script-Attribut
     expect(
       (
         await loadEmbedSettings(
-          { ...BASE, followUps: "none" },
-          fetchConfig({ followUps: "pills" }),
+          { ...BASE, followUps: "pills" },
+          fetchConfig({ followUps: "none" }),
         )
       ).followUps,
     ).toBe("pills");
   });
 
-  it("NAK-4: ungültiges data-follow-ups -> none + genau eine console.warn", async () => {
+  it("NAK-4: ungültiges data-follow-ups -> pills + genau eine console.warn", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const s = await loadEmbedSettings(
       { ...BASE, followUps: "chips" },
       fetchConfig({}),
     );
-    expect(s.followUps).toBe("none");
+    expect(s.followUps).toBe("pills");
     const mine = warn.mock.calls
       .map((c) => String(c[0]))
       .filter((l) => l.includes("Ungültiger followUps-Wert"));
     expect(mine).toHaveLength(1);
-    expect(mine[0]).toContain('es gilt "none"');
+    expect(mine[0]).toContain('es gilt "pills"');
     expect(layoutValidations.followUps(" PILLS ")).toBe("pills");
     expect(layoutValidations.followUps(1)).toBeUndefined();
   });

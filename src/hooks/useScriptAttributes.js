@@ -11,8 +11,9 @@ import {
   DEFAULT_INLINE_OPEN_ON,
   DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
+  applyFixedStandards,
+  dropLegacyDefaults,
   layoutValidations,
-  normalizePanelSettings,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
 import { applyTheme } from "@/utils/theme";
@@ -21,6 +22,8 @@ import { applyTheme } from "@/utils/theme";
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
 // / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
 const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
+// Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“)
+const EMPTY_MEANS_NONE = ["privacyTitle"];
 
 export const DEFAULT_SETTINGS = {
   embedId: null, //required
@@ -36,9 +39,12 @@ export const DEFAULT_SETTINGS = {
   chatIcon: "chatBubble",
   brandImageUrl:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // will be forced into 100x50px container
-  brandText: "Ihr Online-Berater", // brand text to display next to brand image
-  greeting:
-    "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.", // Datenschutz-Standardhinweis (greeting) – wird bei fehlender server-/scriptseitiger Konfiguration angezeigt.
+  brandText: "KI-Berater", // Name im Kopf (Standard wie PANEL_TEXTS.de.assistantName)
+  // Begrüßungstext = Text der Begrüßungsblase (utils/layout.js greetingText:
+  // greetingBubbleText > greeting > Standard der Sprache). null = Standard.
+  // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
+  // Datenschutz-Blase (privacyText).
+  greeting: null,
   buttonColor: "#01a5a9", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#01a5a9", // user text bubble color
@@ -52,7 +58,7 @@ export const DEFAULT_SETTINGS = {
   sponsorText: "Ein Dienst der Kufer Software GmbH", // default sponsor textNo
   sponsorLink: "https://kufer.de", // default sponsor link
   position: "bottom-left", // position of chat button/window
-  assistantName: "Ihr Online-Berater", // default assistant name
+  assistantName: "KI-Berater", // default assistant name
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
   // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
@@ -97,47 +103,47 @@ export const DEFAULT_SETTINGS = {
   // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
   theme: "light",
   inheritFont: false, // Inline: Schrift der Webseite übernehmen
-  // Kurskarten unter Antworten, die Kurse nennen: "off" | "auto". Braucht
+  // Kurskarten zu Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
-  courseCards: "off",
-  // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
-  // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
+  // Standard seit Design Center vereinfacht: "auto" (Server erzwingt es).
+  courseCards: "auto",
+  // Kurskarten über ("above", Standard: Karten zuerst, danach der kurze Text)
+  // oder unter ("below") der Antwort. Bei "above" erscheinen vom Server
+  // angekündigte Kurse schon vor dem Text (Fork >= 7.10).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
-  // Kartenlayout "grid" (Raster) | "rows" (Zeilen-Karten über die volle
-  // Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
+  // Kartenlayout "grid" (Raster) | "rows" (Standard, Zeilen-Karten über die
+  // volle Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
-  // Panel-Optik (opt-in, Standard = bisher): Vorschläge "bars" | "pills",
-  // Begrüßung "text" | "bubble" (greetingBubbleText als Assistenten-Blase,
-  // greeting klein darunter); Kopfzeile: Untertitel unter dem Namen und
-  // dekorativer Online-Punkt am Icon. Icon-Bild = brandImageUrl (Kopfzeile)
-  // bzw. assistantIcon (Blase), im Design Center per Logo gesetzt.
-  suggestionStyle: "bars",
-  greetingStyle: "text",
-  greetingBubbleText: null, // max. 300 Zeichen; null = Standard der Sprache
-  assistantSubtitle: null, // max. 60 Zeichen
+  // Panel-Optik, fest seit Design Center vereinfacht (utils/layout.js
+  // FIXED_STANDARDS, in loadEmbedSettings gesetzt, egal was Script oder
+  // Server liefern): Vorschläge als Pillen, Begrüßung als Blase, darunter die
+  // Datenschutz-Blase, Folgefragen als Pillen, KI-Hinweis fest unter der
+  // Eingabe, kein Online-Punkt. Icon-Bild = brandImageUrl (Kopfzeile) bzw.
+  // assistantIcon (Blase), im Design Center per Logo gesetzt.
+  suggestionStyle: "pills",
+  greetingStyle: "bubble",
+  greetingBubbleText: null, // max. 300 Zeichen; Vorrang vor greeting
+  assistantSubtitle: null, // max. 60 Zeichen, optional (nie automatisch)
   onlineDot: false,
-  // Datenschutz-Hinweis: "none" | "bubble" (Absätze in der Begrüßungsblase,
-  // ohne Bestätigung; setzt greetingStyle "bubble", normalisiert in
-  // loadEmbedSettings) | "modal" (einmalige Karte beim ersten Öffnen,
-  // Bestätigung in localStorage allm-privacy-ack-<embedId>). Texte null =
-  // Standard der Sprache (utils/layout.js PANEL_TEXTS).
-  privacyNotice: "none",
+  privacyNotice: "bubble",
+  // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),
+  // freier Text (Zeilen mit „•“/„-“ = Punkte, sonst Absätze; null = Standard
+  // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen
-  privacyText: null, // Stichpunkte je Zeile bzw. "|", max. 5 × 160 Zeichen
-  privacyButtonText: null, // max. 40 Zeichen, Standard „Start“
+  privacyText: null, // max. 12 Zeilen à 500 Zeichen, 1000 Zeichen gesamt
+  privacyButtonText: null, // nur früherer Einmal-Hinweis („modal“)
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
-  // Fester KI-Hinweis unter dem Eingabefeld: "none" | "footer";
-  // disclaimerText max. 160 Zeichen, null = Standard der Sprache
-  // (utils/layout.js PANEL_TEXTS.aiDisclaimer)
-  disclaimer: "none",
-  disclaimerText: null,
-  // Folgefragen des Modells als Pillen unter der letzten Antwort: "none" |
-  // "pills" (Server-Chunk "followUps", Fork >= 7.14; ohne Wirkung sonst)
-  followUps: "none",
+  disclaimer: "footer",
+  disclaimerText: null, // ignoriert: Text fest (PANEL_TEXTS.aiDisclaimer)
+  // Folgefragen des Modells als Pillen unter der letzten Antwort (Server-
+  // Chunk "followUps", Fork >= 7.14; ohne Wirkung sonst)
+  followUps: "pills",
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
-  sendMessageText: "Wie kann ich Ihnen helfen?", // override text for send message button
+  // Platzhalter im Eingabefeld; null = Standard der Sprache
+  // (PANEL_TEXTS.inputPlaceholder „Ihre Frage eingeben“)
+  sendMessageText: null,
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
   resetBurgerText: "Chat zurücksetzen", // override text for reset option in burger menu
   emailBurgerText: "E-Mail Support", // override text for email support option in burger menu
@@ -180,18 +186,26 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   }
 
   // Only merge non-empty server values so script attributes remain as fallback
+  // (Ausnahme privacyTitle: "" = im Design Center bewusst geleert -> keine
+  // Überschrift)
   const mergedServerConfig = {};
   for (const [key, value] of Object.entries(serverConfig || {})) {
-    if (value !== null && value !== undefined && value !== "")
+    if (value === "" && EMPTY_MEANS_NONE.includes(key))
+      mergedServerConfig[key] = value;
+    else if (value !== null && value !== undefined && value !== "")
       mergedServerConfig[key] = value;
   }
-
-  const resolved = normalizePanelSettings({
-    ...DEFAULT_SETTINGS,
-    ...scriptSettings,
-    ...parseAndValidateEmbedSettings(mergedServerConfig),
-    loaded: true,
-  });
+  // Frühere Standardtexte gelten je Quelle als nicht gesetzt (der nächst-
+  // niedrigere Wert greift); danach feste Standards und Inline-Standards.
+  const script = dropLegacyDefaults(scriptSettings);
+  const server = dropLegacyDefaults(
+    parseAndValidateEmbedSettings(mergedServerConfig),
+  );
+  const given = new Set([...Object.keys(script), ...Object.keys(server)]);
+  const resolved = applyFixedStandards(
+    { ...DEFAULT_SETTINGS, ...script, ...server, loaded: true },
+    given,
+  );
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
   warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
   return resolved;
