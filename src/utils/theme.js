@@ -467,6 +467,18 @@ function render() {
   styleEl.dataset.mode = mode;
 }
 
+// Variablen mit den aktuellen Farben der Seite neu berechnen (Restpunkt rc7
+// Nr. 4, W01-Rest): Der Host hängt beim ersten applyTheme noch an <body>;
+// im Inline-Modus hängt InlineChat ihn danach in den Platzhalter (und fürs
+// mobile Vollbild wieder an <body>). Ein --allm-accent, das die Seite nur am
+// Platzhalter (#kufer-assistent) setzt, ist erst dort im berechneten Stil
+// des Hosts sichtbar; nach jedem Umhängen deshalb neu lesen, damit die
+// Schrift auf der Akzentfarbe (--allmi-on-accent, Pillen-Text) der Fläche
+// folgt, die das Widget tatsächlich zeigt. Ohne applyTheme davor no-op.
+export function refreshTheme() {
+  render();
+}
+
 // Setzt/aktualisiert die Variablen. Synchron vor dem ersten Render aufrufen
 // (useScriptAttributes), dann gibt es keinen Frame im falschen Theme (NAK-4).
 export function applyTheme(styleEl, settings = {}) {

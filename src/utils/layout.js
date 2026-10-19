@@ -126,10 +126,17 @@ export const PANEL_TEXTS = {
     privacyMoreLink: "Erklärung zum Datenschutz",
     // Link am Ende der Datenschutz-Blase (nur mit privacyUrl)
     privacyBubbleLink: "Datenschutzerklärung",
-    // fest, nicht änderbar (disclaimerText wird ignoriert)
-    aiDisclaimer: "KI kann Fehler machen. Bitte überprüfen Sie die Antworten.",
-    // Vorschläge für leere Felder (Name im Kopf, Platzhalter im Eingabefeld);
-    // der Untertitel ist optional und wird nie automatisch gezeigt
+    // fest, nicht änderbar (disclaimerText wird ignoriert); Wortlaut
+    // Fixliste 7.22-rc8 R1 („Unsere KI …“, eindeutiger als „KI …“) in der
+    // Kurzfassung „prüfen“: die Langfassung „überprüfen“ bräuchte im
+    // Chatfenster bei 1280 px (320 px breit) unter 10 px Schrift
+    // (gemessen: 337 px bei 10 px, 304 px Platz; tests/visual/
+    // disclaimer_measure.py, Ergebnis in .test-storage/disclaimer-*.json)
+    aiDisclaimer:
+      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
+    // Standard für leere Felder (Name in der Titelleiste, Untertitel,
+    // Platzhalter im Eingabefeld). Untertitel seit Fixliste 7.22-rc8 R5 auch
+    // live der Standard, wenn der Server keinen liefert (assistantSubtitleText)
     assistantName: "KI-Berater",
     assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
     inputPlaceholder: "Ihre Frage eingeben",
@@ -156,7 +163,7 @@ export const PANEL_TEXTS = {
     privacyMoreLead: "More information in our ",
     privacyMoreLink: "privacy statement",
     privacyBubbleLink: "Privacy statement",
-    aiDisclaimer: "AI can make mistakes. Please double-check the answers.",
+    aiDisclaimer: "Our AI can make mistakes. Please double-check the answers.",
     assistantName: "AI Advisor",
     assistantSubtitle: "Online advisor powered by artificial intelligence",
     inputPlaceholder: "Enter your question",
@@ -354,6 +361,19 @@ export function shortenGreeting(text) {
   return `${cut.replace(/[\s.,;:!?]+$/u, "")}…`;
 }
 
+// Untertitel unter dem Namen in der Titelleiste (Fixliste 7.22-rc8 R5):
+// "" = bewusst keiner (im Design Center leer gespeichert, der Server liefert
+// dann assistantSubtitle ""), ein eigener Text wie geliefert, null/undefined
+// (nicht gespeichert, älterer Server) = Standard der Sprache
+// („Online-Berater mit künstlicher Intelligenz“). Ein data-assistant-subtitle
+// am Skript gilt nur ohne Server-Wert (loadEmbedSettings).
+export function assistantSubtitleText(settings = {}) {
+  const v = settings.assistantSubtitle;
+  if (v === "") return "";
+  if (typeof v === "string" && v.trim()) return v.trim();
+  return panelTexts(settings).assistantSubtitle;
+}
+
 // Überschrift der Datenschutz-Blase: "" = bewusst keine Überschrift (aus dem
 // Design Center: Feld geleert), null/undefined = Standard der Sprache.
 export function privacyTitleText(settings = {}) {
@@ -538,7 +558,40 @@ export function applyFixedStandards(
   const name = panelTexts(out).assistantName;
   for (const key of ["brandText", "assistantName"])
     if (typeof out[key] !== "string" || out[key].trim() === "") out[key] = name;
+  out.assistantSubtitle = assistantSubtitleText(out);
   return out;
+}
+
+// Antworten mit Kursen ohne gespeicherte Wahl (Fixliste 7.22-rc8 R4): der
+// Standard hängt an der TATSÄCHLICHEN Darstellung, die nur das Widget kennt
+// (Inline nur mit gefundenem Platzhalter, auch Inline nur per Skript-
+// Attribut; sonst Chatfenster): In der Seite Kurskarten ("auto"), im
+// Chatfenster Nur Text mit Links ("off"). Der Server liefert courseCards
+// nur, wenn im Design Center gespeichert; dieser Wert gewinnt immer. Ein
+// data-course-cards am Skript wirkt nicht (SERVER_ONLY_SETTINGS): der Server
+// kennt es nicht und entscheidet über courseSources nach demselben Standard
+// (er bekommt die Darstellung mit jeder Chat-Anfrage, displayMode im Body
+// von stream-chat, models/chatService.js).
+export const DISPLAYED_VALUES = ["bubble", "inline"];
+export function courseCardsDefault(displayed) {
+  return displayed === "inline" ? "auto" : "off";
+}
+export function displayedCourseCards(settings = {}, displayed = "bubble") {
+  return (
+    oneOf(settings?.courseCards, COURSE_CARDS_VALUES) ||
+    courseCardsDefault(displayed)
+  );
+}
+// Settings nach der Entscheidung über die Darstellung (App.jsx): displayMode
+// = tatsächliche Darstellung, courseCards = gespeicherter Wert oder Standard
+// der Darstellung. Vorher steht in displayMode die konfigurierte Darstellung.
+export function applyDisplayed(settings = {}, inline = false) {
+  const displayed = inline ? "inline" : "bubble";
+  return {
+    ...settings,
+    displayMode: displayed,
+    courseCards: displayedCourseCards(settings, displayed),
+  };
 }
 
 // Zahl (max. 4 Stellen, optional 2 Nachkommastellen) + Einheit. Eine nackte
@@ -657,8 +710,9 @@ export const layoutValidations = {
   // der Fixliste 7.22-rc7 fest null (FIXED_STANDARDS), Wert ohne Wirkung.
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
-  // Kurskarten aus den Kurs-Metadaten der Antwort-Quellen (opt-in);
-  // ungültig -> verworfen -> Standard "off"
+  // Kurskarten (nur Server-Wert, Fixliste 7.22-rc8 R4); ungültig ->
+  // verworfen -> null -> Standard der tatsächlichen Darstellung
+  // (displayedCourseCards)
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
   // Position der Kurskarten; ungültig -> verworfen -> Standard "below"
   courseCardsPosition: (v) => oneOf(v, COURSE_CARDS_POSITION_VALUES),
@@ -683,7 +737,12 @@ export const layoutValidations = {
     if (typeof v !== "string" || v.trim().length === 0) return undefined;
     return shortenGreeting(v.trim());
   },
-  assistantSubtitle: (v) => shortText(v, ASSISTANT_SUBTITLE_MAX_LEN),
+  // leer (nur Leerraum) = bewusst kein Untertitel ("" bleibt erhalten,
+  // Fixliste 7.22-rc8 R5), sonst Text bis 60 Zeichen (zu lang: verworfen)
+  assistantSubtitle: (v) => {
+    if (typeof v === "string" && v.trim() === "") return "";
+    return shortText(v, ASSISTANT_SUBTITLE_MAX_LEN);
+  },
   onlineDot: bool,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
   privacyTitle: privacyTitleValue,

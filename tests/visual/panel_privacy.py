@@ -600,8 +600,9 @@ def check_disclaimer(browser, base_url):
                        lines: Math.round(r.height / lh), whiteSpace: cs.whiteSpace,
                        pointer: cs.cursor }; }""")
             # Text und Größe seit Design Center vereinfacht (PANEL_TEXTS.aiDisclaimer,
-            # 11 px), immer eine Zeile (Fixliste 7.22-rc7 Nr. 22)
-            ok = (st["text"] == "KI kann Fehler machen. Bitte überprüfen Sie die Antworten."
+            # 11 px), immer eine Zeile (Fixliste 7.22-rc7 Nr. 22); Wortlaut
+            # Fixliste 7.22-rc8 R1 (Messung: tests/visual/disclaimer_measure.py)
+            ok = (st["text"] == "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten."
                   and st["role"] == "note" and st["size"] == "11px" and st["align"] == "center"
                   and st["lines"] == 1 and st["whiteSpace"] == "nowrap"
                   and 0 <= st["gap"] <= 12 and st["visible"])

@@ -58,25 +58,32 @@ describe("Settings: courseCards", () => {
   });
   const base = { embedId: "e", baseApiUrl: "https://x.test/api/embed" };
 
-  // Standard seit Design Center vereinfacht (15.10.2026) "auto" statt "off"
-  // (bewusste Änderung: Kurskarten sind fester Standard, der Server erzwingt
-  // sie); Script und Server können weiterhin "off" liefern.
-  it("Standard auto; data-course-cards=auto; visual_config gewinnt; ungültig verworfen", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc8 R4): nur der Server-Wert zählt
+  // (gespeicherte Wahl im Design Center); ohne ihn bleibt null, der Standard
+  // folgt der tatsächlichen Darstellung (App.jsx applyDisplayed: In der
+  // Seite "auto", Chatfenster "off"; tests/rc8-fixes.test.jsx). Ein
+  // data-course-cards am Skript wirkt nicht mehr (vorher: Standard "auto",
+  // Skript und Server konnten "off" liefern).
+  it("ohne Server-Wert null; data-course-cards ohne Wirkung; visual_config zählt; ungültig verworfen", async () => {
     expect((await loadEmbedSettings(base, fetchJson({}))).courseCards).toBe(
-      "auto",
+      null,
     );
     expect(
       (await loadEmbedSettings({ ...base, courseCards: "off" }, fetchJson({})))
         .courseCards,
-    ).toBe("off");
+    ).toBe(null);
     expect(
       (await loadEmbedSettings({ ...base, courseCards: "AUTO" }, fetchJson({})))
         .courseCards,
-    ).toBe("auto");
+    ).toBe(null);
     expect(
       (await loadEmbedSettings(base, fetchJson({ courseCards: "auto" })))
         .courseCards,
     ).toBe("auto");
+    expect(
+      (await loadEmbedSettings(base, fetchJson({ courseCards: "OFF" })))
+        .courseCards,
+    ).toBe("off");
     expect(
       (
         await loadEmbedSettings(
@@ -86,9 +93,9 @@ describe("Settings: courseCards", () => {
       ).courseCards,
     ).toBe("off");
     expect(
-      (await loadEmbedSettings({ ...base, courseCards: "yes" }, fetchJson({})))
+      (await loadEmbedSettings(base, fetchJson({ courseCards: "yes" })))
         .courseCards,
-    ).toBe("auto");
+    ).toBe(null);
   });
 });
 

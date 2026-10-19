@@ -5,6 +5,7 @@ import {
   splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
+import { DISPLAYED_VALUES } from "@/utils/layout";
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -145,6 +146,14 @@ const ChatService = {
       model: embedSettings?.model ?? null,
       temperature: embedSettings?.temperature ?? null,
     };
+    // Tatsächliche Darstellung (Fixliste 7.22-rc8 R4): "inline" | "bubble"
+    // aus den Settings nach der Entscheidung in App.jsx (applyDisplayed).
+    // Der Server nutzt das Feld NUR für den Standard von „Antworten mit
+    // Kursen“ ohne gespeicherte Wahl (inline -> Kurskarten, bubble -> Nur
+    // Text); ein gespeicherter Wert gewinnt dort. Anderes wird nicht gesendet.
+    const displayed = DISPLAYED_VALUES.includes(embedSettings?.displayMode)
+      ? { displayMode: embedSettings.displayMode }
+      : {};
 
     // Uebergibt der Aufrufer (ChatContainer) ein AbortSignal, kontrolliert er den
     // Abbruch (z.B. Reset-Remount / Unmount). Ohne uebergebenes Signal dient der
@@ -158,6 +167,7 @@ const ChatService = {
         conversationId,
         username,
         ...overrides,
+        ...displayed,
       }),
       signal: signal ?? ctrl.signal,
       openWhenHidden: true,

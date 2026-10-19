@@ -358,12 +358,16 @@ export function appendDraft(current, draft) {
 // Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
 // disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
 // Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
-// sonst deutsch). Eine dezente Zeile, nur Text, nicht anklickbar. Immer
-// genau eine Zeile (Fixliste 7.22-rc7 Nr. 22): kein Umbruch. In schmalen
-// Fenstern (Chatblase bei 1280 px: 304 px Platz, der Text braucht bei 11 px
-// etwa 330 px) wird die Schrift bis 10 px kleiner (Containerabfrage,
-// .allm-ai-disclaimer in main.jsx); reicht auch das nicht, endet die Zeile
-// mit „…“ (voller Text im title und für Screenreader).
+// sonst deutsch; Wortlaut Fixliste 7.22-rc8 R1). Eine dezente Zeile, nur
+// Text, nicht anklickbar. Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22):
+// kein Umbruch. In schmalen Fenstern (Chatfenster bei 1280 px: 320 px breit,
+// 316 px Platz bei 2 px Rand; der Satz braucht bei 11 px etwa 345 px, bei
+// 10 px etwa 314 px in DejaVu Sans, in Segoe UI/Arial etwa 280 px) wird die
+// Schrift bis 10 px kleiner (Containerabfrage, .allm-ai-disclaimer in
+// main.jsx); reicht auch das nicht (noch breitere Schrift), endet die Zeile
+// mit „…“ (voller Text im title und für Screenreader). Seitenrand 2 px
+// (rc8, vorher 8 px): die Zeile ist zentriert, der Rand zählt nur, wenn der
+// Satz das Fenster fast ausfüllt (gemessen: tests/visual/disclaimer_measure.py).
 function AiDisclaimer({ settings }) {
   const text = panelTexts(settings || {}).aiDisclaimer;
   return (
@@ -374,7 +378,7 @@ function AiDisclaimer({ settings }) {
         title={text}
         className="allm-ai-disclaimer allm-font-sans"
         style={{
-          margin: "4px 8px 0",
+          margin: "4px 2px 0",
           lineHeight: 1.4,
           textAlign: "center",
           color: "var(--allmi-text-muted, #6b7280)",

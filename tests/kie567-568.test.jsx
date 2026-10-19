@@ -102,9 +102,13 @@ afterEach(() => {
 // KIE-567: Einstellungen
 // ---------------------------------------------------------------------------
 describe("KIE-567 Antworten mit Kursen: Einstellungen", () => {
-  it("ohne neue Schlüssel wie bisher: Kurskarten, Karten zuerst", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc8 R4): ohne gespeicherten Wert liefert
+  // der Server courseCards nicht mehr; beim Laden bleibt null, der Standard
+  // folgt der tatsächlichen Darstellung (App.jsx, applyDisplayed: In der
+  // Seite "auto", Chatfenster "off"; tests/rc8-fixes.test.jsx)
+  it("ohne neue Schlüssel: Kurskarten nach Darstellung (null), Karten zuerst", async () => {
     const s = await load({}, {});
-    expect(s.courseCards).toBe("auto");
+    expect(s.courseCards).toBe(null);
     expect(s.courseCardsPosition).toBe("above");
     expect(s.courseCardsLayout).toBe("rows");
   });
@@ -126,7 +130,9 @@ describe("KIE-567 Antworten mit Kursen: Einstellungen", () => {
 
   it("ungültige Werte fallen auf den Standard zurück", async () => {
     const s = await load({}, { courseCards: "karten", courseCardsPosition: 3 });
-    expect(s.courseCards).toBe("auto");
+    // courseCards ungültig = nicht gespeichert (rc8 R4: Standard nach
+    // Darstellung, hier noch null)
+    expect(s.courseCards).toBe(null);
     expect(s.courseCardsPosition).toBe("above");
   });
 });

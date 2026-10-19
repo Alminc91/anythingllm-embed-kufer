@@ -20,14 +20,20 @@ import { syncI18nLanguage } from "@/i18n";
 // Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
 // / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
-const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
+// courseCards (Antworten mit Kursen) ebenso: gespeicherter Wert vom Server,
+// sonst der Standard der tatsächlichen Darstellung (Fixliste 7.22-rc8 R4,
+// utils/layout.js applyDisplayed); ein data-course-cards am Skript würde
+// vom Standard abweichen, den der Server für courseSources anwendet.
+const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight", "courseCards"];
 // Gruppen, die als Ganzes dem Server gehören, sobald er einen Wert der Gruppe
 // liefert: Die Begrüßung aus dem Design Center (greeting) verdrängt auch ein
 // data-greeting-bubble-text bzw. data-greeting am Skript (Fixliste 7.22-rc7
 // Nr. 9). Ohne Serverwert bleiben die Script-Attribute wirksam.
 const SERVER_GROUPS = [["greeting", "greetingBubbleText"]];
-// Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“)
-const EMPTY_MEANS_NONE = ["privacyTitle"];
+// Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“):
+// privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
+// (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
+const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
 
 // Rohe Script-Attribute (data-*), wie die Seite sie gesetzt hat, bevor
 // embedderSettings.settings mit den aufgelösten Werten überschrieben wird.
@@ -91,8 +97,11 @@ export const DEFAULT_SETTINGS = {
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
   offsetY: null, // Randabstand Button/Fenster in px (0–200), null = 16px
 
-  // Darstellung: "bubble" (Chat-Blase) | "inline" (in der Seite, im Platzhalter
-  // <div id="kufer-assistent">). Ohne Platzhalter fällt inline auf die Blase zurück.
+  // Darstellung: "bubble" (Chatfenster) | "inline" (in der Seite, im
+  // Platzhalter <div id="kufer-assistent">). Ohne Platzhalter fällt inline auf
+  // das Chatfenster zurück. Nach der Entscheidung (App.jsx, applyDisplayed)
+  // steht in den Settings der Komponenten die TATSÄCHLICHE Darstellung; sie
+  // geht mit jeder Chat-Anfrage an den Server (stream-chat, displayMode).
   displayMode: "bubble",
   mount: DEFAULT_MOUNT_SELECTOR, // nur per data-mount (CSS-Selektor)
   inlineCollapsedText: DEFAULT_INLINE_COLLAPSED_TEXT,
@@ -130,10 +139,13 @@ export const DEFAULT_SETTINGS = {
   inheritFont: false,
   // Kurskarten zu Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
-  // Standard "auto" in Chatblase und Inline (Entscheidung D1, KIE-565);
-  // seit KIE-567 im Design Center wählbar („Kurse anzeigen als“ Kurskarten /
-  // Nur Text mit Links), der Server liefert immer einen gültigen Wert.
-  courseCards: "auto",
+  // Im Design Center wählbar (KIE-567 „Antworten mit Kursen“: Kurskarten /
+  // Nur Text mit Links); der Server liefert den Wert nur, wenn gespeichert.
+  // null = nicht gespeichert: Standard nach der tatsächlichen Darstellung
+  // (Fixliste 7.22-rc8 R4: In der Seite "auto", Chatfenster "off"), gesetzt
+  // in App.jsx (utils/layout.js applyDisplayed), sobald die Darstellung
+  // feststeht. Ein data-course-cards am Skript wirkt nicht.
+  courseCards: null,
   // Kurskarten über ("above", Standard: Karten zuerst, danach der kurze Text)
   // oder unter ("below", Text zuerst, danach Karten und Folgefragen) der
   // Antwort (KIE-567 „Reihenfolge“). Vom Server angekündigte Kurse erscheinen
@@ -153,7 +165,10 @@ export const DEFAULT_SETTINGS = {
   suggestionStyle: "pills",
   greetingStyle: "bubble",
   greetingBubbleText: null, // max. 300 Zeichen; Vorrang vor greeting
-  assistantSubtitle: null, // max. 60 Zeichen, optional (nie automatisch)
+  // Untertitel unter dem Namen (max. 60 Zeichen): null = Standard der
+  // Sprache („Online-Berater mit künstlicher Intelligenz“, Fixliste 7.22-rc8
+  // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
+  assistantSubtitle: null,
   onlineDot: false,
   privacyNotice: "bubble",
   // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),

@@ -514,8 +514,10 @@ describe("Nr. 22 (W10): KI-Hinweis immer genau eine Zeile", () => {
     expect(css).toContain(
       ".allm-ai-disclaimer-box { container-type: inline-size; }",
     );
+    // Bewusste Änderung (Fixliste 7.22-rc8 R1): längerer Satz, Teiler 34
+    // statt 30 und 2 px statt 8 px Seitenrand (tests/rc8-fixes.test.jsx)
     expect(css).toContain(
-      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 16px) / 30), 11px); }",
+      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px); }",
     );
   });
 });

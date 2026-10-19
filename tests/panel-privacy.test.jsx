@@ -102,7 +102,12 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.suggestionStyle).toBe("pills");
     expect(s.greetingStyle).toBe("bubble");
     expect(s.onlineDot).toBe(false);
-    expect(s.assistantSubtitle).toBe(null);
+    // Bewusste Änderung (Fixliste 7.22-rc8 R5): ohne Server-Wert zeigt das
+    // Widget den Untertitel-Standard der Sprache (vorher null = nie
+    // automatisch); "" vom Server = keiner (tests/rc8-fixes.test.jsx)
+    expect(s.assistantSubtitle).toBe(
+      "Online-Berater mit künstlicher Intelligenz",
+    );
     expect(s.privacyNotice).toBe("bubble");
     expect(s.privacyUrl).toBe(null);
     expect(s.greetingBubbleText).toBe(null); // Standard der Sprache
@@ -420,7 +425,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       inlineStartState: "collapsed",
       inlineTheme: null,
       inlineMaxWidth: null,
-      courseCards: "auto",
+      // Bewusste Änderung (Fixliste 7.22-rc8 R4): beim Laden null, der
+      // Standard "auto" in der Seite kommt erst mit der tatsächlichen
+      // Darstellung (App.jsx applyDisplayed, tests/rc8-fixes.test.jsx)
+      courseCards: null,
       courseCardsPosition: "above",
       courseCardsLayout: "rows",
     });
@@ -1501,12 +1509,14 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
   });
 
   it("Standardtexte de/en in PANEL_TEXTS (ein Mechanismus, kein i18n-Schlüssel)", async () => {
-    // neuer Text (Nutzer 15.10.2026), ein Text für beide Stile
+    // neuer Text (Nutzer 15.10.2026), ein Text für beide Stile; Wortlaut
+    // seit Fixliste 7.22-rc8 R1 („Unsere KI …“, Kurzfassung „prüfen“ nach
+    // Messung, tests/rc8-fixes.test.jsx)
     expect(PANEL_TEXTS.de.aiDisclaimer).toBe(
-      "KI kann Fehler machen. Bitte überprüfen Sie die Antworten.",
+      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
     );
     expect(PANEL_TEXTS.en.aiDisclaimer).toBe(
-      "AI can make mistakes. Please double-check the answers.",
+      "Our AI can make mistakes. Please double-check the answers.",
     );
     const de = (await import("../src/locales/de/common.js")).default;
     const en = (await import("../src/locales/en/common.js")).default;

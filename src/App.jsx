@@ -8,12 +8,13 @@ import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import OpenButton from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
 import InlineChat from "@/components/InlineChat";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
 import { embedderSettings, inlineTailwindStyles } from "@/main";
 import {
+  applyDisplayed,
   bubbleButtonStyle,
   bubbleWindowCss,
   findMountTarget,
@@ -52,6 +53,26 @@ export default function App() {
   const [mountTarget, setMountTarget] = useState(undefined);
   const chatWindowRef = useRef(null);
   const isInline = !!mountTarget;
+  // Settings für die Komponenten, sobald die Darstellung feststeht (Fixliste
+  // 7.22-rc8 R4): displayMode = tatsächliche Darstellung (Inline nur mit
+  // Platzhalter, sonst Chatfenster; geht mit jeder Chat-Anfrage an den
+  // Server), courseCards = gespeicherter Wert vom Server, sonst der Standard
+  // der Darstellung (In der Seite Kurskarten, Chatfenster Nur Text).
+  // Vorher (mountTarget undefined) wird nichts gerendert.
+  const shownSettings = useMemo(
+    () =>
+      mountTarget === undefined
+        ? embedSettings
+        : applyDisplayed(embedSettings, isInline),
+    [embedSettings, mountTarget],
+  );
+  // Komponenten, die embedderSettings.settings direkt lesen, sehen dieselben
+  // Werte (wie useScriptAttributes nach dem Laden).
+  useEffect(() => {
+    if (mountTarget === undefined) return;
+    embedderSettings.settings.displayMode = shownSettings.displayMode;
+    embedderSettings.settings.courseCards = shownSettings.courseCards;
+  }, [shownSettings, mountTarget]);
   // Mobile Tastatur-Logik (visualViewport) — nur im Blasen-Modus; das Inline-
   // Vollbild-Overlay nutzt denselben Hook in InlineChat.
   const isKeyboardOpen = useMobileKeyboard(
@@ -167,7 +188,7 @@ export default function App() {
     return (
       <I18nextProvider i18n={i18next}>
         <InlineChat
-          settings={embedSettings}
+          settings={shownSettings}
           mountTarget={mountTarget}
           onMountError={() => setMountTarget(null)}
           sessionId={sessionId}
@@ -241,7 +262,7 @@ export default function App() {
           {isChatOpen && (
             <ChatWindow
               closeChat={() => toggleOpenChat(false)}
-              settings={embedSettings}
+              settings={shownSettings}
               sessionId={sessionId}
               conversationId={conversationId}
               newConversation={newConversation}

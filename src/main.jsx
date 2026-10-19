@@ -210,8 +210,12 @@ const customCss = `
       outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent));
     }
   }
-  #anything-llm-inline-send:hover {
-    opacity: 0.9;
+  /* Hover des Absende-Buttons nur mit echtem Zeiger (Restpunkt rc7 Nr. 3):
+     auf Touch-Geräten bliebe er nach dem Tippen abgedunkelt */
+  @media (hover: hover) {
+    #anything-llm-inline-send:hover {
+      opacity: 0.9;
+    }
   }
   .allm-inline-chip {
     transition: border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
@@ -242,13 +246,16 @@ const customCss = `
   }
   /* KI-Hinweis unter der Eingabe: eine Zeile, 11 px; in schmalen Fenstern
      bis 10 px kleiner, damit der ganze Satz passt (Fixliste 7.22-rc7 Nr. 22).
-     Ohne Containerabfragen gilt die erste Angabe (11 px). */
+     Teiler 34 = Breite des Satzes je px Schriftgröße (Fixliste 7.22-rc8 R1,
+     gemessen: deutsch 345 px bei 11 px in DejaVu Sans, Inline mit breiter
+     Seitenschrift bis 356 px), 4 px = Seitenränder (ChatContainer
+     AiDisclaimer). Ohne Containerabfragen gilt die erste Angabe (11 px). */
   .allm-ai-disclaimer-box {
     container-type: inline-size;
   }
   .allm-ai-disclaimer {
     font-size: 11px;
-    font-size: clamp(10px, calc((100cqi - 16px) / 30), 11px);
+    font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px);
   }
   /* Schließen-X der Willkommensblasen: ohne Hover-Zeiger (Touch) immer
      sichtbar, sonst wie bisher erst beim Hover über die Blasen */
