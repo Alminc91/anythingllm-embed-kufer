@@ -829,7 +829,7 @@ export function warnIfInlineInputIgnored(script = {}, isInline = false) {
   if (isInline || layoutValidations.inlineInput(script?.inlineInput) !== true)
     return false;
   console.warn(
-    "[AnythingLLM Embed] inlineInput (data-inline-input) wirkt nur im Inline-Modus und wird in der Chat-Blase ignoriert.",
+    "[AnythingLLM Embed] inlineInput (data-inline-input) wirkt nur im Inline-Modus und wird im Chatfenster ignoriert.",
   );
   return true;
 }
@@ -1023,13 +1023,13 @@ export function findMountTarget(selector, host = null) {
     matches = document.querySelectorAll(sel);
   } catch (e) {
     console.warn(
-      `[AnythingLLM Embed] Ungültiger data-mount-Selektor "${sel}". Die Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Ungültiger data-mount-Selektor "${sel}". Das Chatfenster wird verwendet.`,
     );
     return null;
   }
   if (matches.length === 0) {
     console.warn(
-      `[AnythingLLM Embed] Inline-Modus: Platzhalter "${sel}" nicht gefunden. Die Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Inline-Modus: Platzhalter "${sel}" nicht gefunden. Das Chatfenster wird verwendet.`,
     );
     return null;
   }
@@ -1040,7 +1040,7 @@ export function findMountTarget(selector, host = null) {
   const target = matches[0];
   if (!isSuitableMountTarget(target, host)) {
     console.warn(
-      `[AnythingLLM Embed] Platzhalter "${sel}" ist als Einhängeort ungeeignet (<${target.tagName.toLowerCase()}>). Die Chat-Blase wird verwendet.`,
+      `[AnythingLLM Embed] Platzhalter "${sel}" ist als Einhängeort ungeeignet (<${target.tagName.toLowerCase()}>). Das Chatfenster wird verwendet.`,
     );
     return null;
   }

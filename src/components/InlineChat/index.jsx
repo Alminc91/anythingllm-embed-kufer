@@ -907,7 +907,7 @@ export default function InlineChat({
       } catch (e) {
         // z. B. Platzhalter inzwischen ungeeignet/entfernt -> Blase
         console.warn(
-          "[AnythingLLM Embed] Inline-Modus: Einhängen fehlgeschlagen. Die Chat-Blase wird verwendet.",
+          "[AnythingLLM Embed] Inline-Modus: Einhängen fehlgeschlagen. Das Chatfenster wird verwendet.",
           e,
         );
         if (host.parentNode !== document.body) document.body.appendChild(host);

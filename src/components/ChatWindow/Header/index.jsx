@@ -170,8 +170,13 @@ export default function ChatWindowHeader({
       className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)]"
       id="anything-llm-header"
     >
+      {/* Titelteil (Logo, Name, Untertitel) und Knopfgruppe (⋮, X) stehen
+          beide im Fluss: der Titelteil darf schrumpfen (min-width 0), die
+          Knöpfe nicht. So enden Name und Untertitel mit Ellipse 8 px (pr-2)
+          vor dem Menü statt darunter zu laufen (Fixliste 7.22-rc10 W1,
+          Chatfenster 360 px). */}
       <div
-        className={`allm-flex allm-items-center allm-px-4 allm-flex-1 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
+        className={`allm-flex allm-items-center allm-pl-4 allm-pr-2 allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
           compact ? "allm-h-[56px]" : "allm-h-[76px]"
         }`}
       >
@@ -199,13 +204,14 @@ export default function ChatWindowHeader({
             <span
               className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
               style={{ color: "var(--allmi-header-text, #1f2937)" }}
+              title={settings.brandText}
             >
               {settings.brandText}
             </span>
           )
         )}
       </div>
-      <div className="allm-absolute allm-right-0 allm-flex allm-gap-x-1 allm-items-center allm-px-[22px]">
+      <div className="allm-flex allm-flex-shrink-0 allm-gap-x-1 allm-items-center allm-pr-[22px]">
         {settings.loaded && (
           <button
             ref={buttonRef}
@@ -249,7 +255,8 @@ export default function ChatWindowHeader({
 // ignoriert (utils/layout.js FIXED_STANDARDS).
 
 // Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
-// ohne Untertitel bleibt die bisherige einzeilige Darstellung.
+// ohne Untertitel bleibt die bisherige einzeilige Darstellung. Beide Zeilen
+// werden bei Platzmangel mit Ellipse gekürzt; title trägt den vollen Text.
 function BrandWithSubtitle({ settings, compact }) {
   return (
     <div
@@ -260,6 +267,7 @@ function BrandWithSubtitle({ settings, compact }) {
         <span
           className="allm-font-semibold allm-text-sm allm-truncate"
           style={{ color: "var(--allmi-header-text, #1f2937)" }}
+          title={settings.brandText}
         >
           {settings.brandText}
         </span>
@@ -273,6 +281,7 @@ function BrandWithSubtitle({ settings, compact }) {
             lineHeight: 1.35,
             color: "var(--allmi-text-muted, #6b7280)",
           }}
+          title={settings.assistantSubtitle}
         >
           {settings.assistantSubtitle}
         </span>
