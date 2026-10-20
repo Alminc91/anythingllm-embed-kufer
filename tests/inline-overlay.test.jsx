@@ -103,7 +103,7 @@ describe("Settings inlineLayout / inlineEffect", () => {
     });
     const s = await loadEmbedSettings({ ...BASE }, fetchFn);
     expect(fetchFn).toHaveBeenCalledWith(
-      `${BASE.baseApiUrl}/${BASE.embedId}/config`,
+      `${BASE.baseApiUrl}/${BASE.embedId}/config?language=de`,
     );
     expect(s.inlineLayout).toBe("overlay");
     expect(s.inlineEffect).toBe("spring");

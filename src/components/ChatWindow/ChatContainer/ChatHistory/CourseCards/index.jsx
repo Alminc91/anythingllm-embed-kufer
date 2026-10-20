@@ -1,5 +1,7 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useEmbedMode from "@/hooks/useEmbedMode";
+import { embedderSettings } from "@/main";
+import { uiTexts } from "@/utils/layout";
 import {
   MORE_COURSES_TEXT,
   rowLead,
@@ -685,7 +687,7 @@ function CourseCards({
   if (part === "footer" && footerCards.length > 0) {
     return (
       <section
-        aria-label="Weitere genannte Kurse"
+        aria-label={uiTexts(embedderSettings.settings).moreCourses}
         data-course-cards-footer=""
         className="allm-course-cards-footer allm-font-sans allm-mt-2 allm-ml-[54px] allm-mr-6"
         style={{ color: TEXT }}
@@ -716,7 +718,7 @@ function CourseCards({
 
   return (
     <section
-      aria-label="Genannte Kurse"
+      aria-label={uiTexts(embedderSettings.settings).courses}
       data-course-cards=""
       data-compact={compact ? "true" : "false"}
       data-position={above ? "above" : "below"}

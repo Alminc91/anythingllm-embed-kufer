@@ -270,6 +270,10 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const boxRef = useRef(null);
+  // Daumen (Öffner des Kommentarfelds): Bereich der Escape-Ebene und
+  // Fokusziel nach Escape (Fixliste 7.22-rc13 W02, W03)
+  const thumbsRef = useRef(null);
+  const downRef = useRef(null);
 
   // Beim Aufklappen die GANZE Box in den sichtbaren Bereich scrollen — sonst
   // verschwindet sie bei der letzten Antwort hinter dem Eingabefeld. Sauber
@@ -354,8 +358,15 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     setComment("");
   };
   // Escape schließt nur das Kommentarfeld (wie „Überspringen“), nicht das
-  // ganze Fenster; der Entwurf im Eingabefeld bleibt (utils/escape.js).
-  useEscapeLayer(showComment, dismissComment);
+  // ganze Fenster; der Entwurf im Eingabefeld bleibt (utils/escape.js). Nur
+  // ein Escape aus dem Kommentarfeld, von den Daumen oder ohne Fokus: Aus dem
+  // Haupt-Eingabefeld schließt Escape weiter das Fenster, auch wenn ein
+  // Kommentarfeld weiter oben im Verlauf offen ist (W02). Danach steht der
+  // Fokus auf „Daumen runter“ (W03).
+  useEscapeLayer(showComment, dismissComment, {
+    within: () => [boxRef.current, thumbsRef.current],
+    returnFocus: () => downRef.current,
+  });
   const ui = uiTexts(embedderSettings.settings);
 
   const btnBase =
@@ -364,7 +375,10 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
 
   return (
     <>
-      <div className="allm-flex allm-items-center allm-gap-x-1.5">
+      <div
+        ref={thumbsRef}
+        className="allm-flex allm-items-center allm-gap-x-1.5"
+      >
         <span
           className="allm-text-[color:var(--allmi-text-muted,#d1d5db)] allm-select-none"
           aria-hidden="true"
@@ -386,6 +400,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
         </button>
         <button
+          ref={downRef}
           type="button"
           onClick={() => submit(false)}
           disabled={busy}
@@ -593,7 +608,9 @@ const HistoricalMessage = forwardRef(
                   embedderSettings.settings.brandImageUrl ||
                   AnythingLLMIcon
                 }
-                alt="Anything LLM Icon"
+                // dekorativ: der Name steht als Text daneben bzw. darüber (Fixliste
+                // 7.22-rc13 W04, vorher fest englisch „Brand“/„Anything LLM Icon“)
+                alt=""
                 className="allm-w-9 allm-h-9 allm-object-contain"
                 style={{ borderRadius: LOGO_RADIUS }}
                 id="anything-llm-icon"

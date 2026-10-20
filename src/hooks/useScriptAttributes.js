@@ -16,6 +16,7 @@ import {
 } from "@/utils/layout";
 import { applyTheme, userTextColorFor } from "@/utils/theme";
 import { syncI18nLanguage } from "@/i18n";
+import { widgetLanguage } from "@/utils/language";
 
 // Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
@@ -34,6 +35,13 @@ const SERVER_GROUPS = [["greeting", "greetingBubbleText"]];
 // privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
 // (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
 const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
+// Kennzeichen der Startvorschläge vom Server (Vertrag mit dem Fork, GET
+// /embed/:id/config, Fixliste 7.22-rc13 F02): defaultMessagesSaved = im
+// Design Center gespeichert, auch als leere Liste; defaultMessagesStandard =
+// nichts gespeichert, die Liste ist der Standard der Sprache. Beide werden
+// nach dem Auflösen entfernt (applyDefaultMessagesOrder).
+const DEFAULT_MESSAGES_SAVED = "defaultMessagesSaved";
+const DEFAULT_MESSAGES_STANDARD = "defaultMessagesStandard";
 
 // Rohe Script-Attribute (data-*), wie die Seite sie gesetzt hat, bevor
 // embedderSettings.settings mit den aufgelösten Werten überschrieben wird.
@@ -202,7 +210,10 @@ export const DEFAULT_SETTINGS = {
   openOnLoad: "off", // or "on"
   supportEmail: "info@kufer.de", // string of email for contact
   username: null, // The display or readable name set on a script
-  defaultMessages: [], // list of strings for default messages.
+  // Startvorschläge (Liste von Strings): gespeichert im Design Center (auch
+  // leer) vor data-default-messages (kommagetrennt) vor dem Standard der
+  // Sprache vom Server (applyDefaultMessagesOrder, Fixliste 7.22-rc13 F02)
+  defaultMessages: [],
   displayChatbotBubbles: true, // controls whether welcome message bubbles are shown
   chatbotBubblesMessages: [], // messages to display in welcome bubbles
   // Willkommensblasen je Gerät (KIE-568, Design Center „Willkommensblasen
@@ -225,7 +236,9 @@ export const DEFAULT_SETTINGS = {
 
 // Script-Attribute + Server-visual_config zu den finalen Settings auflösen
 // (ohne Seiteneffekte; testbar mit gemocktem fetch).
-// Priority: defaults < script data-attributes < server config (live design)
+// Priority: defaults < script data-attributes < server config (live design).
+// Ausnahme Startvorschläge: Der Standard des Servers liegt unter dem
+// Skript-Attribut (applyDefaultMessagesOrder).
 export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   const scriptSettings = parseAndValidateEmbedSettings(dataset);
   for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
@@ -234,7 +247,7 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   let serverConfig = {};
   try {
     const res = await fetchFn(
-      `${scriptSettings.baseApiUrl}/${scriptSettings.embedId}/config`,
+      embedConfigUrl({ ...DEFAULT_SETTINGS, ...scriptSettings }),
     );
     if (res.ok) serverConfig = await res.json();
   } catch (e) {
@@ -257,6 +270,7 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   const server = dropLegacyDefaults(
     parseAndValidateEmbedSettings(mergedServerConfig),
   );
+  applyDefaultMessagesOrder(script, server);
   for (const group of SERVER_GROUPS)
     if (group.some((key) => server[key] !== undefined))
       for (const key of group) delete script[key];
@@ -269,6 +283,38 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
   warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
   return resolved;
+}
+
+// Abruf der Konfiguration mit der Sprache des Widgets (Fixliste 7.22-rc13
+// F01, Entscheidung E12): Die Sprache steht nur im Skript (data-language,
+// sonst "de"); der Server wählt damit die Standard-Startvorschläge
+// (fehlend oder unbekannt = de). Die Abfrage trennt auch den Cache je
+// Sprache (max-age=300).
+export function embedConfigUrl(settings = {}) {
+  const language = encodeURIComponent(widgetLanguage(settings));
+  return `${settings.baseApiUrl}/${settings.embedId}/config?language=${language}`;
+}
+
+// Startvorschläge (Fixliste 7.22-rc13 F02, Entscheidung E10): gespeicherte
+// Liste (auch leer) vor data-default-messages am Skript vor dem Standard des
+// Servers. Ein Standard (defaultMessagesStandard) weicht einem nicht leeren
+// Skript-Attribut; eine gespeicherte Liste gewinnt immer, ein gespeichertes
+// [] (defaultMessagesSaved) heißt „keine Startvorschläge“, auch mit
+// Skript-Attribut. Ohne Liste vom Server (älterer Server, keine Antwort)
+// gilt das Skript-Attribut wie bisher. Ändert server und script an Ort und
+// Stelle.
+export function applyDefaultMessagesOrder(script = {}, server = {}) {
+  const saved = server[DEFAULT_MESSAGES_SAVED] === true;
+  const standard = !saved && server[DEFAULT_MESSAGES_STANDARD] === true;
+  delete server[DEFAULT_MESSAGES_SAVED];
+  delete server[DEFAULT_MESSAGES_STANDARD];
+  delete script[DEFAULT_MESSAGES_SAVED];
+  delete script[DEFAULT_MESSAGES_STANDARD];
+  if (saved && !Array.isArray(server.defaultMessages))
+    server.defaultMessages = [];
+  if (!Array.isArray(server.defaultMessages)) return;
+  if (standard && script.defaultMessages?.length > 0)
+    delete server.defaultMessages;
 }
 
 export default function useGetScriptAttributes() {
@@ -332,35 +378,32 @@ const validations = {
   // undefined = ungültig -> Feld wird verworfen (siehe unten).
   ...layoutValidations,
 
-  _fallbacks: {
-    defaultMessages: [],
-    chatbotBubblesMessages: [],
-  },
-
-  defaultMessages: function (value = null) {
-    if (typeof value !== "string") return this._fallbacks.defaultMessages;
-    const list = value
-      .split(",")
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter((v) => v.length > 0);
-    return list;
-  },
-
-  chatbotBubblesMessages: function (value = null) {
-    if (typeof value !== "string")
-      return this._fallbacks.chatbotBubblesMessages;
-    const list = value
-      .split(",")
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter((v) => v.length > 0);
-    return list;
-  },
+  defaultMessages: messageList,
+  chatbotBubblesMessages: messageList,
 };
+
+// Startvorschläge und Willkommensblasen: Der Server liefert ein Array von
+// Strings (Fixliste 7.22-rc13 F03, Entscheidung E11), jeder Eintrag bleibt
+// ganz, auch mit Komma („Gibt es Kurse, die abends stattfinden?“). An Kommas
+// getrennt wird nur ein String: das Skript-Attribut (data-default-messages=
+// "A,B", Bestand) und die Antwort älterer Server. Leere Einträge und
+// Nicht-Strings fallen weg; alles andere ergibt eine leere Liste.
+function messageList(value = null) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return items
+    .filter((v) => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+}
 
 export function parseAndValidateEmbedSettings(settings = {}) {
   const validated = {};
   for (let [key, value] of Object.entries(settings)) {
-    if (!validations.hasOwnProperty(key)) {
+    if (!Object.prototype.hasOwnProperty.call(validations, key)) {
       validated[key] = value;
       continue;
     }

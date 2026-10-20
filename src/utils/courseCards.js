@@ -418,6 +418,16 @@ export function cardsAnnounced(entry) {
   return Number.isInteger(n) && n > 0;
 }
 
+// Kurskarten je Antwort (Fixliste 7.22-rc13 W07): Eine Antwort, zu der der
+// Server Karten angekündigt hat, wurde im Kartenmodus beantwortet (kurzer
+// Text ohne Kursnamen und Links, z. B. „In der Seite“). Sie zeigt ihre
+// Karten auch dort, wo sonst „Nur Text mit Links“ gilt, etwa wenn derselbe
+// Verlauf auf einer Unterseite ohne Platzhalter im Chatfenster lädt. Für
+// alle anderen Antworten gilt die Einstellung (settings.courseCards).
+export function entryCourseCards(settings = {}, entry = null) {
+  return cardsAnnounced(entry) ? "auto" : settings?.courseCards;
+}
+
 /**
  * Markdown-Zeichen aus einem Linktext entfernen ("**Umwelt und Gesundheit**"
  * -> "Umwelt und Gesundheit"): Backticks, ** und __, sowie * und _ am

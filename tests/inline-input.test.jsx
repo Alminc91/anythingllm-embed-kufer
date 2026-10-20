@@ -176,7 +176,7 @@ describe("Settings inlineInput / inlineInputPlaceholder / inlineSendText", () =>
     });
     const s = await loadEmbedSettings({ ...BASE }, fetchFn);
     expect(fetchFn).toHaveBeenCalledWith(
-      `${BASE.baseApiUrl}/${BASE.embedId}/config`,
+      `${BASE.baseApiUrl}/${BASE.embedId}/config?language=de`,
     );
     expect(s.inlineInput).toBe(true);
     expect(s.inlineInputPlaceholder).toBe("Fragen Sie uns …");

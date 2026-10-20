@@ -131,17 +131,26 @@ export function onAccentTextColor(settings = {}, page = {}) {
 // mindestens 4,5:1 zur Fläche: hell auf der weißen Pille (abgedunkelt, wenn
 // nötig), dunkel auf dem Panelton (Fenster DARK.bg und Fläche DARK.surface,
 // aufgehellt, wenn nötig). Reicht die Kundenfarbe schon, bleibt es
-// var(--allmi-accent) (folgt dann auch einem --allm-accent der Seite);
-// nicht auswertbare Farbe: hell der Akzent, dunkel der Text des dunklen
-// Satzes (bisher). Gezeigt wird die Kundenfarbe der Seite (page.accent),
-// sonst die aus dem Design Center.
+// var(--allmi-accent) (folgt dann auch einem --allm-accent der Seite).
+// Gezeigt wird die Kundenfarbe der Seite (page.accent), sonst die aus dem
+// Design Center. Setzt die Seite eine Farbe, die das Widget nicht auswerten
+// kann (page.accent "unparsed": Farbname, hsl(), oklch()), gilt die Farbe
+// aus dem Design Center, als fester Wert (nicht var(--allmi-accent), das
+// wäre wieder die Seitenfarbe): Pillenschrift auch dann mit mindestens
+// 4,5:1 (Fixliste 7.22-rc13 W06; vorher z. B. gold auf Weiß, 1,4:1).
+// Ist auch die nicht auswertbar: hell der Akzent, dunkel der Text des
+// dunklen Satzes (bisher).
 export const PILL_BG_LIGHT = "#FFFFFF";
 export function pillTextColor(settings = {}, mode = "light", page = {}) {
-  const accent = page.accent || cssValue(settings.buttonColor, DEFAULTS.accent);
+  const unparsed = page.accent === "unparsed";
+  const accent =
+    (!unparsed && page.accent) ||
+    cssValue(settings.buttonColor, DEFAULTS.accent);
   const backgrounds =
     mode === "dark" ? [DARK.bg, DARK.surface] : [PILL_BG_LIGHT];
   const text = accessibleTextColor(accent, backgrounds);
   if (!text) return mode === "dark" ? DARK.text : "var(--allmi-accent)";
+  if (unparsed) return text;
   const same = parseColor(text).every((v, i) => v === parseColor(accent)[i]);
   return same ? "var(--allmi-accent)" : text;
 }

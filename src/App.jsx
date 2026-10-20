@@ -5,7 +5,7 @@ import useSessionId from "@/hooks/useSessionId";
 import useConversationId from "@/hooks/useConversationId";
 import useOpenChat from "@/hooks/useOpen";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
-import OpenButton from "@/components/OpenButton";
+import OpenButton, { phoneAtLoad } from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
 import InlineChat from "@/components/InlineChat";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,7 +22,7 @@ import {
   whenDomReady,
 } from "@/utils/layout";
 import {
-  closeTopEscapeLayer,
+  closeEscapeLayerFor,
   focusInPageField,
   isImeEscape,
 } from "@/utils/escape";
@@ -39,6 +39,10 @@ const BUBBLE_WINDOW_STYLE = {
 };
 
 export default function App() {
+  // Gerät für die Willkommensblasen beim Laden der Seite festhalten, auch
+  // wenn der Chat offen startet (wiederhergestellter Offen-Zustand, Chat-
+  // Button erst nach dem Schließen sichtbar; Fixliste 7.22-rc13 W08)
+  useState(phoneAtLoad);
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
@@ -138,18 +142,18 @@ export default function App() {
   // Element hat die Taste schon verarbeitet (defaultPrevented), IME-Eingabe,
   // der Fokus steht in einem Texteingabefeld der Seite (dort bleibt Escape
   // beim Feld), oder ein verschachtelter Schritt ist offen (Kommentarfeld,
-  // „Frühere Chats“: nur dieser schließt). Danach Fokus auf den Chat-Knopf,
-  // damit Tastaturnutzer nicht auf <body> landen.
+  // „Frühere Chats“: nur dieser schließt; preventDefault nur bei Escape aus
+  // dem Widget oder ohne Fokus, Fixliste 7.22-rc13 W01). Danach Fokus auf
+  // den Chat-Button, damit Tastaturnutzer nicht auf <body> landen.
   const restoreFocusRef = useRef(false);
   useEffect(() => {
     if (!isChatOpen || mountTarget !== null) return;
     const onKeyDown = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
-      if (focusInPageField(e, embedderSettings.hostElement)) return;
-      if (closeTopEscapeLayer()) {
-        e.preventDefault();
+      const host = embedderSettings.hostElement;
+      if (focusInPageField(e, host)) return;
+      if (closeEscapeLayerFor(e, { host, root: embedderSettings.shadowRoot }))
         return;
-      }
       restoreFocusRef.current = true;
       toggleOpenChat(false);
     };

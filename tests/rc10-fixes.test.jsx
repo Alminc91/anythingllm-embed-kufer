@@ -7,11 +7,13 @@ import { join } from "node:path";
 // Korrekturrunde Design Center 2.0, Fixliste 7.22-rc10, Teil Widget
 // (issues/rollout-721/fixliste-7.22-rc10.md):
 // W1 Untertitel-Kollision in der Titelleiste des Chatfensters: Knopfgruppe
-//    (⋮, X) im Fluss statt absolut, Titelblock darf schrumpfen (min-width 0),
-//    Name und Untertitel mit Ellipse und title-Attribut (voller Text).
-//    Die Maße (Abstand Untertitel zu ⋮ >= 8 px bei 360/390/420 px, Ellipse
-//    sichtbar) misst .test-storage/rc10/probe_w1.py mit gebautem dist und
-//    Playwright; hier nur die Struktur, die jsdom prüfen kann.
+//    (⋮, X) im Fluss statt absolut, Titelblock darf schrumpfen (min-width 0).
+//    Seit Fixliste 7.22-rc13 N3 (Nutzerentscheidung) brechen Name und
+//    Untertitel um statt mit Ellipse zu enden; die Fälle unten prüfen das
+//    (weitere N3-Fälle in rc13-fixes.test.jsx). Die Maße (Abstand zu ⋮
+//    >= 8 px, nichts abgeschnitten bei 360/390/420 px) misst
+//    .test-storage/rc13/probe_n3.py mit gebautem dist und Playwright; hier
+//    nur die Struktur, die jsdom prüfen kann.
 // W2 Konsolenwarnungen „Chatfenster“ statt „Chat-Blase“.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -86,20 +88,21 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
     expect(hasClass(left, "allm-min-w-0")).toBe(true);
   });
 
-  it("Name und Untertitel: Ellipse (truncate) und title mit vollem Text, Titelblock min-width 0", async () => {
+  it("Name und Untertitel: umbrechen statt Ellipse, kein title (N3), Titelblock min-width 0", async () => {
     render(<ChatWindowHeader settings={await load({ brandText: NAME })} />);
     const sub = $("#anything-llm-header-subtitle");
     expect(sub.textContent).toBe(DE_SUBTITLE);
-    expect(sub.getAttribute("title")).toBe(DE_SUBTITLE);
-    expect(hasClass(sub, "allm-truncate")).toBe(true);
+    expect(sub.hasAttribute("title")).toBe(false);
+    expect(hasClass(sub, "allm-truncate")).not.toBe(true);
+    expect(sub.style.overflowWrap).toBe("anywhere");
     const name = sub.previousElementSibling;
     expect(name.textContent).toBe(NAME);
-    expect(name.getAttribute("title")).toBe(NAME);
-    expect(hasClass(name, "allm-truncate")).toBe(true);
+    expect(name.hasAttribute("title")).toBe(false);
+    expect(hasClass(name, "allm-truncate")).not.toBe(true);
     expect(sub.parentElement.style.minWidth).toMatch(/^0(px)?$/);
   });
 
-  it("eigener Untertitel vom Server: title zeigt diesen Text", async () => {
+  it("eigener Untertitel vom Server: voller Text, umbrechend", async () => {
     render(
       <ChatWindowHeader
         settings={await load(
@@ -110,10 +113,11 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
     );
     const sub = $("#anything-llm-header-subtitle");
     expect(sub.textContent).toBe("durchsucht 1.243 Kurse");
-    expect(sub.getAttribute("title")).toBe("durchsucht 1.243 Kurse");
+    expect(sub.hasAttribute("title")).toBe(false);
+    expect(sub.style.overflowWrap).toBe("anywhere");
   });
 
-  it('ohne Untertitel ("" vom Server): einzeiliger Name mit Ellipse und title', async () => {
+  it('ohne Untertitel ("" vom Server): Name umbrechend, ⋮ und ✕ im Fluss', async () => {
     render(
       <ChatWindowHeader
         settings={await load({ brandText: NAME }, { assistantSubtitle: "" })}
@@ -124,13 +128,14 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
       (s) => s.textContent === NAME,
     );
     expect(name).not.toBe(undefined);
-    expect(name.getAttribute("title")).toBe(NAME);
-    expect(hasClass(name, "allm-truncate")).toBe(true);
+    expect(name.hasAttribute("title")).toBe(false);
+    expect(hasClass(name, "allm-truncate")).not.toBe(true);
+    expect(name.style.overflowWrap).toBe("anywhere");
     const group = $('button[aria-label="Optionen"]').parentElement;
     expect(hasClass(group, "allm-absolute")).not.toBe(true);
   });
 
-  it("kompakt (mobile Tastatur): kein Untertitel, Name behält title", async () => {
+  it("kompakt (mobile Tastatur): kein Untertitel, Name umbrechend", async () => {
     render(
       <ChatWindowHeader settings={await load({ brandText: NAME })} compact />,
     );
@@ -138,7 +143,8 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
     const name = [...container.querySelectorAll("span")].find(
       (s) => s.textContent === NAME,
     );
-    expect(name.getAttribute("title")).toBe(NAME);
+    expect(hasClass(name, "allm-truncate")).not.toBe(true);
+    expect(name.style.overflowWrap).toBe("anywhere");
   });
 });
 

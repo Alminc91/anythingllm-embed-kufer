@@ -43,7 +43,9 @@ const BASE = {
 // gemockter /config-Fetch
 function fetchConfig(config) {
   return vi.fn(async (url) => {
-    expect(url).toBe(`${BASE.baseApiUrl}/${BASE.embedId}/config`);
+    // mit der Sprache des Widgets (ohne data-language: de, Fixliste
+    // 7.22-rc13 F01)
+    expect(url).toBe(`${BASE.baseApiUrl}/${BASE.embedId}/config?language=de`);
     return { ok: true, json: async () => config };
   });
 }

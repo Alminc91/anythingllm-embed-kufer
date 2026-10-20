@@ -20,6 +20,21 @@ import {
 } from "@/utils/theme";
 import { panelTexts, uiTexts } from "@/utils/layout";
 
+// Name und Untertitel immer ausgeschrieben, Standard wie eigener Text des
+// Kunden: umbrechen statt kürzen (keine Ellipse, kein title-Ersatz nötig).
+// overflowWrap "anywhere" trennt notfalls auch ein einzelnes überlanges
+// Wort, damit nichts unter das Menü läuft (Nutzerentscheidung N3, Fixliste
+// 7.22-rc13; ersetzt die Ellipse aus rc10 W1).
+export const HEADER_WRAP = {
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+};
+
+// Menü unter ⋮: bei der üblichen Kopfhöhe (76 px, kompakt 56 px) wie bisher
+// 64 px unter der Oberkante; wird der Kopf durch umbrochene Zeilen höher,
+// wandert es mit dem mittig stehenden ⋮ nach unten (N3).
+const OPTIONS_MENU_TOP = "max(64px, calc(50% + 26px))";
+
 export default function ChatWindowHeader({
   sessionId,
   conversationId = null,
@@ -172,12 +187,13 @@ export default function ChatWindowHeader({
     >
       {/* Titelteil (Logo, Name, Untertitel) und Knopfgruppe (⋮, X) stehen
           beide im Fluss: der Titelteil darf schrumpfen (min-width 0), die
-          Knöpfe nicht. So enden Name und Untertitel mit Ellipse 8 px (pr-2)
-          vor dem Menü statt darunter zu laufen (Fixliste 7.22-rc10 W1,
-          Chatfenster 360 px). */}
+          Buttons nicht (Fixliste 7.22-rc10 W1). Name und Untertitel werden nie
+          gekürzt: Bei Platzmangel brechen sie um und enden mindestens 8 px
+          (pr-2) vor dem Menü, der Kopf wird dafür höher (Mindesthöhe 76 px,
+          kompakt 56 px; Nutzerentscheidung N3, Fixliste 7.22-rc13). */}
       <div
-        className={`allm-flex allm-items-center allm-pl-4 allm-pr-2 allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
-          compact ? "allm-h-[56px]" : "allm-h-[76px]"
+        className={`allm-flex allm-items-center allm-pl-4 allm-pr-2 allm-py-2 allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
+          compact ? "allm-min-h-[56px]" : "allm-min-h-[76px]"
         }`}
       >
         <div
@@ -186,7 +202,9 @@ export default function ChatWindowHeader({
         >
           <img
             src={iconUrl ?? AnythingLLMIcon}
-            alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
+            // dekorativ: der Name steht als Text daneben bzw. darüber (Fixliste
+            // 7.22-rc13 W04, vorher fest englisch „Brand“/„Anything LLM Icon“)
+            alt=""
             style={{
               maxWidth: compact ? "28px" : "40px",
               maxHeight: compact ? "28px" : "40px",
@@ -202,9 +220,11 @@ export default function ChatWindowHeader({
         ) : (
           settings.brandText && (
             <span
-              className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
-              style={{ color: "var(--allmi-header-text, #1f2937)" }}
-              title={settings.brandText}
+              className="allm-ml-3 allm-font-semibold allm-text-sm allm-font-sans allm-min-w-0"
+              style={{
+                ...HEADER_WRAP,
+                color: "var(--allmi-header-text, #1f2937)",
+              }}
             >
               {settings.brandText}
             </span>
@@ -241,7 +261,8 @@ export default function ChatWindowHeader({
           openHistory
             ? () => {
                 setShowOptions(false);
-                openHistory();
+                // ⋮ als Öffner: Fokus nach Escape in „Frühere Chats“
+                openHistory(buttonRef.current);
               }
             : null
         }
@@ -255,8 +276,7 @@ export default function ChatWindowHeader({
 // ignoriert (utils/layout.js FIXED_STANDARDS).
 
 // Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
-// ohne Untertitel bleibt die bisherige einzeilige Darstellung. Beide Zeilen
-// werden bei Platzmangel mit Ellipse gekürzt; title trägt den vollen Text.
+// ohne Untertitel steht nur der Name. Beide brechen bei Platzmangel um.
 function BrandWithSubtitle({ settings, compact }) {
   return (
     <div
@@ -265,9 +285,8 @@ function BrandWithSubtitle({ settings, compact }) {
     >
       {settings.brandText && (
         <span
-          className="allm-font-semibold allm-text-sm allm-truncate"
-          style={{ color: "var(--allmi-header-text, #1f2937)" }}
-          title={settings.brandText}
+          className="allm-font-semibold allm-text-sm"
+          style={{ ...HEADER_WRAP, color: "var(--allmi-header-text, #1f2937)" }}
         >
           {settings.brandText}
         </span>
@@ -275,13 +294,12 @@ function BrandWithSubtitle({ settings, compact }) {
       {!compact && (
         <span
           id="anything-llm-header-subtitle"
-          className="allm-truncate"
           style={{
+            ...HEADER_WRAP,
             fontSize: "11.5px",
             lineHeight: 1.35,
             color: "var(--allmi-text-muted, #6b7280)",
           }}
-          title={settings.assistantSubtitle}
         >
           {settings.assistantSubtitle}
         </span>
@@ -324,7 +342,8 @@ function OptionsMenu({
   return (
     <div
       ref={menuRef}
-      className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
+      className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-right-[46px]"
+      style={{ top: OPTIONS_MENU_TOP }}
     >
       {/* Reset bleibt oben (häufigste Aktion, gewohnte Position), "Frühere
           Chats" (KIE-503) direkt darunter. */}

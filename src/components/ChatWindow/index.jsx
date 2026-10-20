@@ -13,7 +13,7 @@ import { embedderSettings } from "@/main";
 import { panelTexts } from "@/utils/layout";
 import { useEscapeLayer } from "@/utils/escape";
 import useEmbedMode from "@/hooks/useEmbedMode";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function ChatWindow({
   closeChat,
@@ -41,9 +41,20 @@ export default function ChatWindow({
   const historyEnabled =
     settings?.historyEnabled !== false &&
     String(settings?.historyEnabled) !== "false";
-  const openHistory = historyEnabled ? () => setShowHistory(true) : null;
+  // Öffner der Ansicht (⋮ in der Titelleiste, von ChatWindowHeader
+  // übergeben): bekommt nach Escape den Fokus zurück (Fixliste 7.22-rc13 W03)
+  const historyOpenerRef = useRef(null);
+  const openHistory = historyEnabled
+    ? (opener = null) => {
+        historyOpenerRef.current = opener;
+        setShowHistory(true);
+      }
+    : null;
   // Escape in „Frühere Chats“: zurück zum Chat statt das Fenster zu schließen
-  useEscapeLayer(showHistory, () => setShowHistory(false));
+  // (die Ansicht deckt das ganze Fenster ab und nimmt jedes Escape)
+  useEscapeLayer(showHistory, () => setShowHistory(false), {
+    returnFocus: () => historyOpenerRef.current,
+  });
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,

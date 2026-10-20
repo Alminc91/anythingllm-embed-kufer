@@ -346,9 +346,10 @@ export function greetingText(settings = {}) {
 
 // Begrüßung für die Blase: bis GREETING_BUBBLE_TEXT_MAX_LEN Zeichen
 // unverändert, länger auf ein Wortende gekürzt (ab GREETING_WORD_CUT_MIN,
-// davor hart) mit „…“. Wörtlich dieselbe Regel wie greetingBubbleText() im
-// Fork (server/utils/chats/embedStandards.js) und previewGreetingBubble()
-// im Design Center.
+// davor hart) mit „…“. Allein das Widget kürzt (Review 7.22-rc6 F08), der
+// Server liefert die Begrüßung ungekürzt. Wörtlich dieselbe Regel wie
+// bubbleGreetingText() im Design Center (Fork, EmbedAppearance/widgetKeys.js,
+// genutzt von previewGreeting() für die Vorschau).
 export const GREETING_WORD_CUT_MIN = 200;
 export function shortenGreeting(text) {
   if (typeof text !== "string") return text;

@@ -5,7 +5,6 @@ import {
   Stop,
 } from "@phosphor-icons/react";
 import React, { useState, useRef, useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import ChatService from "@/models/chatService";
 import { isIOS, isTouchDevice } from "@/utils/platform";
 import useEmbedMode from "@/hooks/useEmbedMode";
@@ -42,7 +41,6 @@ export default function PromptInput({
   // der laufenden Antwort). Gilt nur, solange die Übergabe wartet.
   suppressAutoFocus = false,
 }) {
-  const { t } = useTranslation();
   const embedMode = useEmbedMode();
   const formRef = useRef(null);
   // Inline-Box: nach einer Antwort nur re-fokussieren, wenn der Nutzer
@@ -289,10 +287,12 @@ export default function PromptInput({
                       ? uiTexts(settings).stopRecording
                       : uiTexts(settings).startRecording
                   }
+                  // Tooltip wortgleich mit dem aria-label (uiTexts), in
+                  // jeder Sprache dieselbe Wahl (Fixliste 7.22-rc13 W09)
                   title={
                     isRecording
-                      ? t("chat.stop-recording")
-                      : t("chat.start-recording")
+                      ? uiTexts(settings).stopRecording
+                      : uiTexts(settings).startRecording
                   }
                 >
                   {isTranscribing ? (

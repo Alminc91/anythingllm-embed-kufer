@@ -8,6 +8,7 @@ import {
   courseCardsAbove,
   courseCardsEnabled,
   courseCardsLayout,
+  entryCourseCards,
   followUpsList,
   selectAnnouncedCourseCards,
   teaserMap,
@@ -47,7 +48,6 @@ export default function ChatHistory({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const chatHistoryRef = useRef(null);
   const arrowSlot = useContext(ScrollArrowSlotContext);
-  const cardsAbove = courseCardsAbove(settings);
   // Mit Kurskarten (oben wie unten, KIE-567): beim Antworten höchstens so weit
   // nachführen, dass die Frage oben steht (Anker je Turn). Ohne Karten ("Nur
   // Text mit Links") wie früher immer ans Ende.
@@ -302,7 +302,12 @@ export default function ChatHistory({
           // Kurskarten über der Antwort: stabiler Block je Antwort (Name,
           // Karten, Antwort). Die Karten bleiben beim Wechsel PromptReply ->
           // HistoricalMessage am Stream-Ende im DOM (kein Neuaufbau).
-          const above = cardsAbove && props.role === "assistant";
+          // Kurskarten dieser Antwort: Einstellung, bei vom Server
+          // angekündigten Karten immer an (W07, utils/courseCards.js)
+          const courseCards = entryCourseCards(settings, props);
+          const above =
+            props.role === "assistant" &&
+            courseCardsAbove({ ...settings, courseCards });
 
           // selection: Kurskarten-Auswahl des Blocks oben (nur "above") ->
           // HistoricalMessage zeigt damit nur den Abschlusslink
@@ -331,7 +336,7 @@ export default function ChatHistory({
                 // Sprachausgabe; der Fuß zeigt keine Teaser
                 courseTeasers={above ? null : props.courseTeasers}
                 courseTeaserMap={teasers}
-                courseCards={settings?.courseCards}
+                courseCards={courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
                 // Karten unten: angekündigte Kurse wie oben auswählen
                 courseCardsAnnounced={above ? null : props.courseCardsAnnounced}
@@ -363,7 +368,7 @@ export default function ChatHistory({
             <AssistantTurnAbove
               key={index}
               message={props}
-              courseCards={settings?.courseCards}
+              courseCards={courseCards}
               layout={courseCardsLayout(settings)}
               pendingText={panelTexts(settings).teaserPending}
               renderBody={renderBody}

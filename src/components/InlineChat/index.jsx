@@ -1,4 +1,8 @@
-import { closeTopEscapeLayer, isImeEscape } from "@/utils/escape";
+import {
+  closeEscapeLayerFor,
+  focusInPageField,
+  isImeEscape,
+} from "@/utils/escape";
 import {
   forwardRef,
   useCallback,
@@ -1647,10 +1651,7 @@ export default function InlineChat({
     const onKeyDown = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
       // offener Zwischenschritt (Kommentarfeld, „Frühere Chats“) zuerst
-      if (closeTopEscapeLayer()) {
-        e.preventDefault();
-        return;
-      }
+      if (closeEscapeLayerFor(e, { root, origin: "widget" })) return;
       collapseRef.current();
     };
     root.addEventListener("keydown", onKeyDown);
@@ -1725,11 +1726,12 @@ export default function InlineChat({
       if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
       // aus dem Widget: Listener am Shadow Root (oben)
       if (host && e.composedPath?.().includes(host)) return;
-      if (closeTopEscapeLayer()) {
-        e.preventDefault();
+      // Fokus in einem Feld der Seite: keine Ebene schließt und kein
+      // preventDefault (das Feld bekommt sein Escape, z. B. ein Suchfeld
+      // leert sich; ein Kommentarentwurf bleibt, Fixliste 7.22-rc13 W01).
+      // Eingeklappt wird wie bisher, der Fokus bleibt im Feld.
+      if (!focusInPageField(e, host) && closeEscapeLayerFor(e, { host }))
         return;
-      }
-      // Fokus in einem Feld der Seite bleibt dort
       collapseRef.current("if-free");
     };
     document.addEventListener("pointerdown", onPointerDown, true);

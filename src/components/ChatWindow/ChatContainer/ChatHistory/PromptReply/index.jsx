@@ -81,7 +81,9 @@ const ReplyFrame = ({ nameInWrapper, rowRef, children, after }) => (
           embedderSettings.settings.brandImageUrl ||
           AnythingLLMIcon
         }
-        alt="Anything LLM Icon"
+        // dekorativ: der Name steht als Text daneben bzw. darüber (Fixliste
+        // 7.22-rc13 W04, vorher fest englisch „Brand“/„Anything LLM Icon“)
+        alt=""
         className="allm-w-9 allm-h-9 allm-flex-shrink-0 allm-ml-2 allm-object-contain"
         style={{ borderRadius: LOGO_RADIUS }}
       />

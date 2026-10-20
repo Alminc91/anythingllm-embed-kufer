@@ -399,7 +399,8 @@ describe("Dunkel: Pillen im Panelton, Folgefragen lesbar, Logo-Kachel (Nr. 30, B
         setChatHistory={() => {}}
       />,
     );
-    expect($('img[alt="Brand"]').style.borderRadius).toBe(
+    // Logo dekorativ (alt="", Fixliste 7.22-rc13 W04)
+    expect($("#anything-llm-header img").style.borderRadius).toBe(
       "var(--allmi-logo-radius)",
     );
     act(() => root.unmount());

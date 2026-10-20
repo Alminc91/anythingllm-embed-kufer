@@ -30,7 +30,9 @@ export function resolveChatIcon(name, fallback = Plus) {
 // der Fensterbreite bestimmt. Auf Modulebene, weil OpenButton bei jedem
 // Öffnen des Chats aus- und beim Schließen wieder eingehängt wird; sonst
 // gälte nach einer Größenänderung plötzlich der andere Gerätemodus
-// (Fixliste 7.22-rc7 Nr. 19).
+// (Fixliste 7.22-rc7 Nr. 19). Den ersten Aufruf macht App beim ersten
+// Rendern, nicht erst OpenButton: Startet der Chat offen, gilt sonst das
+// Gerät beim ersten Schließen (Fixliste 7.22-rc13 W08).
 let loadDevicePhone = null;
 export function phoneAtLoad() {
   if (loadDevicePhone === null) loadDevicePhone = isPhoneViewport();
