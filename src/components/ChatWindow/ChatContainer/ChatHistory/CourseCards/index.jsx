@@ -303,8 +303,9 @@ const statusStyle = (bookable) => ({
 // Zeilen-Karte (courseCardsLayout "rows", Kartenbreite >= 480 px): links
 // Wochentag + Uhrzeit in Akzentfarbe (Tabellenziffern), Mitte Titel, Meta-
 // Zeile und Teaser (höchstens 2 Zeilen) bzw. Platzhalter, rechts die
-// Status-Pille; Zeit und Pille mittig zum Kopfblock Titel + Meta (Variante C). Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
-// sichtbare Zeilen; Hover/Fokus über .allm-course-card (main.jsx).
+// Status-Pille; Zeit und Pille vertikal mittig zur ganzen Karte. Wie die
+// Rasterkarte EIN Link (Name = Titel), Beschreibung = sichtbare Zeilen;
+// Hover/Fokus über .allm-course-card (main.jsx).
 function CardRow({
   card,
   teaser = null,
@@ -330,16 +331,22 @@ function CardRow({
   ]
     .filter(Boolean)
     .join(" ");
-  // Variante C (Entwurf der Designerin): Zeit und Status-Pille sitzen auf der
-  // Mitte des Kopfblocks aus Titel + Metazeile; der Teaser (oder Platzhalter)
-  // hängt als eigene Zeile darunter. Raster statt Flex, damit die Spalten die
-  // Kopfzeilen überspannen können; ohne Metazeile zentriert auf den Titel.
+  // Zeit (links) und Status-Pille (rechts) sitzen auf der Mitte der GESAMTEN
+  // Karte: Titel + Metazeile + Teaser bzw. Platzhalter (Demo-Rückmeldung
+  // 06.10.2026, Nachfrage 20.10.2026; davor Variante C: Mitte des Kopfblocks
+  // Titel + Meta, der Teaser hing darunter). Raster statt Flex, damit die
+  // Seitenspalten alle Zeilen des Textblocks überspannen; der Textblock
+  // selbst bleibt oben (alignItems "start"). Einzeilige Karte (ohne Meta und
+  // Teaser): eine Zeile, nichts ändert sich sichtbar.
   const headRows = meta ? 2 : 1;
+  // Teaser und Platzhalter schließen sich aus (useTeaserSlot): höchstens
+  // eine Zeile unter dem Kopfblock
+  const totalRows = headRows + (showTeaser || showPending ? 1 : 0);
   const contentCol = lead ? 2 : 1;
   const statusCol = contentCol + 1;
   const sideCell = {
     alignSelf: "center",
-    gridRow: `1 / ${headRows + 1}`,
+    gridRow: `1 / ${totalRows + 1}`,
   };
   return (
     <li style={itemStyle}>

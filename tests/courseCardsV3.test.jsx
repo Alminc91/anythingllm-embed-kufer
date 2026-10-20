@@ -844,6 +844,100 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(teaser.style.minHeight).toBe("");
   });
 
+  // Demo-Rückmeldung 06.10.2026, Nachfrage 20.10.2026: Zeit (links) und
+  // Status-Pille (rechts) sitzen vertikal mittig zur GESAMTEN Karte (Titel +
+  // Meta + Teaser bzw. Platzhalter). Bewusste Änderung gegenüber Variante C
+  // (Zeit/Pille mittig zum Kopfblock Titel + Meta, grid-row 1 / 3 trotz
+  // Teaser): die Seitenzellen überspannen jetzt alle Zeilen, der Textblock
+  // bleibt oben (alignItems start). Einzeilige Karte: 1 / 2 wie bisher.
+  // Browser-Messung (±2 px): tests/visual/rows_center.py.
+  it("Zeit und Status-Pille überspannen alle Zeilen der Karte (vertikal mittig zur ganzen Karte)", () => {
+    const side = (row) =>
+      [".allm-course-when", ".allm-course-status"].map((sel) => {
+        const el = row.querySelector(sel);
+        return [el.style.gridRow, el.style.alignSelf];
+      });
+    const render = (history) =>
+      act(() =>
+        root.render(inl(h(ChatHistory, { settings: ROWS_ABOVE, history }))),
+      );
+    // Titel + Meta + Teaser: drei Zeilen, Seitenzellen 1 / 4
+    const el = mount(
+      inl(
+        h(ChatHistory, {
+          settings: ROWS_ABOVE,
+          history: [
+            user,
+            answer({
+              content: "Siehe Karte.",
+              courseSources: clone([KI]),
+              courseCardsAnnounced: 1,
+              courseTeasers: { [KI.url]: TEASER_YOGA },
+            }),
+          ],
+        }),
+      ),
+    );
+    let row = el.querySelector("[data-course-row]");
+    expect(row.style.alignItems).toBe("start");
+    expect(row.querySelector(".allm-course-title").style.gridRow).toBe("1");
+    expect(row.querySelector(".allm-course-details").style.gridRow).toBe("2");
+    expect(row.querySelector(".allm-course-teaser").style.gridRow).toBe("3");
+    expect(side(row)).toEqual([
+      ["1 / 4", "center"],
+      ["1 / 4", "center"],
+    ]);
+    // Titel + Meta + Platzhalter (Stream wartet auf die Teaser): ebenfalls 1 / 4
+    render([
+      user,
+      streaming({ courseSources: clone([KI]), courseCardsAnnounced: 1 }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector("[data-teaser-pending]").style.gridRow).toBe("3");
+    expect(side(row)).toEqual([
+      ["1 / 4", "center"],
+      ["1 / 4", "center"],
+    ]);
+    // Titel + Meta ohne Teaser: zwei Zeilen, 1 / 3
+    render([
+      user,
+      answer({
+        content: "Siehe Karte.",
+        courseSources: clone([KI]),
+        courseCardsAnnounced: 1,
+      }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector(".allm-course-teaser")).toBeNull();
+    expect(side(row)).toEqual([
+      ["1 / 3", "center"],
+      ["1 / 3", "center"],
+    ]);
+    // Einzeilig (nur Zeit, Titel, Pille; keine Meta-Zeile): 1 / 2, unverändert
+    const single = {
+      url: KI.url,
+      title: KI.title,
+      weekdays: KI.weekdays,
+      start_minutes: KI.start_minutes,
+      bookable: true,
+    };
+    render([
+      user,
+      answer({
+        content: "Siehe Karte.",
+        courseSources: clone([single]),
+        courseCardsAnnounced: 1,
+      }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector(".allm-course-details")).toBeNull();
+    expect(row.querySelector(".allm-course-when").textContent).toBe("Di 18:30");
+    expect(side(row)).toEqual([
+      ["1 / 2", "center"],
+      ["1 / 2", "center"],
+    ]);
+  });
+
   // Review-Befund 5: Teaser-Zeilen nach Kartenbreite (ResizeObserver der
   // Liste): ab 680 px 2 Zeilen, 480–679 px 3 Zeilen, darunter Rasterkarte
   for (const [width, layout, lines] of [
