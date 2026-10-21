@@ -1,54 +1,111 @@
 # AnythingLLM Embed Widget - Attribute Reference
 
-Alle verfügbaren `data-*` Attribute für das Embed-Script.
+Alle `data-*` Attribute für das Embed-Script und ihre Wirkung ab Widget 7.22 (Fixliste 7.22-rc17, Rangfolge E23 und E24).
 
-## Verwendung
+## Rangfolge
 
-```html
-<script
-  data-embed-id="your-embed-id"
-  data-base-api-url="https://your-instance.domain.de/api/embed"
-  data-button-color="#607D8B"
-  ...
-  src="https://your-instance.domain.de/embed/anythingllm-chat-widget.min.js">
-</script>
-```
+| Gruppe | Was | Wirkung |
+|---|---|---|
+| **A · Design Center** | Alles, was der Kunde im Design Center 2.0 einstellen kann (je ein Feld im Reiter Aussehen oder Inhalt) | Es gilt nur das Design Center: der gespeicherte Wert, sonst sein Standard. Einbau-Angaben **und** CSS-Variablen der Seite für diese Eigenschaften wirken nicht, auch wenn im Design Center nichts gespeichert ist. Das Widget meldet jede solche Einbau-Angabe einmal in der Browser-Konsole. |
+| **B · Feste Standards** | Was es im Design Center nicht zum Einstellen gibt: Inline-Design (Layout, Effekt, Höhe, Startzustand, Öffnen, Eingabeleiste, Texte der Leiste, Schrift der Seite), Begrüßungs- und Vorschlagsstil, Folgefragen, Kartenlayout, Randabstände, Kopffarben, Icon-Stil, Textgröße, Radien, Schatten, Flächen- und Textfarben | Es gilt der feste Standard (der Server liefert ihn mit). Entwickler dürfen ihn per Einbau-Angabe oder CSS-Variable verfeinern; die Einbau-Angabe schlägt den vom Server gelieferten Standard. |
+| **C · Technik** | Widget-ID, Adresse, Sprache, Einhängepunkt, Besuchername, KI-Overrides, Audio, Öffnen beim Laden, Menütexte, Sponsor-Zeile | Wirken immer. |
+
+**KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.
+
+Umsetzung: `src/hooks/useScriptAttributes.js` (`DC_COVERED`, `dropIneffectiveAttributes`, `loadEmbedSettings`), `src/utils/layout.js` (`FIXED_STANDARDS`, `INLINE_STANDARDS`, `AI_NOTICE`), `src/utils/theme.js` (Variablen mit `dc`, `AI_NOTICE_COLORS`).
 
 ---
 
-## Pflicht-Attribute
+## Einbau-Code
+
+Kunden brauchen nur den Einbau-Code aus dem Reiter Einbau im Design Center:
+
+```html
+<script
+  data-embed-id="WIDGET-ID"
+  data-base-api-url="https://KUNDE.ki.kufer.de/api/embed"
+  src="https://KUNDE.ki.kufer.de/embed/anythingllm-chat-widget.min.js">
+</script>
+```
+
+Für „In der Seite“ (im Design Center gewählt) zusätzlich der Platzhalter `<div id="kufer-assistent"></div>` an der Stelle im Inhalt. Englischsprachige Seite: `data-language="en"` ergänzen.
+
+### Pflicht-Attribute
 
 | Attribut | Beschreibung |
 |----------|--------------|
 | `data-embed-id` | Eindeutige Embed-ID aus AnythingLLM |
-| `data-base-api-url` | API-URL der AnythingLLM Instanz |
+| `data-base-api-url` | API-URL der AnythingLLM Instanz (endet auf `/api/embed`) |
 
 ---
 
-## Styling
+## Vom Design Center abgedeckt (Attribut ohne Wirkung)
 
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-button-color` | `#607D8B` | Farbe des Chat-Buttons (Hex) |
-| `data-button-outline` | `null` | Rahmen um Chat-Button: `none`, `white`, `black`. Nützlich wenn Button-Farbe dem Hintergrund ähnelt. |
-| `data-user-bg-color` | `#607D8B` | Hintergrundfarbe User-Nachrichten |
-| `data-user-text-color` | `null` | Schrift auf der Akzentfarbe: `#FFFFFF` oder „Schwarz“ `#222628` (Design Center; ein früher gespeichertes `#000000` liefert der Server als `#222628` aus). Gilt wie gewählt für Nutzer-Sprechblasen und alle Flächen in Akzentfarbe (Chat-Button, Senden-Button, gefüllte Pillen beim Hover). Ohne Wert die Empfehlung nach WCAG-Kontrast aus der Akzentfarbe (höherer Kontrast zu `#FFFFFF` bzw. `#222628`, Gleichstand Weiß). Ein am Skript gesetztes `#000000` gilt wie gesetzt |
-| `data-assistant-bg-color` | `#2563eb` | Hintergrundfarbe Bot-Nachrichten |
-| `data-link-color` | `null` | Farbe für Links in Bot-Nachrichten (z.B. `#8B0000` für VHS-Rot). Wird sofort während Streaming angezeigt. |
-| `data-header-bg-color` | `null` | Header-Hintergrundfarbe (z.B. `#8B1A1A`). Wenn gesetzt, wird Border entfernt, Ecken bleiben rund. |
-| `data-header-text-color` | `null` | Textfarbe für Chatbot-Namen im Header (z.B. `#FFFFFF` für weiß auf dunklem Header) |
-| `data-icon-style` | `rounded` | Icon-Hintergrund im Header. Optionen: `none`, `rounded`, `circle`, `border`, `border-dark`, `soft`, `glass`, `adaptive`, `shadow`, `pill`. Nur aktiv wenn `header-bg-color` gesetzt. Siehe Tabelle unten. |
-| `data-brand-image-url` | Kufer Logo | Logo im Chat-Header (100x50px) |
-| `data-brand-text` | `KI-Berater` (`en`: `AI Advisor`) | Text neben dem Logo |
-| `data-assistant-name` | `KI-Berater` (`en`: `AI Advisor`) | Name des Assistenten |
-| `data-assistant-icon` | Kufer Logo | Avatar-Icon des Assistenten |
-| `data-chat-icon` | `chatBubble` | Icon für den Chat-Button |
-| `data-position` | `bottom-left` | Position: `bottom-left`, `bottom-right`, `top-left`, `top-right` |
-| `data-window-height` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterhöhe). |
-| `data-window-width` | – | **Ohne Wirkung** (wird ignoriert). Die Fenstergröße wird ausschließlich im Design Center eingestellt (Erscheinungsbild → Aussehen → Fensterbreite). |
-| `data-text-size` | `14` | Textgröße in px (nur Zahl) |
-| `data-no-header` | `null` | Header ausblenden wenn gesetzt |
-| `data-theme` | `light` | Theme des ganzen Chatfensters: `light`, `dark`, `auto` (folgt `prefers-color-scheme`). Ein im Design Center gespeichertes Farbschema gewinnt gegen das Attribut (alle Einstellungen kommen aus dem Design Center). Auch per Design Center (`visual_config.theme`) — wirkt erst mit der Fork-Version, die diesen Schlüssel ausliefert (Image ≥ 7.9); bis dahin nur Script-Attribut bzw. Seiten-CSS. Feinsteuerung per Seiten-CSS über `--allm-*`-Variablen, siehe README „Styling per CSS-Variablen“. |
+Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespeichert ist; es gilt der Wert aus dem Design Center bzw. dessen Standard. Je Attribut eine `console.warn`-Zeile (deutsch): `[AnythingLLM Embed] Einbau-Angabe data-… wirkt nicht. …`.
+
+| Attribut | Feld im Design Center | Standard ohne gespeicherten Wert |
+|----------|-----------------------|----------------------------------|
+| `data-display-mode` | Aussehen: Darstellung | `bubble` (Chatfenster) |
+| `data-theme` | Aussehen: Farbschema | `light` |
+| `data-button-color`, `data-user-bg-color`, `data-link-color` | Aussehen: Akzentfarbe (gilt für Chat-Button, Nutzerblasen und Links) | `#01a5a9` |
+| `data-user-text-color` | Aussehen: Schrift auf der Akzentfarbe | Empfehlung nach WCAG-Kontrast (`#FFFFFF` oder `#222628`) |
+| `data-brand-image-url`, `data-assistant-icon` | Aussehen: Logo | Kufer-Logo |
+| `data-chat-icon` | Aussehen: Chat-Icon | `chatBubble` |
+| `data-position` | Aussehen: Position des Chat-Buttons | `bottom-left` |
+| `data-course-cards` | Aussehen: Kurse anzeigen als | nach Darstellung: In der Seite Kurskarten, Chatfenster Nur Text mit Links |
+| `data-course-cards-position` | Aussehen: Reihenfolge | `above` (Karten zuerst) |
+| `data-brand-text`, `data-assistant-name` | Inhalt: Name | `KI-Berater` (`en`: `AI Advisor`) |
+| `data-assistant-subtitle` | Inhalt: Untertitel | `Online-Berater mit künstlicher Intelligenz` (`en`: `Online advisor powered by artificial intelligence`) |
+| `data-greeting`, `data-greeting-bubble-text` | Inhalt: Begrüßungstext | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` |
+| `data-privacy-notice` | Inhalt: Schalter Datenschutz-Hinweis | an (eigene Blase unter der Begrüßung) |
+| `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link) | `Datenschutz`, Standardtext der Sprache, kein Link |
+| `data-default-messages` | Inhalt: Startvorschläge | Standard der Sprache vom Server (E10 neu: gespeichert, auch leer, vor Standard) |
+| `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
+| `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
+| `data-support-email` | Inhalt: Support-E-Mail | `info@kufer.de` |
+
+Ebenfalls ohne Wirkung (mit Warnzeile), aber nicht aus dem Design Center:
+
+| Attribut | Grund |
+|----------|-------|
+| `data-disclaimer`, `data-disclaimer-text` | KI-Hinweis fest (E24): immer unter dem Eingabefeld, genau eine Zeile (11 px, in schmalen Fenstern bis 10 px, sonst mit „…“ gekürzt, voller Text im Tooltip), Text „Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.“ (`en`: „Our AI can make mistakes. Please double-check the answers.“) |
+| `data-window-width`, `data-window-height` | Fenstergröße fest (Tablet 40 %, Desktop ab 1280 px 25 % Breite, 77 % Höhe; mobil Vollbild) |
+| `data-online-dot` | Den Online-Punkt gibt es nicht mehr |
+
+---
+
+## Feste Standards verfeinern (Entwickler-Attribute)
+
+Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite). Eine Angabe hier schlägt den Wert, den der Server als festen Standard liefert. Ungültige Werte: eine `console.warn`-Zeile, es gilt der Standard. Nicht für Kunden gedacht; im Zweifel gehört der Wunsch ins Design Center.
+
+| Attribut | Standard | Beschreibung |
+|----------|----------|--------------|
+| `data-inline-layout` | `overlay` | Box schwebt über dem Inhalt (`overlay`) oder schiebt ihn nach unten (`flow`), ab 768 px. Details README |
+| `data-inline-effect` | `morph` | Aufklapp-Effekt ab 768 px: `expand`, `grow`, `spring`, `float`, `morph`. Details README |
+| `data-inline-height` | `520px` | Höhe der aufgeklappten Box ab 768 px (`px` oder `vh`, geklemmt 400 bis 1200 px) |
+| `data-inline-start-state` | `collapsed` | `collapsed` oder `expanded` (nur ab 768 px) |
+| `data-inline-open-on` | `focus` | `focus` (Klick ins Feld öffnet) oder `submit` (erst beim Absenden) |
+| `data-inline-input` | `true` | Leiste als Eingabefeld mit Absende-Button (`false` = Klickfläche) |
+| `data-inline-input-placeholder` | `Stellen Sie hier Ihre Frage …` | Platzhalter der Leiste (max. 120 Zeichen) |
+| `data-inline-send-text` | `Chatten` | Text des Absende-Buttons der Leiste (max. 40 Zeichen) |
+| `data-inline-collapsed-text` | `Jetzt mit unserem KI-Assistenten schreiben` | Text der Leiste als Klickfläche (max. 120 Zeichen) |
+| `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
+| `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
+| `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
+| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`) |
+| `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
+| `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
+| `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |
+| `data-offset-x`, `data-offset-y` | `16` | Randabstand von Chat-Button und Chatfenster in px (0 bis 200) |
+| `data-header-bg-color` | leer | Farbe der Kopfzeile; mit Farbe entfällt die Trennlinie |
+| `data-header-text-color` | leer | Farbe des Namens in der Kopfzeile |
+| `data-icon-style` | `rounded` | Hintergrund des Logos in der Kopfzeile, nur mit Kopffarbe (Tabelle unten) |
+| `data-assistant-bg-color` | `#FFFFFF` | Farbe der Antwortblasen; im dunklen Farbschema ersetzt der dunkle Satz sie |
+| `data-text-size` | `14` | Textgröße der Nachrichten in px (wirksam 10 bis 14 und 16) |
+| `data-no-header` | aus | Kopfzeile ausblenden |
+| `data-button-outline` | leer | Rahmen um den Chat-Button: `none`, `white`, `black` |
+
+Dazu die CSS-Variablen `--allm-*` (Radien, Schatten, Flächen- und Textfarben, Übergänge, Leiste), siehe README „Styling per CSS-Variablen“. Ohne Wirkung sind dort nur die Variablen der Gruppe A (`--allm-accent`, `--allm-on-accent`, `--allm-user-bg`, `--allm-user-text`, `--allm-link`).
 
 ### Icon Style Optionen
 
@@ -67,125 +124,58 @@ Alle verfügbaren `data-*` Attribute für das Embed-Script.
 
 ---
 
-## Texte & Sprache
+## Entwickler-Attribute (wirken immer)
+
+Gruppe C, Technik und Verhalten.
 
 | Attribut | Default | Beschreibung |
 |----------|---------|--------------|
-| `data-language` | `de` | Sprache: `de`, `en`, etc. Ohne Angabe deutsch, auch die i18n-Texte (kein `allm_embed_language` im `localStorage` mehr). Panel-, Menü- und Bedientexte (`aria-label`) gibt es deutsch und englisch, andere Sprachen nutzen dafür Deutsch. |
-| `data-greeting` | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` (en: englisch) | Begrüßungstext = Text der Begrüßungsblase (`data-greeting-bubble-text` hat Vorrang). Frühere Standardtexte gelten als nicht gesetzt |
-| `data-send-message-text` | `Ihre Frage eingeben` (en: `Enter your question`) | Placeholder im Input-Feld (der frühere Standard „Wie kann ich Ihnen helfen?“ gilt als nicht gesetzt) |
-| `data-reset-chat-text` | `Chat zurücksetzen` | Text für Reset-Link |
-| `data-reset-burger-text` | Sprache (`Chat zurücksetzen` / `Reset chat`) | Text im Burger-Menü. Der frühere feste Text gilt als nicht gesetzt (die Sprache des Widgets greift) |
-| `data-email-burger-text` | Sprache (`E-Mail Support` / `Email support`) | E-Mail Option im Menü |
-| `data-session-burger-text` | Sprache (`Chat-ID` / `Chat ID`) | Option im Menü, kopiert die Chat-ID |
-| `data-history-burger-text` | Sprache (`Frühere Chats` / `Previous chats`) | Option „Frühere Chats“ im Menü |
+| `data-embed-id` | Pflicht | ID des Widgets aus dem Design Center |
+| `data-base-api-url` | Pflicht | Adresse der Instanz, endet auf `/api/embed` |
+| `data-language` | `de` | Sprache des Widgets und der Standardtexte (auch Startvorschläge vom Server, `?language=`). Panel-, Menü- und Bedientexte gibt es deutsch und englisch, andere Sprachen nutzen dafür Deutsch |
+| `data-mount` | `#kufer-assistent` | CSS-Selektor des Platzhalters für „In der Seite“. Ungeeignete Elemente werden ignoriert, dann erscheint das Chatfenster |
+| `data-username` | leer | Lesbarer Name oder Kennung des Besuchers, erscheint in den Chat-Protokollen |
+| `data-prompt` | leer | System-Prompt überschreiben (nur wenn der Server es erlaubt) |
+| `data-model` | leer | LLM-Modell überschreiben (nur wenn der Server es erlaubt) |
+| `data-temperature` | leer | Temperatur überschreiben, 0.0 bis 1.0 (nur wenn der Server es erlaubt) |
+| `data-show-thoughts` | `false` | Denkprozess des Modells anzeigen, sofern es einen liefert |
+| `data-open-on-load` | `off` | Mit `on` öffnet sich das Chatfenster beim Laden |
+| `data-enable-stt` | `true` | Mikrofon zur Spracheingabe zeigen, wenn der Server sie anbietet |
+| `data-enable-tts` | `true` | Vorlesen anbieten, wenn der Server es kann |
+| `data-tts-position` | `bottom-right` | Platz des Vorlese-Symbols: `bottom-right` (in der Blase) oder `icon-left` (unter dem Avatar) |
+| `data-reset-burger-text` | Sprache (`Chat zurücksetzen` / `Reset chat`) | Menüpunkt „Chat zurücksetzen“. Der frühere feste Text gilt als nicht gesetzt |
+| `data-history-burger-text` | Sprache (`Frühere Chats` / `Previous chats`) | Menüpunkt „Frühere Chats“ |
+| `data-session-burger-text` | Sprache (`Chat-ID` / `Chat ID`) | Menüpunkt, kopiert die Chat-ID |
+| `data-email-burger-text` | Sprache (`E-Mail Support` / `Email support`) | Menüpunkt für die Support-E-Mail |
+| `data-reset-chat-text` | `Chat zurücksetzen` | Text des Zurücksetzen-Links |
+| `data-history-enabled` | `true` | `false` blendet „Frühere Chats“ aus; ist es in den Widget-Einstellungen abgeschaltet, gilt das |
+| `data-no-sponsor` | `true` | Sponsor-Zeile ausblenden |
+| `data-sponsor-text` | `Ein Dienst der Kufer Software GmbH` | Text der Sponsor-Zeile |
+| `data-sponsor-link` | `https://kufer.de` | Link der Sponsor-Zeile |
+
+**Hinweis Audio:** STT und TTS müssen serverseitig konfiguriert sein (`.env`). Die Buttons erscheinen nur, wenn der Server sie unterstützt (`/embed/:embedId/audio/status` gibt `stt: true` bzw. `tts: true` zurück) und das Attribut nicht auf `false` steht.
 
 ---
 
-## Verhalten
+## Beispiel: Einbau-Code mit Entwickler-Attributen
 
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-open-on-load` | `off` | Chat automatisch öffnen: `on` / `off` |
-| `data-support-email` | `info@kufer.de` | E-Mail für Support-Anfragen |
-| `data-username` | `null` | Anzeigename des Benutzers |
-| `data-default-messages` | `[]` | Startvorschläge (kommagetrennt). Vorrang: im Design Center gespeicherte Liste (auch leer = keine Startvorschläge) vor diesem Attribut vor dem Standard der Sprache vom Server (`GET /embed/:id/config?language=…`, Fixliste 7.22-rc13 F01 bis F03). Der Server liefert die Liste als Array, ein Vorschlag mit Komma bleibt dort ganz; per Attribut trennt jedes Komma |
-| `data-course-cards` | nach Darstellung (`auto` In der Seite, `off` Chatfenster) | **Ohne Wirkung** am Skript (Fixliste 7.22-rc8 R4). Antworten mit Kursen: `auto` = Kurskarten unter Antworten, die Kurse nennen (nur die in der Antwort verlinkten bzw. genannten Kurse; ≤ 5 Karten, ab 6 Kompaktliste), `off` = Nur Text mit Links (KIE-567, Design Center „Antworten mit Kursen“). Ohne gespeicherte Wahl entscheidet die tatsächliche Darstellung: In der Seite (Platzhalter gefunden, auch nur per `data-display-mode`) Kurskarten, Chatfenster (auch der Rückfall ohne Platzhalter) Nur Text. `GET /embed/:id/config` liefert `visual_config.courseCards` nur, wenn gespeichert; dieser Wert gewinnt immer. Das Widget schickt seine Darstellung mit jeder Chat-Anfrage (`displayMode` `"inline"` \| `"bubble"` im JSON-Body von `stream-chat`); der Server nutzt sie nur für diesen Standard (`courseSources`, ab Image ≥ 7.9). Im Chatfenster Teaser ganz (ohne Zeilenbegrenzung), In der Seite bis 3 Zeilen. Details: README |
-| `data-course-cards-position` | `above` | `below` \| `above`: Kurskarten unter bzw. über der Antwort (KIE-567, Design Center „Reihenfolge“: Text zuerst bzw. Karten zuerst). Bei `below` erscheinen Text, dann die vom Server angekündigten Kurse als Karten, dann die Folgefragen. Bei `above` stehen vom Server vorab angekündigte Kurse (Image ≥ 7.10, Prompt „Course Cards Mode“) schon vor dem ersten Wort über der Antwort; ganze Karte klickbar. Auch `visual_config.courseCardsPosition`. Details: README |
-| `data-suggestion-style` | `pills` (fest) | Seit Design Center vereinfacht (10/2026) fest `pills`: Vorschläge im leeren Chat als kleine Pillen (max. 6, > 60 Zeichen gekürzt); Attribut und `visual_config` wirken nicht mehr |
-| `data-greeting-style` | `bubble` (fest) | Begrüßung immer als Assistenten-Blase (Text: `data-greeting-bubble-text`, sonst `data-greeting`, sonst Standard; über 300 Zeichen auf ein Wortende gekürzt). Eine Begrüßung aus dem Design Center gewinnt gegen beide Attribute |
-| `data-assistant-subtitle` | `Online-Berater mit künstlicher Intelligenz` (`en`: `Online advisor powered by artificial intelligence`) | Untertitel unter dem Namen in der Titelleiste des Chats (max. 60 Zeichen). Ohne Server-Wert der Standard der Sprache (Fixliste 7.22-rc8 R5); im Design Center leer gespeichert (`visual_config.assistantSubtitle` `""`) = kein Untertitel. Das Attribut wirkt nur, solange im Design Center nichts gespeichert ist; leer (`""`) = kein Untertitel. Name und Untertitel werden nie gekürzt: Bei Platzmangel (schmales Chatfenster, In der Seite, mobil) brechen sie um, die Titelleiste wird höher, ⋮ und ✕ bleiben frei (Fixliste 7.22-rc13 N3, ersetzt die Ellipse aus rc10 W1). Mobil bei offener Bildschirmtastatur (kompakte Titelleiste) steht nur der Name, der Untertitel ist so lange ausgeblendet (Fixliste 7.22-rc16 E21) |
-| `data-online-dot` | `false` (fest) | Entfällt: kein Online-Punkt mehr, der Wert wird ignoriert |
-| `data-privacy-notice` | `bubble` (nur Design Center) | Datenschutz-Hinweis als eigene zweite Blase unter der Begrüßungsblase. Das Attribut wirkt nicht: Ein- und ausgeschaltet wird der Hinweis nur im Design Center (Schalter „Datenschutz-Hinweis anzeigen“, `visual_config.privacyNotice` `none` = aus, jeder andere Wert und das frühere `modal` = Blase). Texte: `data-privacy-title` (leer = keine Überschrift, Standard „Datenschutz“), `data-privacy-text` (freier Text, ≤ 12 Zeilen × 500 Zeichen: Zeilen mit „•“ oder „-“ werden Aufzählungspunkte, andere Absätze; ohne solche Zeilen altes Format, ein Punkt je Zeile bzw. `\|`), `data-privacy-url` (Link „Datenschutzerklärung“) |
-| `data-disclaimer` | `footer` (fest) | KI-Hinweis immer unter dem Eingabefeld, genau eine Zeile (11 px, in schmalen Fenstern bis 10 px; reicht das nicht, mit „…“ gekürzt, voller Text im Tooltip), Text fest „Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.“ (`en`: „Our AI can make mistakes. Please double-check the answers.“); `data-disclaimer-text` wird ignoriert |
-
----
-
-## Audio (STT/TTS)
-
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-enable-stt` | `true` | Speech-to-Text Mikrofon anzeigen: `true` / `false`. Nur wenn Server STT unterstützt. |
-| `data-enable-tts` | `true` | Text-to-Speech Lautsprecher anzeigen: `true` / `false`. Nur wenn Server TTS unterstützt. |
-| `data-tts-position` | `bottom-right` | Position des TTS-Icons: `bottom-right` (unten rechts in Bubble) oder `icon-left` (unter dem Avatar, wie AnythingLLM App) |
-
-**Hinweis:** STT und TTS müssen serverseitig konfiguriert sein (`.env`). Die Buttons erscheinen nur, wenn:
-1. Der Server STT/TTS unterstützt (`/embed/:embedId/audio/status` gibt `stt: true` / `tts: true` zurück)
-2. Das entsprechende Attribut nicht auf `false` gesetzt ist
-
----
-
-## Welcome Bubbles
-
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-display-chatbot-bubbles` | `true` | Welcome-Bubbles anzeigen |
-| `data-chatbot-bubbles-messages` | `[]` | Texte der Willkommensblasen (kommagetrennt). Eine im Design Center gespeicherte Liste gewinnt (der Server liefert sie als Array, eine Blase mit Komma bleibt ganz) |
-| `data-bubble-persistence` | `localStorage` | **Ohne Wirkung** mit einem Server ab 7.22 (er liefert `welcomeBubbles*` immer, Standard „Beim ersten Besuch“). Ersatz für `sessionStorage` (1x pro Tab): im Design Center „Bei jedem Besuch“ wählen. Das Widget schreibt dann eine `console.warn`-Zeile. Nur bei einem älteren Server bzw. ohne Antwort vom Server wirkt es noch |
-
-**Willkommensblasen je Gerät (KIE-568, nur Design Center):** `visual_config.welcomeBubblesDesktop` und `visual_config.welcomeBubblesMobile`, je `off` (keine Blasen, nur der Chat-Button) \| `first` (Standard, beim ersten Besuch: `localStorage`, nach Schließen der Blasen oder Öffnen des Chats nicht mehr) \| `every` (bei jedem Besuch: einmal je Browser-Tab per `sessionStorage`, Unterseiten im selben Tab zeigen sie nicht erneut). Fehlend oder ungültig = `first`. Handy = Fensterbreite < 768 px beim Laden. Kein Script-Attribut: allein der Server-Wert zählt.
-
----
-
-## LLM Overrides
-
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-prompt` | `null` | System-Prompt überschreiben |
-| `data-model` | `null` | LLM-Modell überschreiben |
-| `data-temperature` | `null` | Temperatur überschreiben (0.0-1.0) |
-| `data-show-thoughts` | `false` | KI-Denkprozess anzeigen |
-
----
-
-## Sponsor/Footer
-
-| Attribut | Default | Beschreibung |
-|----------|---------|--------------|
-| `data-no-sponsor` | `true` | Sponsor-Footer ausblenden |
-| `data-sponsor-text` | `Ein Dienst der Kufer Software GmbH` | Sponsor-Text |
-| `data-sponsor-link` | `https://kufer.de` | Sponsor-Link |
-
----
-
-## Beispiel: Vollständige Konfiguration
+Nur Pflicht- und Entwickler-Attribute; Aussehen und Texte kommen aus dem Design Center. Technik (Gruppe C): `data-language` bis `data-tts-position`; feste Standards verfeinern (Gruppe B, nur bei Bedarf): `data-inline-effect` bis `data-icon-style`.
 
 ```html
+<div id="kufer-assistent"></div>
 <script
   data-embed-id="abc123-def456"
   data-base-api-url="https://chatbot.example.de/api/embed"
-
-  <!-- Styling -->
-  data-button-color="#E63946"
-  data-user-bg-color="#E63946"
-  data-assistant-bg-color="#1D3557"
-  data-link-color="#8B0000"
-  data-header-bg-color="#8B1A1A"
-  data-header-text-color="#FFFFFF"
-  data-icon-style="rounded"
-  data-position="bottom-right"
-  data-brand-text="Mein Assistent"
-  data-assistant-name="Mein Assistent"
-
-  <!-- Texte -->
   data-language="de"
-  data-greeting="Willkommen! Wie kann ich helfen?"
-  data-send-message-text="Ihre Frage..."
-
-  <!-- Verhalten -->
-  data-open-on-load="off"
-  data-support-email="support@example.de"
-
-  <!-- Audio (optional - Default ist "true") -->
+  data-username="Kursportal"
   data-enable-stt="true"
   data-enable-tts="true"
   data-tts-position="icon-left"
-
-  <!-- Welcome Bubbles -->
-  data-display-chatbot-bubbles="true"
-  data-chatbot-bubbles-messages="Hallo!,Kann ich helfen?"
-  data-bubble-persistence="localStorage"
-
+  data-inline-effect="float"
+  data-inline-height="600px"
+  data-header-bg-color="#8B1A1A"
+  data-header-text-color="#FFFFFF"
+  data-icon-style="rounded"
   src="https://chatbot.example.de/embed/anythingllm-chat-widget.min.js">
 </script>
 ```
@@ -200,10 +190,8 @@ Das Widget passt sich automatisch an:
 - **Tablet** (768-1279px): 40% Breite, 77% Höhe
 - **Desktop** (≥1280px): 25% Breite, 77% Höhe
 
-Die `data-window-*` Attribute überschreiben diese Defaults nicht mehr (TODO: konfigurierbar machen).
-
 ### Shadow DOM
-Das Widget verwendet Shadow DOM für CSS-Isolation. Styles der Host-Seite beeinflussen das Widget nicht.
+Das Widget verwendet Shadow DOM für CSS-Isolation. Styles der Host-Seite beeinflussen das Widget nicht, nur die CSS-Variablen `--allm-*` (README).
 
 ### z-index
 Das Widget hat `z-index: 9999` und liegt immer über anderen Elementen.
