@@ -10,7 +10,7 @@ Alle `data-*` Attribute für das Embed-Script und ihre Wirkung ab Widget 7.22 (F
 | **B · Feste Standards** | Was es im Design Center nicht zum Einstellen gibt: Inline-Design (Layout, Effekt, Höhe, Startzustand, Öffnen, Eingabeleiste, Texte der Leiste, Schrift der Seite), Begrüßungs- und Vorschlagsstil, Folgefragen, Kartenlayout, Randabstände, Kopffarben, Icon-Stil, Textgröße, Radien, Schatten, Flächen- und Textfarben | Es gilt der feste Standard (der Server liefert ihn mit). Entwickler dürfen ihn per Einbau-Angabe oder CSS-Variable verfeinern; die Einbau-Angabe schlägt den vom Server gelieferten Standard. |
 | **C · Technik** | Widget-ID, Adresse, Sprache, Einhängepunkt, Besuchername, KI-Overrides, Audio, Öffnen beim Laden, Menütexte, Sponsor-Zeile | Wirken immer. |
 
-**KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.
+**KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus; ist er an, gilt die Begrüßung als Blase, auch gegen `data-greeting-style="text"` (E26). Der Text der Datenschutz-Blase hat wie der KI-Hinweis feste, lesbare Farben je Farbschema; Einbau-Angaben und CSS-Variablen der Seite ändern sie nicht (E25).
 
 Umsetzung: `src/hooks/useScriptAttributes.js` (`DC_COVERED`, `dropIneffectiveAttributes`, `loadEmbedSettings`), `src/utils/layout.js` (`FIXED_STANDARDS`, `INLINE_STANDARDS`, `AI_NOTICE`), `src/utils/theme.js` (Variablen mit `dc`, `AI_NOTICE_COLORS`).
 
@@ -61,7 +61,7 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link) | `Datenschutz`, Standardtext der Sprache, kein Link |
 | `data-default-messages` | Inhalt: Startvorschläge | Standard der Sprache vom Server (E10 neu: gespeichert, auch leer, vor Standard) |
 | `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
-| `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
+| `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence`, `data-welcome-bubbles-desktop`, `data-welcome-bubbles-mobile` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
 | `data-support-email` | Inhalt: Support-E-Mail | `info@kufer.de` |
 
 Ebenfalls ohne Wirkung (mit Warnzeile), aber nicht aus dem Design Center:
@@ -92,7 +92,7 @@ Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite)
 | `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
 | `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
 | `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
-| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`) |
+| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); `text` wirkt nur bei abgeschaltetem Datenschutz-Hinweis, sonst gilt `bubble` (E26) |
 | `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
 | `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
 | `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |
