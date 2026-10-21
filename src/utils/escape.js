@@ -14,7 +14,10 @@
 //   bei den Daumen steht oder auf keinem Element (nach einem Mausklick auf
 //   Text steht er auf <body>); aus dem Haupt-Eingabefeld schließt Escape
 //   weiter das Fenster (W02). Danach steht der Fokus wieder auf dem Öffner
-//   (⋮ bzw. Daumen), nicht auf <body> (W03).
+//   (⋮ bzw. Daumen), nicht auf <body> (W03), auch wenn der Kopf inzwischen
+//   neu eingehängt wurde (Fixliste 7.22-rc16 W42). Ohne Fokus schließt die
+//   Ebene in jeder Darstellung, auch im mobilen Vollbild und in der
+//   Inline-Box im Seitenfluss (W43).
 // - Fokus in einem Eingabefeld der Webseite (focusInPageField).
 // - preventDefault nur für Escape aus dem Widget oder ohne Fokus: Ein Escape
 //   der Webseite (Button in einem <dialog> der Seite) bleibt für die Seite

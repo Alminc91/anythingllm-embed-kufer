@@ -15,7 +15,7 @@ import { createRoot } from "react-dom/client";
 // W09 Rückfallsprache Deutsch, Tooltip wie aria-label.
 // W10 isContentEditable entscheidet im Browser.
 // N3 Kopfzeile: Name und Untertitel brechen um, nie gekürzt (Nutzer-
-//   entscheidung); Maße im Browser: .test-storage/rc13/probe_n3.py.
+//   entscheidung); Maße im Browser: tests/visual/n3_header.py.
 // Der Fall Inline-Box (W01, schwebend) steht in rc13-inline-escape.test.jsx,
 // der Vertrag mit dem Fork in embed-config-contract.test.js.
 // Neue Funktionen werden je Test dynamisch gelesen: Am alten Stand scheitert
@@ -760,7 +760,7 @@ describe("N3: Kopfzeile umbricht Name und Untertitel, nie gekürzt", () => {
     expect(menu).toBeTruthy();
     expect(menu.className).not.toMatch(/allm-top-\[64px\]/);
     // jsdom gibt max() verfälscht wieder („max(64px * , * calc(…))“), im
-    // Browser misst probe_n3.py die Lage
+    // Browser misst tests/visual/n3_header.py die Lage
     const style = menu.getAttribute("style") || "";
     expect(style).toMatch(/top:\s*max\(64px/);
     expect(style).toMatch(/calc\(50% \+ 26px\)/);

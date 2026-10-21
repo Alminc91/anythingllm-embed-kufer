@@ -9,9 +9,11 @@ import { join } from "node:path";
 // Servers samt Skript-Attributen. Mit KUFER_FORK_DIR (Checkout des Forks
 // anythingllm-kufer, Branch feat/design-center-standard) zusätzlich die
 // Gegenprobe gegen den Fork selbst: Standard-Startvorschläge und Sprachwahl
-// aus server/utils/chats/embedDefaults.js und, falls vorhanden, die
-// Fixture-Kopie im Fork (wortgleich). Ohne die Variable wird übersprungen
-// (wie KUFER_EMBED_DIR im Fork).
+// aus server/utils/chats/embedDefaults.js und die Fixture-Kopie im Fork
+// (wortgleich; fehlt sie, scheitert der Test, Fixliste 7.22-rc16 W45). Ohne
+// die Variable wird übersprungen (wie KUFER_EMBED_DIR im Fork), mit dem Grund
+// im Namen des Blocks; im rc-Build laufen beide Seiten mit gesetzten
+// Variablen.
 
 vi.mock("../src/main.jsx", () => ({
   embedderSettings: {
@@ -85,31 +87,44 @@ describe("Vertrag /config: Antwort des Servers -> Startvorschläge und Willkomme
 // Gegenprobe gegen den Fork (KUFER_FORK_DIR)
 const forkDir = process.env.KUFER_FORK_DIR;
 const describeFork = forkDir ? describe : describe.skip;
-describeFork("Vertrag /config: Gegenprobe gegen den Fork (KUFER_FORK_DIR)", () => {
-  const require = createRequire(import.meta.url);
-  const defaults = () =>
-    require(join(forkDir, "server/utils/chats/embedDefaults.js"));
+// sichtbar im Log statt still übersprungen (W45)
+if (!forkDir)
+  console.warn(
+    "[embed-config-contract] KUFER_FORK_DIR nicht gesetzt: Gegenprobe gegen den Fork übersprungen (3 Tests). Im rc-Build mit gesetzter Variable laufen lassen.",
+  );
+describeFork(
+  forkDir
+    ? "Vertrag /config: Gegenprobe gegen den Fork (KUFER_FORK_DIR)"
+    : "Vertrag /config: Gegenprobe gegen den Fork (übersprungen: KUFER_FORK_DIR nicht gesetzt)",
+  () => {
+    const require = createRequire(import.meta.url);
+    const defaults = () =>
+      require(join(forkDir, "server/utils/chats/embedDefaults.js"));
 
-  it("Standard-Startvorschläge je Sprache wortgleich mit embedDefaults.js", () => {
-    const { defaultSuggestions } = defaults();
-    for (const [lang, list] of Object.entries(contract.standardSuggestions))
-      expect(defaultSuggestions(lang)).toEqual(list);
-  });
+    it("Standard-Startvorschläge je Sprache wortgleich mit embedDefaults.js", () => {
+      const { defaultSuggestions } = defaults();
+      for (const [lang, list] of Object.entries(contract.standardSuggestions))
+        expect(defaultSuggestions(lang)).toEqual(list);
+    });
 
-  it("Wert von ?language= wählt im Fork dieselbe Sprache der Standards", () => {
-    const { embedDefaultsLanguage } = defaults();
-    for (const { query, standards } of contract.languageQuery)
-      expect(embedDefaultsLanguage(query), query).toBe(standards);
-    // fehlender Parameter
-    expect(embedDefaultsLanguage(undefined)).toBe("de");
-  });
+    it("Wert von ?language= wählt im Fork dieselbe Sprache der Standards", () => {
+      const { embedDefaultsLanguage } = defaults();
+      for (const { query, standards } of contract.languageQuery)
+        expect(embedDefaultsLanguage(query), query).toBe(standards);
+      // fehlender Parameter
+      expect(embedDefaultsLanguage(undefined)).toBe("de");
+    });
 
-  it("Fixture-Kopie im Fork (falls vorhanden) wortgleich", () => {
-    const copy = join(
-      forkDir,
-      "server/__tests__/utils/chats/fixtures/embedConfigContract.json",
-    );
-    if (!existsSync(copy)) return;
-    expect(JSON.parse(readFileSync(copy, "utf8"))).toEqual(contract);
-  });
-});
+    it("Fixture-Kopie im Fork vorhanden und wortgleich", () => {
+      const copy = join(
+        forkDir,
+        "server/__tests__/utils/chats/fixtures/embedConfigContract.json",
+      );
+      // kein stilles Bestehen, wenn die Kopie fehlt oder umbenannt wurde (W45)
+      expect(existsSync(copy), `Fixture-Kopie im Fork fehlt: ${copy}`).toBe(
+        true,
+      );
+      expect(JSON.parse(readFileSync(copy, "utf8"))).toEqual(contract);
+    });
+  },
+);

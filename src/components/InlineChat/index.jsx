@@ -1,5 +1,6 @@
 import {
   closeEscapeLayerFor,
+  escapeOrigin,
   focusInPageField,
   isImeEscape,
 } from "@/utils/escape";
@@ -1657,6 +1658,25 @@ export default function InlineChat({
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
   }, [view]);
+
+  // Mobiles Vollbild (view "overlay") und Box im Seitenfluss: Ein Escape ohne
+  // Fokus (<body>, etwa nach „Frühere Chats“ über das Menü oder nach einem
+  // Klick auf Antworttext) kommt am Shadow Root nicht an. Offene
+  // Zwischenschritte (Kommentarfeld, „Frühere Chats“) schließen trotzdem, wie
+  // utils/escape.js zusagt, mit Fokus zurück auf den Öffner. Das Widget
+  // selbst bleibt offen: eingeklappt bzw. geschlossen wird dort wie bisher
+  // nur mit Escape aus dem Widget. Die schwebende Box hat dafür den Listener
+  // unten (Fixliste 7.22-rc16 W43).
+  useEffect(() => {
+    if (view === "bar" || (floating && view === "box")) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
+      if (escapeOrigin(e, host) !== "none") return;
+      closeEscapeLayerFor(e, { host, origin: "none" });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [floating, view]);
 
   // Schwebende Box: Klick/Tippen außerhalb des Widgets und Escape (auch wenn
   // der Fokus nicht im Widget liegt) klappen ein. pointerdown/pointerup in der

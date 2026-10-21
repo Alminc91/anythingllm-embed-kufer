@@ -11,9 +11,9 @@ import { join } from "node:path";
 //    Seit Fixliste 7.22-rc13 N3 (Nutzerentscheidung) brechen Name und
 //    Untertitel um statt mit Ellipse zu enden; die Fälle unten prüfen das
 //    (weitere N3-Fälle in rc13-fixes.test.jsx). Die Maße (Abstand zu ⋮
-//    >= 8 px, nichts abgeschnitten bei 360/390/420 px) misst
-//    .test-storage/rc13/probe_n3.py mit gebautem dist und Playwright; hier
-//    nur die Struktur, die jsdom prüfen kann.
+//    >= 8 px, nichts abgeschnitten bei 360/390/420 px, Kopfhöhe mit kurzem
+//    Namen) misst tests/visual/n3_header.py mit gebautem dist und
+//    Playwright; hier nur die Struktur, die jsdom prüfen kann.
 // W2 Konsolenwarnungen „Chatfenster“ statt „Chat-Blase“.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;

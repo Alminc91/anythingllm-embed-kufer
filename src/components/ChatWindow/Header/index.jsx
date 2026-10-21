@@ -24,11 +24,28 @@ import { panelTexts, uiTexts } from "@/utils/layout";
 // Kunden: umbrechen statt kürzen (keine Ellipse, kein title-Ersatz nötig).
 // overflowWrap "anywhere" trennt notfalls auch ein einzelnes überlanges
 // Wort, damit nichts unter das Menü läuft (Nutzerentscheidung N3, Fixliste
-// 7.22-rc13; ersetzt die Ellipse aus rc10 W1).
+// 7.22-rc13; ersetzt die Ellipse aus rc10 W1). wordBreak "break-word" ist
+// der Rückfall für Safari vor 15.4, das "anywhere" verwirft (Fixliste
+// 7.22-rc16 W44, wie in CourseCards); neuere Browser trennen damit gleich.
+// Ausnahme kompakter Kopf (mobil bei offener Tastatur): nur der Name, kein
+// Untertitel (Bestand seit 06.10.2026, bestätigt in Fixliste 7.22-rc16 E21).
 export const HEADER_WRAP = {
   whiteSpace: "normal",
   overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
+
+// Titelblock (Logo, Name, Untertitel): Mindesthöhe einschließlich des
+// senkrechten Innenabstands (allm-box-border; im Shadow Root gilt kein
+// globales box-sizing, preflight ist aus). Mit kurzem Namen misst der Kopf
+// so 76 px plus 1 px Unterlinie, kompakt 56 px plus 1 px; nur umbrochene
+// Zeilen machen ihn höher (Fixliste 7.22-rc16 W40). Kompakt 6 px statt
+// 8 px Innenabstand: der Logo-Rahmen (44 px) passt dann genau in 56 px.
+export function headerTitleClass(compact = false) {
+  return `allm-flex allm-items-center allm-box-border allm-pl-4 allm-pr-2 ${
+    compact ? "allm-py-1.5 allm-min-h-[56px]" : "allm-py-2 allm-min-h-[76px]"
+  } allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))]`;
+}
 
 // Menü unter ⋮: bei der üblichen Kopfhöhe (76 px, kompakt 56 px) wie bisher
 // 64 px unter der Oberkante; wird der Kopf durch umbrochene Zeilen höher,
@@ -45,10 +62,15 @@ export default function ChatWindowHeader({
   setChatHistory,
   compact = false,
   openHistory = null, // KIE-503: öffnet die "Frühere Chats"-Ansicht
+  // Ref für ⋮ vom ChatWindow: überdauert das Neueinhängen des Kopfs nach dem
+  // Laden, damit Escape in „Frühere Chats“ den Fokus auf den aktuellen ⋮
+  // zurückgibt (Fixliste 7.22-rc16 W42); ohne Übergabe eine eigene Ref
+  optionsButtonRef = null,
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
-  const buttonRef = useRef();
+  const ownButtonRef = useRef();
+  const buttonRef = optionsButtonRef || ownButtonRef;
 
   const handleChatReset = () => {
     // Neue Konversation starten: alte bleibt serverseitig erhalten & im Backend
@@ -185,17 +207,14 @@ export default function ChatWindowHeader({
       className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)]"
       id="anything-llm-header"
     >
-      {/* Titelteil (Logo, Name, Untertitel) und Knopfgruppe (⋮, X) stehen
+      {/* Titelteil (Logo, Name, Untertitel) und Buttongruppe (⋮, X) stehen
           beide im Fluss: der Titelteil darf schrumpfen (min-width 0), die
           Buttons nicht (Fixliste 7.22-rc10 W1). Name und Untertitel werden nie
           gekürzt: Bei Platzmangel brechen sie um und enden mindestens 8 px
           (pr-2) vor dem Menü, der Kopf wird dafür höher (Mindesthöhe 76 px,
-          kompakt 56 px; Nutzerentscheidung N3, Fixliste 7.22-rc13). */}
-      <div
-        className={`allm-flex allm-items-center allm-pl-4 allm-pr-2 allm-py-2 allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
-          compact ? "allm-min-h-[56px]" : "allm-min-h-[76px]"
-        }`}
-      >
+          kompakt 56 px, jeweils mit Innenabstand; Nutzerentscheidung N3,
+          Fixliste 7.22-rc13, W40 aus rc16). */}
+      <div className={headerTitleClass(compact)}>
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
           style={getIconContainerStyle()}
@@ -261,8 +280,9 @@ export default function ChatWindowHeader({
           openHistory
             ? () => {
                 setShowOptions(false);
-                // ⋮ als Öffner: Fokus nach Escape in „Frühere Chats“
-                openHistory(buttonRef.current);
+                // ⋮ als Öffner: Fokus nach Escape in „Frühere Chats“. Die Ref,
+                // nicht der Knoten: aufgelöst wird erst beim Schließen (W42)
+                openHistory(buttonRef);
               }
             : null
         }
@@ -277,6 +297,7 @@ export default function ChatWindowHeader({
 
 // Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
 // ohne Untertitel steht nur der Name. Beide brechen bei Platzmangel um.
+// Kompakt (mobil bei offener Tastatur) steht nur der Name (E21).
 function BrandWithSubtitle({ settings, compact }) {
   return (
     <div
