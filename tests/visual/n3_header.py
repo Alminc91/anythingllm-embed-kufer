@@ -9,6 +9,9 @@ offener Bildschirmtastatur) 56 px plus 1 px (W40). Kompakt steht nur der
 Name, der Untertitel ist ausgeblendet (E21).
 Gebautes dist, lokale Testseite und gemockter Server wie
 tests/visual/theme_visual.py (vorher in .test-storage/rc13/probe_n3.py).
+Darstellung „In der Seite“ und Name kommen als Antwort des gemockten Servers
+(Design Center, Gruppe A nach E23; ein data-display-mode am Skript wirkt
+seit rc17 nicht, Fixliste 7.22-rc18 W65).
 
 Aufruf (aus dem Repo-Wurzelverzeichnis, npm run build vorher):
 
@@ -34,12 +37,15 @@ Texte (je Modus und Breite):
   standard     langer Kundenname, Standard-Untertitel deutsch
   standard-en  langer Kundenname, Standard-Untertitel englisch
   eigen        langer Kundenname, langer eigener Untertitel (59 Zeichen)
+  kurz-rand    wie kurz, Kopffarbe und Icon-Stil border (2 px Rand, W64)
+  kurz-glas    wie kurz, Kopffarbe und Icon-Stil glass (1 px Rand, W64)
 Prüfungen je Fall: voller Text im Namen und (außer kompakt) im Untertitel,
 kein text-overflow: ellipsis, kein waagerechter Überlauf (scrollWidth <=
 clientWidth), Text vollständig innerhalb der Titelleiste, Abstand Text zu ⋮
 >= 8 px, ⋮ und ✕ oben auf (elementFromPoint), Menü öffnet unter ⋮.
-Kurzer Name: Kopf 77 px (kompakt 57 px, je ±0,5 px), Menü 64 px unter der
-Oberkante. Kompakt: kein Untertitel.
+Kurzer Name: Kopf 77 px (kompakt 57 px, je ±0,5 px; mit Kopffarbe ohne
+Unterlinie 76 bzw. 56 px), Menü 64 px unter der Oberkante. Kompakt: kein
+Untertitel.
 """
 
 import argparse
@@ -63,6 +69,8 @@ NAME = {
     "standard": LONG_NAME,
     "standard-en": LONG_NAME,
     "eigen": LONG_NAME,
+    "kurz-rand": SHORT_NAME,
+    "kurz-glas": SHORT_NAME,
 }
 SUBTITLE = {
     "kurz": "Online-Berater mit künstlicher Intelligenz",
@@ -70,7 +78,13 @@ SUBTITLE = {
     "standard": "Online-Berater mit künstlicher Intelligenz",
     "standard-en": "Online advisor powered by artificial intelligence",
     "eigen": LONG_SUBTITLE,
+    "kurz-rand": "Online-Berater mit künstlicher Intelligenz",
+    "kurz-glas": "Online-Berater mit künstlicher Intelligenz",
 }
+# Logo-Rahmen mit Rand (Gruppe B, Einbau-Angaben): Kopffarbe, damit der
+# Icon-Stil wirkt; mit Kopffarbe entfällt die Unterlinie (W64)
+ICON_STYLE = {"kurz-rand": "border", "kurz-glas": "glass"}
+HEADER_BG = "#8B1A1A"
 TEXTS = tuple(NAME)
 MODES = ("chatfenster", "seite", "mobil", "kompakt")
 WIDTHS = (360, 390, 420)
@@ -155,6 +169,8 @@ def case(b, base, out, label, mode, width, text):
     attrs = {**tv.BASE_ATTRS, "open-on-load": "on"}
     if text == "standard-en":
         attrs["language"] = "en"
+    if text in ICON_STYLE:
+        attrs.update({"icon-style": ICON_STYLE[text], "header-bg-color": HEADER_BG})
     cfg = {"brandText": NAME[text]}
     if text == "eigen":
         cfg["assistantSubtitle"] = LONG_SUBTITLE
@@ -168,7 +184,8 @@ def case(b, base, out, label, mode, width, text):
         viewport = {"width": width, "height": 780}
     else:  # seite
         attrs.pop("open-on-load")
-        attrs.update({"display-mode": "inline", "inline-start-state": "expanded"})
+        attrs["inline-start-state"] = "expanded"
+        cfg["displayMode"] = "inline"  # Gruppe A: nur vom Server (E23)
         page_cfg = {"attrs": attrs, "inline": True, "css": f"#kufer-assistent {{ width: {width}px; }}"}
         viewport = {"width": 1280, "height": 900}
     ctx, page = tv.open_page(b, base, page_cfg, tv.Mock(config=cfg), viewport=viewport)
@@ -189,6 +206,10 @@ def case(b, base, out, label, mode, width, text):
     m = page.evaluate(MEASURE, {"name": NAME[text], "subtitle": SUBTITLE[text]})
     m["box"] = page.evaluate("""() => { const w = window.__q('#anything-llm-chat');
       return w ? +w.getBoundingClientRect().width.toFixed(1) : null; }""")
+    m["logo"] = page.evaluate("""() => { const h = window.__q('#anything-llm-header');
+      const f = h && h.firstElementChild && h.firstElementChild.firstElementChild;
+      if (!f) return null; const cs = getComputedStyle(f); const r = f.getBoundingClientRect();
+      return { height: +r.height.toFixed(1), boxSizing: cs.boxSizing, border: cs.borderTopWidth }; }""")
     stem = f"n3-{label}-{mode}-{width}-{text}"
     crop_header(page, out / f"{stem}-kopf.png")
     if text == "eigen":
@@ -227,7 +248,7 @@ def verdict(m, mode, text):
     if not m["menuOpen"]["belowButton"]:
         probs.append("Menü über ⋮")
     if text.startswith("kurz"):
-        soll = SHORT_HEIGHT["kompakt" if compact else "normal"]
+        soll = SHORT_HEIGHT["kompakt" if compact else "normal"] - (1 if text in ICON_STYLE else 0)
         ist = m["header"]["height"]
         if abs(ist - soll) > TOL:
             probs.append(f"Kopf {ist} px statt {soll} px (W40)")
@@ -273,7 +294,7 @@ def main():
     for k, m in res.items():
         n, s = m["name"], m["subtitle"]
         bad += bool(m["probleme"])
-        print(f"{k:30s} box={m['box']} kopf={m['header']['height']} "
+        print(f"{k:30s} box={m['box']} kopf={m['header']['height']} logo={(m.get('logo') or {}).get('height')} "
               f"name={n.get('lines')}Z abst={n.get('gapToMenu')} "
               f"unter={'-' if s.get('missing') else str(s.get('lines')) + 'Z'} abst={s.get('gapToMenu')} "
               f"menü={m['menuOpen']['menuTop']} -> {'OK' if not m['probleme'] else '; '.join(m['probleme'])}")

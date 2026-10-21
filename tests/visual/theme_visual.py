@@ -47,6 +47,8 @@ import threading
 import time
 import urllib.parse
 
+import re
+
 import numpy as np
 from PIL import Image
 from playwright.sync_api import sync_playwright
@@ -93,6 +95,42 @@ HISTORY_ANSWER = [
 ]
 
 BASE_ATTRS = {"embed-id": EMBED_ID, "base-api-url": API}
+
+
+# Gruppe A (Fixliste 7.22-rc17 E23): Einbau-Angaben zu Feldern des Design
+# Centers verwirft das Widget seit rc17 (src/hooks/useScriptAttributes.js
+# DC_COVERED). Die Suiten geben Darstellung, Farbschema, Farben und Texte
+# deshalb als Antwort des gemockten Servers vor, wie rc17_rangfolge.py
+# (Fixliste 7.22-rc18 W65): open_page verschiebt solche Angaben aus
+# cfg["attrs"] in die Mock-config. Gibt die Mock-config denselben Schlüssel
+# vor, gilt ihr Wert (wie vor rc17, als der Server das Skript schlug).
+# cfg["script_attrs"] = True lässt die Angaben am Skript (Prüfung, dass sie
+# nicht wirken). Die Liste kommt aus dem Quelltext, damit sie nicht veraltet.
+def _dc_covered():
+    src = (ROOT / "src" / "hooks" / "useScriptAttributes.js").read_text(encoding="utf-8")
+    m = re.search(r"export const DC_COVERED = \[(.*?)\];", src, re.S)
+    keys = re.findall(r'"(\w+)"', m.group(1)) if m else []
+    if not keys:
+        raise SystemExit("DC_COVERED nicht gefunden (src/hooks/useScriptAttributes.js)")
+    return keys
+
+
+def _attr_name(key):
+    return re.sub(r"[A-Z]", lambda c: "-" + c.group(0).lower(), key)
+
+
+DC_ATTRS = {_attr_name(k): k for k in _dc_covered()}
+
+
+def split_dc_attrs(attrs):
+    """(Skript-Angaben ohne Gruppe A, Gruppe A als Schlüssel der Server-config)"""
+    script, moved = {}, {}
+    for name, value in (attrs or {}).items():
+        if name in DC_ATTRS:
+            moved[DC_ATTRS[name]] = value
+        else:
+            script[name] = value
+    return script, moved
 
 # Zustände, die es auf main nicht gab (dunkles Theme, Seiten-CSS): Referenz
 # stammt aus diesem Branch (Regressionsschutz), nicht vom alten Build.
@@ -230,6 +268,15 @@ def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light
     )
     ctx.add_init_script(INIT_JS)
     brand = (FIXTURES / "brand.png").read_bytes()
+    mock = mock or Mock()
+    if not live and not cfg.get("script_attrs"):
+        attrs, moved = split_dc_attrs(cfg.get("attrs"))
+        cfg = {**cfg, "attrs": attrs}
+        # Ausgangs-config einmal merken: dieselbe Mock-Instanz kann mehrere
+        # Seiten mit verschiedenen Angaben bedienen
+        if not hasattr(mock, "base_config"):
+            mock.base_config = mock.config
+        mock.config = {**moved, **(mock.base_config or {})}
 
     def route_all(route):
         u = route.request.url
@@ -238,7 +285,7 @@ def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light
         if u.startswith(API):
             if live:
                 return route.continue_()
-            return (mock or Mock()).handle(route)
+            return mock.handle(route)
         if route.request.resource_type == "image":
             return route.fulfill(body=brand, content_type="image/png")
         if live:
