@@ -1,7 +1,16 @@
 import { useLayoutEffect, useRef } from "react";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { embedderSettings } from "@/main";
-import { BUBBLE_RADIUS, BUBBLE_SHADOW, LOGO_RADIUS } from "@/utils/theme";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  LOGO_RADIUS,
+  PRIVACY_BG,
+  PRIVACY_BUBBLE_ID,
+  PRIVACY_TEXT,
+  PRIVACY_TITLE,
+  PRIVACY_TITLE_ID,
+} from "@/utils/theme";
 import {
   greetingText,
   panelPills,
@@ -17,7 +26,9 @@ import Pill from "../Pill";
 // "bubble"; privacyNotice "bubble" oder "none"); Vorschläge nur im leeren Chat, die
 // Begrüßungs- und Datenschutz-Blase bleiben auch im Verlauf (PanelGreeting).
 // Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
-// Theme); Texte immer als Text, nie als HTML.
+// Theme); die Datenschutz-Blase hat feste Farben (E25, utils/theme.js
+// PRIVACY_NOTICE_COLORS, Regel direkt am Element). Texte immer als Text, nie
+// als HTML.
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
@@ -201,12 +212,18 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
 // Format ein Punkt je Zeile weiter als Aufzählung), am Ende der Link zur
 // Datenschutzerklärung (privacyUrl) in eigener Zeile. Etwas kleiner und
 // gedämpft wie im Mockup. Alles Text, nie HTML.
+// Farben fest je Farbschema wie der KI-Hinweis (E25, Fixliste 7.22-rc18):
+// Weder Einbau-Angaben (data-assistant-bg-color) noch CSS-Variablen der
+// Seite (--allm-text-muted, --allm-assistant-text, --allm-assistant-bg, auch
+// per @property) machen den Text unsichtbar. Die Regel direkt am Element
+// steht im Theme-Stylesheet (utils/theme.js buildThemeCss); die Werte hier
+// gelten nur ohne dieses Stylesheet.
 function PrivacyBubble({ settings, texts }) {
   const title = privacyTitleText(settings);
   const groups = groupPrivacyBlocks(privacyBlocks(settings));
   return (
     <div
-      id="anything-llm-privacy-bubble"
+      id={PRIVACY_BUBBLE_ID}
       className="allm-font-sans"
       style={{
         ...BUBBLE_STYLE,
@@ -216,16 +233,17 @@ function PrivacyBubble({ settings, texts }) {
         gap: "5px",
         fontSize: "12.5px",
         lineHeight: 1.45,
-        color: "var(--allmi-text-muted, #57534e)",
+        backgroundColor: PRIVACY_BG,
+        color: PRIVACY_TEXT,
       }}
     >
       {title && (
         <strong
-          id="anything-llm-bubble-privacy-title"
+          id={PRIVACY_TITLE_ID}
           style={{
             display: "block",
             fontWeight: 700,
-            color: "var(--allmi-assistant-text, #222628)",
+            color: PRIVACY_TITLE,
           }}
         >
           {title}

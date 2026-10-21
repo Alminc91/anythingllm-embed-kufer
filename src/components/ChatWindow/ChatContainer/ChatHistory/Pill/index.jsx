@@ -5,13 +5,15 @@ import { embedderSettings } from "@/main";
 // Startvorschläge sehen aus und reagieren wie die Folgefragen). Chatblase und
 // Inline, hell und dunkel; Farben nur über --allmi-*:
 //   - Fläche --allmi-pill-bg (hell Weiß, dunkel der Panelton)
-//   - Rand --allmi-pill-border (Kundenfarbe, --allm-accent)
+//   - Rand --allmi-pill-border (Akzentfarbe aus dem Design Center,
+//     --allmi-accent, Gruppe A)
 //   - Schrift --allmi-pill-accent-text: Kundenfarbe mit mindestens 4,5:1 zur
 //     Fläche (hell ggf. abgedunkelt, dunkel ggf. aufgehellt; utils/theme.js
 //     pillTextColor)
 //   - Hover und Tastaturfokus füllen die Pille in Kundenfarbe, Schrift dann
-//     --allm-on-accent (Schrift auf der Kundenfarbe; .allm-pill-accent, CSS in
-//     main.jsx, Übergang --allmi-transition)
+//     --allmi-on-accent (Schrift auf der Kundenfarbe aus dem Design Center,
+//     Gruppe A; .allm-pill-accent, CSS in main.jsx, Übergang
+//     --allmi-transition)
 //   - langer Text bricht um; label = Anzeige (Startvorschläge ab 60 Zeichen
 //     mit … gekürzt, voller Text im title und beim Senden)
 // Text immer als Text, nie als HTML.

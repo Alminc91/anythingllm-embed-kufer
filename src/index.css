@@ -32,7 +32,8 @@
 }
 
 /* Kufer: Icon-Kachel "Frühere Chats" — 10 % Akzent per color-mix(), folgt
-   --allm-accent (auch per Seiten-CSS). Ohne color-mix() bleibt der inline
+   der Akzentfarbe aus dem Design Center (--allmi-accent, Gruppe A; Seiten-CSS
+   wirkt dafür nicht, Fixliste 7.22-rc17 E23). Ohne color-mix() bleibt der inline
    gesetzte bisherige Wert aus buttonColor (accentTintFallback). 10,2 % =
    Alpha 0x1a wie bisher (pixelgleich). */
 @supports (background: color-mix(in srgb, red, blue)) {

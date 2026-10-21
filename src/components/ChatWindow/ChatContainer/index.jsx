@@ -7,7 +7,7 @@ import ChatService from "@/models/chatService";
 import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
-import { AI_NOTICE_BG, AI_NOTICE_TEXT } from "@/utils/theme";
+import { AI_NOTICE_BG, AI_NOTICE_ID, AI_NOTICE_TEXT } from "@/utils/theme";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 // id des Shadow-Hosts jedes Widgets (main.jsx)
 const WIDGET_HOST_ID = "anythingllm-embed-widget";
@@ -360,8 +360,11 @@ export function appendDraft(current, draft) {
 // disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
 // Farben fest je Farbschema (E24, Fixliste 7.22-rc17, utils/theme.js
 // AI_NOTICE_COLORS): Schrift und eine eigene Fläche hinter dem Satz, damit
-// keine CSS-Variable der Seite (--allm-text-muted, --allm-surface) ihn
-// unsichtbar oder unlesbar macht.
+// keine CSS-Variable der Seite (--allm-text-muted, --allm-surface, auch per
+// @property registrierte --allmi-*) ihn unsichtbar oder unlesbar macht. Die
+// festen Farben gelten als Regel direkt am Element (Theme-Stylesheet,
+// buildThemeCss, Fixliste 7.22-rc18 W62); die Werte im style gelten nur
+// ohne dieses Stylesheet.
 // Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
 // sonst deutsch; Wortlaut Fixliste 7.22-rc8 R1). Eine dezente Zeile, nur
 // Text, nicht anklickbar. Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22):
@@ -378,7 +381,7 @@ function AiDisclaimer({ settings }) {
   return (
     <div className="allm-ai-disclaimer-box">
       <p
-        id="anything-llm-ai-disclaimer"
+        id={AI_NOTICE_ID}
         role="note"
         title={text}
         className="allm-ai-disclaimer allm-font-sans"

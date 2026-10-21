@@ -28,6 +28,8 @@ import { widgetLanguage } from "@/utils/language";
 //   (utils/theme.js, Variablen mit dc).
 // - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
 //   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
+//   Ausnahme: Ist der Datenschutz-Hinweis an, gilt greetingStyle "bubble"
+//   (E26, utils/layout.js applyFixedStandards).
 // - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
 //   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
 //   Sponsor-Zeile): wirken immer.
@@ -356,10 +358,8 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
   const serverWins = {};
   for (const key of SERVER_WINS)
     if (server[key] !== undefined) serverWins[key] = server[key];
-  const given = new Set([...Object.keys(script), ...Object.keys(server)]);
   const resolved = applyFixedStandards(
     { ...DEFAULT_SETTINGS, ...server, ...script, ...serverWins, loaded: true },
-    given,
     server,
     new Set(Object.keys(script)),
   );

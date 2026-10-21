@@ -93,10 +93,18 @@ describe("theme.test.js", () => {
   // Rückgriff auf die öffentliche Variable; alle übrigen wie bisher.
   it("host-css-wins: Standards nur als --allmi-* auf :host, öffentliche Variable gewinnt außer bei Gruppe A", () => {
     const css = buildThemeCss(DEFAULT_SETTINGS, "light");
-    const host = css.slice(css.indexOf(":host {"), css.indexOf("}") + 1);
+    const block = (start) => {
+      const i = css.indexOf(start);
+      return i < 0 ? "" : css.slice(i, css.indexOf("}", i) + 1);
+    };
+    const host = block(":host {");
+    // Bewusste Änderung (Fixliste 7.22-rc18 W62): Gruppe A steht auf dem
+    // Host und auf jedem Element (eigener Block), nicht nur auf :host
+    const fixed = block(":host, :host * {");
     // keine öffentliche Variable wird vom Widget deklariert (sonst schlüge
     // :host Vorfahren bzw. ein Inline-Style auf dem Host das Seiten-CSS)
-    expect(host).not.toMatch(/(^|[\s{;])--allm-[a-z-]+\s*:/);
+    for (const b of [host, fixed])
+      expect(b).not.toMatch(/(^|[\s{;])--allm-[a-z-]+\s*:/);
     const dc = THEME_VARIABLES.filter((v) => v.dc).map((v) => v.name);
     expect(dc.sort()).toEqual(
       ["accent", "link", "on-accent", "user-bg", "user-text"].sort(),
@@ -104,10 +112,11 @@ describe("theme.test.js", () => {
     // jede übrige öffentliche Variable steht als erstes Argument im var()
     for (const { name, dc: fromDc } of THEME_VARIABLES)
       if (fromDc) {
-        expect(host).toMatch(
+        expect(fixed).toMatch(
           new RegExp(`--allmi-${name}: #[0-9a-fA-F]{6} !important;`),
         );
-        expect(host).not.toContain(`var(--allm-${name}`);
+        expect(css).not.toContain(`var(--allm-${name}`);
+        expect(host).not.toContain(`--allmi-${name}:`);
       } else
         expect(host).toMatch(
           new RegExp(`--allmi-${name}: var\\(--allm-${name}[,)]`),

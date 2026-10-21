@@ -6,7 +6,7 @@
 // INTERNE Variable `--allmi-<name>`, die in einem <style> im (geschlossenen)
 // Shadow-Root auf `:host` gesetzt wird:
 //
-//     :host { --allmi-accent: var(--allm-accent, #01a5a9); … }
+//     :host { --allmi-surface: var(--allm-surface, #FFFFFF); … }
 //
 // Dadurch gilt der Vorrang (Gruppe B, Fixliste 7.22-rc17 E23)
 //     Standard < Server < Script-Attribut < Seiten-CSS
@@ -17,12 +17,24 @@
 //   auf dem Host und gewinnt immer gegen den Fallback. (Würden die Standards
 //   direkt als `--allm-*` auf :host stehen, schlüge :host jeden Vorfahren und
 //   ein Inline-Style auf dem Host sogar das Seiten-CSS.)
-// Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
-// daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design Center
-// ein, und die Farben des KI-Hinweises sind fest. Diese setzt das Widget
-// direkt und mit !important (`--allmi-accent: #01a5a9 !important;`): kein
-// Rückgriff auf `--allm-*`, und ein wichtiger Wert im Shadow-Root schlägt
-// jede Angabe der Seite am Host, auch eine `--allmi-*` mit !important.
+// Ausnahmen (E23, E24, E25): Variablen mit dc (Akzentfarbe und was der
+// Server daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
+// Center ein, die Farben des KI-Hinweises und der Datenschutz-Blase sind
+// fest. Die dc-Variablen setzt das Widget direkt und mit !important, ohne
+// Rückgriff auf `--allm-*`, und zwar auf `:host` UND auf jedem Element im
+// Shadow-Root (`:host, :host * { --allmi-accent: #01a5a9 !important; }`).
+// Nur am Host reichte nicht: Registriert die Seite die interne Variable per
+// `@property … { inherits: false }`, erben die Elemente den Wert des Hosts
+// nicht und bekämen den `initial-value` der Seite (Fixliste 7.22-rc18 W62).
+// Ein wichtiger Wert im Shadow-Root schlägt jede Angabe der Seite am Host,
+// auch eine `--allmi-*` mit !important. KI-Hinweis und Datenschutz-Blase
+// bekommen ihre festen Farben zusätzlich als Regel direkt am Element
+// (`#anything-llm-ai-disclaimer { color: #6b7280 !important; }`), ganz ohne
+// Variable: so ändert sie auch eine Registrierung mit anderer Syntax nicht.
+// Rest für Gruppe A: Registriert die Seite eine interne Variable mit anderer
+// Syntax (etwa `<length>`), ist der Wert ungültig und es gilt der
+// `initial-value` der Seite; das verlangt, dass die Seite interne Namen
+// gezielt anspricht (im Browser gemessen, Fixliste 7.22-rc18 W62).
 // - Fremde Elemente (Geschwister) erreichen das Widget nicht (NAK-3), Klassen
 //   im Shadow DOM bleiben unerreichbar (NAK-2).
 //
@@ -68,6 +80,10 @@ export const AI_NOTICE_COLORS = {
 };
 export const AI_NOTICE_TEXT = "var(--allmi-ai-notice-text, #6b7280)";
 export const AI_NOTICE_BG = "var(--allmi-ai-notice-bg, #FFFFFF)";
+// Elemente mit festen Farben (Regeln direkt am Element, buildThemeCss)
+export const AI_NOTICE_ID = "anything-llm-ai-disclaimer";
+export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
+export const PRIVACY_TITLE_ID = "anything-llm-bubble-privacy-title";
 
 // Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
 // Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,
@@ -95,6 +111,20 @@ export const DARK = {
   hoverBg: "rgba(255, 255, 255, 0.08)",
 };
 
+// Datenschutz-Blase (E25, Fixliste 7.22-rc18): Text, Überschrift und Fläche
+// fest je Farbschema wie der KI-Hinweis, unabhängig von --allm-* und
+// data-assistant-bg-color (Kontrast hell 7,6:1, dunkel 6,0:1 für den Text).
+// Die Fläche entspricht dem Standard der Antwortblasen; setzt die Seite
+// --allm-assistant-bg oder das Skript data-assistant-bg-color, behält die
+// Datenschutz-Blase ihre eigene Fläche.
+export const PRIVACY_NOTICE_COLORS = {
+  light: { text: "#57534e", title: "#222628", bg: "#FFFFFF" },
+  dark: { text: DARK.textMuted, title: DARK.text, bg: DARK.assistantBg },
+};
+export const PRIVACY_TEXT = "var(--allmi-privacy-text, #57534e)";
+export const PRIVACY_TITLE = "var(--allmi-privacy-title, #222628)";
+export const PRIVACY_BG = "var(--allmi-privacy-bg, #FFFFFF)";
+
 const DEFAULTS = {
   accent: "#01a5a9",
   userBg: "#01a5a9",
@@ -104,11 +134,19 @@ const DEFAULTS = {
 
 // Werte aus Settings landen als CSS-Text im Stylesheet -> nur harmlose Zeichen
 // (Hex, Farbnamen, rgb()/hsl() …), keine Deklarations-/Regel-Grenzen, kein url().
+// CSS-weite Schlüsselwörter (inherit, initial, unset, revert, revert-layer)
+// ebenfalls nicht: `--allmi-accent: inherit !important` holte sonst einen
+// Wert der Seite vom Elternelement (Fixliste 7.22-rc18 N17).
 const SAFE_CSS_VALUE = /^[#a-zA-Z0-9\s(),.%/+-]{1,64}$/;
+const CSS_WIDE_KEYWORD = /^(?:inherit|initial|unset|revert|revert-layer)$/i;
 export function cssValue(value, fallback = null) {
   if (typeof value !== "string") return fallback;
   const v = value.trim();
-  if (!SAFE_CSS_VALUE.test(v) || /url\s*\(|expression/i.test(v))
+  if (
+    !SAFE_CSS_VALUE.test(v) ||
+    /url\s*\(|expression/i.test(v) ||
+    CSS_WIDE_KEYWORD.test(v)
+  )
     return fallback;
   return v;
 }
@@ -310,7 +348,8 @@ export const THEME_VARIABLES = [
   { name: "bar-text", bar: "text" },
   { name: "bar-border", bar: "border" },
   // Pillen im Panel, Startvorschläge und Folgefragen gleich (KIE-565
-  // Nachtrag, Punkt 4): Rand in Kundenfarbe (folgt --allm-accent)
+  // Nachtrag, Punkt 4): Rand in der Akzentfarbe aus dem Design Center
+  // (--allmi-accent, Gruppe A)
   { name: "pill-border", chain: "accent", light: null, dark: null },
   // Fläche: hell Weiß (fest, damit der Kontrast des Texts sicher ist, auch
   // bei dunkler Leiste im hellen Fenster), dunkel im Panelton (transparent
@@ -382,11 +421,13 @@ export function resolveThemeVars(settings = {}, mode = "light") {
 export function buildThemeCss(settings = {}, mode = "light") {
   const bar = BAR_THEMES[resolveBarTheme(settings, mode)];
   const decls = [];
+  // Gruppe A und feste Farben: auf dem Host und auf jedem Element (W62)
+  const fixed = [];
   for (const spec of THEME_VARIABLES) {
     const pub = `--allm-${spec.name}`;
     if (spec.dc) {
       // Gruppe A: Wert aus dem Design Center direkt, ohne var(--allm-…)
-      decls.push(
+      fixed.push(
         `--allmi-${spec.name}: ${pick(spec, settings, mode)} !important;`,
       );
       continue;
@@ -409,11 +450,19 @@ export function buildThemeCss(settings = {}, mode = "light") {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // interne Hilfswerte; KI-Hinweis fest (E24)
-  const notice = AI_NOTICE_COLORS[mode === "dark" ? "dark" : "light"];
-  decls.push(
+  // KI-Hinweis (E24) und Datenschutz-Blase (E25) fest
+  const scheme = mode === "dark" ? "dark" : "light";
+  const notice = AI_NOTICE_COLORS[scheme];
+  const privacy = PRIVACY_NOTICE_COLORS[scheme];
+  fixed.push(
     `--allmi-ai-notice-text: ${notice.text} !important;`,
     `--allmi-ai-notice-bg: ${notice.bg} !important;`,
+    `--allmi-privacy-text: ${privacy.text} !important;`,
+    `--allmi-privacy-title: ${privacy.title} !important;`,
+    `--allmi-privacy-bg: ${privacy.bg} !important;`,
+  );
+  // interne Hilfswerte
+  decls.push(
     "--allmi-radius-bubble-small: min(4px, calc(var(--allmi-radius-bubble) / 4.5));",
     // Icons im Eingabefeld beim Hover: folgen der Eingabe-Textfarbe (Seiten-CSS
     // --allm-input-text bzw. --allm-text); ohne Vorgabe hell der bisherige Wert
@@ -432,6 +481,12 @@ export function buildThemeCss(settings = {}, mode = "light") {
     );
   return (
     `:host { ${decls.join(" ")} }\n` +
+    `:host, :host * { ${fixed.join(" ")} }\n` +
+    // feste Farben direkt am Element, ohne Variable (W62, E25)
+    `#${AI_NOTICE_ID} { color: ${notice.text} !important; }\n` +
+    `#${AI_NOTICE_ID} > span { background-color: ${notice.bg} !important; }\n` +
+    `#${PRIVACY_BUBBLE_ID} { color: ${privacy.text} !important; background-color: ${privacy.bg} !important; }\n` +
+    `#${PRIVACY_TITLE_ID} { color: ${privacy.title} !important; }\n` +
     // Reduzierte Bewegung schlägt auch eine per Seiten-CSS gesetzte Dauer.
     // Aufklapp-Effekt der Inline-Box: bewusst NICHT hier über die Dauer,
     // sondern an genau einer Stelle per animation: none (main.jsx, .allm-effect).
@@ -581,7 +636,8 @@ export const HEADER_ICON_STYLE = {
 // `${buttonColor}1a`, was nur für #rrggbb gültig war. Hex (3/6/8 Stellen) und
 // rgb()/rgba() werden umgerechnet, alles andere -> null (keine Tönung statt
 // eines ungültigen Werts). Mit color-mix() (index.css, .allm-accent-tint)
-// folgt die Tönung --allm-accent.
+// folgt die Tönung der Akzentfarbe aus dem Design Center (--allmi-accent,
+// Gruppe A).
 export function accentTintFallback(color) {
   if (typeof color !== "string") return null;
   const c = color.trim();

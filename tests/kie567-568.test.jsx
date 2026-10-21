@@ -395,9 +395,7 @@ describe("KIE-568 Willkommensblasen: Einstellungen", () => {
   });
 
   it("applyFixedStandards setzt immer beide Schlüssel", () => {
-    const out = applyFixedStandards({}, new Set(), {
-      welcomeBubblesMobile: "off",
-    });
+    const out = applyFixedStandards({}, { welcomeBubblesMobile: "off" });
     expect(out.welcomeBubblesDesktop).toBe("first");
     expect(out.welcomeBubblesMobile).toBe("off");
   });
@@ -537,13 +535,33 @@ describe("KIE-568 Willkommensblasen je Gerät", () => {
     expect(bubbles(el)).not.toBeNull();
   });
 
-  it("ohne neue Schlüssel und mit altem bubblePersistence: Verhalten wie bisher", () => {
+  // Bewusste Änderung (Fixliste 7.22-rc18 C14): data-bubble-persistence
+  // wirkt nicht mehr (Gruppe A, E23; loadEmbedSettings entfernt es ohnehin).
+  // Auch direkt am Chat-Button gilt dann „Beim ersten Besuch“ mit
+  // localStorage, nicht sessionStorage.
+  it("altes bubblePersistence ohne Wirkung: Beim ersten Besuch mit localStorage", () => {
     setWidth(1440);
-    let el = mount(button({ bubblePersistence: "sessionStorage" }));
+    const legacy = { bubblePersistence: "sessionStorage" };
+    let el = mount(button(legacy));
     expect(bubbles(el)).not.toBeNull();
     // ohne Interaktion bleibt nichts gespeichert (kein "shown")
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
-    el = reload(button({ bubblePersistence: "sessionStorage" }));
+    el = reload(button(legacy));
     expect(bubbles(el)).not.toBeNull();
+    act(() =>
+      el
+        .querySelector('[aria-label="Willkommensblasen schließen"]')
+        .dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+    expect(bubbles(el)).toBeNull();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(KEY))).toEqual({
+      manuallyDismissed: true,
+      chatOpened: false,
+    });
+    // neuer Tab (sessionStorage leer): bleibt geschlossen
+    window.sessionStorage.clear();
+    el = reload(button(legacy));
+    expect(bubbles(el)).toBeNull();
   });
 });

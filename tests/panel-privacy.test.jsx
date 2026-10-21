@@ -128,6 +128,8 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
   // Skript-Attribut nicht mehr; feste Standards ohne Feld (Vorschlags- und
   // Begrüßungsstil, Folgefragen) verfeinert ein Skript-Attribut; der
   // KI-Hinweis bleibt fest, den Online-Punkt gibt es nicht mehr.
+  // Bewusste Änderung (Fixliste 7.22-rc18 E26): Der Datenschutz-Hinweis ist
+  // an (kein Server-Wert), also gilt greetingStyle "bubble" gegen "text".
   it("Script-Attribute (data-*): Design-Center-Texte wirken nicht, feste Standards verfeinerbar, KI-Hinweis fest", async () => {
     const s = await loadEmbedSettings(
       {
@@ -150,7 +152,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     );
     expect(s).toMatchObject({
       suggestionStyle: "bars",
-      greetingStyle: "text",
+      greetingStyle: "bubble",
       greetingBubbleText: null,
       assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
       onlineDot: false,
@@ -451,13 +453,16 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     );
     expect(t.displayMode).toBe("bubble");
     expect(t.inlineOpenOn).toBe("submit");
-    // geliefert (Server liefert dieselben Werte) -> geliefert gilt
+    // Skript-Angabe schlägt den Standard; Bewusste Änderung (Fixliste
+    // 7.22-rc18 C18, eine Regel wie FIXED_STANDARDS): ein Altwert vom Server
+    // ohne Skript-Angabe wirkt nicht mehr (der Server liefert dieselben
+    // Werte wie INLINE_STANDARDS)
     const u = await loadEmbedSettings(
       { ...BASE, inlineOpenOn: "submit" },
       fetchConfig({ displayMode: "inline", inlineEffect: "expand" }),
     );
     expect(u.inlineOpenOn).toBe("submit");
-    expect(u.inlineEffect).toBe("expand");
+    expect(u.inlineEffect).toBe("morph");
     expect(u.inlineLayout).toBe("overlay");
     // Chatblase: keine Inline-Standards (keine inlineInput-Warnung)
     const b = await loadEmbedSettings(BASE, fetchConfig({}));
@@ -745,7 +750,9 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect(bubble.style.boxSizing).toBe("border-box");
     expect(privacy.style.boxSizing).toBe("border-box");
-    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
+    // Bewusste Änderung (Fixliste 7.22-rc18 E25): eigene feste Fläche wie
+    // der KI-Hinweis, im Standard gleich der Antwortblase
+    expect(privacy.style.backgroundColor).toContain("--allmi-privacy-bg");
     expect(privacy.style.borderRadius).toBe(bubble.style.borderRadius);
     // altes Format (|) -> Aufzählung, Überschrift „Datenschutz“ ohne Doppelpunkt
     expect(privacy.querySelector("strong").textContent).toBe("Datenschutz");
@@ -1391,9 +1398,10 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     expect(link.getAttribute("href")).toBe("/datenschutz");
     expect(link.textContent).toBe("Datenschutzerklärung");
     expect(privacy.lastElementChild).toBe(link);
-    // kleiner und gedämpft (Mockup), gleiche Blasenfarbe
+    // kleiner und gedämpft (Mockup). Bewusste Änderung (Fixliste 7.22-rc18
+    // E25): feste Farbe der Datenschutz-Blase statt --allmi-text-muted
     expect(privacy.style.fontSize).toBe("12.5px");
-    expect(privacy.style.color).toContain("--allmi-text-muted");
+    expect(privacy.style.color).toContain("--allmi-privacy-text");
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect($("#anything-llm-privacy-notice")).toBe(null);
     expect($("#message-input").disabled).toBe(false);

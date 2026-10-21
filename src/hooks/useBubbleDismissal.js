@@ -7,7 +7,8 @@ const STORAGE_KEY = "anythingllm-embed-bubbles-dismissed";
 // - "first" (Standard, bisheriges Verhalten): localStorage; nach Schließen
 //   der Blasen oder Öffnen des Chats nicht mehr, bis der Nutzer die
 //   Browserdaten löscht. Ein altes data-bubble-persistence="sessionStorage"
-//   wirkt hier nur ohne Server-Wert (applyFixedStandards entfernt es sonst).
+//   wirkt nicht (Gruppe A, E23: applyFixedStandards entfernt es immer); für
+//   „einmal je Besuch“ gilt im Design Center „Bei jedem Besuch“.
 // - "every": einmal je Browser-Tab (sessionStorage). Sobald die Blasen
 //   einmal zu sehen waren, erscheinen sie auf Unterseiten im selben Tab nicht
 //   erneut (shown); ein neuer Tab bzw. ein späterer Besuch zeigt sie wieder.
@@ -29,14 +30,7 @@ export default function useBubbleDismissal(settings = {}, mode = "first") {
       if (mode === "every") {
         return typeof sessionStorage !== "undefined" ? sessionStorage : null;
       }
-      // "first": localStorage (Blasen nur einmal pro Browser, wie Chatbase);
-      // sessionStorage nur, wenn per Altattribut explizit gewünscht
-      if (
-        settings.bubblePersistence === "sessionStorage" &&
-        typeof sessionStorage !== "undefined"
-      ) {
-        return sessionStorage;
-      }
+      // "first": localStorage (Blasen nur einmal pro Browser, wie Chatbase)
       if (typeof localStorage !== "undefined") {
         return localStorage;
       }
@@ -120,7 +114,7 @@ export default function useBubbleDismissal(settings = {}, mode = "first") {
 
   useEffect(() => {
     setBubblesVisible(computeVisible());
-  }, [settings.bubblePersistence, settings.embedId, mode]);
+  }, [settings.embedId, mode]);
 
   const dismissBubbles = () => {
     setBubblesVisible(false);

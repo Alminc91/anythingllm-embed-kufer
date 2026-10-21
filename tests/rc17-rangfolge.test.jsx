@@ -281,11 +281,18 @@ describe("W50: Gruppe B (feste Standards ohne Feld) per Skript-Angabe verfeinerb
     expect(warnLines().some((l) => l.includes("wirkt nicht"))).toBe(false);
   });
 
+  // Bewusste Änderung (Fixliste 7.22-rc18 E26): data-greeting-style="text"
+  // wirkt nur bei abgeschaltetem Datenschutz-Hinweis (Fälle in
+  // rc18-widget.test.jsx)
   it("Optik ohne Feld (Kopffarbe, Begrüßungsstil) wirkt, ein Altwert vom Server bei festen Standards nicht", async () => {
-    const s = await load({ headerBgColor: "#0b5f8a", greetingStyle: "text" });
+    const off = { ...SERVER_STANDARDS, privacyNotice: "none" };
+    const s = await load(
+      { headerBgColor: "#0b5f8a", greetingStyle: "text" },
+      off,
+    );
     expect(s.headerBgColor).toBe("#0b5f8a");
     expect(s.greetingStyle).toBe("text");
-    const t = await load({}, { ...SERVER_STANDARDS, greetingStyle: "text" });
+    const t = await load({}, { ...off, greetingStyle: "text" });
     expect(t.greetingStyle).toBe("bubble");
   });
 });
@@ -401,8 +408,16 @@ describe("E24: KI-Hinweis auf keinem Weg abschalt- oder änderbar", () => {
 // Standard bzw. Transport ohne Feld.
 const forkDir = process.env.KUFER_FORK_DIR;
 const describeFork = forkDir ? describe : describe.skip;
+// sichtbar im Log statt still übersprungen (wie embed-config-contract,
+// Fixliste 7.22-rc18 W66)
+if (!forkDir)
+  console.warn(
+    "[rc17-rangfolge] KUFER_FORK_DIR nicht gesetzt: Gegenprobe /config gegen DC_COVERED übersprungen (1 Test). Im rc-Build mit gesetzter Variable laufen lassen.",
+  );
 describeFork(
-  "Gegenprobe: Schlüssel von /config gegen DC_COVERED (KUFER_FORK_DIR)",
+  forkDir
+    ? "Gegenprobe: Schlüssel von /config gegen DC_COVERED (KUFER_FORK_DIR)"
+    : "Gegenprobe: Schlüssel von /config gegen DC_COVERED (übersprungen: KUFER_FORK_DIR nicht gesetzt)",
   () => {
     it("Schlüssel aus Feldern des Design Centers stehen in DC_COVERED, feste Standards nicht", () => {
       const require = createRequire(import.meta.url);

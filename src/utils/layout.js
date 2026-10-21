@@ -443,7 +443,10 @@ export function privacyPoints(settings = {}) {
 // Feste Standards (Design Center vereinfacht, 15.10.2026), ohne Feld im
 // Design Center: Gruppe B nach E23 (Fixliste 7.22-rc17). Eine Skript-Angabe
 // verfeinert sie; ohne Skript-Angabe gilt der feste Wert, auch gegen einen
-// Altwert vom Server (der Server liefert dieselben Werte).
+// Altwert vom Server (der Server liefert dieselben Werte). Dieselbe Regel
+// gilt für INLINE_STANDARDS (applyFixedStandards, Fixliste 7.22-rc18 C18).
+// Ausnahme greetingStyle: Ist der Datenschutz-Hinweis an, gilt "bubble"
+// (E26, applyFixedStandards).
 // Randabstände der Chatblase (offsetX/offsetY, Standard 16 px), Max. Breite
 // der Inline-Box (inlineMaxWidth, Standard volle Breite des Platzhalters) und
 // Stil der Inline-Leiste (inlineTheme, Standard: folgt dem Farbschema).
@@ -468,10 +471,10 @@ export const AI_NOTICE = { disclaimer: "footer", disclaimerText: null };
 // data-inline-layout "overlay", data-inline-effect "morph",
 // data-inline-height "520px", data-inline-start-state "collapsed",
 // data-inherit-font "true"; Leisten-Stil folgt dem Fenster-Theme, Breite =
-// Platzhalter). Nur im Inline-Modus und
-// nur, wo weder Script noch Server einen Wert liefern (der Server liefert
-// dieselben Werte; eine Skript-Angabe schlägt sie, Gruppe B nach E23); in
-// der Chatblase wirkungslos.
+// Platzhalter). Nur im Inline-Modus, in der Chatblase wirkungslos. Regel wie
+// FIXED_STANDARDS (Gruppe B nach E23): eine Skript-Angabe schlägt den
+// Standard, ohne Skript-Angabe gilt er, auch gegen einen Altwert vom Server
+// (der Server liefert dieselben Werte; Fixliste 7.22-rc18 C18).
 export const INLINE_STANDARDS = {
   inlineInput: true,
   inlineOpenOn: "focus",
@@ -513,16 +516,15 @@ export function welcomeBubblesMode(settings = {}, phone = false) {
   return oneOf(value, WELCOME_BUBBLES_VALUES) || DEFAULT_WELCOME_BUBBLES;
 }
 
-// Einmal beim Laden (loadEmbedSettings): feste Standards setzen, außer das
-// Skript gibt den Wert vor (scriptKeys), Inline-Standards ergänzen, wo weder
-// Script noch Server einen Wert liefern (given), KI-Hinweis fest,
+// Einmal beim Laden (loadEmbedSettings): feste Standards und im Inline-Modus
+// die Inline-Standards setzen, außer das Skript gibt den Wert vor
+// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis fest,
 // Datenschutz-Hinweis und Willkommensblasen aus dem Server-Wert (server =
 // geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
 // Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
 // bzw. „AI Advisor“).
 export function applyFixedStandards(
   settings = {},
-  given = new Set(),
   server = {},
   scriptKeys = new Set(),
 ) {
@@ -533,6 +535,12 @@ export function applyFixedStandards(
   };
   for (const [key, value] of Object.entries(FIXED_STANDARDS))
     if (!scriptKeys.has(key)) out[key] = value;
+  // Datenschutz-Hinweis an (Schalter im Design Center): Begrüßung als Blase,
+  // auch gegen data-greeting-style="text" (E26, Fixliste 7.22-rc18 W60). Nur
+  // die Begrüßungsblase trägt die Datenschutz-Blase (ChatHistory:
+  // PanelWelcome im leeren Chat, PanelGreeting im Verlauf); "text" wirkt nur
+  // bei abgeschaltetem Hinweis.
+  if (out.privacyNotice === "bubble") out.greetingStyle = "bubble";
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
   // (data-bubble-persistence wirkt nicht, Gruppe A)
   for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"])
@@ -540,7 +548,7 @@ export function applyFixedStandards(
   delete out.bubblePersistence;
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
-      if (!given.has(key)) out[key] = value;
+      if (!scriptKeys.has(key)) out[key] = value;
   const name = panelTexts(out).assistantName;
   for (const key of ["brandText", "assistantName"])
     if (typeof out[key] !== "string" || out[key].trim() === "") out[key] = name;

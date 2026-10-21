@@ -149,7 +149,7 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
       "bubble",
     );
     expect(
-      applyFixedStandards({}, new Set(), { privacyNotice: "none" })
+      applyFixedStandards({}, { privacyNotice: "none" })
         .privacyNotice,
     ).toBe("none");
   });
