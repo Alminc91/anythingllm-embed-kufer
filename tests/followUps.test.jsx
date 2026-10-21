@@ -89,25 +89,31 @@ const PILLS = { followUps: "pills" };
 
 // ---------------------------------------------------------------------------
 describe("Settings (AK-6, NAK-4)", () => {
-  // Bewusste Änderung (Design Center vereinfacht, 15.10.2026): Folgefragen
-  // sind fester Standard "pills" in beiden Stilen; "none" aus Script-Attribut
-  // oder Design Center wirkt nicht mehr (FIXED_STANDARDS).
-  it("fest pills: ohne Angabe, per Script-Attribut und Design Center", async () => {
+  // Design Center vereinfacht (15.10.2026): Folgefragen sind fester
+  // Standard "pills" in beiden Stilen (FIXED_STANDARDS).
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): fester Standard ohne Feld
+  // im Design Center (Gruppe B), ein Script-Attribut verfeinert ihn; ein
+  // Altwert vom Server wirkt weiter nicht
+  it("Standard pills: ohne Angabe und gegen den Server fest, Script-Attribut verfeinert", async () => {
     expect((await loadEmbedSettings(BASE, fetchConfig({}))).followUps).toBe(
       "pills",
     );
     expect(
       (await loadEmbedSettings({ ...BASE, followUps: "none" }, fetchConfig({})))
         .followUps,
+    ).toBe("none");
+    expect(
+      (await loadEmbedSettings(BASE, fetchConfig({ followUps: "none" })))
+        .followUps,
     ).toBe("pills");
     expect(
       (
         await loadEmbedSettings(
-          { ...BASE, followUps: "pills" },
-          fetchConfig({ followUps: "none" }),
+          { ...BASE, followUps: "none" },
+          fetchConfig({ followUps: "pills" }),
         )
       ).followUps,
-    ).toBe("pills");
+    ).toBe("none");
   });
 
   it("NAK-4: ungültiges data-follow-ups -> pills + genau eine console.warn", async () => {

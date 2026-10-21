@@ -271,36 +271,45 @@ describe("Altlisten der Begrüßung (Nr. 19, W08)", () => {
 describe("Feste Randabstände und Max. Breite, inheritFont Inline (Nr. 15, 18)", () => {
   // inlineTheme seit Fixliste 7.22-rc7 Nr. 21 ebenfalls fest (Leiste folgt dem
   // Farbschema aus dem Design Center)
-  it("data-offset-x/-y, data-inline-max-width und data-inline-theme wirken nicht mehr", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): feste Standards ohne Feld
+  // im Design Center (Gruppe B), ein Script-Attribut verfeinert sie wieder;
+  // ohne Script-Attribut gilt der feste Wert, auch gegen einen Server-Wert
+  it("data-offset-x/-y, data-inline-max-width und data-inline-theme verfeinern den festen Standard", async () => {
     const s = await loadEmbedSettings(
       {
         ...BASE,
-        displayMode: "inline",
         offsetX: "120",
         offsetY: "40",
         inlineMaxWidth: "600px",
         inlineTheme: "dark",
       },
-      fetchConfig({}),
+      fetchConfig({ displayMode: "inline" }),
     );
-    expect(s.offsetX).toBe(null);
-    expect(s.offsetY).toBe(null);
-    expect(s.inlineMaxWidth).toBe(null);
-    expect(s.inlineTheme).toBe(null);
+    expect(s.offsetX).toBe(120);
+    expect(s.offsetY).toBe(40);
+    expect(s.inlineMaxWidth).toBe("600px");
+    expect(s.inlineTheme).toBe("dark");
+    const t = await loadEmbedSettings(
+      BASE,
+      fetchConfig({ displayMode: "inline", offsetX: 50, inlineTheme: "dark" }),
+    );
+    expect(t.offsetX).toBe(null);
+    expect(t.inlineTheme).toBe(null);
   });
 
   it("Inline ohne Angabe: Seitenschrift (inheritFont true), Chatblase nicht", async () => {
     expect(INLINE_STANDARDS.inheritFont).toBe(true);
+    // Darstellung aus dem Design Center (Fixliste 7.22-rc17 E23)
     const inline = await loadEmbedSettings(
-      { ...BASE, displayMode: "inline" },
-      fetchConfig({}),
+      BASE,
+      fetchConfig({ displayMode: "inline" }),
     );
     expect(inline.inheritFont).toBe(true);
     const bubble = await loadEmbedSettings(BASE, fetchConfig({}));
     expect(bubble.inheritFont).toBe(false);
     const off = await loadEmbedSettings(
-      { ...BASE, displayMode: "inline", inheritFont: "false" },
-      fetchConfig({}),
+      { ...BASE, inheritFont: "false" },
+      fetchConfig({ displayMode: "inline", inheritFont: true }),
     );
     expect(off.inheritFont).toBe(false);
   });

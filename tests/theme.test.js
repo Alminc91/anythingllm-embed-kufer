@@ -88,34 +88,50 @@ afterEach(() => {
 });
 
 describe("theme.test.js", () => {
-  it("host-css-wins: Standards nur als --allmi-* auf :host, öffentliche Variable gewinnt immer", () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): Variablen der Gruppe A (dc,
+  // im Design Center einstellbar) stehen direkt und mit !important, ohne
+  // Rückgriff auf die öffentliche Variable; alle übrigen wie bisher.
+  it("host-css-wins: Standards nur als --allmi-* auf :host, öffentliche Variable gewinnt außer bei Gruppe A", () => {
     const css = buildThemeCss(DEFAULT_SETTINGS, "light");
     const host = css.slice(css.indexOf(":host {"), css.indexOf("}") + 1);
     // keine öffentliche Variable wird vom Widget deklariert (sonst schlüge
     // :host Vorfahren bzw. ein Inline-Style auf dem Host das Seiten-CSS)
     expect(host).not.toMatch(/(^|[\s{;])--allm-[a-z-]+\s*:/);
-    // jede öffentliche Variable steht als erstes Argument im var()
-    for (const { name } of THEME_VARIABLES)
-      expect(host).toMatch(
-        new RegExp(`--allmi-${name}: var\\(--allm-${name}[,)]`),
-      );
+    const dc = THEME_VARIABLES.filter((v) => v.dc).map((v) => v.name);
+    expect(dc.sort()).toEqual(
+      ["accent", "link", "on-accent", "user-bg", "user-text"].sort(),
+    );
+    // jede übrige öffentliche Variable steht als erstes Argument im var()
+    for (const { name, dc: fromDc } of THEME_VARIABLES)
+      if (fromDc) {
+        expect(host).toMatch(
+          new RegExp(`--allmi-${name}: #[0-9a-fA-F]{6} !important;`),
+        );
+        expect(host).not.toContain(`var(--allm-${name}`);
+      } else
+        expect(host).toMatch(
+          new RegExp(`--allmi-${name}: var\\(--allm-${name}[,)]`),
+        );
     // Werte im :host-Stylesheet, nicht als Inline-Style am Host
     expect(css.startsWith(":host {")).toBe(true);
   });
 
-  it("precedence-server-over-script: visual_config schlägt data-Attribut", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): Farbe der Nutzerblase =
+  // Akzentfarbe aus dem Design Center (Gruppe A); das Script-Attribut wirkt
+  // auch ohne Server-Wert nicht.
+  it("precedence-server-over-script: visual_config gilt, data-Attribut wirkt nicht", async () => {
     const { vars, settings } = await finalVars(
       { userBgColor: "#111111" },
       { userBgColor: "#222222" },
     );
     expect(vars["--allm-user-bg"]).toBe("#222222");
     expect(buildThemeCss(settings, "light")).toContain(
-      "--allmi-user-bg: var(--allm-user-bg, #222222);",
+      "--allmi-user-bg: #222222 !important;",
     );
-    // ohne Server-Wert greift das Script-Attribut, ohne beides der Default
+    // ohne Server-Wert der Standard, nicht das Script-Attribut
     expect(
       (await finalVars({ userBgColor: "#111111" })).vars["--allm-user-bg"],
-    ).toBe("#111111");
+    ).toBe("#01a5a9");
     expect((await finalVars({})).vars["--allm-user-bg"]).toBe("#01a5a9");
   });
 
@@ -130,25 +146,29 @@ describe("theme.test.js", () => {
     );
   });
 
-  it("theme-script-attr-without-server-theme: Server-Antwort ohne theme, data-theme=dark gewinnt", async () => {
-    // Fork-Versionen vor Image 7.9 liefern theme nicht aus -> Script-Attribut
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): das Farbschema stellt nur
+  // das Design Center ein; data-theme wirkt auch ohne Server-Wert nicht
+  // (eine Warnung).
+  it("theme-script-attr-without-server-theme: Server-Antwort ohne theme, data-theme=dark wirkt nicht", async () => {
     const { settings, mode, vars } = await finalVars(
       { theme: "dark" },
       { buttonColor: "#FFA102", userBgColor: "#FFA102" },
     );
-    expect(settings.theme).toBe("dark");
-    expect(mode).toBe("dark");
-    expect(vars["--allm-surface"]).toBe(DARK.surface);
+    expect(settings.theme).toBe("light");
+    expect(mode).toBe("light");
+    expect(vars["--allm-surface"]).toBe("#FFFFFF");
     expect(vars["--allm-accent"]).toBe("#FFA102");
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("data-theme wirkt nicht");
     expect(error).not.toHaveBeenCalled();
   });
 
   it("legacy-settings-map: buttonColor/linkColor speisen --allm-accent/--allm-link", async () => {
-    const { vars } = await finalVars({
-      buttonColor: "#ff0000",
-      linkColor: "#00ff00",
-    });
+    // seit Fixliste 7.22-rc17 (E23) nur vom Server (Design Center)
+    const { vars } = await finalVars(
+      { buttonColor: "#0000ff", linkColor: "#0000ff" },
+      { buttonColor: "#ff0000", linkColor: "#00ff00" },
+    );
     expect(vars["--allm-accent"]).toBe("#ff0000");
     expect(vars["--allm-link"]).toBe("#00ff00");
     // weitere Bestands-Settings
@@ -169,11 +189,13 @@ describe("theme.test.js", () => {
   });
 
   it("invalid-theme-falls-back: data-theme=blau / visual_config.theme=7 -> light + genau eine Warnung", async () => {
+    // data-theme wirkt seit Fixliste 7.22-rc17 (E23) nicht: eine Warnung
+    // „wirkt nicht“, keine zweite über den Wert
     const a = await finalVars({ theme: "blau" });
     expect(a.settings.theme).toBe("light");
     expect(a.mode).toBe("light");
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toContain('"blau"');
+    expect(String(warn.mock.calls[0][0])).toContain("data-theme wirkt nicht");
 
     warn.mockClear();
     const b = await finalVars({}, { theme: 7 });
@@ -182,10 +204,14 @@ describe("theme.test.js", () => {
     expect(String(warn.mock.calls[0][0])).toContain("7");
     expect(error).not.toHaveBeenCalled();
 
-    // Groß-/Kleinschreibung egal, gültige Werte ohne Warnung
+    // Groß-/Kleinschreibung egal, gültige Werte vom Server ohne Warnung
     warn.mockClear();
-    expect((await finalVars({ theme: "Dark" })).settings.theme).toBe("dark");
-    expect((await finalVars({ theme: "auto" })).settings.theme).toBe("auto");
+    expect((await finalVars({}, { theme: "Dark" })).settings.theme).toBe(
+      "dark",
+    );
+    expect((await finalVars({}, { theme: "auto" })).settings.theme).toBe(
+      "auto",
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -254,34 +280,32 @@ describe("theme.test.js", () => {
     expect(dark["--allm-bar-text"]).toBe(BAR_THEMES.dark.text);
   });
 
-  // Fixliste 7.22-rc7 Nr. 21: inlineTheme ist fest null (Leiste folgt dem
-  // Farbschema aus dem Design Center), Script und Server wirken nicht mehr.
-  // resolveBarTheme selbst kennt den expliziten Wert weiter (Werkzeug).
-  it("inlineTheme: Leiste folgt immer dem Fenster-Theme, data-inline-theme wirkt nicht", async () => {
+  // Fixliste 7.22-rc7 Nr. 21: ohne Angabe folgt die Leiste dem Farbschema
+  // aus dem Design Center, ein Serverwert wirkt nicht. Bewusste Änderung
+  // (Fixliste 7.22-rc17 E23): data-inline-theme verfeinert den festen
+  // Standard wieder (Gruppe B).
+  it("inlineTheme: Leiste folgt ohne Angabe dem Fenster-Theme, data-inline-theme verfeinert", async () => {
     expect(DEFAULT_SETTINGS.inlineTheme).toBeNull();
     expect((await finalVars({})).settings.inlineTheme).toBeNull();
     expect(resolveBarTheme({ inlineTheme: null }, "light")).toBe("light");
     expect(resolveBarTheme({ inlineTheme: null }, "dark")).toBe("dark");
-    // Bestand data-inline-theme="dark" im hellen Fenster: helle Leiste
-    const legacy = await finalVars({ inlineTheme: "dark" });
-    expect(legacy.settings.inlineTheme).toBeNull();
-    expect(legacy.mode).toBe("light");
-    expect(legacy.vars["--allm-bar-bg"]).toBe(BAR_THEMES.light.bg);
-    // data-inline-theme="light" im dunklen Fenster: dunkle Leiste
-    const lightBar = await finalVars({ theme: "dark", inlineTheme: "light" });
-    expect(lightBar.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
-    expect(lightBar.vars["--allm-surface"]).toBe(DARK.surface);
-    // auch ein Serverwert wirkt nicht
-    const server = await finalVars(
-      { theme: "light", inlineTheme: "light" },
-      { inlineTheme: "dark" },
-    );
+    // data-inline-theme="dark" im hellen Fenster: dunkle Leiste
+    const own = await finalVars({ inlineTheme: "dark" });
+    expect(own.settings.inlineTheme).toBe("dark");
+    expect(own.mode).toBe("light");
+    expect(own.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
+    // ohne Angabe im dunklen Fenster: dunkle Leiste
+    const darkBar = await finalVars({}, { theme: "dark" });
+    expect(darkBar.vars["--allm-bar-bg"]).toBe(BAR_THEMES.dark.bg);
+    expect(darkBar.vars["--allm-surface"]).toBe(DARK.surface);
+    // ein Serverwert wirkt nicht
+    const server = await finalVars({}, { inlineTheme: "dark" });
     expect(server.vars["--allm-bar-bg"]).toBe(BAR_THEMES.light.bg);
   });
 
   it("brand-header-dark: headerBgColor ohne headerTextColor -> Text folgt dem dunklen Satz (Kontrast >= 4,5:1)", async () => {
     const brand = "#0b3d6b";
-    const dark = await finalVars({ theme: "dark" }, { headerBgColor: brand });
+    const dark = await finalVars({}, { theme: "dark", headerBgColor: brand });
     expect(dark.vars["--allm-header-bg"]).toBe(brand);
     expect(dark.vars["--allm-header-text"]).toBe(DARK.text);
     expect(dark.vars["--allm-header-icon"]).toBe("#FFFFFF");
@@ -300,8 +324,8 @@ describe("theme.test.js", () => {
     expect(light.vars["--allm-header-text"]).toBe("#1f2937");
     // headerTextColor gewinnt in beiden Themes
     const explicit = await finalVars(
-      { theme: "dark" },
-      { headerBgColor: brand, headerTextColor: "#FFFFFF" },
+      {},
+      { theme: "dark", headerBgColor: brand, headerTextColor: "#FFFFFF" },
     );
     expect(explicit.vars["--allm-header-text"]).toBe("#FFFFFF");
   });
@@ -401,7 +425,7 @@ describe("theme.test.js", () => {
       { ...DEFAULT_SETTINGS, buttonColor: "red;}</style><script>" },
       "light",
     );
-    expect(css).toContain("--allmi-accent: var(--allm-accent, #01a5a9);");
+    expect(css).toContain("--allmi-accent: #01a5a9 !important;");
     expect(css).not.toContain("<script>");
   });
 
@@ -412,7 +436,10 @@ describe("theme.test.js", () => {
     expect(legacyTextSize("15")).toBeNull();
   });
 
-  it("NAK-5: dokumentierte data-Attribute werden weiter angewendet", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): Angaben, die das Design
+  // Center einstellt (Position, Begrüßung, Darstellung, Akzentfarbe),
+  // wirken per data-Attribut nicht mehr; die übrigen weiter.
+  it("NAK-5: dokumentierte data-Attribute ohne Feld im Design Center werden weiter angewendet", async () => {
     const s = await loadEmbedSettings(
       {
         ...BASE,
@@ -422,26 +449,32 @@ describe("theme.test.js", () => {
         inheritFont: "",
         displayMode: "Inline",
         buttonColor: "#123456",
+        headerBgColor: "#0b5f8a",
+        textSize: "16",
       },
       fetchConfig({}),
     );
-    expect(s.position).toBe("top-right");
-    expect(s.greeting).toBe("Hallo Test");
+    expect(s.position).toBe("bottom-left");
+    expect(s.greeting).toBe(null);
     expect(s.noHeader).toBe("true");
     expect(s.inheritFont).toBe(true);
-    expect(s.displayMode).toBe("inline");
-    expect(s.buttonColor).toBe("#123456");
+    expect(s.displayMode).toBe("bubble");
+    expect(s.buttonColor).toBe("#01a5a9");
+    expect(s.headerBgColor).toBe("#0b5f8a");
+    expect(s.textSize).toBe("16");
     expect(s.theme).toBe("light");
   });
 
-  it("Config-Fetch-Fehler: Script-Attribute bleiben gültig", async () => {
+  it("Config-Fetch-Fehler: Script-Attribute ohne Feld im Design Center bleiben gültig", async () => {
     const s = await loadEmbedSettings(
-      { ...BASE, theme: "dark" },
+      { ...BASE, theme: "dark", headerBgColor: "#0b5f8a" },
       vi.fn(async () => {
         throw new Error("offline");
       }),
     );
-    expect(s.theme).toBe("dark");
+    // Farbschema nur aus dem Design Center (Fixliste 7.22-rc17 E23)
+    expect(s.theme).toBe("light");
+    expect(s.headerBgColor).toBe("#0b5f8a");
     expect(s.loaded).toBe(true);
   });
 });

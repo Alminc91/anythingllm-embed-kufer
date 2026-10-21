@@ -183,12 +183,19 @@ describe("Settings inlineInput / inlineInputPlaceholder / inlineSendText", () =>
     expect(s.inlineSendText).toBe("Fragen");
   });
 
-  it("Design Center (false) schlägt das Script-Attribut (Vorrangregel)", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+  // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
+  it("Script-Attribut schlägt den Wert vom Server (Gruppe B)", async () => {
     const s = await loadEmbedSettings(
       { ...BASE, inlineInput: "true" },
       fetchConfig({ inlineInput: false }),
     );
-    expect(s.inlineInput).toBe(false);
+    expect(s.inlineInput).toBe(true);
+    const t = await loadEmbedSettings(
+      { ...BASE, inlineInput: "false" },
+      fetchConfig({ inlineInput: true }),
+    );
+    expect(t.inlineInput).toBe(false);
   });
 
   it("ungültige Werte fallen auf den nächstniedrigeren Wert zurück", async () => {

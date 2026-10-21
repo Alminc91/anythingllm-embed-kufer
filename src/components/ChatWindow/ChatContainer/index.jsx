@@ -7,6 +7,7 @@ import ChatService from "@/models/chatService";
 import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
+import { AI_NOTICE_BG, AI_NOTICE_TEXT } from "@/utils/theme";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 // id des Shadow-Hosts jedes Widgets (main.jsx)
 const WIDGET_HOST_ID = "anythingllm-embed-widget";
@@ -357,6 +358,10 @@ export function appendDraft(current, draft) {
 // Fester KI-Hinweis unter dem Eingabefeld, in allen Modi und immer (Design
 // Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
 // disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
+// Farben fest je Farbschema (E24, Fixliste 7.22-rc17, utils/theme.js
+// AI_NOTICE_COLORS): Schrift und eine eigene Fläche hinter dem Satz, damit
+// keine CSS-Variable der Seite (--allm-text-muted, --allm-surface) ihn
+// unsichtbar oder unlesbar macht.
 // Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
 // sonst deutsch; Wortlaut Fixliste 7.22-rc8 R1). Eine dezente Zeile, nur
 // Text, nicht anklickbar. Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22):
@@ -381,13 +386,13 @@ function AiDisclaimer({ settings }) {
           margin: "4px 2px 0",
           lineHeight: 1.4,
           textAlign: "center",
-          color: "var(--allmi-text-muted, #6b7280)",
+          color: AI_NOTICE_TEXT,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
         }}
       >
-        {text}
+        <span style={{ backgroundColor: AI_NOTICE_BG }}>{text}</span>
       </p>
     </div>
   );

@@ -188,18 +188,20 @@ describe("F01 (E12): /config mit der Sprache des Widgets", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("F02 (E10): gespeichert (auch leer) vor Skript-Attribut vor Standard", () => {
+// Bewusste Änderung (Fixliste 7.22-rc17, E10 neu und E23): Startvorschläge
+// stellt das Design Center ein (Gruppe A); data-default-messages am Skript
+// wirkt nicht, auch nicht gegen den Standard vom Server.
+describe("F02 (E10 neu): gespeichert (auch leer) vor Standard, Skript-Attribut ohne Wirkung", () => {
   const SCRIPT = { defaultMessages: "Spanisch A1,Yoga" };
 
-  it("Standard vom Server weicht data-default-messages; ohne Attribut gilt der Standard", async () => {
+  it("Standard vom Server gilt, auch mit data-default-messages", async () => {
     const standard = {
       defaultMessages: [...STANDARD.de],
       defaultMessagesStandard: true,
     };
-    expect((await load(SCRIPT, standard)).defaultMessages).toEqual([
-      "Spanisch A1",
-      "Yoga",
-    ]);
+    expect((await load(SCRIPT, standard)).defaultMessages).toEqual(
+      STANDARD.de,
+    );
     expect((await load({}, standard)).defaultMessages).toEqual(STANDARD.de);
   });
 
@@ -243,7 +245,8 @@ describe("F02 (E10): gespeichert (auch leer) vor Skript-Attribut vor Standard", 
     expect(
       container.querySelectorAll("#anything-llm-inline-chips button"),
     ).toHaveLength(0);
-    // Gegenprobe: mit Skript-Attribut und Standard vom Server erscheinen sie
+    // Gegenprobe: mit Standard vom Server erscheinen dessen Vorschläge
+    // (das Skript-Attribut wirkt nicht)
     const withScript = await load(SCRIPT, {
       defaultMessages: [...STANDARD.de],
       defaultMessagesStandard: true,
@@ -260,13 +263,13 @@ describe("F02 (E10): gespeichert (auch leer) vor Skript-Attribut vor Standard", 
       [...container.querySelectorAll("#anything-llm-inline-chips button")].map(
         (b) => b.textContent,
       ),
-    ).toEqual(["Spanisch A1", "Yoga"]);
+    ).toEqual(STANDARD.de);
   });
 });
 
 // ---------------------------------------------------------------------------
 describe("F03 (E11): Listen vom Server als Array", () => {
-  it("Array vom Server: Einträge mit Komma bleiben ganz; Skript-Attribute weiter kommagetrennt", async () => {
+  it("Array vom Server: Einträge mit Komma bleiben ganz; ältere Server kommagetrennt", async () => {
     const question = "Gibt es Kurse, die abends stattfinden?";
     const bubble = "Hallo, schön, dass Sie da sind!";
     const s = await load(
@@ -301,16 +304,23 @@ describe("F03 (E11): Listen vom Server als Array", () => {
     expect(bubbles).not.toBeNull();
     expect(bubbles.textContent).toContain(bubble);
 
-    // Bestand: Skript-Attribute (Strings) trennen weiter an Kommas
+    // Antwort älterer Server (String) wird weiter an Kommas getrennt;
+    // Skript-Attribute wirken seit Fixliste 7.22-rc17 (E23) nicht mehr
     const t = await load(
+      { defaultMessages: "Spanisch A1", chatbotBubblesMessages: "Hallo" },
       {
         defaultMessages: "Spanisch A1, Yoga,,Töpfern",
         chatbotBubblesMessages: "Hallo,Willkommen",
       },
-      {},
     );
     expect(t.defaultMessages).toEqual(["Spanisch A1", "Yoga", "Töpfern"]);
     expect(t.chatbotBubblesMessages).toEqual(["Hallo", "Willkommen"]);
+    const u = await load(
+      { defaultMessages: "Spanisch A1,Yoga", chatbotBubblesMessages: "Hallo" },
+      {},
+    );
+    expect(u.defaultMessages).toEqual([]);
+    expect(u.chatbotBubblesMessages).toEqual([]);
   });
 });
 
@@ -505,30 +515,34 @@ describe("W04: Kurskarten-Beschriftung in der Sprache des Widgets, Logos dekorat
 });
 
 // ---------------------------------------------------------------------------
-describe("W06: Pillenschrift bei nicht auswertbarer Seitenfarbe", () => {
-  it("--allm-accent der Seite nicht auswertbar: Farbe aus dem Design Center mit mindestens 4,5:1, als fester Wert", () => {
-    for (const buttonColor of ["#FFD700", "#01a5a9", "#0b5f8a"]) {
-      const text = theme.pillTextColor({ buttonColor }, "light", {
-        accent: "unparsed",
-      });
+// Bewusste Änderung (Fixliste 7.22-rc17 E23): Farben der Seite zählen für
+// die Akzentfarbe nicht mehr; die Pillenschrift kommt immer aus der Farbe
+// des Design Centers, mit mindestens 4,5:1.
+describe("W06: Pillenschrift bei nicht auswertbarer Seitenfarbe (seit E23: nur Design Center)", () => {
+  it("Farbe aus dem Design Center mit mindestens 4,5:1, eine Farbe der Seite zählt nicht", () => {
+    // var(--allmi-accent) = die Farbe des Design Centers selbst
+    const shown = (v, buttonColor) =>
+      v === "var(--allmi-accent)" ? buttonColor : v;
+    for (const buttonColor of ["#FFD700", "#01a5a9"]) {
+      const text = theme.pillTextColor({ buttonColor }, "light");
       expect(text).toMatch(/^#[0-9a-f]{6}$/i);
       expect(contrastRatio(text, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
-      const dark = theme.pillTextColor({ buttonColor }, "dark", {
-        accent: "unparsed",
-      });
+      const dark = shown(theme.pillTextColor({ buttonColor }, "dark"), buttonColor);
       expect(contrastRatio(dark, theme.DARK.bg)).toBeGreaterThanOrEqual(4.5);
     }
-    expect(
-      theme.buildThemeCss({ buttonColor: "#FFD700" }, "light", {
-        accent: "unparsed",
-      }),
-    ).not.toContain("--allmi-pill-accent-text: var(--allmi-accent)");
-    // auswertbare Seitenfarbe unverändert: reicht sie, folgt die Pille ihr
+    // reicht die Farbe des Design Centers, folgt die Pille ihr
+    expect(theme.pillTextColor({ buttonColor: "#0b5f8a" }, "light")).toBe(
+      "var(--allmi-accent)",
+    );
+    // eine (frühere) dritte Angabe mit der Farbe der Seite ändert nichts
     expect(
       theme.pillTextColor({ buttonColor: "#FFD700" }, "light", {
         accent: "#0b5f8a",
       }),
-    ).toBe("var(--allmi-accent)");
+    ).toBe(theme.pillTextColor({ buttonColor: "#FFD700" }, "light"));
+    expect(theme.buildThemeCss({ buttonColor: "#FFD700" }, "light")).toContain(
+      "--allmi-pill-accent-text: var(--allm-pill-accent-text, #8A7400);",
+    );
   });
 });
 
@@ -702,10 +716,10 @@ describe("N3: Kopfzeile umbricht Name und Untertitel, nie gekürzt", () => {
   ]) {
     it(`langer Name, ${name}: voller Text, umbrechend, kein title`, async () => {
       const { language, ...config } = server;
-      const settings = await load(
-        { brandText: LONG_NAME, ...(language ? { language } : {}) },
-        config,
-      );
+      const settings = await load(language ? { language } : {}, {
+        brandText: LONG_NAME,
+        ...config,
+      });
       embedderSettings.settings = settings;
       render(<ChatWindowHeader settings={{ ...settings, loaded: true }} />);
       const header = $("#anything-llm-header");
@@ -732,8 +746,8 @@ describe("N3: Kopfzeile umbricht Name und Untertitel, nie gekürzt", () => {
 
   it("ohne Untertitel und kompakt: Name umbrechend, Mindesthöhe statt fester Höhe", async () => {
     const settings = await load(
-      { brandText: LONG_NAME },
-      { assistantSubtitle: "" },
+      {},
+      { brandText: LONG_NAME, assistantSubtitle: "" },
     );
     render(<ChatWindowHeader settings={settings} />);
     expectNothingCut($("#anything-llm-header"));
@@ -751,7 +765,7 @@ describe("N3: Kopfzeile umbricht Name und Untertitel, nie gekürzt", () => {
   });
 
   it("Menü unter ⋮ wandert mit einem höheren Kopf mit (bei 76 px wie bisher 64 px)", async () => {
-    const settings = await load({ brandText: LONG_NAME });
+    const settings = await load({}, { brandText: LONG_NAME });
     render(<ChatWindowHeader settings={{ ...settings, loaded: true }} />);
     act(() => $('button[aria-label="Optionen"]').click());
     const menu = [...container.querySelectorAll("button")].find((b) =>

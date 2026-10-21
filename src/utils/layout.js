@@ -94,7 +94,7 @@ export const PRIVACY_TEXT_MAX_LEN = 1000;
 export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
 // erzeugt; Text fest PANEL_TEXTS.aiDisclaimer (disclaimerText wird seit dem
-// vereinfachten Design Center ignoriert, FIXED_STANDARDS).
+// vereinfachten Design Center ignoriert, AI_NOTICE).
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
@@ -440,34 +440,28 @@ export function privacyPoints(settings = {}) {
   return privacyBlocks(settings).map((b) => b.text);
 }
 
-// Feste Standards (Design Center vereinfacht, 15.10.2026): gelten unabhängig
-// von Script-Attributen und gespeicherter Konfiguration (alte Werte bleiben
-// gespeichert, werden aber ignoriert). Der Server erzwingt dieselben Werte;
-// das Widget sichert sie zusätzlich selbst ab (kein Widget ohne KI-Hinweis
-// oder mit Online-Punkt, auch nicht per data-*). Der Datenschutz-Hinweis ist
-// nicht mehr fest: privacyNoticeSetting() unten.
-// Randabstände der Chatblase (offsetX/offsetY) und die Max. Breite der
-// Inline-Box (inlineMaxWidth) sind ebenfalls fest (Standard 16 px bzw. volle
-// Breite des Platzhalters); der Server liefert sie nicht mehr aus, ein
-// Script-Attribut (data-offset-x, data-inline-max-width …) wirkt nicht mehr.
-// Ebenso der Stil der Inline-Leiste (inlineTheme, Fixliste 7.22-rc7 Nr. 21):
-// Die Leiste folgt dem Farbschema aus dem Design Center (D5), ein
-// data-inline-theme am Skript wirkt nicht mehr.
-// Bewusst weiter wirksam (Rückwärtskompatibilität, eigener Text):
-// inlineCollapsedText, inlineSendText, inlineInputPlaceholder,
-// greetingBubbleText, privacyButtonText.
+// Feste Standards (Design Center vereinfacht, 15.10.2026), ohne Feld im
+// Design Center: Gruppe B nach E23 (Fixliste 7.22-rc17). Eine Skript-Angabe
+// verfeinert sie; ohne Skript-Angabe gilt der feste Wert, auch gegen einen
+// Altwert vom Server (der Server liefert dieselben Werte).
+// Randabstände der Chatblase (offsetX/offsetY, Standard 16 px), Max. Breite
+// der Inline-Box (inlineMaxWidth, Standard volle Breite des Platzhalters) und
+// Stil der Inline-Leiste (inlineTheme, Standard: folgt dem Farbschema).
 export const FIXED_STANDARDS = {
   greetingStyle: "bubble",
   suggestionStyle: "pills",
   followUps: "pills",
-  disclaimer: "footer",
-  disclaimerText: null,
   onlineDot: false,
   offsetX: null,
   offsetY: null,
   inlineMaxWidth: null,
   inlineTheme: null,
 };
+// KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
+// fest (PANEL_TEXTS.aiDisclaimer). Auf keinem Weg abschalt- oder änderbar,
+// weder per Skript-Angabe noch vom Server noch per CSS-Variable
+// (utils/theme.js AI_NOTICE_COLORS).
+export const AI_NOTICE = { disclaimer: "footer", disclaimerText: null };
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
 // loadWidgetScript: data-inline-input "true", data-inline-open-on "focus",
@@ -475,8 +469,9 @@ export const FIXED_STANDARDS = {
 // data-inline-height "520px", data-inline-start-state "collapsed",
 // data-inherit-font "true"; Leisten-Stil folgt dem Fenster-Theme, Breite =
 // Platzhalter). Nur im Inline-Modus und
-// nur, wo weder Script noch Server einen Wert liefern (der Server erzwingt
-// die Werte ohnehin); in der Chatblase wirkungslos.
+// nur, wo weder Script noch Server einen Wert liefern (der Server liefert
+// dieselben Werte; eine Skript-Angabe schlägt sie, Gruppe B nach E23); in
+// der Chatblase wirkungslos.
 export const INLINE_STANDARDS = {
   inlineInput: true,
   inlineOpenOn: "focus",
@@ -487,13 +482,13 @@ export const INLINE_STANDARDS = {
   inheritFont: true,
 };
 
-// Datenschutz-Hinweis (KIE-565 Nachtrag, Nutzer 15.10.2026): im Design
-// Center abschaltbar (Schalter „Datenschutz-Hinweis anzeigen“). Allein der
-// Wert vom Server zählt (wie D5 beim Farbschema gewinnt das Design Center):
-// "none" = keine zweite Blase, jeder andere und ein fehlender Wert = "bubble",
-// auch das frühere "modal" (Einmal-Hinweis entfällt). Ein Script-Attribut
-// (data-privacy-notice) kann den Hinweis weder ab- noch einschalten; ohne
-// Antwort vom Server bleibt er an.
+// Datenschutz-Hinweis (KIE-565 Nachtrag, Nutzer 15.10.2026; Gruppe A nach
+// E24): nur im Design Center abschaltbar (Schalter „Datenschutz-Hinweis
+// anzeigen“). Allein der Wert vom Server zählt: "none" = keine zweite Blase,
+// jeder andere und ein fehlender Wert = "bubble", auch das frühere "modal"
+// (Einmal-Hinweis entfällt). Ein Script-Attribut (data-privacy-notice) kann
+// den Hinweis weder ab- noch einschalten; ohne Antwort vom Server bleibt er
+// an.
 export function privacyNoticeSetting(serverValue) {
   return oneOf(serverValue, PRIVACY_NOTICE_VALUES) === "none"
     ? "none"
@@ -518,41 +513,31 @@ export function welcomeBubblesMode(settings = {}, phone = false) {
   return oneOf(value, WELCOME_BUBBLES_VALUES) || DEFAULT_WELCOME_BUBBLES;
 }
 
-// Einmal beim Laden (loadEmbedSettings): Inline-Standards ergänzen, feste
-// Standards setzen, Datenschutz-Hinweis aus dem Server-Wert (server =
+// Einmal beim Laden (loadEmbedSettings): feste Standards setzen, außer das
+// Skript gibt den Wert vor (scriptKeys), Inline-Standards ergänzen, wo weder
+// Script noch Server einen Wert liefern (given), KI-Hinweis fest,
+// Datenschutz-Hinweis und Willkommensblasen aus dem Server-Wert (server =
 // geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
 // Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
-// bzw. „AI Advisor“). given = Schlüssel, die Script oder Server geliefert
-// haben.
+// bzw. „AI Advisor“).
 export function applyFixedStandards(
   settings = {},
   given = new Set(),
   server = {},
+  scriptKeys = new Set(),
 ) {
   const out = {
     ...settings,
-    ...FIXED_STANDARDS,
+    ...AI_NOTICE,
     privacyNotice: privacyNoticeSetting(server?.privacyNotice),
   };
-  // Willkommensblasen: nur der Server-Wert zählt. Ohne gültigen Server-Wert
-  // (älterer Server, keine Antwort) "first" wie bisher; dann bleibt auch ein
-  // altes data-bubble-persistence="sessionStorage" wirksam. Mit Server-Wert
-  // (ab 7.22 liefert der Server ihn immer, Standard "first") gilt allein er
-  // ("first" = localStorage): Das Altattribut ist dann wirkungslos, eine
-  // Warnzeile nennt den Ersatz („Bei jedem Besuch“ im Design Center).
-  let serverGaveWelcome = false;
-  for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"]) {
-    const value = welcomeBubblesSetting(server?.[key]);
-    if (value) serverGaveWelcome = true;
-    out[key] = value || DEFAULT_WELCOME_BUBBLES;
-  }
-  if (serverGaveWelcome && out.bubblePersistence !== undefined) {
-    if (out.bubblePersistence === "sessionStorage")
-      console.warn(
-        "[AnythingLLM Embed] data-bubble-persistence wirkt nicht mehr. Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
-      );
-    delete out.bubblePersistence;
-  }
+  for (const [key, value] of Object.entries(FIXED_STANDARDS))
+    if (!scriptKeys.has(key)) out[key] = value;
+  // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
+  // (data-bubble-persistence wirkt nicht, Gruppe A)
+  for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"])
+    out[key] = welcomeBubblesSetting(server?.[key]) || DEFAULT_WELCOME_BUBBLES;
+  delete out.bubblePersistence;
   if (out.displayMode === "inline")
     for (const [key, value] of Object.entries(INLINE_STANDARDS))
       if (!given.has(key)) out[key] = value;
@@ -565,11 +550,11 @@ export function applyFixedStandards(
 
 // Antworten mit Kursen ohne gespeicherte Wahl (Fixliste 7.22-rc8 R4): der
 // Standard hängt an der TATSÄCHLICHEN Darstellung, die nur das Widget kennt
-// (Inline nur mit gefundenem Platzhalter, auch Inline nur per Skript-
-// Attribut; sonst Chatfenster): In der Seite Kurskarten ("auto"), im
-// Chatfenster Nur Text mit Links ("off"). Der Server liefert courseCards
-// nur, wenn im Design Center gespeichert; dieser Wert gewinnt immer. Ein
-// data-course-cards am Skript wirkt nicht (SERVER_ONLY_SETTINGS): der Server
+// (Inline nur mit gefundenem Platzhalter; sonst Chatfenster): In der Seite
+// Kurskarten ("auto"), im Chatfenster Nur Text mit Links ("off"). Der Server
+// liefert courseCards nur, wenn im Design Center gespeichert; dieser Wert
+// gewinnt immer. Ein data-course-cards am Skript wirkt nicht (Gruppe A,
+// useScriptAttributes DC_COVERED): der Server
 // kennt es nicht und entscheidet über courseSources nach demselben Standard
 // (er bekommt die Darstellung mit jeder Chat-Anfrage, displayMode im Body
 // von stream-chat, models/chatService.js).
@@ -707,8 +692,8 @@ export const layoutValidations = {
   inlineMaxWidth: (v) => cssLength(v, ["px"]),
   inlineStartState: (v) => oneOf(v, ["collapsed", "expanded"]),
   // explizit "light" | "dark"; leer/ungültig -> verworfen -> Standard null
-  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme). Seit
-  // der Fixliste 7.22-rc7 fest null (FIXED_STANDARDS), Wert ohne Wirkung.
+  // (Leiste folgt dem Fenster-Theme, utils/theme.js resolveBarTheme).
+  // Standard null (FIXED_STANDARDS), per Skript-Angabe verfeinerbar (E23).
   inlineTheme: (v) => oneOf(v, ["light", "dark"]),
   inheritFont: bool,
   // Kurskarten (nur Server-Wert, Fixliste 7.22-rc8 R4); ungültig ->

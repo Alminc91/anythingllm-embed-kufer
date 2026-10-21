@@ -18,19 +18,98 @@ import { applyTheme, userTextColorFor } from "@/utils/theme";
 import { syncI18nLanguage } from "@/i18n";
 import { widgetLanguage } from "@/utils/language";
 
-// Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
-// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
-// / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
-// courseCards (Antworten mit Kursen) ebenso: gespeicherter Wert vom Server,
-// sonst der Standard der tatsächlichen Darstellung (Fixliste 7.22-rc8 R4,
-// utils/layout.js applyDisplayed); ein data-course-cards am Skript würde
-// vom Standard abweichen, den der Server für courseSources anwendet.
-const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight", "courseCards"];
-// Gruppen, die als Ganzes dem Server gehören, sobald er einen Wert der Gruppe
-// liefert: Die Begrüßung aus dem Design Center (greeting) verdrängt auch ein
-// data-greeting-bubble-text bzw. data-greeting am Skript (Fixliste 7.22-rc7
-// Nr. 9). Ohne Serverwert bleiben die Script-Attribute wirksam.
-const SERVER_GROUPS = [["greeting", "greetingBubbleText"]];
+// Rangfolge der Einbau-Angaben (Fixliste 7.22-rc17, E23 und E24):
+// - Gruppe A (DC_COVERED): im Design Center 2.0 einstellbar (je ein Feld im
+//   Reiter Aussehen oder Inhalt, Fork EmbedAppearance/AppearanceTab.jsx und
+//   ContentTab.jsx). Es gilt nur das Design Center: der Wert vom Server
+//   (gespeichert oder sein Standard), sonst der Standard des Widgets. Skript-
+//   Angaben werden vor dem Zusammenführen verworfen, auch wenn nichts
+//   gespeichert ist; CSS-Variablen der Seite wirken dafür ebenfalls nicht
+//   (utils/theme.js, Variablen mit dc).
+// - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
+//   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
+// - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
+//   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
+//   Sponsor-Zeile): wirken immer.
+// - E24: Der KI-Hinweis (disclaimer, disclaimerText) ist auf keinem Weg
+//   abschaltbar oder änderbar (utils/layout.js AI_NOTICE).
+export const DC_COVERED = [
+  "displayMode", // Darstellung
+  "theme", // Farbschema
+  "buttonColor", // Akzentfarbe (der Server liefert sie als diese drei)
+  "userBgColor",
+  "linkColor",
+  "userTextColor", // Schrift auf der Akzentfarbe
+  "brandImageUrl", // Logo (Kopfzeile und Avatar)
+  "assistantIcon",
+  "chatIcon", // Chat-Icon
+  "position", // Position des Chat-Buttons
+  "courseCards", // Kurse anzeigen als
+  "courseCardsPosition", // Reihenfolge
+  "brandText", // Name (Kopfzeile und über den Antworten)
+  "assistantName",
+  "assistantSubtitle", // Untertitel
+  "greeting", // Begrüßungstext
+  "greetingBubbleText",
+  "privacyNotice", // Schalter Datenschutz-Hinweis
+  "privacyTitle",
+  "privacyText",
+  "privacyUrl",
+  "defaultMessages", // Startvorschläge
+  "sendMessageText", // Platzhalter im Eingabefeld
+  "chatbotBubblesMessages", // Willkommensblasen (Texte und Anzeige)
+  "displayChatbotBubbles",
+  "bubblePersistence",
+  "welcomeBubblesDesktop",
+  "welcomeBubblesMobile",
+  "supportEmail", // Support-E-Mail
+];
+// Ohne Wirkung, aber nicht aus dem Design Center: der KI-Hinweis (E24) und
+// Altangaben, die schon früher nichts bewirkten (Fenstergröße: Bestands-
+// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height
+// "77%" und data-window-width "25%"; Online-Punkt: im Kopf entfallen).
+const IGNORED_HINTS = {
+  disclaimer: "Der KI-Hinweis ist fest und lässt sich nicht abschalten.",
+  disclaimerText: "Der Text des KI-Hinweises ist fest.",
+  windowWidth: "Die Fenstergröße ist fest.",
+  windowHeight: "Die Fenstergröße ist fest.",
+  onlineDot: "Den Online-Punkt gibt es nicht mehr.",
+};
+const DC_HINTS = {
+  bubblePersistence:
+    "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
+  privacyNotice:
+    "Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.",
+};
+// Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
+// „Frühere Chats“, KIE-503; kein Feld des Design Centers)
+const SERVER_WINS = ["historyEnabled"];
+
+// data-Attribut zum Schlüssel im dataset (buttonColor -> data-button-color)
+function dataAttributeName(key) {
+  return `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+}
+
+// Gruppe A und wirkungslose Angaben aus den Skript-Attributen entfernen,
+// eine Warnung je entfernter Angabe (Fixliste 7.22-rc17 W50).
+export function dropIneffectiveAttributes(dataset = {}) {
+  const out = { ...dataset };
+  for (const key of Object.keys(out)) {
+    const dc = DC_COVERED.includes(key);
+    const ignored = Object.prototype.hasOwnProperty.call(IGNORED_HINTS, key);
+    if (!dc && !ignored) continue;
+    delete out[key];
+    const hint = dc
+      ? DC_HINTS[key] ||
+        "Diese Einstellung kommt aus dem Design Center (gespeichert oder Standard)."
+      : IGNORED_HINTS[key];
+    console.warn(
+      `[AnythingLLM Embed] Einbau-Angabe ${dataAttributeName(key)} wirkt nicht. ${hint}`,
+    );
+  }
+  return out;
+}
+
 // Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“):
 // privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
 // (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
@@ -99,7 +178,7 @@ export const DEFAULT_SETTINGS = {
   // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
   // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
   // Bestandskunden. data-window-width/-height am Script werden verworfen
-  // (SERVER_ONLY_SETTINGS).
+  // (IGNORED_HINTS, mit Warnung).
   windowHeight: null, // z. B. "600px" | "80%" | "70vh"
   windowWidth: null, // z. B. "420px" | "25%" | "30vw"
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
@@ -140,7 +219,8 @@ export const DEFAULT_SETTINGS = {
   inlineTheme: null,
   // Theme des ganzen Fensters: "light" | "dark" | "auto" (folgt
   // prefers-color-scheme). Setzt den Standard-Satz der CSS-Variablen
-  // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
+  // (utils/theme.js). Nur aus dem Design Center (Gruppe A, E23);
+  // Flächen- und Textfarben verfeinert Seiten-CSS (--allm-*).
   theme: "light",
   // Inline: Schrift der Webseite übernehmen. Im Inline-Modus ohne Angabe an
   // (INLINE_STANDARDS, wie die Demo); in der Chatblase ohne Wirkung.
@@ -163,13 +243,14 @@ export const DEFAULT_SETTINGS = {
   // Kartenlayout "grid" (Raster) | "rows" (Standard, Zeilen-Karten über die
   // volle Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
-  // Panel-Optik, fest seit Design Center vereinfacht (utils/layout.js
-  // FIXED_STANDARDS, in loadEmbedSettings gesetzt, egal was Script oder
-  // Server liefern): Vorschläge als Pillen, Begrüßung als Blase, darunter die
-  // Datenschutz-Blase, Folgefragen als Pillen, KI-Hinweis fest unter der
-  // Eingabe, kein Online-Punkt. Die Datenschutz-Blase schaltet allein der
-  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting). Icon-Bild = brandImageUrl (Kopfzeile) bzw.
-  // assistantIcon (Blase), im Design Center per Logo gesetzt.
+  // Panel-Optik, Standard seit Design Center vereinfacht (utils/layout.js
+  // FIXED_STANDARDS, Gruppe B: eine Skript-Angabe verfeinert ihn, E23):
+  // Vorschläge als Pillen, Begrüßung als Blase, darunter die
+  // Datenschutz-Blase, Folgefragen als Pillen. KI-Hinweis fest unter der
+  // Eingabe (AI_NOTICE, E24). Die Datenschutz-Blase schaltet allein der
+  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting).
+  // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
+  // Design Center per Logo gesetzt.
   suggestionStyle: "pills",
   greetingStyle: "bubble",
   greetingBubbleText: null, // max. 300 Zeichen; Vorrang vor greeting
@@ -211,8 +292,8 @@ export const DEFAULT_SETTINGS = {
   supportEmail: "info@kufer.de", // string of email for contact
   username: null, // The display or readable name set on a script
   // Startvorschläge (Liste von Strings): gespeichert im Design Center (auch
-  // leer) vor data-default-messages (kommagetrennt) vor dem Standard der
-  // Sprache vom Server (applyDefaultMessagesOrder, Fixliste 7.22-rc13 F02)
+  // leer) vor dem Standard der Sprache vom Server (applyDefaultMessagesOrder,
+  // E10 neu, Fixliste 7.22-rc17); data-default-messages wirkt nicht
   defaultMessages: [],
   displayChatbotBubbles: true, // controls whether welcome message bubbles are shown
   chatbotBubblesMessages: [], // messages to display in welcome bubbles
@@ -230,18 +311,20 @@ export const DEFAULT_SETTINGS = {
   ttsPosition: "bottom-right", // "bottom-right" or "icon-left" (under avatar)
 
   // KIE-503: "Frühere Chats" im Burger-Menü. Abschaltbar per Admin
-  // (visual_config.historyEnabled=false) oder data-history-enabled="false".
+  // (visual_config.historyEnabled=false, gewinnt: SERVER_WINS) oder
+  // data-history-enabled="false".
   historyEnabled: true,
 };
 
 // Script-Attribute + Server-visual_config zu den finalen Settings auflösen
-// (ohne Seiteneffekte; testbar mit gemocktem fetch).
-// Priority: defaults < script data-attributes < server config (live design).
-// Ausnahme Startvorschläge: Der Standard des Servers liegt unter dem
-// Skript-Attribut (applyDefaultMessagesOrder).
+// (ohne Seiteneffekte; testbar mit gemocktem fetch). Rangfolge nach E23
+// (oben): Gruppe A nur vom Server, sonst Standard; übrige Angaben
+// Standard < Server < Skript-Attribut (die Skript-Angabe schlägt einen vom
+// Server gelieferten festen Standard; FIXED_STANDARDS gelten ohne
+// Skript-Angabe auch gegen den Server), Ausnahme SERVER_WINS.
 export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
-  const scriptSettings = parseAndValidateEmbedSettings(dataset);
-  for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
+  const effective = dropIneffectiveAttributes(dataset);
+  const scriptSettings = parseAndValidateEmbedSettings(effective);
 
   // Fetch live visual config from server (admin panel settings)
   let serverConfig = {};
@@ -254,9 +337,8 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
     console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
   }
 
-  // Only merge non-empty server values so script attributes remain as fallback
-  // (Ausnahme privacyTitle: "" = im Design Center bewusst geleert -> keine
-  // Überschrift)
+  // Nur nicht leere Server-Werte übernehmen (Ausnahme privacyTitle und
+  // assistantSubtitle: "" = im Design Center bewusst geleert)
   const mergedServerConfig = {};
   for (const [key, value] of Object.entries(serverConfig || {})) {
     if (value === "" && EMPTY_MEANS_NONE.includes(key))
@@ -271,17 +353,18 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
     parseAndValidateEmbedSettings(mergedServerConfig),
   );
   applyDefaultMessagesOrder(script, server);
-  for (const group of SERVER_GROUPS)
-    if (group.some((key) => server[key] !== undefined))
-      for (const key of group) delete script[key];
+  const serverWins = {};
+  for (const key of SERVER_WINS)
+    if (server[key] !== undefined) serverWins[key] = server[key];
   const given = new Set([...Object.keys(script), ...Object.keys(server)]);
   const resolved = applyFixedStandards(
-    { ...DEFAULT_SETTINGS, ...script, ...server, loaded: true },
+    { ...DEFAULT_SETTINGS, ...server, ...script, ...serverWins, loaded: true },
     given,
     server,
+    new Set(Object.keys(script)),
   );
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
-  warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
+  warnInvalidInlineEnums(effective, mergedServerConfig, resolved);
   return resolved;
 }
 
@@ -295,26 +378,21 @@ export function embedConfigUrl(settings = {}) {
   return `${settings.baseApiUrl}/${settings.embedId}/config?language=${language}`;
 }
 
-// Startvorschläge (Fixliste 7.22-rc13 F02, Entscheidung E10): gespeicherte
-// Liste (auch leer) vor data-default-messages am Skript vor dem Standard des
-// Servers. Ein Standard (defaultMessagesStandard) weicht einem nicht leeren
-// Skript-Attribut; eine gespeicherte Liste gewinnt immer, ein gespeichertes
-// [] (defaultMessagesSaved) heißt „keine Startvorschläge“, auch mit
-// Skript-Attribut. Ohne Liste vom Server (älterer Server, keine Antwort)
-// gilt das Skript-Attribut wie bisher. Ändert server und script an Ort und
-// Stelle.
+// Startvorschläge (E10 neu, Fixliste 7.22-rc17): gespeicherte Liste (auch
+// leer) vor dem Standard des Servers (defaultMessagesStandard); ein
+// gespeichertes [] (defaultMessagesSaved) heißt „keine Startvorschläge“.
+// data-default-messages am Skript wirkt nicht (Gruppe A, DC_COVERED), auch
+// ohne Liste vom Server (älterer Server, keine Antwort: keine
+// Startvorschläge). Entfernt die Kennzeichen aus beiden Quellen, ändert
+// server und script an Ort und Stelle.
 export function applyDefaultMessagesOrder(script = {}, server = {}) {
   const saved = server[DEFAULT_MESSAGES_SAVED] === true;
-  const standard = !saved && server[DEFAULT_MESSAGES_STANDARD] === true;
-  delete server[DEFAULT_MESSAGES_SAVED];
-  delete server[DEFAULT_MESSAGES_STANDARD];
-  delete script[DEFAULT_MESSAGES_SAVED];
-  delete script[DEFAULT_MESSAGES_STANDARD];
+  for (const source of [server, script]) {
+    delete source[DEFAULT_MESSAGES_SAVED];
+    delete source[DEFAULT_MESSAGES_STANDARD];
+  }
   if (saved && !Array.isArray(server.defaultMessages))
     server.defaultMessages = [];
-  if (!Array.isArray(server.defaultMessages)) return;
-  if (standard && script.defaultMessages?.length > 0)
-    delete server.defaultMessages;
 }
 
 export default function useGetScriptAttributes() {

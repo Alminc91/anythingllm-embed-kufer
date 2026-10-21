@@ -174,8 +174,11 @@ describe("Settings: courseCardsPosition", () => {
   const ok = (json) => ({ ok: true, json: async () => json });
   // Standard seit Design Center vereinfacht (15.10.2026) "above" statt
   // "below" (bewusste Änderung: Karten zuerst, danach der kurze Text)
-  it("Standard above; data-course-cards-position=below; visual_config gewinnt; ungültig verworfen", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): „Reihenfolge“ stellt das
+  // Design Center ein (Gruppe A), data-course-cards-position wirkt nicht
+  it("Standard above; data-course-cards-position wirkt nicht; visual_config gewinnt; ungültig verworfen", async () => {
     const base = { embedId: "e", baseApiUrl: "https://x/api/embed" };
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(
       (await loadEmbedSettings(base, async () => ok({}))).courseCardsPosition,
     ).toBe("above");
@@ -184,6 +187,13 @@ describe("Settings: courseCardsPosition", () => {
         await loadEmbedSettings(
           { ...base, courseCardsPosition: "below" },
           async () => ok({}),
+        )
+      ).courseCardsPosition,
+    ).toBe("above");
+    expect(
+      (
+        await loadEmbedSettings(base, async () =>
+          ok({ courseCardsPosition: "below" }),
         )
       ).courseCardsPosition,
     ).toBe("below");

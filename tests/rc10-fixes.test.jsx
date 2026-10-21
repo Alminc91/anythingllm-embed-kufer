@@ -77,7 +77,7 @@ const hasClass = (el, cls) =>
 // ---------------------------------------------------------------------------
 describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () => {
   it("Knopfgruppe (⋮, X) steht im Fluss und schrumpft nicht; Titelteil darf schrumpfen", async () => {
-    render(<ChatWindowHeader settings={await load({ brandText: NAME })} />);
+    render(<ChatWindowHeader settings={await load({}, { brandText: NAME })} />);
     const menu = $('button[aria-label="Optionen"]');
     expect(menu).not.toBe(null);
     const group = menu.parentElement;
@@ -89,7 +89,7 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
   });
 
   it("Name und Untertitel: umbrechen statt Ellipse, kein title (N3), Titelblock min-width 0", async () => {
-    render(<ChatWindowHeader settings={await load({ brandText: NAME })} />);
+    render(<ChatWindowHeader settings={await load({}, { brandText: NAME })} />);
     const sub = $("#anything-llm-header-subtitle");
     expect(sub.textContent).toBe(DE_SUBTITLE);
     expect(sub.hasAttribute("title")).toBe(false);
@@ -106,8 +106,8 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
     render(
       <ChatWindowHeader
         settings={await load(
-          { brandText: NAME },
-          { assistantSubtitle: "durchsucht 1.243 Kurse" },
+          {},
+          { brandText: NAME, assistantSubtitle: "durchsucht 1.243 Kurse" },
         )}
       />,
     );
@@ -120,7 +120,7 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
   it('ohne Untertitel ("" vom Server): Name umbrechend, ⋮ und ✕ im Fluss', async () => {
     render(
       <ChatWindowHeader
-        settings={await load({ brandText: NAME }, { assistantSubtitle: "" })}
+        settings={await load({}, { brandText: NAME, assistantSubtitle: "" })}
       />,
     );
     expect($("#anything-llm-header-subtitle")).toBe(null);
@@ -137,7 +137,7 @@ describe("W1: Untertitel in der Titelleiste läuft nicht unter das Menü", () =>
 
   it("kompakt (mobile Tastatur): kein Untertitel, Name umbrechend", async () => {
     render(
-      <ChatWindowHeader settings={await load({ brandText: NAME })} compact />,
+      <ChatWindowHeader settings={await load({}, { brandText: NAME })} compact />,
     );
     expect($("#anything-llm-header-subtitle")).toBe(null);
     const name = [...container.querySelectorAll("span")].find(

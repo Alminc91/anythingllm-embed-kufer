@@ -381,9 +381,12 @@ describe("KIE-568 Willkommensblasen: Einstellungen", () => {
     expect(t.welcomeBubblesDesktop).toBe("first");
   });
 
-  it("altes data-bubble-persistence wirkt nur ohne Server-Wert", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): Willkommensblasen stellt
+  // das Design Center ein (Gruppe A), das Altattribut wirkt auch ohne
+  // Server-Wert nicht mehr
+  it("altes data-bubble-persistence wirkt nicht, auch ohne Server-Wert", async () => {
     const legacy = await load({ bubblePersistence: "sessionStorage" }, {});
-    expect(legacy.bubblePersistence).toBe("sessionStorage");
+    expect(legacy.bubblePersistence).toBeUndefined();
     const neu = await load(
       { bubblePersistence: "sessionStorage" },
       { welcomeBubblesDesktop: "first", welcomeBubblesMobile: "first" },

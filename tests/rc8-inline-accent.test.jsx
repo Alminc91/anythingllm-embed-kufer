@@ -3,13 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 // Restpunkt rc7 Nr. 4 (W01-Rest, issues/rollout-721/restpunkte-7.22-rc7.md):
-// Setzt die Seite --allm-accent nur am Platzhalter #kufer-assistent, hängt der
-// Host beim ersten applyTheme noch an <body> und sieht die Farbe nicht; die
-// Schrift auf der Akzentfarbe folgte dann nicht der gezeigten Fläche.
-// InlineChat liest die Farben der Seite nach jedem Umhängen neu
-// (utils/theme.js refreshTheme). jsdom vererbt eigene Eigenschaften nicht:
-// die Farbe steht hier direkt am Host und wird erst NACH applyTheme gesetzt
-// (wie im Browser erst im Platzhalter im berechneten Stil des Hosts sichtbar).
+// Setzte die Seite --allm-accent nur am Platzhalter #kufer-assistent, las
+// InlineChat die Farben der Seite nach jedem Umhängen neu (refreshTheme).
+// Bewusste Änderung (Fixliste 7.22-rc17 E23): Akzentfarbe und Schrift auf
+// der Akzentfarbe kommen nur aus dem Design Center (Gruppe A); eine Farbe
+// der Seite zählt nicht, weder vor noch nach dem Umhängen. jsdom vererbt
+// eigene Eigenschaften nicht: die Farbe steht hier direkt am Host.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,7 +46,7 @@ const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
   baseApiUrl: "https://praesentation.ki.kufer.de/api/embed",
 };
-const ON_ACCENT = (hex) => `--allmi-on-accent: var(--allm-on-accent, ${hex});`;
+const ON_ACCENT = (hex) => `--allmi-on-accent: ${hex} !important;`;
 
 let container;
 let root;
@@ -102,40 +101,36 @@ function renderInline(extra = {}) {
   );
 }
 
-describe("Restpunkt rc7 Nr. 4: Akzentfarbe der Seite nur am Platzhalter", () => {
-  it("refreshTheme liest die Farben der Seite am Host neu", () => {
-    theme.applyTheme(styleEl, { buttonColor: "#ffd400" });
-    // Gelb aus dem Design Center: Schwarz
-    expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
+describe("Restpunkt rc7 Nr. 4: Akzentfarbe der Seite nur am Platzhalter (seit E23: ohne Wirkung)", () => {
+  it("refreshTheme entfällt: die Farben der Seite werden nicht mehr gelesen", () => {
+    expect(theme.refreshTheme).toBeUndefined();
+    expect(theme.pageColors).toBeUndefined();
     host.style.setProperty("--allm-accent", "#b45309");
-    theme.refreshTheme();
-    // gezeigt wird jetzt Braun von der Seite: Weiß
-    expect(styleEl.textContent).toContain(ON_ACCENT("#FFFFFF"));
-    expect(styleEl.textContent).toContain(
-      "--allmi-pill-accent-text: var(--allm-pill-accent-text, var(--allmi-accent));",
-    );
+    theme.applyTheme(styleEl, { buttonColor: "#ffd400" });
+    // Gelb aus dem Design Center: Schwarz, auch mit Braun der Seite
+    expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
+    expect(styleEl.textContent).toContain("--allmi-accent: #ffd400 !important;");
+    expect(styleEl.textContent).not.toContain("var(--allm-accent");
   });
 
-  it("nach dem Einhängen in den Platzhalter folgt die Schrift der dort gezeigten Akzentfarbe", () => {
+  it("nach dem Einhängen in den Platzhalter bleiben Akzent und Schrift aus dem Design Center", () => {
     theme.applyTheme(styleEl, { buttonColor: "#ffd400" });
-    expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
-    // im Browser: erst im Platzhalter sichtbar (jsdom: direkt am Host, nach
-    // applyTheme); ohne Neu-Lesen bliebe Schwarz stehen
+    const before = styleEl.textContent;
     host.style.setProperty("--allm-accent", "#b45309");
-    expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
+    mountTarget.style.setProperty("--allm-accent", "#b45309");
     renderInline();
     expect(host.parentNode).toBe(mountTarget);
-    expect(styleEl.textContent).toContain(ON_ACCENT("#FFFFFF"));
-    expect(styleEl.textContent).not.toContain(ON_ACCENT("#222628"));
+    expect(styleEl.textContent).toBe(before);
+    expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
   });
 
   it("gewählte Schrift (userTextColor) bleibt auch nach dem Umhängen wie gewählt", () => {
     theme.applyTheme(styleEl, {
-      buttonColor: "#ffd400",
+      buttonColor: "#b45309",
       userTextColor: "#222628",
     });
-    host.style.setProperty("--allm-accent", "#b45309");
-    renderInline({ userTextColor: "#222628" });
+    host.style.setProperty("--allm-accent", "#ffd400");
+    renderInline({ buttonColor: "#b45309", userTextColor: "#222628" });
     expect(host.parentNode).toBe(mountTarget);
     expect(styleEl.textContent).toContain(ON_ACCENT("#222628"));
   });

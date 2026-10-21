@@ -123,9 +123,12 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.brandText).toBe("KI-Berater");
   });
 
-  // Texte aus Script-Attributen wirken weiter; Darstellungs-Schlüssel nicht
-  // mehr (bewusste Änderung: feste Standards, siehe FIXED_STANDARDS).
-  it("Script-Attribute (data-*): Texte wirken, Darstellung bleibt fest", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23, E24): Texte, die das Design
+  // Center einstellt (Begrüßung, Untertitel, Datenschutz), wirken per
+  // Skript-Attribut nicht mehr; feste Standards ohne Feld (Vorschlags- und
+  // Begrüßungsstil, Folgefragen) verfeinert ein Skript-Attribut; der
+  // KI-Hinweis bleibt fest, den Online-Punkt gibt es nicht mehr.
+  it("Script-Attribute (data-*): Design-Center-Texte wirken nicht, feste Standards verfeinerbar, KI-Hinweis fest", async () => {
     const s = await loadEmbedSettings(
       {
         ...BASE,
@@ -146,19 +149,19 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       fetchConfig({}),
     );
     expect(s).toMatchObject({
-      suggestionStyle: "pills",
-      greetingStyle: "bubble",
-      greetingBubbleText: "Hallo!",
-      assistantSubtitle: "durchsucht 1.243 Kurse",
+      suggestionStyle: "bars",
+      greetingStyle: "text",
+      greetingBubbleText: null,
+      assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
       onlineDot: false,
       privacyNotice: "bubble",
-      privacyTitle: "Datenschutz",
-      privacyText: "Punkt eins\nPunkt zwei",
+      privacyTitle: null,
+      privacyText: null,
       privacyButtonText: "Los",
-      privacyUrl: "https://example.org/datenschutz",
+      privacyUrl: null,
       disclaimer: "footer",
       disclaimerText: null,
-      followUps: "pills",
+      followUps: "none",
     });
   });
 
@@ -207,12 +210,14 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     const s = await loadEmbedSettings(BASE, fetchConfig({ privacyTitle: "" }));
     expect(s.privacyTitle).toBe("");
     expect(layout.privacyTitleText(s)).toBe("");
-    // Script-Attribut leer ebenso; fehlend = Standard „Datenschutz“
+    // Bewusste Änderung (Fixliste 7.22-rc17 E23): ein Script-Attribut wirkt
+    // nicht (Gruppe A); fehlend = Standard „Datenschutz“
     const t = await loadEmbedSettings(
       { ...BASE, privacyTitle: "  " },
       fetchConfig({}),
     );
-    expect(t.privacyTitle).toBe("");
+    expect(t.privacyTitle).toBe(null);
+    expect(layout.privacyTitleText(t)).toBe("Datenschutz");
     const u = await loadEmbedSettings(BASE, fetchConfig({}));
     expect(layout.privacyTitleText(u)).toBe("Datenschutz");
     expect(layout.privacyTitleText({ ...u, language: "en" })).toBe("Privacy");
@@ -238,7 +243,9 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
     );
     expect(layout.privacyTitleText(s)).toBe("Datenschutz");
-    // alter Server-Standard + eigenes Script-Attribut -> Script gilt
+    // alter Server-Standard + eigenes Script-Attribut: Bewusste Änderung
+    // (Fixliste 7.22-rc17 E23), das Script-Attribut wirkt nicht (Gruppe A),
+    // es gilt der neue Standard
     const t = await loadEmbedSettings(
       { ...BASE, greetingBubbleText: "Willkommen bei der vhs!" },
       fetchConfig({
@@ -246,7 +253,9 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
           "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). Beschreiben Sie einfach, was Sie suchen.",
       }),
     );
-    expect(layout.greetingText(t)).toBe("Willkommen bei der vhs!");
+    expect(layout.greetingText(t)).toBe(
+      "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
+    );
     // eigener Text bleibt unverändert
     const u = await loadEmbedSettings(
       BASE,
@@ -269,6 +278,8 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     );
   });
 
+  // privacyNotice und disclaimer am Skript: seit Fixliste 7.22-rc17 (E23,
+  // E24) ohne Wirkung, gemeldet als „wirkt nicht“ statt als ungültiger Wert
   it("ungültige Enums -> fester Standard + je eine console.warn", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const s = await loadEmbedSettings(
@@ -286,15 +297,15 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.privacyNotice).toBe("bubble");
     expect(s.disclaimer).toBe("footer");
     const lines = warn.mock.calls.map((c) => String(c[0]));
-    for (const key of [
-      "suggestionStyle",
-      "greetingStyle",
-      "privacyNotice",
-      "disclaimer",
-    ]) {
+    for (const key of ["suggestionStyle", "greetingStyle"]) {
       const mine = lines.filter((l) => l.includes(`Ungültiger ${key}-Wert`));
       expect(mine).toHaveLength(1);
     }
+    for (const attr of ["data-privacy-notice", "data-disclaimer "]) {
+      expect(lines.filter((l) => l.includes(attr))).toHaveLength(1);
+      expect(lines.find((l) => l.includes(attr))).toContain("wirkt nicht");
+    }
+    expect(lines.filter((l) => l.includes("Ungültiger"))).toHaveLength(2);
     expect(lines.find((l) => l.includes("suggestionStyle"))).toContain(
       'es gilt "pills"',
     );
@@ -411,10 +422,11 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layoutValidations.onlineDot("vielleicht")).toBe(undefined);
   });
 
+  // Darstellung nur aus dem Design Center (Fixliste 7.22-rc17 E23)
   it("Inline: Standard wie die Demo (focus, morph, schwebend, Eingabe-Leiste, 520 px), nur im Inline-Modus", async () => {
     const s = await loadEmbedSettings(
-      { ...BASE, displayMode: "inline" },
-      fetchConfig({}),
+      BASE,
+      fetchConfig({ displayMode: "inline" }),
     );
     expect(s).toMatchObject({
       inlineInput: true,
@@ -432,16 +444,17 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       courseCardsPosition: "above",
       courseCardsLayout: "rows",
     });
-    // Displaymodus aus dem Design Center zählt ebenso
+    // data-display-mode am Skript wirkt nicht: Chatfenster
     const t = await loadEmbedSettings(
-      BASE,
-      fetchConfig({ displayMode: "inline" }),
+      { ...BASE, displayMode: "inline" },
+      fetchConfig({}),
     );
-    expect(t.inlineOpenOn).toBe("focus");
-    // geliefert (Server erzwingt dieselben Werte) -> geliefert gilt
+    expect(t.displayMode).toBe("bubble");
+    expect(t.inlineOpenOn).toBe("submit");
+    // geliefert (Server liefert dieselben Werte) -> geliefert gilt
     const u = await loadEmbedSettings(
-      { ...BASE, displayMode: "inline", inlineOpenOn: "submit" },
-      fetchConfig({ inlineEffect: "expand" }),
+      { ...BASE, inlineOpenOn: "submit" },
+      fetchConfig({ displayMode: "inline", inlineEffect: "expand" }),
     );
     expect(u.inlineOpenOn).toBe("submit");
     expect(u.inlineEffect).toBe("expand");
@@ -1483,7 +1496,8 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     // schmalen Fenstern bis 10 px (Fixliste 7.22-rc7 Nr. 22, main.jsx)
     expect(note.classList.contains("allm-ai-disclaimer")).toBe(true);
     expect(note.style.textAlign).toBe("center");
-    expect(note.style.color).toContain("--allmi-text-muted");
+    // Farbe fest je Farbschema (Fixliste 7.22-rc17 E24), keine --allm-*
+    expect(note.style.color).toContain("--allmi-ai-notice-text");
     expect(note.querySelector("a, button")).toBe(null);
     const form = $("#message-input").closest("form") || $("#message-input");
     expect(

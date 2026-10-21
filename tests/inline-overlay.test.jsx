@@ -110,13 +110,21 @@ describe("Settings inlineLayout / inlineEffect", () => {
     expect(isInlineOverlay(s)).toBe(true);
   });
 
-  it("visual_config schlägt Script-Attribut, leerer Server-Wert nicht", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+  // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
+  it("Script-Attribut schlägt den Wert vom Server, leerer Server-Wert zählt nicht", async () => {
     const s = await loadEmbedSettings(
       { ...BASE, inlineLayout: "overlay", inlineEffect: "grow" },
+      fetchConfig({ inlineLayout: "flow", inlineEffect: "morph" }),
+    );
+    expect(s.inlineLayout).toBe("overlay");
+    expect(s.inlineEffect).toBe("grow");
+    const t = await loadEmbedSettings(
+      BASE,
       fetchConfig({ inlineLayout: "flow", inlineEffect: "" }),
     );
-    expect(s.inlineLayout).toBe("flow");
-    expect(s.inlineEffect).toBe("grow");
+    expect(t.inlineLayout).toBe("flow");
+    expect(t.inlineEffect).toBe(null);
   });
 
   it('NAK-3: data-inline-effect="wobble" -> Standard + genau eine Warnung mit dem wirksamen Wert', async () => {

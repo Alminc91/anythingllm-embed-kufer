@@ -197,15 +197,26 @@ describe("R4: Antworten mit Kursen ohne gespeicherte Wahl folgt der tatsächlich
     expect(embedderSettings.settings.courseCards).toBe("off");
   });
 
-  it("In der Seite nur per Skript-Attribut data-display-mode: Kurskarten", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): die Darstellung stellt nur
+  // das Design Center ein; data-display-mode am Skript wirkt nicht
+  it("In der Seite aus dem Design Center: Kurskarten; data-display-mode am Skript wirkt nicht", async () => {
     const el = await renderApp(
-      { displayMode: "inline" },
       {},
+      { displayMode: "inline" },
       { placeholder: true },
     );
     expect(el?.id).toBe("inline-stub");
     expect(el.dataset.display).toBe("inline");
     expect(el.dataset.courseCards).toBe("auto");
+    act(() => root.unmount());
+    root = createRoot(container);
+    const bubble = await renderApp(
+      { displayMode: "inline" },
+      {},
+      { placeholder: true },
+    );
+    expect(bubble?.id).toBe("chat-window-stub");
+    expect(bubble.dataset.courseCards).toBe("off");
   });
 
   it("Chatfenster (Standard): Nur Text mit Links", async () => {
@@ -293,10 +304,12 @@ describe("R5: Untertitel unter dem Namen", () => {
     expect(layout.layoutValidations.assistantSubtitle("")).toBe("");
   });
 
-  it("data-assistant-subtitle am Skript nur wirksam ohne Server-Wert", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): der Untertitel kommt nur
+  // aus dem Design Center, auch ohne Server-Wert wirkt das Skript nicht
+  it("data-assistant-subtitle am Skript wirkt nicht (auch ohne Server-Wert)", async () => {
     expect(
       (await load({ assistantSubtitle: "Vom Skript" }, {})).assistantSubtitle,
-    ).toBe("Vom Skript");
+    ).toBe(DE_SUBTITLE);
     expect(
       (
         await load(

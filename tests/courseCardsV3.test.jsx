@@ -734,10 +734,15 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(
       (await load({}, { courseCardsLayout: "rows" })).courseCardsLayout,
     ).toBe("rows");
+    expect((await load({}, { courseCardsLayout: "grid" })).courseCardsLayout).toBe(
+      "grid",
+    );
+    // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+    // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
     expect(
       (await load({ courseCardsLayout: "rows" }, { courseCardsLayout: "grid" }))
         .courseCardsLayout,
-    ).toBe("grid");
+    ).toBe("rows");
     expect(warn).not.toHaveBeenCalled();
     expect(
       (await load({ courseCardsLayout: "kacheln" })).courseCardsLayout,

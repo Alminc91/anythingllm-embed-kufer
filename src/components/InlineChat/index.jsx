@@ -21,12 +21,7 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
-import {
-  BAR_THEMES,
-  INLINE_RADIUS_VARS,
-  ON_ACCENT_TEXT,
-  refreshTheme,
-} from "@/utils/theme";
+import { BAR_THEMES, INLINE_RADIUS_VARS, ON_ACCENT_TEXT } from "@/utils/theme";
 import { PILL_CLASS } from "@/components/ChatWindow/ChatContainer/ChatHistory/Pill";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
@@ -730,8 +725,8 @@ const BAR_STYLE = {
   WebkitBackdropFilter: "var(--allmi-bar-backdrop)",
 };
 
-// Akzent der Leiste (Icon-Kreis, Absende-Knopf): --allm-accent, Fallback
-// buttonColor bzw. der Kufer-Standard.
+// Akzent der Leiste (Icon-Kreis, Absende-Knopf): Akzentfarbe aus dem Design
+// Center (--allmi-accent), Fallback buttonColor bzw. der Kufer-Standard.
 function barAccent(settings) {
   return `var(--allmi-accent, ${settings.buttonColor || "#01a5a9"})`;
 }
@@ -899,16 +894,12 @@ export default function InlineChat({
 
   // Host im Platzhalter halten; für das mobile Overlay an <body> hängen.
   // useLayoutEffect: umhängen vor dem Paint, kein Aufblitzen an falscher Stelle.
-  // Nach jedem Umhängen die Farben der Seite neu lesen (utils/theme.js
-  // refreshTheme): ein --allm-accent nur am Platzhalter gilt im Platzhalter,
-  // nicht an <body> (Restpunkt rc7 Nr. 4).
   useLayoutEffect(() => {
     if (!host || !mountTarget) return;
     if (!overlay) {
       if (host.parentNode === mountTarget) return;
       try {
         mountTarget.appendChild(host);
-        refreshTheme();
       } catch (e) {
         // z. B. Platzhalter inzwischen ungeeignet/entfernt -> Blase
         console.warn(
@@ -926,13 +917,11 @@ export default function InlineChat({
     if (host.parentNode === mountTarget) mountTarget.insertBefore(spacer, host);
     else mountTarget.appendChild(spacer);
     document.body.appendChild(host);
-    refreshTheme();
     scrollChatToBottom();
     return () => {
       // Overlay zu: Host exakt an die Stelle des Abstandhalters zurück.
       if (spacer.parentNode) spacer.parentNode.replaceChild(host, spacer);
       else mountTarget.appendChild(host);
-      refreshTheme();
       scrollChatToBottom();
     };
   }, [overlay, mountTarget]);

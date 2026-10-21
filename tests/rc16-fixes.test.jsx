@@ -200,7 +200,7 @@ describe("W44: Rückfall für Safari vor 15.4 (overflow-wrap: anywhere fehlt)", 
       { assistantSubtitle: "vhs-musterstadtlandkreis-volkshochschule.de" },
       { assistantSubtitle: "" },
     ]) {
-      const settings = await load({ brandText: LONG }, server);
+      const settings = await load({}, { brandText: LONG, ...server });
       render(<ChatWindowHeader settings={{ ...settings, loaded: true }} />);
       const spans = $$("#anything-llm-header span");
       const nameEl = spans.find((el) => el.textContent === LONG);
@@ -225,8 +225,8 @@ describe("E21: kompakter Kopf (mobil bei offener Tastatur) zeigt nur den Namen",
     const LONG_NAME =
       "KI-Berater der Volkshochschule Rhein-Sieg-Kreis und Umgebung";
     const settings = await load(
-      { brandText: LONG_NAME },
-      { assistantSubtitle: "durchsucht 1.243 Kurse" },
+      {},
+      { brandText: LONG_NAME, assistantSubtitle: "durchsucht 1.243 Kurse" },
     );
     render(<ChatWindowHeader settings={{ ...settings, loaded: true }} />);
     expect($("#anything-llm-header-subtitle")?.textContent).toBe(

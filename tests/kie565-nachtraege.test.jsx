@@ -203,8 +203,9 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
     );
     expect(neu.userTextColor ?? null).toBe(null);
     const css = buildThemeCss(neu, "light");
-    expect(css).toContain("--allmi-user-text: var(--allm-user-text, #222628);");
-    expect(css).toContain("--allmi-on-accent: var(--allm-on-accent, #222628);");
+    // seit Fixliste 7.22-rc17 (E23) direkt gesetzt, ohne --allm-* der Seite
+    expect(css).toContain("--allmi-user-text: #222628 !important;");
+    expect(css).toContain("--allmi-on-accent: #222628 !important;");
     const alt = await loadEmbedSettings(
       BASE,
       fetchConfig({
@@ -215,7 +216,7 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
     );
     expect(alt.userTextColor).toBe("#FFFFFF");
     expect(buildThemeCss(alt, "dark")).toContain(
-      "--allmi-on-accent: var(--allm-on-accent, #FFFFFF);",
+      "--allmi-on-accent: #FFFFFF !important;",
     );
   });
 

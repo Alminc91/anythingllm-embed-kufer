@@ -174,7 +174,11 @@ describe("E1: Schwarz ist #222628, Empfehlung rechnet mit der gezeigten Farbe", 
 });
 
 // ---------------------------------------------------------------------------
-describe("Nr. 3 (W01): Schrift auf der Kundenfarbe folgt der gezeigten Fläche", () => {
+// Bewusste Änderung (Fixliste 7.22-rc17 E23): Akzentfarbe und Schrift auf
+// der Akzentfarbe stellt nur das Design Center ein (Gruppe A). Farben der
+// Seite (--allm-accent, --allm-user-bg) zählen nicht mehr, die Werte stehen
+// direkt (ohne var(--allm-…)) und mit !important im Stylesheet.
+describe("Nr. 3 (W01): Schrift auf der Kundenfarbe folgt der gezeigten Fläche (seit E23: Design Center)", () => {
   function shadowStyle(hostStyle = {}) {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -186,51 +190,47 @@ describe("Nr. 3 (W01): Schrift auf der Kundenfarbe folgt der gezeigten Fläche",
     return { host, styleEl };
   }
 
-  it("Seite setzt --allm-accent ohne --allm-on-accent: Schrift aus dieser Farbe (Weiß auf Braun)", () => {
+  it("Seite setzt --allm-accent: wirkt nicht, Akzent und Schrift aus dem Design Center", () => {
     const { host, styleEl } = shadowStyle({ "--allm-accent": "#b45309" });
     theme.applyTheme(styleEl, { buttonColor: "#01a5a9" });
+    expect(styleEl.textContent).toContain("--allmi-accent: #01a5a9 !important;");
     expect(styleEl.textContent).toContain(
-      "--allmi-on-accent: var(--allm-on-accent, #FFFFFF);",
+      "--allmi-on-accent: #222628 !important;",
     );
-    // Pillen-Text richtet sich ebenfalls nach der gezeigten Farbe
+    expect(styleEl.textContent).not.toContain("var(--allm-accent");
+    expect(styleEl.textContent).not.toContain("var(--allm-on-accent");
+    // Pillen-Text aus der Akzentfarbe des Design Centers (abgedunkelt auf
+    // mindestens 4,5:1), nicht aus der Farbe der Seite
     expect(styleEl.textContent).toContain(
-      "--allmi-pill-accent-text: var(--allm-pill-accent-text, var(--allmi-accent));",
+      "--allmi-pill-accent-text: var(--allm-pill-accent-text, #018487);",
     );
     host.remove();
   });
 
-  it("Seite setzt --allm-user-bg: Nutzerblase aus dieser Farbe; nicht auswertbar: Weiß", () => {
+  it("Seite setzt --allm-user-bg: wirkt nicht, Nutzerblase und Schrift aus dem Design Center", () => {
     const a = shadowStyle({ "--allm-user-bg": "#1e3a8a" });
     theme.applyTheme(a.styleEl, {
       buttonColor: "#ffd400",
       userBgColor: "#ffd400",
     });
     expect(a.styleEl.textContent).toContain(
-      "--allmi-user-text: var(--allm-user-text, #FFFFFF);",
+      "--allmi-user-bg: #ffd400 !important;",
     );
+    expect(a.styleEl.textContent).toContain(
+      "--allmi-user-text: #222628 !important;",
+    );
+    expect(a.styleEl.textContent).not.toContain("var(--allm-user-");
     a.host.remove();
-    const b = shadowStyle({ "--allm-accent": "teal" });
-    theme.applyTheme(b.styleEl, { buttonColor: "#ffd400" });
-    expect(b.styleEl.textContent).toContain(
-      "--allmi-on-accent: var(--allm-on-accent, #FFFFFF);",
-    );
-    b.host.remove();
   });
 
-  it("ohne Seitenwert: Design-Center-Farbe; gewählte Schrift bleibt wie gewählt", () => {
-    const a = shadowStyle();
-    theme.applyTheme(a.styleEl, { buttonColor: "#ffd400" });
-    expect(a.styleEl.textContent).toContain(
-      "--allmi-on-accent: var(--allm-on-accent, #222628);",
-    );
-    a.host.remove();
+  it("gewählte Schrift bleibt wie gewählt", () => {
     const b = shadowStyle({ "--allm-accent": "#b45309" });
     theme.applyTheme(b.styleEl, {
-      buttonColor: "#ffd400",
+      buttonColor: "#b45309",
       userTextColor: "#222628",
     });
     expect(b.styleEl.textContent).toContain(
-      "--allmi-on-accent: var(--allm-on-accent, #222628);",
+      "--allmi-on-accent: #222628 !important;",
     );
     b.host.remove();
   });
@@ -244,9 +244,10 @@ describe("Nr. 9 (F08, Widget): Begrüßung als Gruppe vom Server, kürzen statt 
       { greeting: "Willkommen bei der VHS!" },
     );
     expect(layout.greetingText(s)).toBe("Willkommen bei der VHS!");
-    // ohne Serverwert bleibt das Skript-Attribut wirksam
+    // Bewusste Änderung (Fixliste 7.22-rc17 E23): auch ohne Serverwert wirkt
+    // das Skript-Attribut nicht (Gruppe A), es gilt der Standard
     const t = await load({ greetingBubbleText: "Blase vom Skript" }, {});
-    expect(layout.greetingText(t)).toBe("Blase vom Skript");
+    expect(layout.greetingText(t)).toBe(layout.PANEL_TEXTS.de.greetingBubble);
   });
 
   it("zu lange Begrüßung wird auf ein Wortende gekürzt (wie Server und Design Center)", async () => {
@@ -479,18 +480,18 @@ describe("Nr. 20/27 (W08): Startvorschläge unter der eingeklappten Leiste wie d
 });
 
 // ---------------------------------------------------------------------------
+// Bewusste Änderung (Fixliste 7.22-rc17 E23): Ohne Angabe folgt die Leiste
+// dem Farbschema aus dem Design Center; data-inline-theme verfeinert diesen
+// festen Standard wieder (Gruppe B, kein Feld im Design Center).
 describe("Nr. 21 (W09): Leiste folgt dem Farbschema aus dem Design Center", () => {
-  it("data-inline-theme am Skript wirkt nicht mehr", async () => {
-    const s = await load({ displayMode: "inline", inlineTheme: "dark" }, {});
+  it("ohne Angabe folgt die Leiste dem Farbschema, data-inline-theme verfeinert", async () => {
+    const s = await load({}, { displayMode: "inline" });
     expect(s.inlineTheme).toBeNull();
     expect(theme.resolveBarTheme(s, "light")).toBe("light");
-    const d = await load(
-      { displayMode: "inline", inlineTheme: "light" },
-      {
-        theme: "dark",
-      },
-    );
+    const d = await load({}, { displayMode: "inline", theme: "dark" });
     expect(theme.resolveBarTheme(d, "dark")).toBe("dark");
+    const e = await load({ inlineTheme: "light" }, { displayMode: "inline" });
+    expect(theme.resolveBarTheme(e, "dark")).toBe("light");
   });
 });
 

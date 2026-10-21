@@ -8,8 +8,8 @@
 //
 //     :host { --allmi-accent: var(--allm-accent, #01a5a9); … }
 //
-// Dadurch gilt der Vorrang
-//     Standard < Script-Attribut < Server-visual_config < Seiten-CSS
+// Dadurch gilt der Vorrang (Gruppe B, Fixliste 7.22-rc17 E23)
+//     Standard < Server < Script-Attribut < Seiten-CSS
 // - Settings (Script/Server) landen als Fallback-Wert im :host-Stylesheet.
 // - Seiten-CSS setzt `--allm-*` auf #anythingllm-embed-widget ODER einem
 //   Vorfahren (z. B. #kufer-assistent, :root). Da das Widget die öffentliche
@@ -17,6 +17,12 @@
 //   auf dem Host und gewinnt immer gegen den Fallback. (Würden die Standards
 //   direkt als `--allm-*` auf :host stehen, schlüge :host jeden Vorfahren und
 //   ein Inline-Style auf dem Host sogar das Seiten-CSS.)
+// Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
+// daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design Center
+// ein, und die Farben des KI-Hinweises sind fest. Diese setzt das Widget
+// direkt und mit !important (`--allmi-accent: #01a5a9 !important;`): kein
+// Rückgriff auf `--allm-*`, und ein wichtiger Wert im Shadow-Root schlägt
+// jede Angabe der Seite am Host, auch eine `--allmi-*` mit !important.
 // - Fremde Elemente (Geschwister) erreichen das Widget nicht (NAK-3), Klassen
 //   im Shadow DOM bleiben unerreichbar (NAK-2).
 //
@@ -52,10 +58,22 @@ export const BAR_THEMES = {
   },
 };
 
+// KI-Hinweis (E24, Fixliste 7.22-rc17): Schrift und Fläche fest je
+// Farbschema, unabhängig von --allm-* (Kontrast hell 4,8:1, dunkel 7,1:1).
+// Die Fläche entspricht dem Standard der Fensterfläche; setzt die Seite
+// --allm-surface, liegt der Satz auf seiner eigenen Fläche.
+export const AI_NOTICE_COLORS = {
+  light: { text: "#6b7280", bg: "#FFFFFF" },
+  dark: { text: "#A6A8AD", bg: "#1D1D21" },
+};
+export const AI_NOTICE_TEXT = "var(--allmi-ai-notice-text, #6b7280)";
+export const AI_NOTICE_BG = "var(--allmi-ai-notice-bg, #FFFFFF)";
+
 // Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
 // Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,
-// Button der Rückmeldung): --allm-on-accent, ohne Variable Weiß wie bisher.
-// Wert: onAccentTextColor (KIE-565 Nachtrag, „Schrift auf der Kundenfarbe“).
+// Button der Rückmeldung): Wert aus dem Design Center (onAccentTextColor,
+// KIE-565 Nachtrag, „Schrift auf der Kundenfarbe“; --allm-on-accent der
+// Seite wirkt nicht, E23), ohne Theme-Stylesheet Weiß wie bisher.
 export const ON_ACCENT_TEXT = "var(--allmi-on-accent, #FFFFFF)";
 
 // Dunkler Satz (Kontrast geprüft, siehe README/Test AK-4): Text auf Fenster
@@ -100,57 +118,39 @@ export function cssValue(value, fallback = null) {
 // liefert Schwarz als #222628). Sie gilt wie gewählt für die Nutzer-
 // Sprechblasen UND alle Flächen in Kundenfarbe. Ohne Wert gilt die
 // Empfehlung nach WCAG-Kontrast (utils/contrast.js recommendedTextColor,
-// Weiß oder #222628) aus der Farbe, die die Fläche TATSÄCHLICH zeigt
-// (Fixliste 7.22-rc7 Nr. 3): Setzt die Seite --allm-accent bzw.
-// --allm-user-bg (Seiten-CSS gewinnt beim Malen der Fläche), zählt diese
-// Farbe (page, von render() aus dem berechneten Stil des Hosts gelesen);
-// ist sie nicht auswertbar (z. B. ein Farbname), Weiß wie früher. Sonst die
-// Design-Center-Farbe: für die Nutzerblase deren Fläche (userBgColor), für
-// die übrigen Flächen die Kundenfarbe (buttonColor). Eine --allm-on-accent
-// bzw. --allm-user-text der Seite gewinnt ohnehin (buildThemeCss).
-export function userTextColorFor(settings = {}, page = {}) {
+// Weiß oder #222628) aus der Design-Center-Farbe: für die Nutzerblase deren
+// Fläche (userBgColor), für die übrigen Flächen die Kundenfarbe
+// (buttonColor). Farben der Seite (--allm-accent, --allm-user-bg) zählen
+// nicht mehr (Gruppe A, Fixliste 7.22-rc17 E23).
+export function userTextColorFor(settings = {}) {
   return (
     cssValue(settings.userTextColor) ||
     recommendedTextColor(
-      page.userBg ||
-        cssValue(settings.userBgColor) ||
+      cssValue(settings.userBgColor) ||
         cssValue(settings.buttonColor, DEFAULTS.userBg),
     )
   );
 }
-export function onAccentTextColor(settings = {}, page = {}) {
+export function onAccentTextColor(settings = {}) {
   return (
     cssValue(settings.userTextColor) ||
-    recommendedTextColor(
-      page.accent || cssValue(settings.buttonColor, DEFAULTS.accent),
-    )
+    recommendedTextColor(cssValue(settings.buttonColor, DEFAULTS.accent))
   );
 }
 
 // Text der Pillen (Startvorschläge und Folgefragen) in Kundenfarbe mit
 // mindestens 4,5:1 zur Fläche: hell auf der weißen Pille (abgedunkelt, wenn
 // nötig), dunkel auf dem Panelton (Fenster DARK.bg und Fläche DARK.surface,
-// aufgehellt, wenn nötig). Reicht die Kundenfarbe schon, bleibt es
-// var(--allmi-accent) (folgt dann auch einem --allm-accent der Seite).
-// Gezeigt wird die Kundenfarbe der Seite (page.accent), sonst die aus dem
-// Design Center. Setzt die Seite eine Farbe, die das Widget nicht auswerten
-// kann (page.accent "unparsed": Farbname, hsl(), oklch()), gilt die Farbe
-// aus dem Design Center, als fester Wert (nicht var(--allmi-accent), das
-// wäre wieder die Seitenfarbe): Pillenschrift auch dann mit mindestens
-// 4,5:1 (Fixliste 7.22-rc13 W06; vorher z. B. gold auf Weiß, 1,4:1).
-// Ist auch die nicht auswertbar: hell der Akzent, dunkel der Text des
-// dunklen Satzes (bisher).
+// aufgehellt, wenn nötig). Reicht die Kundenfarbe aus dem Design Center
+// schon, bleibt es var(--allmi-accent). Ist sie nicht auswertbar
+// (Farbname): hell der Akzent, dunkel der Text des dunklen Satzes (bisher).
 export const PILL_BG_LIGHT = "#FFFFFF";
-export function pillTextColor(settings = {}, mode = "light", page = {}) {
-  const unparsed = page.accent === "unparsed";
-  const accent =
-    (!unparsed && page.accent) ||
-    cssValue(settings.buttonColor, DEFAULTS.accent);
+export function pillTextColor(settings = {}, mode = "light") {
+  const accent = cssValue(settings.buttonColor, DEFAULTS.accent);
   const backgrounds =
     mode === "dark" ? [DARK.bg, DARK.surface] : [PILL_BG_LIGHT];
   const text = accessibleTextColor(accent, backgrounds);
   if (!text) return mode === "dark" ? DARK.text : "var(--allmi-accent)";
-  if (unparsed) return text;
   const same = parseColor(text).every((v, i) => v === parseColor(accent)[i]);
   return same ? "var(--allmi-accent)" : text;
 }
@@ -167,7 +167,9 @@ export function legacyTextSize(textSize) {
 // Spezifikation je öffentlicher Variable. light/dark: Standardwert (String,
 // Funktion der Settings oder null = keiner). chain: Variable, der dieser Wert
 // folgt, solange er nicht explizit per Setting vorgegeben ist
-// (explicit(settings, mode)).
+// (explicit(settings, mode)). dc: im Design Center einstellbar (Gruppe A,
+// E23): der Wert gilt direkt, die öffentliche Variable der Seite wirkt
+// nicht.
 export const THEME_VARIABLES = [
   // Flächen/Text
   { name: "bg", light: null, dark: DARK.bg },
@@ -178,24 +180,28 @@ export const THEME_VARIABLES = [
   // Akzent/Blasen
   {
     name: "accent",
+    dc: true,
     light: (s) => cssValue(s.buttonColor, DEFAULTS.accent),
     dark: (s) => cssValue(s.buttonColor, DEFAULTS.accent),
   },
   {
     name: "user-bg",
+    dc: true,
     light: (s) => cssValue(s.userBgColor, DEFAULTS.userBg),
     dark: (s) => cssValue(s.userBgColor, DEFAULTS.userBg),
   },
   {
     name: "user-text",
-    light: (s, p) => userTextColorFor(s, p),
-    dark: (s, p) => userTextColorFor(s, p),
+    dc: true,
+    light: (s) => userTextColorFor(s),
+    dark: (s) => userTextColorFor(s),
   },
   // Schrift auf allen Flächen in Kundenfarbe (ON_ACCENT_TEXT)
   {
     name: "on-accent",
-    light: (s, p) => onAccentTextColor(s, p),
-    dark: (s, p) => onAccentTextColor(s, p),
+    dc: true,
+    light: (s) => onAccentTextColor(s),
+    dark: (s) => onAccentTextColor(s),
   },
   {
     name: "assistant-bg",
@@ -210,6 +216,7 @@ export const THEME_VARIABLES = [
   },
   {
     name: "link",
+    dc: true,
     light: (s) => cssValue(s.linkColor, DEFAULTS.link),
     dark: DARK.link,
   },
@@ -314,8 +321,8 @@ export const THEME_VARIABLES = [
   // in Kundenfarbe, Text dann --allm-on-accent (main.jsx)
   {
     name: "pill-accent-text",
-    light: (s, p) => pillTextColor(s, "light", p),
-    dark: (s, p) => pillTextColor(s, "dark", p),
+    light: (s) => pillTextColor(s, "light"),
+    dark: (s) => pillTextColor(s, "dark"),
   },
   // Rundung von Logo und Avatar: hell keine (wie bisher), dunkel eine
   // abgerundete Kachel, damit ein Logo mit weißem Hintergrund (z. B. das
@@ -337,26 +344,25 @@ export function resolveThemeMode(theme, prefersDark = false) {
 }
 
 // Leiste: ein explizit gesetztes inlineTheme ("light" | "dark") gewinnt;
-// ohne Angabe (null, Standard) folgt die Leiste dem Fenster-Theme. Seit der
-// Fixliste 7.22-rc7 (Nr. 21) setzt loadEmbedSettings inlineTheme immer auf
-// null (utils/layout.js FIXED_STANDARDS): Die Leiste folgt dem Farbschema
-// aus dem Design Center, ein data-inline-theme am Skript wirkt nicht mehr.
+// ohne Angabe (null, Standard) folgt die Leiste dem Fenster-Theme. Ohne
+// Skript-Angabe setzt loadEmbedSettings inlineTheme auf null (utils/layout.js
+// FIXED_STANDARDS, ein Serverwert wirkt nicht); data-inline-theme verfeinert
+// den Standard (Gruppe B, Fixliste 7.22-rc17 E23).
 export function resolveBarTheme(settings = {}, mode = "light") {
   const t = settings.inlineTheme;
   if (t === "light" || t === "dark") return t;
   return mode === "dark" ? "dark" : "light";
 }
 
-// page: Farben, die das Seiten-CSS setzt ({ accent, userBg }, pageColors)
-function pick(spec, settings, mode, page = {}) {
+function pick(spec, settings, mode) {
   const v = spec[mode];
-  return typeof v === "function" ? v(settings, page) : (v ?? null);
+  return typeof v === "function" ? v(settings) : (v ?? null);
 }
 
 // Wirksame Standardwerte je öffentlicher Variable (ohne Seiten-CSS) für
 // Tests/Doku: { "--allm-accent": "#01a5a9", "--allm-text": null, … }.
 // Kettenwerte werden aufgelöst (header-text -> text usw.).
-export function resolveThemeVars(settings = {}, mode = "light", page = {}) {
+export function resolveThemeVars(settings = {}, mode = "light") {
   const bar = BAR_THEMES[resolveBarTheme(settings, mode)];
   const out = {};
   for (const spec of THEME_VARIABLES) {
@@ -365,25 +371,31 @@ export function resolveThemeVars(settings = {}, mode = "light", page = {}) {
     else {
       const explicit = spec.explicit?.(settings, mode) ?? null;
       const chained = spec.chain ? out[`--allm-${spec.chain}`] : null;
-      value = explicit ?? chained ?? pick(spec, settings, mode, page);
+      value = explicit ?? chained ?? pick(spec, settings, mode);
     }
     out[`--allm-${spec.name}`] = value;
   }
   return out;
 }
 
-// Stylesheet-Text für den Shadow-Root. page: vom Seiten-CSS gesetzte Farben
-// (pageColors), daraus die Schrift auf der Kundenfarbe ohne gewählten Wert.
-export function buildThemeCss(settings = {}, mode = "light", page = {}) {
+// Stylesheet-Text für den Shadow-Root.
+export function buildThemeCss(settings = {}, mode = "light") {
   const bar = BAR_THEMES[resolveBarTheme(settings, mode)];
   const decls = [];
   for (const spec of THEME_VARIABLES) {
     const pub = `--allm-${spec.name}`;
+    if (spec.dc) {
+      // Gruppe A: Wert aus dem Design Center direkt, ohne var(--allm-…)
+      decls.push(
+        `--allmi-${spec.name}: ${pick(spec, settings, mode)} !important;`,
+      );
+      continue;
+    }
     let fallback;
     if (spec.bar) fallback = bar[spec.bar];
     else {
       const explicit = spec.explicit?.(settings, mode) ?? null;
-      const def = pick(spec, settings, mode, page);
+      const def = pick(spec, settings, mode);
       if (explicit) fallback = explicit;
       else if (spec.chain)
         fallback = def
@@ -397,8 +409,11 @@ export function buildThemeCss(settings = {}, mode = "light", page = {}) {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // interne Hilfswerte
+  // interne Hilfswerte; KI-Hinweis fest (E24)
+  const notice = AI_NOTICE_COLORS[mode === "dark" ? "dark" : "light"];
   decls.push(
+    `--allmi-ai-notice-text: ${notice.text} !important;`,
+    `--allmi-ai-notice-bg: ${notice.bg} !important;`,
     "--allmi-radius-bubble-small: min(4px, calc(var(--allmi-radius-bubble) / 4.5));",
     // Icons im Eingabefeld beim Hover: folgen der Eingabe-Textfarbe (Seiten-CSS
     // --allm-input-text bzw. --allm-text); ohne Vorgabe hell der bisherige Wert
@@ -430,7 +445,6 @@ let current = {
   settings: null,
   mql: null,
   listener: null,
-  loadListener: null,
 };
 
 function prefersDark() {
@@ -441,51 +455,13 @@ function prefersDark() {
   }
 }
 
-// Vom Seiten-CSS gesetzte Flächenfarben (--allm-accent, --allm-user-bg am
-// Host oder einem Vorfahren): Das Widget deklariert die öffentlichen
-// Variablen nie selbst, der berechnete Stil des Hosts zeigt also genau den
-// Wert der Seite. Nur auswertbare Farben (parseColor) zählen; ein anderer
-// Wert (Farbname, var(...)) ergibt "unparsed" -> Weiß als Schrift (wie vor
-// KIE-565). Ohne Seitenwert null (Design-Center-Farbe gilt).
-export function pageColors(host) {
-  const out = { accent: null, userBg: null };
-  if (!host || typeof getComputedStyle !== "function") return out;
-  try {
-    const cs = getComputedStyle(host);
-    for (const [key, name] of [
-      ["accent", "--allm-accent"],
-      ["userBg", "--allm-user-bg"],
-    ]) {
-      const raw = cs.getPropertyValue(name).trim();
-      if (!raw) continue;
-      out[key] = parseColor(raw) ? raw : "unparsed";
-    }
-  } catch (e) {
-    // kein berechneter Stil (Host nicht im Dokument): Design-Center-Farbe
-  }
-  return out;
-}
-
 function render() {
   const { styleEl, settings } = current;
   if (!styleEl || !settings) return;
   const mode = resolveThemeMode(settings.theme, prefersDark());
-  const host = styleEl.getRootNode?.()?.host || null;
-  const css = buildThemeCss(settings, mode, pageColors(host));
+  const css = buildThemeCss(settings, mode);
   if (styleEl.textContent !== css) styleEl.textContent = css;
   styleEl.dataset.mode = mode;
-}
-
-// Variablen mit den aktuellen Farben der Seite neu berechnen (Restpunkt rc7
-// Nr. 4, W01-Rest): Der Host hängt beim ersten applyTheme noch an <body>;
-// im Inline-Modus hängt InlineChat ihn danach in den Platzhalter (und fürs
-// mobile Vollbild wieder an <body>). Ein --allm-accent, das die Seite nur am
-// Platzhalter (#kufer-assistent) setzt, ist erst dort im berechneten Stil
-// des Hosts sichtbar; nach jedem Umhängen deshalb neu lesen, damit die
-// Schrift auf der Akzentfarbe (--allmi-on-accent, Pillen-Text) der Fläche
-// folgt, die das Widget tatsächlich zeigt. Ohne applyTheme davor no-op.
-export function refreshTheme() {
-  render();
 }
 
 // Setzt/aktualisiert die Variablen. Synchron vor dem ersten Render aufrufen
@@ -493,13 +469,6 @@ export function refreshTheme() {
 export function applyTheme(styleEl, settings = {}) {
   current.styleEl = styleEl;
   current.settings = settings;
-  // Seiten-CSS kann nach dem Widget-Skript laden: nach "load" die Farben der
-  // Seite noch einmal lesen (Schrift auf der Kundenfarbe, pageColors).
-  if (!current.loadListener && typeof window !== "undefined") {
-    current.loadListener = () => render();
-    if (document.readyState !== "complete")
-      window.addEventListener("load", current.loadListener, { once: true });
-  }
   const wantListener = settings.theme === "auto";
   if (wantListener && !current.listener && window.matchMedia) {
     current.mql = window.matchMedia(DARK_QUERY);
