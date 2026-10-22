@@ -109,8 +109,10 @@ export const URL_MAX_LEN = 512;
 // Speicherdauer, sachlich, keine Rechtsberatung; Kunden ersetzen den Text
 // über privacyText und tragen ihre Erklärung als privacyUrl ein (Standard:
 // kein Link). Design Center vereinfacht (15.10.2026): keine Gedankenstriche
-// in sichtbaren Texten. Wörtliche Kopie im Fork:
-// server/utils/chats/embedDefaults.js (Jest-Test vergleicht beide).
+// in sichtbaren Texten; keine Gendersprache („Mitarbeiter“, Fixliste
+// 7.22-rc19 E30). Wörtliche Kopie im Fork:
+// server/utils/chats/embedDefaults.js (Jest-Test vergleicht beide, mit
+// KUFER_FORK_DIR auch tests/embed-config-contract.test.js).
 export const PANEL_TEXTS = {
   de: {
     greetingBubble: "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
@@ -118,7 +120,7 @@ export const PANEL_TEXTS = {
     privacyTitle: "Datenschutz",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
-      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
     privacyButton: "Start",

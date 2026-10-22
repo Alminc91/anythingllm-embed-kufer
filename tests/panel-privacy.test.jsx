@@ -696,7 +696,7 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
       "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
     );
     expect($("#anything-llm-privacy-bubble").textContent).toContain(
-      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
     );
     render(
       <ChatHistory
@@ -723,7 +723,7 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
       />,
     );
     expect($$("[role=dialog] li")[1].textContent).toBe(
-      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
     );
   });
 
@@ -998,7 +998,7 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     );
     expect(DEFAULT_PRIVACY_POINTS).toEqual([
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
-      "Mitarbeitende der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ]);
     expect(PANEL_TEXTS.en.privacyPoints).toEqual([
@@ -1028,6 +1028,24 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
       />,
     );
     expect($("#anything-llm-privacy-notice a")).toBe(null);
+  });
+
+  // E30 (Fixliste 7.22-rc19): Standardtext ohne Gendersprache, wortgleich
+  // mit dem Fork (Gegenprobe in tests/embed-config-contract.test.js mit
+  // KUFER_FORK_DIR); Englisch unverändert
+  it("E30: Datenschutz-Standard „Mitarbeiter der Einrichtung …“, keine Gendersprache", () => {
+    expect(DEFAULT_PRIVACY_POINTS[1]).toBe(
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+    );
+    expect(PANEL_TEXTS.de.privacyText.split("\n")[1]).toBe(
+      "• Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+    );
+    expect(PANEL_TEXTS.en.privacyPoints[1]).toBe(
+      "Staff of the institution may view conversations for quality assurance.",
+    );
+    const de = JSON.stringify(PANEL_TEXTS.de);
+    expect(de).not.toMatch(/Mitarbeitende|Teilnehmende|Lehrende/);
+    expect(de).not.toMatch(/\p{L}[*:_/]innen\b|\p{Ll}Innen\b/u);
   });
 
   it("Standard (none): kein Hinweis, Eingabe frei", () => {

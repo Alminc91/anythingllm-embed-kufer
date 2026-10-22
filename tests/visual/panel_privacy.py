@@ -543,7 +543,7 @@ def check_privacy_bubble(browser, base_url):
               and st["greet"] == "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). "
                                  "Beschreiben Sie einfach, was Sie suchen."
               and st["paras"][0].startswith("Datenschutz:Ihre Anfragen bleiben auf Servern in Deutschland")
-              and "Mitarbeitende der Einrichtung können" in st["paras"][0]
+              and "Mitarbeiter der Einrichtung können" in st["paras"][0]
               and st["paras"][0].endswith("nötig sind. Datenschutz")
               and st["strong"] == ["Datenschutz:"] and st["titleWeight"] >= 600 and st["titleOwnLine"]
               and st["link"] == "/datenschutz"

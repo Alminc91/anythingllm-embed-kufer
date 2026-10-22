@@ -34,7 +34,10 @@
 // Rest für Gruppe A: Registriert die Seite eine interne Variable mit anderer
 // Syntax (etwa `<length>`), ist der Wert ungültig und es gilt der
 // `initial-value` der Seite; das verlangt, dass die Seite interne Namen
-// gezielt anspricht (im Browser gemessen, Fixliste 7.22-rc18 W62).
+// gezielt anspricht (im Browser gemessen, Fixliste 7.22-rc18 W62). Das
+// Widget registriert selbst keine Eigenschaften, denn `CSS.registerProperty`
+// gilt für das ganze Dokument der Kundenseite: bekannte Grenze, keine
+// Änderung (Fixliste 7.22-rc19 E31).
 // - Fremde Elemente (Geschwister) erreichen das Widget nicht (NAK-3), Klassen
 //   im Shadow DOM bleiben unerreichbar (NAK-2).
 //

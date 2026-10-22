@@ -10,7 +10,9 @@ import { join } from "node:path";
 // anythingllm-kufer, Branch feat/design-center-standard) zusätzlich die
 // Gegenprobe gegen den Fork selbst: Standard-Startvorschläge und Sprachwahl
 // aus server/utils/chats/embedDefaults.js und die Fixture-Kopie im Fork
-// (wortgleich; fehlt sie, scheitert der Test, Fixliste 7.22-rc16 W45). Ohne
+// (wortgleich; fehlt sie, scheitert der Test, Fixliste 7.22-rc16 W45), dazu
+// die Standardtexte der Panel-Optik (PANEL_TEXTS) gegen embedDefaultTexts()
+// und die Fork-Fixture embedPanelTexts.json (Fixliste 7.22-rc19 E30). Ohne
 // die Variable wird übersprungen (wie KUFER_EMBED_DIR im Fork), mit dem Grund
 // im Namen des Blocks; im rc-Build laufen beide Seiten mit gesetzten
 // Variablen.
@@ -27,6 +29,7 @@ vi.mock("../src/main.jsx", () => ({
 }));
 
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
+import { PANEL_TEXTS } from "../src/utils/layout.js";
 
 const FIXTURE = join(__dirname, "fixtures", "embedConfigContract.json");
 const contract = JSON.parse(readFileSync(FIXTURE, "utf8"));
@@ -90,7 +93,7 @@ const describeFork = forkDir ? describe : describe.skip;
 // sichtbar im Log statt still übersprungen (W45)
 if (!forkDir)
   console.warn(
-    "[embed-config-contract] KUFER_FORK_DIR nicht gesetzt: Gegenprobe gegen den Fork übersprungen (3 Tests). Im rc-Build mit gesetzter Variable laufen lassen.",
+    "[embed-config-contract] KUFER_FORK_DIR nicht gesetzt: Gegenprobe gegen den Fork übersprungen (4 Tests). Im rc-Build mit gesetzter Variable laufen lassen.",
   );
 describeFork(
   forkDir
@@ -125,6 +128,38 @@ describeFork(
         true,
       );
       expect(JSON.parse(readFileSync(copy, "utf8"))).toEqual(contract);
+    });
+
+    // E30 (Fixliste 7.22-rc19): Standardtexte der Panel-Optik wortgleich im
+    // Fork (Standard und Vorbelegung des Design Centers) und in dessen
+    // Vertragsfixture; bisher prüfte nur der Fork (KUFER_EMBED_DIR) und dort
+    // ohne die Datenschutz-Punkte
+    it("Standardtexte der Panel-Optik wortgleich mit embedDefaultTexts() und embedPanelTexts.json", () => {
+      const { embedDefaultTexts } = defaults();
+      const copy = join(
+        forkDir,
+        "server/__tests__/utils/chats/fixtures/embedPanelTexts.json",
+      );
+      expect(existsSync(copy), `Fixture im Fork fehlt: ${copy}`).toBe(true);
+      const fixture = JSON.parse(readFileSync(copy, "utf8"));
+      for (const lang of ["de", "en"]) {
+        const w = PANEL_TEXTS[lang];
+        const { defaultMessages, ...texts } = embedDefaultTexts(lang);
+        expect(texts, lang).toEqual({
+          name: w.assistantName,
+          assistantSubtitle: w.assistantSubtitle,
+          greeting: w.greetingBubble,
+          sendMessageText: w.inputPlaceholder,
+          privacyTitle: w.privacyTitle,
+          privacyText: w.privacyText,
+          disclaimerText: w.aiDisclaimer,
+          inlineInputPlaceholder: w.inlineBarPlaceholder,
+          inlineSendText: w.inlineSendText,
+        });
+        expect(Array.isArray(defaultMessages), lang).toBe(true);
+        for (const [key, value] of Object.entries(fixture[lang]))
+          expect(value, `${lang}.${key}`).toEqual(w[key]);
+      }
     });
   },
 );
