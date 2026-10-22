@@ -369,7 +369,7 @@ export function shortenGreeting(text) {
 // dann assistantSubtitle ""), ein eigener Text wie geliefert, null/undefined
 // (nicht gespeichert, älterer Server) = Standard der Sprache
 // („Online-Berater mit künstlicher Intelligenz“). Ein data-assistant-subtitle
-// am Skript gilt nur ohne Server-Wert (loadEmbedSettings).
+// am Skript wirkt nicht (Gruppe A, useScriptAttributes DC_COVERED).
 export function assistantSubtitleText(settings = {}) {
   const v = settings.assistantSubtitle;
   if (v === "") return "";
@@ -541,8 +541,15 @@ export function applyFixedStandards(
   // auch gegen data-greeting-style="text" (E26, Fixliste 7.22-rc18 W60). Nur
   // die Begrüßungsblase trägt die Datenschutz-Blase (ChatHistory:
   // PanelWelcome im leeren Chat, PanelGreeting im Verlauf); "text" wirkt nur
-  // bei abgeschaltetem Hinweis.
-  if (out.privacyNotice === "bubble") out.greetingStyle = "bubble";
+  // bei abgeschaltetem Hinweis. Eine Warnzeile, wenn das Skript "text"
+  // vorgibt (Fixliste 7.22-rc20 W81).
+  if (out.privacyNotice === "bubble") {
+    if (scriptKeys.has("greetingStyle") && out.greetingStyle === "text")
+      console.warn(
+        '[AnythingLLM Embed] Einbau-Angabe data-greeting-style="text" wirkt nur bei abgeschaltetem Datenschutz-Hinweis (Schalter im Design Center), es gilt "bubble".',
+      );
+    out.greetingStyle = "bubble";
+  }
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
   // (data-bubble-persistence wirkt nicht, Gruppe A)
   for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"])
@@ -770,11 +777,18 @@ export const layoutValidations = {
 // je Quelle eine console.warn-Zeile, die den tatsächlich geltenden Wert nennt
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
-// zusammengeführte Settings.
+// zusammengeführte Settings. Herkunft bei festen Standards (FIXED_STANDARDS,
+// im Inline-Modus INLINE_STANDARDS, KI-Hinweis AI_NOTICE): ein Server-Wert
+// wirkt dort nicht, es gilt das Script-Attribut, wenn sein Wert wirkt, sonst
+// der „Standard“ (applyFixedStandards; Fixliste 7.22-rc20 W82).
 const ENUM_SOURCES = [
   ["script", "Script-Attribut"],
   ["server", "Design Center"],
 ];
+function isFixedStandard(key, settings) {
+  if (key in AI_NOTICE || key in FIXED_STANDARDS) return true;
+  return key in INLINE_STANDARDS && settings.displayMode === "inline";
+}
 export function warnInvalidInlineEnums(
   script = {},
   server = {},
@@ -797,11 +811,19 @@ export function warnInvalidInlineEnums(
       const value = raw[src][key];
       if (value === undefined || value === null || value === "" || valid(src))
         continue;
-      const origin = valid("server")
-        ? "Design Center"
-        : valid("script")
+      const scriptWins =
+        !(key in AI_NOTICE) &&
+        valid("script") &&
+        settings[key] === oneOf(raw.script[key], allowed);
+      const origin = isFixedStandard(key, settings)
+        ? scriptWins
           ? "Script-Attribut"
-          : "Standard";
+          : "Standard"
+        : valid("server")
+          ? "Design Center"
+          : valid("script")
+            ? "Script-Attribut"
+            : "Standard";
       const effective =
         key !== "inlineEffect"
           ? `"${settings[key]}"`

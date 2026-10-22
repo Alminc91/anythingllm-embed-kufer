@@ -35,8 +35,9 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Zeilen-Karten (.allm-course-card-row) nutzen Hover/Fokus der Rasterkarten.
 // Pillen im Panel (.allm-pill-accent, Startvorschläge und Folgefragen, eine
 // Komponente Pill): Hover und Tastaturfokus füllen in Kundenfarbe, Text
-// ON_ACCENT_TEXT = --allm-on-accent (Schrift auf der Kundenfarbe; Farben
-// stehen inline -> !important), Übergang --allm-transition; Fokusring
+// ON_ACCENT_TEXT = --allmi-on-accent (Schrift auf der Kundenfarbe aus dem
+// Design Center, Gruppe A; Farben stehen inline -> !important), Übergang
+// --allm-transition; Fokusring
 // --allm-focus-ring, sonst 2px Akzent (!important gegen die allgemeine
 // Fokus-Regel mit ID).
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
@@ -163,8 +164,9 @@ const customCss = `
     font-family: inherit !important;
   }
 
-  /* Links in Assistenten-Antworten (historisch + Streaming): --allm-link
-     (Standard = linkColor). Ersetzt die frühere Link-Farb-Injektion. */
+  /* Links in Assistenten-Antworten (historisch + Streaming): Linkfarbe aus
+     dem Design Center (--allmi-link, Gruppe A). Ersetzt die frühere
+     Link-Farb-Injektion. */
   .allm-anything-llm-assistant-message a,
   .allm-reply a {
     color: var(--allmi-link, #01a5a9) !important;

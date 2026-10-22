@@ -5,8 +5,8 @@ import { embedderSettings } from "@/main";
 // Startvorschläge sehen aus und reagieren wie die Folgefragen). Chatblase und
 // Inline, hell und dunkel; Farben nur über --allmi-*:
 //   - Fläche --allmi-pill-bg (hell Weiß, dunkel der Panelton)
-//   - Rand --allmi-pill-border (Akzentfarbe aus dem Design Center,
-//     --allmi-accent, Gruppe A)
+//   - Rand --allmi-pill-border (Standard: Akzentfarbe aus dem Design
+//     Center, --allmi-accent; per --allm-pill-border verfeinerbar, Gruppe B)
 //   - Schrift --allmi-pill-accent-text: Kundenfarbe mit mindestens 4,5:1 zur
 //     Fläche (hell ggf. abgedunkelt, dunkel ggf. aufgehellt; utils/theme.js
 //     pillTextColor)

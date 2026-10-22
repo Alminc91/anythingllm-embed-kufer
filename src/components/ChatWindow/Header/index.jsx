@@ -108,21 +108,24 @@ export default function ChatWindowHeader({
     const iconStyle = settings.iconStyle || "rounded";
     const hasHeaderBg = !!settings.headerBgColor;
 
-    // Base style. border-box: ein Rand (Stile border, border-dark, glass)
-    // zählt in die 44 px; im Shadow Root gilt sonst content-box, und der
-    // Rahmen wäre 46 bzw. 48 px hoch (kompakter Kopf 58 bis 61 statt 57 px,
-    // Fixliste 7.22-rc18 W64)
+    // Base style. Kompakt border-box: ein Rand (Stile border, border-dark,
+    // glass) zählt in die 44 px; im Shadow Root gilt sonst content-box, und
+    // der Rahmen wäre 46 bzw. 48 px hoch (kompakter Kopf 58 bis 61 statt
+    // 57 px, Fixliste 7.22-rc18 W64). Im normalen Kopf bleibt content-box
+    // wie im abgenommenen Stand rc14: das 40-px-Logo behält seinen Abstand
+    // zum Rand (Fixliste 7.22-rc20 E34, W84).
+    const boxSizing = compact ? { boxSizing: "border-box" } : {};
     const baseStyle = {
       width: "44px",
       height: "44px",
-      boxSizing: "border-box",
+      ...boxSizing,
     };
 
     // Pill style is wider
     const pillStyle = {
       width: "52px",
       height: "40px",
-      boxSizing: "border-box",
+      ...boxSizing,
     };
 
     if (iconStyle === "none" || !hasHeaderBg) {

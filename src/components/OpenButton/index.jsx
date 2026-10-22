@@ -156,7 +156,8 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       <button
         style={{
           backgroundColor: `var(--allmi-accent, ${settings.buttonColor})`,
-          // Icon in der Schrift auf der Kundenfarbe (--allm-on-accent)
+          // Icon in der Schrift auf der Kundenfarbe aus dem Design Center
+          // (--allmi-on-accent, Gruppe A)
           color: ON_ACCENT_TEXT,
           ...(settings.buttonOutline === "white" && {
             border: "2px solid rgba(255, 255, 255, 0.8)",

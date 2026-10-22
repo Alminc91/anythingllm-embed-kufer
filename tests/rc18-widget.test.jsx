@@ -12,7 +12,8 @@ import tailwindConfig from "../tailwind.config.js";
 // W62/E25 feste Farben des KI-Hinweises und der Datenschutz-Blase direkt am
 //   Element, Gruppe A auf jedem Element (gegen @property der Seite; der
 //   Browser-Beleg steht in tests/visual/rc18_farben.py).
-// W64 Logo-Rahmen mit Rand im kompakten Kopf: border-box, 57 px.
+// W64 Logo-Rahmen mit Rand im kompakten Kopf: border-box, 57 px (seit
+//   Fixliste 7.22-rc20 E34 nur kompakt, normal content-box wie rc14).
 // N17 CSS-weite Schlüsselwörter in cssValue abgelehnt.
 // C18 eine Regel für FIXED_STANDARDS und INLINE_STANDARDS.
 // E29 historyEnabled bleibt vom Server bestimmt.
@@ -347,7 +348,7 @@ function titleHeight(className, contentPx) {
 
 describe("W64: Logo-Rahmen mit Rand im kompakten Kopf", () => {
   for (const iconStyle of ["border", "border-dark", "glass", "pill"])
-    it(`Icon-Stil ${iconStyle}: Rahmen border-box, kompakt 56 px (mit Linie 57), sonst 76 px`, async () => {
+    it(`Icon-Stil ${iconStyle}: kompakt Rahmen border-box und 56 px (mit Linie 57), sonst content-box und 76 px`, async () => {
       const s = await load({ iconStyle, headerBgColor: "#8B1A1A" });
       expect(s.iconStyle).toBe(iconStyle);
       for (const [compact, soll] of [
@@ -362,7 +363,10 @@ describe("W64: Logo-Rahmen mit Rand im kompakten Kopf", () => {
         );
         const header = $("#anything-llm-header");
         const frame = header.firstElementChild.firstElementChild;
-        expect(frame.style.boxSizing, `compact=${compact}`).toBe("border-box");
+        // E34 (Fixliste 7.22-rc20): border-box nur im kompakten Kopf
+        expect(frame.style.boxSizing, `compact=${compact}`).toBe(
+          compact ? "border-box" : "",
+        );
         expect(
           titleHeight(
             header.firstElementChild.className,

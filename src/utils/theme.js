@@ -154,6 +154,21 @@ export function cssValue(value, fallback = null) {
   return v;
 }
 
+// Werte der dc-Variablen (Gruppe A): nur Farben, die nichts von der Seite
+// holen. Erlaubt sind Farbcodes, die parseColor lesen kann (#rgb, #rrggbb,
+// #rrggbbaa, rgb()/rgba(); so prüft auch das Design Center), und Farbnamen
+// aus Buchstaben außer currentcolor. var(), env(), attr() und currentcolor
+// holten sonst einen Wert der Seite (`--allmi-accent: var(--allm-accent)`),
+// sie ergeben den Standard (Fixliste 7.22-rc20 W80).
+const NAMED_COLOR = /^[a-z]+$/i;
+export function dcColor(value, fallback = null) {
+  const v = cssValue(value);
+  if (v === null) return fallback;
+  if (parseColor(v)) return v;
+  if (NAMED_COLOR.test(v) && v.toLowerCase() !== "currentcolor") return v;
+  return fallback;
+}
+
 // --- Schrift auf der Kundenfarbe (KIE-565 Nachtrag, Punkt 2 und 4) ---
 // userTextColor ist die Wahl im Design Center (Weiß oder Schwarz; der Server
 // liefert Schwarz als #222628). Sie gilt wie gewählt für die Nutzer-
@@ -165,17 +180,17 @@ export function cssValue(value, fallback = null) {
 // nicht mehr (Gruppe A, Fixliste 7.22-rc17 E23).
 export function userTextColorFor(settings = {}) {
   return (
-    cssValue(settings.userTextColor) ||
+    dcColor(settings.userTextColor) ||
     recommendedTextColor(
-      cssValue(settings.userBgColor) ||
-        cssValue(settings.buttonColor, DEFAULTS.userBg),
+      dcColor(settings.userBgColor) ||
+        dcColor(settings.buttonColor, DEFAULTS.userBg),
     )
   );
 }
 export function onAccentTextColor(settings = {}) {
   return (
-    cssValue(settings.userTextColor) ||
-    recommendedTextColor(cssValue(settings.buttonColor, DEFAULTS.accent))
+    dcColor(settings.userTextColor) ||
+    recommendedTextColor(dcColor(settings.buttonColor, DEFAULTS.accent))
   );
 }
 
@@ -187,7 +202,7 @@ export function onAccentTextColor(settings = {}) {
 // (Farbname): hell der Akzent, dunkel der Text des dunklen Satzes (bisher).
 export const PILL_BG_LIGHT = "#FFFFFF";
 export function pillTextColor(settings = {}, mode = "light") {
-  const accent = cssValue(settings.buttonColor, DEFAULTS.accent);
+  const accent = dcColor(settings.buttonColor, DEFAULTS.accent);
   const backgrounds =
     mode === "dark" ? [DARK.bg, DARK.surface] : [PILL_BG_LIGHT];
   const text = accessibleTextColor(accent, backgrounds);
@@ -222,14 +237,14 @@ export const THEME_VARIABLES = [
   {
     name: "accent",
     dc: true,
-    light: (s) => cssValue(s.buttonColor, DEFAULTS.accent),
-    dark: (s) => cssValue(s.buttonColor, DEFAULTS.accent),
+    light: (s) => dcColor(s.buttonColor, DEFAULTS.accent),
+    dark: (s) => dcColor(s.buttonColor, DEFAULTS.accent),
   },
   {
     name: "user-bg",
     dc: true,
-    light: (s) => cssValue(s.userBgColor, DEFAULTS.userBg),
-    dark: (s) => cssValue(s.userBgColor, DEFAULTS.userBg),
+    light: (s) => dcColor(s.userBgColor, DEFAULTS.userBg),
+    dark: (s) => dcColor(s.userBgColor, DEFAULTS.userBg),
   },
   {
     name: "user-text",
@@ -258,7 +273,7 @@ export const THEME_VARIABLES = [
   {
     name: "link",
     dc: true,
-    light: (s) => cssValue(s.linkColor, DEFAULTS.link),
+    light: (s) => dcColor(s.linkColor, DEFAULTS.link),
     dark: DARK.link,
   },
   // Header/Eingabe
@@ -351,8 +366,9 @@ export const THEME_VARIABLES = [
   { name: "bar-text", bar: "text" },
   { name: "bar-border", bar: "border" },
   // Pillen im Panel, Startvorschläge und Folgefragen gleich (KIE-565
-  // Nachtrag, Punkt 4): Rand in der Akzentfarbe aus dem Design Center
-  // (--allmi-accent, Gruppe A)
+  // Nachtrag, Punkt 4): Rand im Standard in der Akzentfarbe aus dem Design
+  // Center (--allmi-accent); per --allm-pill-border verfeinerbar, Gruppe B
+  // (Fixliste 7.22-rc20 C31)
   { name: "pill-border", chain: "accent", light: null, dark: null },
   // Fläche: hell Weiß (fest, damit der Kontrast des Texts sicher ist, auch
   // bei dunkler Leiste im hellen Fenster), dunkel im Panelton (transparent
@@ -360,7 +376,8 @@ export const THEME_VARIABLES = [
   { name: "pill-bg", light: PILL_BG_LIGHT, dark: "transparent" },
   // Text in Kundenfarbe mit mindestens 4,5:1 zur Fläche (pillTextColor: hell
   // ggf. abgedunkelt, dunkel ggf. aufgehellt); Hover/Fokus füllt die Pille
-  // in Kundenfarbe, Text dann --allm-on-accent (main.jsx)
+  // in Kundenfarbe, Text dann die Schrift auf der Kundenfarbe aus dem Design
+  // Center (--allmi-on-accent, Gruppe A; main.jsx)
   {
     name: "pill-accent-text",
     light: (s) => pillTextColor(s, "light"),
