@@ -30,6 +30,8 @@ Kunden brauchen nur den Einbau-Code aus dem Reiter Einbau im Design Center:
 
 Für „In der Seite“ (im Design Center gewählt) zusätzlich der Platzhalter `<div id="kufer-assistent"></div>` an der Stelle im Inhalt. Englischsprachige Seite: `data-language="en"` ergänzen.
 
+Signal für Seiten-CSS: Solange die Box aufgeklappt ist (ab 768 px), trägt der Platzhalter `data-allm-expanded="true"`, z. B. für `#kufer-assistent[data-allm-expanded] { … }`. Im mobilen Vollbild (unter 768 px) setzt das Widget das Signal nicht, weil das Vollbild über der Seite liegt und die Fläche darunter unverändert bleibt (Fixliste 7.22-rc20 E36). Details README.
+
 ### Pflicht-Attribute
 
 | Attribut | Beschreibung |
@@ -92,7 +94,7 @@ Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite)
 | `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
 | `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
 | `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
-| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); `text` wirkt nur bei abgeschaltetem Datenschutz-Hinweis, sonst gilt `bubble` (E26) |
+| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); `text` wirkt nur bei abgeschaltetem Datenschutz-Hinweis, sonst gilt `bubble` (E26, mit Warnzeile) |
 | `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
 | `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
 | `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |
