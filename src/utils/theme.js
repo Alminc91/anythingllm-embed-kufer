@@ -154,20 +154,37 @@ export function cssValue(value, fallback = null) {
   return v;
 }
 
-// Werte der dc-Variablen (Gruppe A): eine Regel für gültige Farben, die von
-// parseColor (utils/contrast.js; wortgleich im Design Center, das mit
-// accentColorError genau diese Werte annimmt). Gültig sind #rgb, #rrggbb,
-// #rrggbbaa und rgb()/rgba() mit ganzen Zahlen bis 255; die Kontrastrechnung
-// kann jeden angenommenen Wert lesen (Schrift auf der Akzentfarbe,
-// Pillenschrift). Alles andere ergibt den Standard: hsl(), Farbnamen,
-// Prozent, #rgba, Systemfarben (Canvas, LinkText …) sowie var(), env(),
-// attr() und currentcolor, die einen Wert der Seite holten
+// Werte der dc-Variablen (Gruppe A): eine Regel für gültige Farben, wie im
+// Design Center (accentColorError): parseColor (utils/contrast.js,
+// wortgleich im Design Center) liest den Wert, und er ist deckend. Gültig
+// sind #rgb, #rrggbb, #rrggbbaa und rgb()/rgba() mit ganzen Zahlen bis 255;
+// die Kontrastrechnung kann jeden angenommenen Wert lesen (Schrift auf der
+// Akzentfarbe, Pillenschrift). Alles andere ergibt den Standard: Deckkraft
+// unter 1 (rgba() mit Alpha unter 1, #rrggbbaa unter ff; die Seite zeigte
+// sonst eine hellere Farbe, als gerechnet), hsl(), Farbnamen, Prozent,
+// #rgba, Systemfarben (Canvas, LinkText …) sowie var(), env(), attr() und
+// currentcolor, die einen Wert der Seite holten
 // (`--allmi-accent: var(--allm-accent)`). Fixliste 7.22-rc20 W80, rc22 E41
-// (ersetzt die Erweiterung aus rc21 W90). Zurück kommt der gekürzte Wert,
-// den parseColor gelesen hat; er enthält nur Zeichen einer Farbangabe. Die
-// Deckkraft prüft nur das Design Center (Alpha unter 1 lehnt es ab).
+// mit Ergänzung (a) (ersetzt die Erweiterung aus rc21 W90). Zurück kommt
+// der gekürzte Wert, den parseColor gelesen hat; er enthält nur Zeichen
+// einer Farbangabe. Rückweg Deckkraft: die Bedingung colorAlpha < 1
+// streichen.
 export function dcColor(value, fallback = null) {
-  return parseColor(value) ? value.trim() : fallback;
+  if (!parseColor(value)) return fallback;
+  const color = value.trim();
+  return colorAlpha(color) < 1 ? fallback : color;
+}
+
+// Deckkraft eines Werts, den parseColor gelesen hat (gekürzt): Alpha aus
+// #rrggbbaa oder der vierte Kanal von rgb()/rgba() (Zahl oder Prozent),
+// ohne Angabe 1. Wie colorAlpha im Design Center (widgetKeys.js); nur der
+// vierte Kanal zählt, „rgb(0, 0, 0)“ ist deckend.
+function colorAlpha(color) {
+  if (color.startsWith("#"))
+    return color.length === 9 ? parseInt(color.slice(7), 16) / 255 : 1;
+  const alpha = color.match(/[\d.]+%?/g)[3];
+  if (alpha === undefined) return 1;
+  return parseFloat(alpha) / (alpha.endsWith("%") ? 100 : 1);
 }
 
 // --- Schrift auf der Kundenfarbe (KIE-565 Nachtrag, Punkt 2 und 4) ---

@@ -150,7 +150,7 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       ).toBe("#01a5a9");
     });
 
-  it("über die Antwort des Servers: var(--allm-accent) als Akzentfarbe wirkt nicht, Farbcodes bleiben, Farbnamen ergeben den Standard (E41)", async () => {
+  it("über die Antwort des Servers: var(--allm-accent) als Akzentfarbe wirkt nicht, Farbcodes bleiben, Farbnamen und Deckkraft unter 1 ergeben den Standard (E41)", async () => {
     const s = await load(
       {},
       {
@@ -172,14 +172,15 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       "#abc",
       "#0b5f8aff",
       "rgb(1, 2, 3)",
-      "rgba(1, 2, 3, 0.5)",
     ]) {
       const css = theme.buildThemeCss({ buttonColor: value }, "light");
       expect(css, value).toContain(`--allmi-accent: ${value} !important;`);
     }
     // Bewusste Änderung E41 (Fixliste 7.22-rc22): Farbnamen ergeben den
-    // Standard (rc20 bis rc21: blieben)
-    for (const value of ["teal", "RebeccaPurple"]) {
+    // Standard (rc20 bis rc21: blieben); mit Ergänzung (a) ebenso Farben mit
+    // Deckkraft unter 1 (rc20 bis rc22: blieben, das Design Center lehnte
+    // sie ab)
+    for (const value of ["teal", "RebeccaPurple", "rgba(1, 2, 3, 0.5)"]) {
       const css = theme.buildThemeCss({ buttonColor: value }, "light");
       expect(css, value).toContain("--allmi-accent: #01a5a9 !important;");
     }
