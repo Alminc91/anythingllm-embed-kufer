@@ -61,7 +61,7 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-greeting`, `data-greeting-bubble-text` | Inhalt: Begrüßungstext | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` |
 | `data-privacy-notice` | Inhalt: Schalter Datenschutz-Hinweis | an (eigene Blase unter der Begrüßung) |
 | `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link) | `Datenschutz`, Standardtext der Sprache, kein Link |
-| `data-default-messages` | Inhalt: Startvorschläge | Standard der Sprache vom Server (E10 neu: gespeichert, auch leer, vor Standard) |
+| `data-default-messages` | Inhalt: Startvorschläge | keine: der Standard vom Server ist leer (E42, 7.22-rc23); es gilt nur eine im Design Center gespeicherte Liste (E10 neu: gespeichert, auch leer, vor Standard) |
 | `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
 | `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence`, `data-welcome-bubbles-desktop`, `data-welcome-bubbles-mobile` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
 | `data-support-email` | Inhalt: Support-E-Mail | `info@kufer.de` |

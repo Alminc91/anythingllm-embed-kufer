@@ -53,11 +53,10 @@ const BASE = {
 };
 // Antwort eines Servers ab 7.22 ohne gespeicherte Werte: feste Standards
 // (Fork server/utils/chats/embedStandards.js applyEmbedStandards) und die
-// Standard-Startvorschläge mit Kennzeichen
-const STANDARD_SUGGESTIONS = [
-  "Ich suche einen Deutschkurs.",
-  "Gibt es Excel-Kurse am Abend?",
-];
+// Standard-Startvorschläge mit Kennzeichen. Bewusste Änderung E42
+// (7.22-rc23): der Standard ist leer, der Fork liefert [] mit Kennzeichen
+// (bis 7.22-rc22 zwei Beispiele); auch dann wirkt data-default-messages nicht
+const STANDARD_SUGGESTIONS = [];
 const SERVER_STANDARDS = {
   greetingStyle: "bubble",
   suggestionStyle: "pills",

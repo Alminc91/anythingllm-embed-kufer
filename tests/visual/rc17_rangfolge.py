@@ -33,6 +33,9 @@ SITE = "https://kunde.test/"
 API = "https://praesentation.ki.kufer.de/api/embed"
 EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
 NOTICE_DE = "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten."
+# Liste eines Servers mit defaultMessagesStandard: die Beispiele bis 7.22-rc22.
+# Seit E42 (7.22-rc23) liefert der Fork [] (tests/e42-startvorschlaege.test.jsx);
+# die Probe zeigt, dass das Widget eine Serverliste so zeigt, wie sie kommt.
 STANDARD_SUGGESTIONS = ["Ich suche einen Deutschkurs.", "Gibt es Excel-Kurse am Abend?"]
 # Antwort eines Servers ab 7.22 (feste Standards wie embedStandards.js)
 SERVER = {
