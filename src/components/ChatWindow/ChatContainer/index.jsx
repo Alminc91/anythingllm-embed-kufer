@@ -1,3 +1,4 @@
+import { isImeEscape } from "@/utils/escape";
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
@@ -6,6 +7,7 @@ import ChatService from "@/models/chatService";
 import PrivacyNotice from "../PrivacyNotice";
 import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
+import { AI_NOTICE_BG, AI_NOTICE_ID, AI_NOTICE_TEXT } from "@/utils/theme";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 // id des Shadow-Hosts jedes Widgets (main.jsx)
 const WIDGET_HOST_ID = "anythingllm-embed-widget";
@@ -70,7 +72,7 @@ export default function ChatContainer({
     if (!escapeCloses) return;
     const doc = rootRef.current?.ownerDocument || document;
     const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
       e.preventDefault();
       onCloseRef.current?.();
     };
@@ -320,9 +322,7 @@ export default function ChatContainer({
           buttonDisabled={loadingResponse || privacyLocked}
           suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
-        {settings?.disclaimer === "footer" && (
-          <AiDisclaimer settings={settings} />
-        )}
+        <AiDisclaimer settings={settings} />
       </div>
     </div>
   );
@@ -355,26 +355,48 @@ export function appendDraft(current, draft) {
   return `${current.replace(/\s+$/, "")} ${draft}`;
 }
 
-// Fester KI-Hinweis unter dem Eingabefeld (disclaimer "footer"), in allen
-// Modi. Text: disclaimerText, sonst der Standard der Panel-Texte
-// (utils/layout.js panelTexts: "en" englisch, sonst deutsch — dieselbe Regel
-// wie Begrüßungsblase und Datenschutz-Hinweis). Nur Text, nicht anklickbar.
+// Fester KI-Hinweis unter dem Eingabefeld, in allen Modi und immer (Design
+// Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
+// disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
+// Farben fest je Farbschema (E24, Fixliste 7.22-rc17, utils/theme.js
+// AI_NOTICE_COLORS): Schrift und eine eigene Fläche hinter dem Satz, damit
+// keine CSS-Variable der Seite (--allm-text-muted, --allm-surface, auch per
+// @property registrierte --allmi-*) ihn unsichtbar oder unlesbar macht. Die
+// festen Farben gelten als Regel direkt am Element (Theme-Stylesheet,
+// buildThemeCss, Fixliste 7.22-rc18 W62); die Werte im style gelten nur
+// ohne dieses Stylesheet.
+// Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
+// sonst deutsch; Wortlaut Fixliste 7.22-rc8 R1). Eine dezente Zeile, nur
+// Text, nicht anklickbar. Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22):
+// kein Umbruch. In schmalen Fenstern (Chatfenster bei 1280 px: 320 px breit,
+// 316 px Platz bei 2 px Rand; der Satz braucht bei 11 px etwa 345 px, bei
+// 10 px etwa 314 px in DejaVu Sans, in Segoe UI/Arial etwa 280 px) wird die
+// Schrift bis 10 px kleiner (Containerabfrage, .allm-ai-disclaimer in
+// main.jsx); reicht auch das nicht (noch breitere Schrift), endet die Zeile
+// mit „…“ (voller Text im title und für Screenreader). Seitenrand 2 px
+// (rc8, vorher 8 px): die Zeile ist zentriert, der Rand zählt nur, wenn der
+// Satz das Fenster fast ausfüllt (gemessen: tests/visual/disclaimer_measure.py).
 function AiDisclaimer({ settings }) {
-  const text = settings.disclaimerText || panelTexts(settings).aiDisclaimer;
+  const text = panelTexts(settings || {}).aiDisclaimer;
   return (
-    <p
-      id="anything-llm-ai-disclaimer"
-      role="note"
-      className="allm-font-sans"
-      style={{
-        margin: "6px 12px 0",
-        fontSize: "11.5px",
-        lineHeight: 1.4,
-        textAlign: "center",
-        color: "var(--allmi-text-muted, #6b7280)",
-      }}
-    >
-      {text}
-    </p>
+    <div className="allm-ai-disclaimer-box">
+      <p
+        id={AI_NOTICE_ID}
+        role="note"
+        title={text}
+        className="allm-ai-disclaimer allm-font-sans"
+        style={{
+          margin: "4px 2px 0",
+          lineHeight: 1.4,
+          textAlign: "center",
+          color: AI_NOTICE_TEXT,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        <span style={{ backgroundColor: AI_NOTICE_BG }}>{text}</span>
+      </p>
+    </div>
   );
 }

@@ -219,7 +219,9 @@ async function mount(element) {
 }
 
 async function speak(el) {
-  const btns = [...el.querySelectorAll('button[aria-label="Speak message"]')];
+  const btns = [
+    ...el.querySelectorAll('button[aria-label="Antwort vorlesen"]'),
+  ];
   const btn = btns[btns.length - 1];
   await act(async () => btn.click());
   return chatService.textToSpeechStream.mock.calls.at(-1)[1];

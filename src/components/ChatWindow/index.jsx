@@ -10,8 +10,10 @@ import {
 import ConversationHistory from "./ConversationHistory";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
+import { panelTexts } from "@/utils/layout";
+import { useEscapeLayer } from "@/utils/escape";
 import useEmbedMode from "@/hooks/useEmbedMode";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function ChatWindow({
   closeChat,
@@ -39,7 +41,26 @@ export default function ChatWindow({
   const historyEnabled =
     settings?.historyEnabled !== false &&
     String(settings?.historyEnabled) !== "false";
-  const openHistory = historyEnabled ? () => setShowHistory(true) : null;
+  // Öffner der Ansicht (⋮ in der Titelleiste, von ChatWindowHeader
+  // übergeben): bekommt nach Escape den Fokus zurück (Fixliste 7.22-rc13 W03).
+  // Die Ref des ⋮ liegt hier und nicht im Kopf: Endet das Laden des Verlaufs,
+  // während „Frühere Chats“ offen ist, hängt React den Kopf neu ein (anderer
+  // Wurzelknoten unten); die Ref zeigt dann auf den neuen ⋮, ein gespeicherter
+  // Knoten wäre vom Dokument getrennt (Fixliste 7.22-rc16 W42). Der Öffner
+  // wird deshalb erst beim Schließen aufgelöst.
+  const optionsButtonRef = useRef(null);
+  const historyOpenerRef = useRef(null);
+  const openHistory = historyEnabled
+    ? (opener = null) => {
+        historyOpenerRef.current = opener;
+        setShowHistory(true);
+      }
+    : null;
+  // Escape in „Frühere Chats“: zurück zum Chat statt das Fenster zu schließen
+  // (die Ansicht deckt das ganze Fenster ab und nimmt jedes Escape)
+  useEscapeLayer(showHistory, () => setShowHistory(false), {
+    returnFocus: () => resolveOpener(historyOpenerRef.current),
+  });
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
@@ -98,6 +119,7 @@ export default function ChatWindow({
           setChatHistory={setChatHistory}
           compact={compactHeader}
           openHistory={openHistory}
+          optionsButtonRef={optionsButtonRef}
         />
         <ChatHistoryLoading />
         <div className="allm-pt-2 allm-pb-3 allm-h-fit">
@@ -123,6 +145,7 @@ export default function ChatWindow({
             setChatHistory={setChatHistory}
             compact={compactHeader}
             openHistory={openHistory}
+            optionsButtonRef={optionsButtonRef}
           />
         )}
         <div className="allm-flex-grow allm-overflow-y-auto">
@@ -148,6 +171,14 @@ export default function ChatWindow({
   );
 }
 
+// Öffner als Ref ({ current }) oder Element; die Ref wird erst hier, beim
+// Schließen, gelesen (W42)
+function resolveOpener(opener) {
+  if (opener && typeof opener === "object" && "current" in opener)
+    return opener.current;
+  return opener;
+}
+
 // Enables us to safely markdown and sanitize all responses without risk of injection
 // but still be able to attach a handler to copy code snippets on all elements
 // that are code snippets.
@@ -167,7 +198,8 @@ function copyCodeSnippet(uuid) {
 
   target.classList.add("allm-text-green-500");
   const originalText = target.innerHTML;
-  target.innerText = "Copied!";
+  // Sprache des Widgets („Kopiert!“ bzw. „Copied!“)
+  target.innerText = panelTexts(embedderSettings.settings).copied;
   target.setAttribute("disabled", true);
 
   setTimeout(() => {

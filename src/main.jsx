@@ -4,7 +4,11 @@ import App from "./App.jsx";
 import "./index.css";
 import { parseStylesSrc } from "./utils/constants.js";
 import { initI18n } from "./i18n.js";
-import { ON_ACCENT_TEXT, THEME_STYLE_ID } from "./utils/theme.js";
+import {
+  ON_ACCENT_TEXT,
+  THEME_STYLE_ID,
+  userTextColorFor,
+} from "./utils/theme.js";
 
 // CSS Strings für Shadow DOM (von Head.jsx übernommen)
 const hljsCss = `
@@ -29,10 +33,13 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
 // Teaser-Platzhalter (.allm-course-teaser-pending, Karten oben im Stream):
 // Opacity 0,45 <-> 0,9 in 1,6 s, ruhig (0,7) bei prefers-reduced-motion.
 // Zeilen-Karten (.allm-course-card-row) nutzen Hover/Fokus der Rasterkarten.
-// Folgefragen-Pillen (.allm-pill-accent, Pill-Variante "accent"): Hover und
-// Tastaturfokus füllen im Akzent, Text ON_ACCENT_TEXT (Farben stehen inline ->
-// !important), Übergang --allm-transition; Fokusring --allm-focus-ring,
-// sonst 2px Akzent (!important gegen die allgemeine Fokus-Regel mit ID).
+// Pillen im Panel (.allm-pill-accent, Startvorschläge und Folgefragen, eine
+// Komponente Pill): Hover und Tastaturfokus füllen in Kundenfarbe, Text
+// ON_ACCENT_TEXT = --allmi-on-accent (Schrift auf der Kundenfarbe aus dem
+// Design Center, Gruppe A; Farben stehen inline -> !important), Übergang
+// --allm-transition; Fokusring
+// --allm-focus-ring, sonst 2px Akzent (!important gegen die allgemeine
+// Fokus-Regel mit ID).
 // Kommentare im CSS-String landen im Bundle, deshalb hier.
 const customCss = `
   /**
@@ -157,8 +164,9 @@ const customCss = `
     font-family: inherit !important;
   }
 
-  /* Links in Assistenten-Antworten (historisch + Streaming): --allm-link
-     (Standard = linkColor). Ersetzt die frühere Link-Farb-Injektion. */
+  /* Links in Assistenten-Antworten (historisch + Streaming): Linkfarbe aus
+     dem Design Center (--allmi-link, Gruppe A). Ersetzt die frühere
+     Link-Farb-Injektion. */
   .allm-anything-llm-assistant-message a,
   .allm-reply a {
     color: var(--allmi-link, #01a5a9) !important;
@@ -204,25 +212,59 @@ const customCss = `
       outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent));
     }
   }
-  #anything-llm-inline-send:hover {
-    opacity: 0.9;
+  /* Hover des Absende-Buttons nur mit echtem Zeiger (Restpunkt rc7 Nr. 3):
+     auf Touch-Geräten bliebe er nach dem Tippen abgedunkelt */
+  @media (hover: hover) {
+    #anything-llm-inline-send:hover {
+      opacity: 0.9;
+    }
   }
   .allm-inline-chip {
     transition: border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
   }
-  .allm-inline-chip:hover {
-    border-color: var(--allmi-accent);
+  @media (hover: hover) {
+    .allm-inline-chip:hover {
+      border-color: var(--allmi-accent);
+    }
   }
   .allm-inline-chip.allm-pill-accent {
     transition: background-color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
       color var(--allmi-transition, 200ms) var(--allmi-easing, ease),
       border-color var(--allmi-transition, 200ms) var(--allmi-easing, ease);
   }
-  .allm-pill-accent:hover,
+  /* Füllung beim Hover nur mit echtem Zeiger: auf Touch-Geräten bliebe der
+     Hover nach dem Tippen kleben (Fixliste 7.22-rc7 Nr. 34) */
+  @media (hover: hover) {
+    .allm-pill-accent:hover {
+      background-color: var(--allmi-accent, #01a5a9) !important;
+      border-color: var(--allmi-accent, #01a5a9) !important;
+      color: ${ON_ACCENT_TEXT} !important;
+    }
+  }
   .allm-pill-accent:focus-visible {
     background-color: var(--allmi-accent, #01a5a9) !important;
     border-color: var(--allmi-accent, #01a5a9) !important;
     color: ${ON_ACCENT_TEXT} !important;
+  }
+  /* KI-Hinweis unter der Eingabe: eine Zeile, 11 px; in schmalen Fenstern
+     bis 10 px kleiner, damit der ganze Satz passt (Fixliste 7.22-rc7 Nr. 22).
+     Teiler 34 = Breite des Satzes je px Schriftgröße (Fixliste 7.22-rc8 R1,
+     gemessen: deutsch 345 px bei 11 px in DejaVu Sans, Inline mit breiter
+     Seitenschrift bis 356 px), 4 px = Seitenränder (ChatContainer
+     AiDisclaimer). Ohne Containerabfragen gilt die erste Angabe (11 px). */
+  .allm-ai-disclaimer-box {
+    container-type: inline-size;
+  }
+  .allm-ai-disclaimer {
+    font-size: 11px;
+    font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px);
+  }
+  /* Schließen-X der Willkommensblasen: ohne Hover-Zeiger (Touch) immer
+     sichtbar, sonst wie bisher erst beim Hover über die Blasen */
+  @media (hover: none) {
+    .allm-welcome-close {
+      opacity: 1 !important;
+    }
   }
   .allm-pill-accent:focus-visible {
     outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;
@@ -404,7 +446,7 @@ export const embedderSettings = {
   themeStyle, // <style> mit den CSS-Variablen (utils/theme.js)
   USER_STYLES: {
     msgBg: scriptSettings?.userBgColor ?? "#3DBEF5",
-    msgText: scriptSettings?.userTextColor ?? "#FFFFFF",
+    msgText: userTextColorFor(scriptSettings || {}),
     // Rundung/Textfarbe kommen aus den CSS-Variablen (bubbleRadius in utils/theme.js)
     base: `allm-mx-[20px]`,
   },

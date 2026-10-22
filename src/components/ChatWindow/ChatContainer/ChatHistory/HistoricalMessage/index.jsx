@@ -30,7 +30,7 @@ import {
   courseCardsLayout,
   HTML_TAG_RX,
   replySpeechText,
-  selectCourseCards,
+  selectBelowCourseCards,
   SPEECH_STRIP_RX,
   teaserMap,
 } from "@/utils/courseCards";
@@ -39,7 +39,11 @@ import {
   BUBBLE_SHADOW,
   MESSAGE_FONT_SIZE,
   MESSAGE_META_CLASS,
+  LOGO_RADIUS,
+  ON_ACCENT_TEXT,
 } from "@/utils/theme";
+import { uiTexts } from "@/utils/layout";
+import { useEscapeLayer } from "@/utils/escape";
 
 const ThoughtBubble = ({ thought }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -224,6 +228,7 @@ const TTSButton = ({ text, size = 14 }) => {
   // No auto-play needed - streaming handles playback directly
 
   if (!ttsAvailable || !text) return null;
+  const ui = uiTexts(embedderSettings.settings);
 
   return (
     <div className="allm-flex allm-justify-end allm-mt-1">
@@ -231,8 +236,8 @@ const TTSButton = ({ text, size = 14 }) => {
         onClick={handleClick}
         disabled={isLoading}
         className="allm-bg-transparent allm-border-none allm-cursor-pointer allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] disabled:allm-opacity-50 allm-p-0"
-        aria-label={isPlaying ? "Stop speaking" : "Speak message"}
-        title={isPlaying ? "Stop" : "Speak"}
+        aria-label={isPlaying ? ui.stopSpeaking : ui.speak}
+        title={isPlaying ? ui.stopTitle : ui.speakTitle}
       >
         {isLoading ? (
           <CircleNotch size={size} className="allm-animate-spin" />
@@ -265,6 +270,10 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const boxRef = useRef(null);
+  // Daumen (Öffner des Kommentarfelds): Bereich der Escape-Ebene und
+  // Fokusziel nach Escape (Fixliste 7.22-rc13 W02, W03)
+  const thumbsRef = useRef(null);
+  const downRef = useRef(null);
 
   // Beim Aufklappen die GANZE Box in den sichtbaren Bereich scrollen — sonst
   // verschwindet sie bei der letzten Antwort hinter dem Eingabefeld. Sauber
@@ -348,6 +357,17 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
     setReason(null);
     setComment("");
   };
+  // Escape schließt nur das Kommentarfeld (wie „Überspringen“), nicht das
+  // ganze Fenster; der Entwurf im Eingabefeld bleibt (utils/escape.js). Nur
+  // ein Escape aus dem Kommentarfeld, von den Daumen oder ohne Fokus: Aus dem
+  // Haupt-Eingabefeld schließt Escape weiter das Fenster, auch wenn ein
+  // Kommentarfeld weiter oben im Verlauf offen ist (W02). Danach steht der
+  // Fokus auf „Daumen runter“ (W03).
+  useEscapeLayer(showComment, dismissComment, {
+    within: () => [boxRef.current, thumbsRef.current],
+    returnFocus: () => downRef.current,
+  });
+  const ui = uiTexts(embedderSettings.settings);
 
   const btnBase =
     "allm-bg-transparent allm-border-none allm-cursor-pointer allm-p-1.5 allm-flex allm-items-center allm-transition-colors disabled:allm-opacity-60";
@@ -355,7 +375,10 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
 
   return (
     <>
-      <div className="allm-flex allm-items-center allm-gap-x-1.5">
+      <div
+        ref={thumbsRef}
+        className="allm-flex allm-items-center allm-gap-x-1.5"
+      >
         <span
           className="allm-text-[color:var(--allmi-text-muted,#d1d5db)] allm-select-none"
           aria-hidden="true"
@@ -366,8 +389,8 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           type="button"
           onClick={() => submit(true)}
           disabled={busy}
-          aria-label="Antwort war hilfreich"
-          title="Hilfreich"
+          aria-label={ui.helpful}
+          title={ui.helpfulTitle}
           className={`${btnBase} ${
             score === true
               ? "allm-text-green-600"
@@ -377,11 +400,12 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
           <ThumbsUp size={16} weight={score === true ? "fill" : "regular"} />
         </button>
         <button
+          ref={downRef}
           type="button"
           onClick={() => submit(false)}
           disabled={busy}
-          aria-label="Antwort war nicht hilfreich"
-          title="Nicht hilfreich"
+          aria-label={ui.notHelpful}
+          title={ui.notHelpfulTitle}
           className={`${btnBase} ${
             score === false
               ? "allm-text-red-600"
@@ -430,7 +454,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
                 rows={3}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Optional: kurz beschreiben – z. B. die richtige Antwort…"
+                placeholder="Optional: kurz beschreiben, z. B. die richtige Antwort …"
                 className="allm-box-border allm-w-full allm-resize-none allm-text-[13px] allm-px-2 allm-py-1.5 allm-rounded-md allm-border allm-border-gray-200 allm-bg-white allm-text-gray-700 allm-outline-none focus:allm-border-gray-300"
               />
               <div className="allm-flex allm-justify-end allm-items-center allm-gap-x-3 allm-mt-2">
@@ -445,8 +469,11 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
                   type="button"
                   onClick={sendComment}
                   disabled={sending}
-                  style={{ backgroundColor: `var(--allmi-accent, ${accent})` }}
-                  className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-text-white allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
+                  style={{
+                    backgroundColor: `var(--allmi-accent, ${accent})`,
+                    color: ON_ACCENT_TEXT,
+                  }}
+                  className="allm-border-none allm-cursor-pointer allm-text-[11px] allm-px-3 allm-py-1 allm-rounded-md disabled:allm-opacity-60"
                 >
                   {sending ? "Senden…" : "Senden"}
                 </button>
@@ -479,6 +506,9 @@ const HistoricalMessage = forwardRef(
       // Antwort fertig (chatId da) -> Fallback-Karten für Kursseiten ohne
       // Serverdaten
       courseCardsFinal = false,
+      // Karten unten (KIE-567): Anzahl der vom Server angekündigten Kurse
+      // (Marker) -> Auswahl wie bei Karten oben (selectBelowCourseCards)
+      courseCardsAnnounced = null,
       // Name steht schon im umgebenden Block (Kurskarten "above")
       nameInWrapper = false,
       error = false,
@@ -525,11 +555,11 @@ const HistoricalMessage = forwardRef(
         !showCards
           ? null
           : courseCardsSelection ||
-            selectCourseCards(
+            selectBelowCourseCards(
               responseContent,
               courseSources,
               { courseCards },
-              { fallback: courseCardsFinal },
+              { fallback: courseCardsFinal, announced: courseCardsAnnounced },
             ),
       [
         showCards,
@@ -538,6 +568,7 @@ const HistoricalMessage = forwardRef(
         courseSources,
         courseCards,
         courseCardsFinal,
+        courseCardsAnnounced,
       ],
     );
     // Teaser einmal je Antwort prüfen (Karten unten und Sprachausgabe)
@@ -577,8 +608,11 @@ const HistoricalMessage = forwardRef(
                   embedderSettings.settings.brandImageUrl ||
                   AnythingLLMIcon
                 }
-                alt="Anything LLM Icon"
+                // dekorativ: der Name steht als Text daneben bzw. darüber (Fixliste
+                // 7.22-rc13 W04, vorher fest englisch „Brand“/„Anything LLM Icon“)
+                alt=""
                 className="allm-w-9 allm-h-9 allm-object-contain"
+                style={{ borderRadius: LOGO_RADIUS }}
                 id="anything-llm-icon"
               />
               {/* TTS Button under avatar (icon-left position) */}

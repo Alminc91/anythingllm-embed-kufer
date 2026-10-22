@@ -1,23 +1,31 @@
-import useGetScriptAttributes from "@/hooks/useScriptAttributes";
+import useGetScriptAttributes, {
+  scriptAttributes,
+} from "@/hooks/useScriptAttributes";
 import useSessionId from "@/hooks/useSessionId";
 import useConversationId from "@/hooks/useConversationId";
 import useOpenChat from "@/hooks/useOpen";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
-import OpenButton from "@/components/OpenButton";
+import OpenButton, { phoneAtLoad } from "@/components/OpenButton";
 import ChatWindow from "./components/ChatWindow";
 import InlineChat from "@/components/InlineChat";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18next from "@/i18n";
 import ChatService from "@/models/chatService";
 import { embedderSettings, inlineTailwindStyles } from "@/main";
 import {
+  applyDisplayed,
   bubbleButtonStyle,
   bubbleWindowCss,
   findMountTarget,
   warnIfInlineInputIgnored,
   whenDomReady,
 } from "@/utils/layout";
+import {
+  closeEscapeLayerFor,
+  focusInPageField,
+  isImeEscape,
+} from "@/utils/escape";
 
 // Fensterfläche über CSS-Variablen (utils/theme.js); Fallback = bisherige
 // Werte (bg-white, border-gray-300, Schatten). Inline-Style statt Klasse, damit
@@ -31,6 +39,10 @@ const BUBBLE_WINDOW_STYLE = {
 };
 
 export default function App() {
+  // Gerät für die Willkommensblasen beim Laden der Seite festhalten, auch
+  // wenn der Chat offen startet (wiederhergestellter Offen-Zustand, Chat-
+  // Button erst nach dem Schließen sichtbar; Fixliste 7.22-rc13 W08)
+  useState(phoneAtLoad);
   const { isChatOpen, toggleOpenChat } = useOpenChat();
   const embedSettings = useGetScriptAttributes();
   const sessionId = useSessionId();
@@ -45,6 +57,26 @@ export default function App() {
   const [mountTarget, setMountTarget] = useState(undefined);
   const chatWindowRef = useRef(null);
   const isInline = !!mountTarget;
+  // Settings für die Komponenten, sobald die Darstellung feststeht (Fixliste
+  // 7.22-rc8 R4): displayMode = tatsächliche Darstellung (Inline nur mit
+  // Platzhalter, sonst Chatfenster; geht mit jeder Chat-Anfrage an den
+  // Server), courseCards = gespeicherter Wert vom Server, sonst der Standard
+  // der Darstellung (In der Seite Kurskarten, Chatfenster Nur Text).
+  // Vorher (mountTarget undefined) wird nichts gerendert.
+  const shownSettings = useMemo(
+    () =>
+      mountTarget === undefined
+        ? embedSettings
+        : applyDisplayed(embedSettings, isInline),
+    [embedSettings, mountTarget],
+  );
+  // Komponenten, die embedderSettings.settings direkt lesen, sehen dieselben
+  // Werte (wie useScriptAttributes nach dem Laden).
+  useEffect(() => {
+    if (mountTarget === undefined) return;
+    embedderSettings.settings.displayMode = shownSettings.displayMode;
+    embedderSettings.settings.courseCards = shownSettings.courseCards;
+  }, [shownSettings, mountTarget]);
   // Mobile Tastatur-Logik (visualViewport) — nur im Blasen-Modus; das Inline-
   // Vollbild-Overlay nutzt denselben Hook in InlineChat.
   const isKeyboardOpen = useMobileKeyboard(
@@ -93,11 +125,48 @@ export default function App() {
     };
   }, [embedSettings.loaded]);
 
-  // Blase (auch Inline ohne Platzhalter): inlineInput hat keine Wirkung ->
-  // eine Warnzeile, sobald die Darstellung feststeht.
+  // Blase: inlineInput hat keine Wirkung -> eine Warnzeile, sobald die
+  // Darstellung feststeht, aber nur bei einem Script-Attribut der Seite
+  // (data-inline-input), nicht beim festen Inline-Standard des Servers. Nicht
+  // bei Inline ohne Platzhalter: dort ist inlineInput Standard
+  // (INLINE_STANDARDS) und findMountTarget nennt den Grund für die Blase
+  // schon selbst.
   useEffect(() => {
-    if (mountTarget === null) warnIfInlineInputIgnored(embedSettings, false);
+    if (mountTarget === null && embedSettings.displayMode !== "inline")
+      warnIfInlineInputIgnored(scriptAttributes(), false);
   }, [mountTarget]);
+
+  // Chatblase: Escape schließt das Fenster (KIE-565, D7), auch wenn der Fokus
+  // auf der Webseite liegt (keydown aus dem Shadow DOM ist composed und kommt
+  // ebenfalls am document an). Ausnahmen (utils/escape.js): ein anderes
+  // Element hat die Taste schon verarbeitet (defaultPrevented), IME-Eingabe,
+  // der Fokus steht in einem Texteingabefeld der Seite (dort bleibt Escape
+  // beim Feld), oder ein verschachtelter Schritt ist offen (Kommentarfeld,
+  // „Frühere Chats“: nur dieser schließt; preventDefault nur bei Escape aus
+  // dem Widget oder ohne Fokus, Fixliste 7.22-rc13 W01). Danach Fokus auf
+  // den Chat-Button, damit Tastaturnutzer nicht auf <body> landen.
+  const restoreFocusRef = useRef(false);
+  useEffect(() => {
+    if (!isChatOpen || mountTarget !== null) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
+      const host = embedderSettings.hostElement;
+      if (focusInPageField(e, host)) return;
+      if (closeEscapeLayerFor(e, { host, root: embedderSettings.shadowRoot }))
+        return;
+      restoreFocusRef.current = true;
+      toggleOpenChat(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isChatOpen, mountTarget]);
+  useEffect(() => {
+    if (isChatOpen || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    embedderSettings.shadowRoot
+      ?.getElementById?.("anything-llm-embed-chat-button")
+      ?.focus({ preventScroll: true });
+  }, [isChatOpen]);
 
   useEffect(() => {
     // Inline: kein Auto-Öffnen der Blase (und kein sessionStorage-Offen-Flag,
@@ -123,7 +192,7 @@ export default function App() {
     return (
       <I18nextProvider i18n={i18next}>
         <InlineChat
-          settings={embedSettings}
+          settings={shownSettings}
           mountTarget={mountTarget}
           onMountError={() => setMountTarget(null)}
           sessionId={sessionId}
@@ -197,7 +266,7 @@ export default function App() {
           {isChatOpen && (
             <ChatWindow
               closeChat={() => toggleOpenChat(false)}
-              settings={embedSettings}
+              settings={shownSettings}
               sessionId={sessionId}
               conversationId={conversationId}
               newConversation={newConversation}

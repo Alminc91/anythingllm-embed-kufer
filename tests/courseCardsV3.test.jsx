@@ -36,6 +36,7 @@ import {
 import handleChat from "../src/utils/chat/index.js";
 import HistoricalMessage from "../src/components/ChatWindow/ChatContainer/ChatHistory/HistoricalMessage/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
+import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
 const AUTO = { courseCards: "auto" };
 const ABOVE = { courseCards: "auto", courseCardsPosition: "above" };
@@ -438,6 +439,17 @@ afterEach(() => {
   root = null;
 });
 
+// Inline-Modus (Rasterkarte: Teaser bis zu 3 Zeilen); ohne Kontext gilt die
+// Chatblase (Rasterkarte 2 Zeilen, KIE-565)
+const inl = (element) =>
+  h(
+    EmbedModeContext.Provider,
+    {
+      value: { inline: true, overlay: false, consumeFocusRequest: () => false },
+    },
+    element,
+  );
+
 function mount(element) {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -461,14 +473,17 @@ const cards = (el) => [...el.querySelectorAll(".allm-course-card")];
 
 describe("Teaser als Untertext (AK-5)", () => {
   it("::v3-teaser — unter dem Titel, 13 px, Textfarbe, bis zu 3 Zeilen, in der Beschreibung", () => {
+    // Inline-Modus: Rasterkarte bis zu 3 Zeilen (Chatblase: 2, Test unten)
     const el = mount(
-      h(ChatHistory, {
-        settings: ABOVE,
-        history: [
-          user,
-          answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-        ],
-      }),
+      inl(
+        h(ChatHistory, {
+          settings: ABOVE,
+          history: [
+            user,
+            answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+          ],
+        }),
+      ),
     );
     const [first] = cards(el);
     const teaser = first.querySelector(".allm-course-teaser");
@@ -699,28 +714,39 @@ const streaming = (extra = {}) =>
   });
 
 describe("Zeilen-Karten (AK-1)", () => {
-  it("Setting: Script-Attribut/visual_config grid|rows, sonst grid (mit Warnung)", async () => {
+  // Standard seit Design Center vereinfacht (15.10.2026) "rows" statt "grid"
+  // (bewusste Änderung, wie die Demo); die Komponente selbst fällt ohne Wert
+  // weiter auf "grid" zurück (courseCardsLayout()).
+  it("Setting: Script-Attribut/visual_config grid|rows, sonst rows (mit Warnung)", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const load = (dataset, server = {}) =>
       loadEmbedSettings(
         { embedId: "e", baseApiUrl: "https://x.test/api/embed", ...dataset },
         vi.fn(async () => ({ ok: true, json: async () => server })),
       );
-    expect((await load({})).courseCardsLayout).toBe("grid");
-    expect((await load({ courseCardsLayout: " Rows " })).courseCardsLayout).toBe(
-      "rows",
-    );
+    expect((await load({})).courseCardsLayout).toBe("rows");
+    expect(
+      (await load({ courseCardsLayout: " Grid " })).courseCardsLayout,
+    ).toBe("grid");
+    expect(
+      (await load({ courseCardsLayout: " Rows " })).courseCardsLayout,
+    ).toBe("rows");
     expect(
       (await load({}, { courseCardsLayout: "rows" })).courseCardsLayout,
     ).toBe("rows");
+    expect((await load({}, { courseCardsLayout: "grid" })).courseCardsLayout).toBe(
+      "grid",
+    );
+    // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+    // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
     expect(
       (await load({ courseCardsLayout: "rows" }, { courseCardsLayout: "grid" }))
         .courseCardsLayout,
-    ).toBe("grid");
+    ).toBe("rows");
     expect(warn).not.toHaveBeenCalled();
     expect(
       (await load({ courseCardsLayout: "kacheln" })).courseCardsLayout,
-    ).toBe("grid");
+    ).toBe("rows");
     expect(warn.mock.calls.flat().join(" ")).toContain("courseCardsLayout");
     expect(courseCardsLayout({ courseCardsLayout: "list" })).toBe("grid");
     expect(courseCardsLayout(undefined)).toBe("grid");
@@ -799,14 +825,17 @@ describe("Zeilen-Karten (AK-1)", () => {
   });
 
   it("Teaser in der Zeilen-Karte: unter Meta, höchstens 2 Zeilen; Raster unverändert 3", () => {
+    // Inline-Modus (Chatblase: Teaser ohne Klammer, KIE-565 Nachtrag Punkt 5)
     const el = mount(
-      h(ChatHistory, {
-        settings: ROWS_ABOVE,
-        history: [
-          user,
-          answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-        ],
-      }),
+      inl(
+        h(ChatHistory, {
+          settings: ROWS_ABOVE,
+          history: [
+            user,
+            answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+          ],
+        }),
+      ),
     );
     const teaser = el.querySelector("[data-course-row] .allm-course-teaser");
     expect(teaser.textContent).toBe(TEASER_YOGA);
@@ -818,6 +847,100 @@ describe("Zeilen-Karten (AK-1)", () => {
     );
     // geladener Verlauf: keine reservierte Höhe
     expect(teaser.style.minHeight).toBe("");
+  });
+
+  // Demo-Rückmeldung 06.10.2026, Nachfrage 20.10.2026: Zeit (links) und
+  // Status-Pille (rechts) sitzen vertikal mittig zur GESAMTEN Karte (Titel +
+  // Meta + Teaser bzw. Platzhalter). Bewusste Änderung gegenüber Variante C
+  // (Zeit/Pille mittig zum Kopfblock Titel + Meta, grid-row 1 / 3 trotz
+  // Teaser): die Seitenzellen überspannen jetzt alle Zeilen, der Textblock
+  // bleibt oben (alignItems start). Einzeilige Karte: 1 / 2 wie bisher.
+  // Browser-Messung (±2 px): tests/visual/rows_center.py.
+  it("Zeit und Status-Pille überspannen alle Zeilen der Karte (vertikal mittig zur ganzen Karte)", () => {
+    const side = (row) =>
+      [".allm-course-when", ".allm-course-status"].map((sel) => {
+        const el = row.querySelector(sel);
+        return [el.style.gridRow, el.style.alignSelf];
+      });
+    const render = (history) =>
+      act(() =>
+        root.render(inl(h(ChatHistory, { settings: ROWS_ABOVE, history }))),
+      );
+    // Titel + Meta + Teaser: drei Zeilen, Seitenzellen 1 / 4
+    const el = mount(
+      inl(
+        h(ChatHistory, {
+          settings: ROWS_ABOVE,
+          history: [
+            user,
+            answer({
+              content: "Siehe Karte.",
+              courseSources: clone([KI]),
+              courseCardsAnnounced: 1,
+              courseTeasers: { [KI.url]: TEASER_YOGA },
+            }),
+          ],
+        }),
+      ),
+    );
+    let row = el.querySelector("[data-course-row]");
+    expect(row.style.alignItems).toBe("start");
+    expect(row.querySelector(".allm-course-title").style.gridRow).toBe("1");
+    expect(row.querySelector(".allm-course-details").style.gridRow).toBe("2");
+    expect(row.querySelector(".allm-course-teaser").style.gridRow).toBe("3");
+    expect(side(row)).toEqual([
+      ["1 / 4", "center"],
+      ["1 / 4", "center"],
+    ]);
+    // Titel + Meta + Platzhalter (Stream wartet auf die Teaser): ebenfalls 1 / 4
+    render([
+      user,
+      streaming({ courseSources: clone([KI]), courseCardsAnnounced: 1 }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector("[data-teaser-pending]").style.gridRow).toBe("3");
+    expect(side(row)).toEqual([
+      ["1 / 4", "center"],
+      ["1 / 4", "center"],
+    ]);
+    // Titel + Meta ohne Teaser: zwei Zeilen, 1 / 3
+    render([
+      user,
+      answer({
+        content: "Siehe Karte.",
+        courseSources: clone([KI]),
+        courseCardsAnnounced: 1,
+      }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector(".allm-course-teaser")).toBeNull();
+    expect(side(row)).toEqual([
+      ["1 / 3", "center"],
+      ["1 / 3", "center"],
+    ]);
+    // Einzeilig (nur Zeit, Titel, Pille; keine Meta-Zeile): 1 / 2, unverändert
+    const single = {
+      url: KI.url,
+      title: KI.title,
+      weekdays: KI.weekdays,
+      start_minutes: KI.start_minutes,
+      bookable: true,
+    };
+    render([
+      user,
+      answer({
+        content: "Siehe Karte.",
+        courseSources: clone([single]),
+        courseCardsAnnounced: 1,
+      }),
+    ]);
+    row = el.querySelector("[data-course-row]");
+    expect(row.querySelector(".allm-course-details")).toBeNull();
+    expect(row.querySelector(".allm-course-when").textContent).toBe("Di 18:30");
+    expect(side(row)).toEqual([
+      ["1 / 2", "center"],
+      ["1 / 2", "center"],
+    ]);
   });
 
   // Review-Befund 5: Teaser-Zeilen nach Kartenbreite (ResizeObserver der
@@ -836,11 +959,14 @@ describe("Zeilen-Karten (AK-1)", () => {
           return this.classList?.contains("allm-course-list") ? width : 0;
         });
       try {
+        // Inline-Modus (unter 480 px Rasterkarte mit 3 Zeilen)
         const el = mount(
-          h(ChatHistory, {
-            settings: ROWS_ABOVE,
-            history: [user, streaming()],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings: ROWS_ABOVE,
+              history: [user, streaming()],
+            }),
+          ),
         );
         expect(
           el.querySelector(".allm-course-list").getAttribute("data-layout"),
@@ -849,13 +975,18 @@ describe("Zeilen-Karten (AK-1)", () => {
           expect(p.style.height).toBe(`${lines * 18}px`);
         act(() =>
           root.render(
-            h(ChatHistory, {
-              settings: ROWS_ABOVE,
-              history: [
-                user,
-                streaming({ courseTeasers: TEASERS, teaserArrivedAt: Date.now() }),
-              ],
-            }),
+            inl(
+              h(ChatHistory, {
+                settings: ROWS_ABOVE,
+                history: [
+                  user,
+                  streaming({
+                    courseTeasers: TEASERS,
+                    teaserArrivedAt: Date.now(),
+                  }),
+                ],
+              }),
+            ),
           ),
         );
         const teasers = [...el.querySelectorAll(".allm-course-teaser")];
@@ -928,8 +1059,9 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
     it(`::teaser-pending (${layout}) — Platzhalter je Karte, Teaser ersetzt ihn an Ort und Stelle (gleiche Knoten, reservierte Höhe)`, () => {
       const settings = { ...ABOVE, courseCardsLayout: layout };
       const lines = layout === "rows" ? 2 : 3;
+      // Inline-Modus (Rasterkarte 3 Zeilen; Chatblase 2, eigener Test)
       const el = mount(
-        h(ChatHistory, { settings, history: [user, streaming()] }),
+        inl(h(ChatHistory, { settings, history: [user, streaming()] })),
       );
       const before = cards(el);
       expect(before).toHaveLength(2);
@@ -963,16 +1095,18 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
       }
       act(() =>
         root.render(
-          h(ChatHistory, {
-            settings,
-            history: [
-              user,
-              streaming({
-                courseTeasers: TEASERS,
-                teaserArrivedAt: Date.now(),
-              }),
-            ],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings,
+              history: [
+                user,
+                streaming({
+                  courseTeasers: TEASERS,
+                  teaserArrivedAt: Date.now(),
+                }),
+              ],
+            }),
+          ),
         ),
       );
       expect(pendingEls(el)).toHaveLength(0);
@@ -992,13 +1126,15 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
       // Text kommt, Stream endet: Teaser bleiben, kein Platzhalter
       act(() =>
         root.render(
-          h(ChatHistory, {
-            settings,
-            history: [
-              user,
-              answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
-            ],
-          }),
+          inl(
+            h(ChatHistory, {
+              settings,
+              history: [
+                user,
+                answer({ courseTeasers: TEASERS, courseCardsAnnounced: 2 }),
+              ],
+            }),
+          ),
         ),
       );
       expect(pendingEls(el)).toHaveLength(0);

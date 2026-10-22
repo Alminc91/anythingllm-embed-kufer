@@ -63,6 +63,7 @@ import {
   INLINE_CHIPS_MAX,
   inlineChips,
   layoutValidations,
+  inlineBarTexts,
   warnIfInlineInputIgnored,
 } from "../src/utils/layout.js";
 import ChatContainer, {
@@ -126,13 +127,30 @@ function click(el) {
 }
 
 describe("Settings inlineInput / inlineInputPlaceholder / inlineSendText", () => {
-  it("Standard: aus, deutsche Texte", async () => {
+  // KIE-565 (D2): ohne eigenen Text kein gespeicherter Wert (null); die
+  // Leiste zeigt die Demo-Texte in der Sprache des Widgets (inlineBarTexts),
+  // bisher stand der deutsche Text fest in den Settings
+  it("Standard: aus, Demo-Texte der Sprache (deutsch, englisch)", async () => {
     const s = await loadEmbedSettings({ ...BASE }, fetchConfig({}));
     expect(s.inlineInput).toBe(false);
-    expect(s.inlineInputPlaceholder).toBe("Stellen Sie hier Ihre Frage …");
-    expect(s.inlineSendText).toBe("Chatten");
-    expect(DEFAULT_INLINE_INPUT_PLACEHOLDER).toBe(s.inlineInputPlaceholder);
-    expect(DEFAULT_INLINE_SEND_TEXT).toBe(s.inlineSendText);
+    expect(s.inlineInputPlaceholder).toBe(null);
+    expect(s.inlineSendText).toBe(null);
+    expect(inlineBarTexts(s)).toEqual({
+      placeholder: "Stellen Sie hier Ihre Frage …",
+      sendText: "Chatten",
+    });
+    expect(DEFAULT_INLINE_INPUT_PLACEHOLDER).toBe(
+      inlineBarTexts(s).placeholder,
+    );
+    expect(DEFAULT_INLINE_SEND_TEXT).toBe(inlineBarTexts(s).sendText);
+    const en = await loadEmbedSettings(
+      { ...BASE, language: "en" },
+      fetchConfig({}),
+    );
+    expect(inlineBarTexts(en)).toEqual({
+      placeholder: "Ask your question here …",
+      sendText: "Chat",
+    });
   });
 
   it('Script-Attribut data-inline-input="true" schaltet ein', async () => {
@@ -158,19 +176,26 @@ describe("Settings inlineInput / inlineInputPlaceholder / inlineSendText", () =>
     });
     const s = await loadEmbedSettings({ ...BASE }, fetchFn);
     expect(fetchFn).toHaveBeenCalledWith(
-      `${BASE.baseApiUrl}/${BASE.embedId}/config`,
+      `${BASE.baseApiUrl}/${BASE.embedId}/config?language=de`,
     );
     expect(s.inlineInput).toBe(true);
     expect(s.inlineInputPlaceholder).toBe("Fragen Sie uns …");
     expect(s.inlineSendText).toBe("Fragen");
   });
 
-  it("Design Center (false) schlägt das Script-Attribut (Vorrangregel)", async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+  // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
+  it("Script-Attribut schlägt den Wert vom Server (Gruppe B)", async () => {
     const s = await loadEmbedSettings(
       { ...BASE, inlineInput: "true" },
       fetchConfig({ inlineInput: false }),
     );
-    expect(s.inlineInput).toBe(false);
+    expect(s.inlineInput).toBe(true);
+    const t = await loadEmbedSettings(
+      { ...BASE, inlineInput: "false" },
+      fetchConfig({ inlineInput: true }),
+    );
+    expect(t.inlineInput).toBe(false);
   });
 
   it("ungültige Werte fallen auf den nächstniedrigeren Wert zurück", async () => {
@@ -183,7 +208,11 @@ describe("Settings inlineInput / inlineInputPlaceholder / inlineSendText", () =>
     );
     expect(s.inlineInput).toBe(false);
     expect(s.inlineSendText).toBe("Absenden");
-    expect(s.inlineInputPlaceholder).toBe(DEFAULT_INLINE_INPUT_PLACEHOLDER);
+    // ungültiger Server-Wert verworfen -> kein eigener Text -> Standard
+    expect(s.inlineInputPlaceholder).toBe(null);
+    expect(inlineBarTexts(s).placeholder).toBe(
+      DEFAULT_INLINE_INPUT_PLACEHOLDER,
+    );
   });
 
   it("Validatoren", () => {
@@ -514,6 +543,62 @@ describe("InlineChat: Leiste -> pendingFirstMessage", () => {
       removeEventListener() {},
     });
   }
+
+  // KIE-565 (D2, Fixliste Nr. 3): ohne eigenen Text zeigt die eingeklappte
+  // Leiste die Demo-Texte in der Sprache des Widgets (bisher immer deutsch);
+  // ein eigener Text (z. B. früher gespeichert) gewinnt
+  it("Leiste ohne eigenen Text: Demo-Texte der Sprache, eigener Text gewinnt", () => {
+    setup({ inlineInputPlaceholder: null, inlineSendText: null });
+    expect(
+      container.querySelector("#anything-llm-inline-input").placeholder,
+    ).toBe("Stellen Sie hier Ihre Frage …");
+    expect(
+      container.querySelector("#anything-llm-inline-send").textContent,
+    ).toBe("Chatten");
+    act(() => root.unmount());
+    root = createRoot(container);
+    setup({
+      inlineInputPlaceholder: null,
+      inlineSendText: null,
+      language: "en",
+    });
+    expect(
+      container.querySelector("#anything-llm-inline-input").placeholder,
+    ).toBe("Ask your question here …");
+    expect(
+      container.querySelector("#anything-llm-inline-send").textContent,
+    ).toBe("Chat");
+    act(() => root.unmount());
+    root = createRoot(container);
+    setup({
+      inlineInputPlaceholder: "Was suchen Sie?",
+      inlineSendText: null,
+      language: "en",
+    });
+    expect(
+      container.querySelector("#anything-llm-inline-input").placeholder,
+    ).toBe("Was suchen Sie?");
+  });
+
+  // KIE-565 (W02, Fixliste Nr. 4): Rundungen der Demo als Inline-Standard
+  // (Panel 40, Karten 14, Blasen 18, Leiste und Pillen 999 px), Seiten-CSS
+  // (--allm-*) gewinnt weiter; bisher galten 16/12/18/16 px
+  it("Inline-Fläche: Rundungen wie die Demo, Seiten-CSS gewinnt", () => {
+    setup();
+    const st = container.querySelector("#anything-llm-embed-inline").style;
+    expect(st.getPropertyValue("--allmi-radius")).toBe(
+      "var(--allm-radius, 40px)",
+    );
+    expect(st.getPropertyValue("--allmi-radius-card")).toBe(
+      "var(--allm-radius-card, 14px)",
+    );
+    expect(st.getPropertyValue("--allmi-radius-bubble")).toBe(
+      "var(--allm-radius-bubble, 18px)",
+    );
+    expect(st.getPropertyValue("--allmi-bar-radius")).toBe(
+      "var(--allm-bar-radius, 999px)",
+    );
+  });
 
   it("Standard ohne inlineInput: Klick-Leiste wie bisher, kein Feld, keine Chips", () => {
     setup({ inlineInput: false });

@@ -16,8 +16,41 @@ import {
   HEADER_ICON_STYLE,
   HEADER_STYLE,
   headerButtonClass,
+  LOGO_RADIUS,
 } from "@/utils/theme";
-import { panelTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
+
+// Name und Untertitel immer ausgeschrieben, Standard wie eigener Text des
+// Kunden: umbrechen statt kürzen (keine Ellipse, kein title-Ersatz nötig).
+// overflowWrap "anywhere" trennt notfalls auch ein einzelnes überlanges
+// Wort, damit nichts unter das Menü läuft (Nutzerentscheidung N3, Fixliste
+// 7.22-rc13; ersetzt die Ellipse aus rc10 W1). wordBreak "break-word" ist
+// der Rückfall für Safari vor 15.4, das "anywhere" verwirft (Fixliste
+// 7.22-rc16 W44, wie in CourseCards); neuere Browser trennen damit gleich.
+// Ausnahme kompakter Kopf (mobil bei offener Tastatur): nur der Name, kein
+// Untertitel (Bestand seit 06.10.2026, bestätigt in Fixliste 7.22-rc16 E21).
+export const HEADER_WRAP = {
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+// Titelblock (Logo, Name, Untertitel): Mindesthöhe einschließlich des
+// senkrechten Innenabstands (allm-box-border; im Shadow Root gilt kein
+// globales box-sizing, preflight ist aus). Mit kurzem Namen misst der Kopf
+// so 76 px plus 1 px Unterlinie, kompakt 56 px plus 1 px; nur umbrochene
+// Zeilen machen ihn höher (Fixliste 7.22-rc16 W40). Kompakt 6 px statt
+// 8 px Innenabstand: der Logo-Rahmen (44 px) passt dann genau in 56 px.
+export function headerTitleClass(compact = false) {
+  return `allm-flex allm-items-center allm-box-border allm-pl-4 allm-pr-2 ${
+    compact ? "allm-py-1.5 allm-min-h-[56px]" : "allm-py-2 allm-min-h-[76px]"
+  } allm-flex-1 allm-min-w-0 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))]`;
+}
+
+// Menü unter ⋮: bei der üblichen Kopfhöhe (76 px, kompakt 56 px) wie bisher
+// 64 px unter der Oberkante; wird der Kopf durch umbrochene Zeilen höher,
+// wandert es mit dem mittig stehenden ⋮ nach unten (N3).
+const OPTIONS_MENU_TOP = "max(64px, calc(50% + 26px))";
 
 export default function ChatWindowHeader({
   sessionId,
@@ -29,10 +62,15 @@ export default function ChatWindowHeader({
   setChatHistory,
   compact = false,
   openHistory = null, // KIE-503: öffnet die "Frühere Chats"-Ansicht
+  // Ref für ⋮ vom ChatWindow: überdauert das Neueinhängen des Kopfs nach dem
+  // Laden, damit Escape in „Frühere Chats“ den Fokus auf den aktuellen ⋮
+  // zurückgibt (Fixliste 7.22-rc16 W42); ohne Übergabe eine eigene Ref
+  optionsButtonRef = null,
 }) {
   const [showingOptions, setShowOptions] = useState(false);
   const menuRef = useRef();
-  const buttonRef = useRef();
+  const ownButtonRef = useRef();
+  const buttonRef = optionsButtonRef || ownButtonRef;
 
   const handleChatReset = () => {
     // Neue Konversation starten: alte bleibt serverseitig erhalten & im Backend
@@ -70,16 +108,24 @@ export default function ChatWindowHeader({
     const iconStyle = settings.iconStyle || "rounded";
     const hasHeaderBg = !!settings.headerBgColor;
 
-    // Base style
+    // Base style. Kompakt border-box: ein Rand (Stile border, border-dark,
+    // glass) zählt in die 44 px; im Shadow Root gilt sonst content-box, und
+    // der Rahmen wäre 46 bzw. 48 px hoch (kompakter Kopf 58 bis 61 statt
+    // 57 px, Fixliste 7.22-rc18 W64). Im normalen Kopf bleibt content-box
+    // wie im abgenommenen Stand rc14: das 40-px-Logo behält seinen Abstand
+    // zum Rand (Fixliste 7.22-rc20 E34, W84).
+    const boxSizing = compact ? { boxSizing: "border-box" } : {};
     const baseStyle = {
       width: "44px",
       height: "44px",
+      ...boxSizing,
     };
 
     // Pill style is wider
     const pillStyle = {
       width: "52px",
       height: "40px",
+      ...boxSizing,
     };
 
     if (iconStyle === "none" || !hasHeaderBg) {
@@ -169,48 +215,50 @@ export default function ChatWindowHeader({
       className="allm-flex allm-items-center allm-relative allm-rounded-t-[var(--allmi-radius,16px)]"
       id="anything-llm-header"
     >
-      <div
-        className={`allm-flex allm-items-center allm-px-4 allm-flex-1 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] ${
-          compact ? "allm-h-[56px]" : "allm-h-[76px]"
-        }`}
-      >
+      {/* Titelteil (Logo, Name, Untertitel) und Buttongruppe (⋮, X) stehen
+          beide im Fluss: der Titelteil darf schrumpfen (min-width 0), die
+          Buttons nicht (Fixliste 7.22-rc10 W1). Name und Untertitel werden nie
+          gekürzt: Bei Platzmangel brechen sie um und enden mindestens 8 px
+          (pr-2) vor dem Menü, der Kopf wird dafür höher (Mindesthöhe 76 px,
+          kompakt 56 px, jeweils mit Innenabstand; Nutzerentscheidung N3,
+          Fixliste 7.22-rc13, W40 aus rc16). */}
+      <div className={headerTitleClass(compact)}>
         <div
           className="allm-flex-shrink-0 allm-flex allm-items-center allm-justify-center"
-          style={
-            settings.onlineDot === true
-              ? { ...getIconContainerStyle(), position: "relative" }
-              : getIconContainerStyle()
-          }
+          style={getIconContainerStyle()}
         >
           <img
             src={iconUrl ?? AnythingLLMIcon}
-            alt={iconUrl ? "Brand" : "AnythingLLM Logo"}
+            // dekorativ: der Name steht als Text daneben bzw. darüber (Fixliste
+            // 7.22-rc13 W04, vorher fest englisch „Brand“/„Anything LLM Icon“)
+            alt=""
             style={{
               maxWidth: compact ? "28px" : "40px",
               maxHeight: compact ? "28px" : "40px",
               objectFit: "contain",
+              borderRadius: LOGO_RADIUS,
               transition:
                 "max-width var(--allmi-transition, 200ms), max-height var(--allmi-transition, 200ms)",
             }}
           />
-          {settings.onlineDot === true && (
-            <OnlineDot label={panelTexts(settings).online} />
-          )}
         </div>
         {settings.assistantSubtitle ? (
           <BrandWithSubtitle settings={settings} compact={compact} />
         ) : (
           settings.brandText && (
             <span
-              className="allm-ml-3 allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
-              style={{ color: "var(--allmi-header-text, #1f2937)" }}
+              className="allm-ml-3 allm-font-semibold allm-text-sm allm-font-sans allm-min-w-0"
+              style={{
+                ...HEADER_WRAP,
+                color: "var(--allmi-header-text, #1f2937)",
+              }}
             >
               {settings.brandText}
             </span>
           )
         )}
       </div>
-      <div className="allm-absolute allm-right-0 allm-flex allm-gap-x-1 allm-items-center allm-px-[22px]">
+      <div className="allm-flex allm-flex-shrink-0 allm-gap-x-1 allm-items-center allm-pr-[22px]">
         {settings.loaded && (
           <button
             ref={buttonRef}
@@ -218,7 +266,7 @@ export default function ChatWindowHeader({
             onClick={() => setShowOptions(!showingOptions)}
             className={iconButtonClass}
             style={HEADER_ICON_STYLE}
-            aria-label="Options"
+            aria-label={uiTexts(settings).options}
           >
             <DotsThreeOutlineVertical size={20} weight="fill" />
           </button>
@@ -240,7 +288,9 @@ export default function ChatWindowHeader({
           openHistory
             ? () => {
                 setShowOptions(false);
-                openHistory();
+                // ⋮ als Öffner: Fokus nach Escape in „Frühere Chats“. Die Ref,
+                // nicht der Knoten: aufgelöst wird erst beim Schließen (W42)
+                openHistory(buttonRef);
               }
             : null
         }
@@ -249,35 +299,13 @@ export default function ChatWindowHeader({
   );
 }
 
-// Online-Punkt (onlineDot): rein dekorativ, kein Status-Abruf; für
-// Screenreader verborgen, Tooltip „online“ für Maus-Nutzer. Der Ring trennt
-// den Punkt vom Icon in der Farbe der Kopfzeile: --allmi-header-bg über
-// --allmi-surface (erster Schatten liegt oben) — ohne Header-Farbe
-// (transparent) also die Fensterfläche, mit Header-Farbe bzw. dunklem Theme
-// deren Farbe.
-function OnlineDot({ label }) {
-  return (
-    <span
-      aria-hidden="true"
-      title={label}
-      data-online-dot=""
-      style={{
-        position: "absolute",
-        right: "0px",
-        bottom: "0px",
-        width: "8px",
-        height: "8px",
-        borderRadius: "999px",
-        backgroundColor: "#3BB273",
-        boxShadow:
-          "0 0 0 2px var(--allmi-header-bg, transparent), 0 0 0 2px var(--allmi-surface, #FFFFFF)",
-      }}
-    />
-  );
-}
+// Kein Online-Punkt mehr (Design Center vereinfacht, 15.10.2026): er wirkte
+// wie ein menschlicher Live-Chat; onlineDot aus Script/Konfiguration wird
+// ignoriert (utils/layout.js FIXED_STANDARDS).
 
 // Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
-// ohne Untertitel bleibt die bisherige einzeilige Darstellung.
+// ohne Untertitel steht nur der Name. Beide brechen bei Platzmangel um.
+// Kompakt (mobil bei offener Tastatur) steht nur der Name (E21).
 function BrandWithSubtitle({ settings, compact }) {
   return (
     <div
@@ -286,8 +314,8 @@ function BrandWithSubtitle({ settings, compact }) {
     >
       {settings.brandText && (
         <span
-          className="allm-font-semibold allm-text-sm allm-truncate"
-          style={{ color: "var(--allmi-header-text, #1f2937)" }}
+          className="allm-font-semibold allm-text-sm"
+          style={{ ...HEADER_WRAP, color: "var(--allmi-header-text, #1f2937)" }}
         >
           {settings.brandText}
         </span>
@@ -295,8 +323,8 @@ function BrandWithSubtitle({ settings, compact }) {
       {!compact && (
         <span
           id="anything-llm-header-subtitle"
-          className="allm-truncate"
           style={{
+            ...HEADER_WRAP,
             fontSize: "11.5px",
             lineHeight: 1.35,
             color: "var(--allmi-text-muted, #6b7280)",
@@ -315,14 +343,15 @@ export function CloseButton({ onClick, className, color, style }) {
   const { inline, overlay } = useEmbedMode();
   const collapse = inline && !overlay;
   const Icon = collapse ? CaretUp : X;
+  const ui = uiTexts(embedderSettings.settings);
   return (
     <button
       type="button"
       onClick={onClick}
       className={className}
       style={style}
-      aria-label={collapse ? "Einklappen" : "Close"}
-      title={collapse ? "Einklappen" : undefined}
+      aria-label={collapse ? ui.collapse : ui.close}
+      title={collapse ? ui.collapse : undefined}
     >
       <Icon size={20} weight="bold" color={color} />
     </button>
@@ -342,7 +371,8 @@ function OptionsMenu({
   return (
     <div
       ref={menuRef}
-      className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-top-[64px] allm-right-[46px]"
+      className="allm-bg-[color:var(--allmi-surface,#fff)] allm-absolute allm-z-10 allm-flex allm-flex-col allm-gap-y-1 allm-rounded-xl allm-shadow-lg allm-right-[46px]"
+      style={{ top: OPTIONS_MENU_TOP }}
     >
       {/* Reset bleibt oben (häufigste Aktion, gewohnte Position), "Frühere
           Chats" (KIE-503) direkt darunter. */}
@@ -352,7 +382,7 @@ function OptionsMenu({
       >
         <ArrowCounterClockwise size={24} />
         <p className="allm-text-[14px] allm-font-sans">
-          {settings.resetBurgerText || "Reset Chat"}
+          {settings.resetBurgerText || uiTexts(settings).menuReset}
         </p>
       </button>
       {openHistory && (
@@ -362,7 +392,7 @@ function OptionsMenu({
         >
           <ClockCounterClockwise size={24} />
           <p className="allm-text-[14px] allm-font-sans">
-            {settings.historyBurgerText || "Frühere Chats"}
+            {settings.historyBurgerText || uiTexts(settings).menuHistory}
           </p>
         </button>
       )}
@@ -397,7 +427,9 @@ function SessionID({ sessionId, conversationId, settings }) {
     return (
       <div className="hover:allm-cursor-pointer allm-bg-[color:var(--allmi-surface,#fff)] allm-gap-x-[12px] hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-rounded-lg allm-border-none allm-flex allm-items-center allm-text-base allm-text-[color:var(--allmi-text-muted,#7A7D7E)] allm-font-bold allm-px-4">
         <Check size={24} />
-        <p className="allm-text-[14px] allm-font-sans">Copied!</p>
+        <p className="allm-text-[14px] allm-font-sans">
+          {panelTexts(settings).copied}
+        </p>
       </div>
     );
   }
@@ -409,7 +441,7 @@ function SessionID({ sessionId, conversationId, settings }) {
     >
       <Copy size={24} />
       <p className="allm-text-[14px] allm-font-sans">
-        {settings.sessionBurgerText || "Chat-ID"}
+        {settings.sessionBurgerText || uiTexts(settings).menuChatId}
       </p>
     </button>
   );
@@ -418,7 +450,10 @@ function SessionID({ sessionId, conversationId, settings }) {
 function ContactSupport({ email = null, settings, sessionId, conversationId }) {
   if (!email) return null;
 
-  const subject = `Anfrage zum Chatbot "${settings.brandText}" von ${window.location.hostname}`;
+  const subject = uiTexts(settings).mailSubject(
+    settings.brandText,
+    window.location.hostname,
+  );
   const body = `\n\n---\nChat-ID: ${conversationId || sessionId || "-"}`;
   return (
     <a
@@ -427,7 +462,7 @@ function ContactSupport({ email = null, settings, sessionId, conversationId }) {
     >
       <Envelope size={24} />
       <p className="allm-text-[14px] allm-font-sans">
-        {settings.emailBurgerText || "Email Support"}
+        {settings.emailBurgerText || uiTexts(settings).menuEmail}
       </p>
     </a>
   );

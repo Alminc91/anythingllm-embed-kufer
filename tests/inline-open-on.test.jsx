@@ -141,7 +141,9 @@ function setup(extra = {}) {
 }
 
 describe("Settings inlineOpenOn", () => {
-  it('Standard "submit"; Script-Attribut und visual_config (Vorrang Server)', async () => {
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
+  // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
+  it('Standard "submit"; Script-Attribut und visual_config (Vorrang Script-Attribut)', async () => {
     const fetchConfig = (c) =>
       vi.fn(async () => ({ ok: true, json: async () => c }));
     let s = await loadEmbedSettings({ ...BASE }, fetchConfig({}));
@@ -156,7 +158,9 @@ describe("Settings inlineOpenOn", () => {
       { ...BASE, inlineOpenOn: "focus" },
       fetchConfig({ inlineOpenOn: "submit" }),
     );
-    expect(s.inlineOpenOn).toBe("submit");
+    expect(s.inlineOpenOn).toBe("focus");
+    s = await loadEmbedSettings({ ...BASE }, fetchConfig({ inlineOpenOn: "focus" }));
+    expect(s.inlineOpenOn).toBe("focus");
     expect(warn).not.toHaveBeenCalled();
   });
 

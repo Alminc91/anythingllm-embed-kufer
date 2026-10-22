@@ -1,4 +1,7 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import useEmbedMode from "@/hooks/useEmbedMode";
+import { embedderSettings } from "@/main";
+import { uiTexts } from "@/utils/layout";
 import {
   MORE_COURSES_TEXT,
   rowLead,
@@ -87,7 +90,16 @@ export const ROW_CARD_MIN_PX = 480;
 // Pille, Polsterung); schmaler 3 Zeilen. Raster immer 3.
 export const ROW_TEASER_2_LINES_MIN_PX = 680;
 const rowTeaserLines = (width) => (width >= ROW_TEASER_2_LINES_MIN_PX ? 2 : 3);
-const GRID_TEASER_LINES = 3;
+// Rasterkarte: 3 Zeilen (Inline). In der Chatblase OHNE Zeilenklammer
+// (KIE-565 Nachtrag, Punkt 5): Die Karten sind dort nur 200 bis 390 px
+// breit (Fenster 25 % bzw. mobil volle Breite), ein Teaser von 15 bis 20
+// Wörtern braucht 3 bis 7 Zeilen; die frühere Klammer auf 2 Zeilen zeigte
+// deshalb in jeder gemessenen Größe nur den Anfang mit „…“. Die Länge
+// begrenzt der Server bzw. teaserMap (TEASER_MAX_LEN, 200 Zeichen). Der
+// Platzhalter reserviert in der Chatblase 3 Zeilen.
+export const GRID_TEASER_LINES = 3;
+export const BUBBLE_TEASER_LINES = null;
+export const BUBBLE_TEASER_PENDING_LINES = 3;
 
 // Eigene Komponente: mountet erst, wenn der Teaser da ist — die Entscheidung
 // "einblenden" fällt einmal beim Erscheinen (kein erneutes Einblenden bei
@@ -114,7 +126,10 @@ function Teaser({
       style={{
         ...teaserStyle,
         ...(placement || {}),
-        WebkitLineClamp: lines,
+        // lines null (Chatblase): ganzer Teaser, keine Klammer
+        ...(lines
+          ? { WebkitLineClamp: lines }
+          : { display: "block", WebkitLineClamp: "none", overflow: "visible" }),
         ...(reserve > 0 && { minHeight: `${reserve * TEASER_LINE_PX}px` }),
       }}
     >
@@ -168,14 +183,21 @@ function joinParts(parts) {
 // Teaser). teaser = KI-Teaser (Kurskarten v3), sonst null; teaserArrivedAt
 // = Ankunft des Teasers im Stream (nur Karten oben, sonst null).
 // pending = Teaser erwartet (Platzhalter, nur Karten oben im Stream)
-function Card({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
+function Card({
+  card,
+  teaser = null,
+  teaserArrivedAt = null,
+  pending = null,
+  lines = GRID_TEASER_LINES,
+  pendingLines = lines,
+}) {
   const id = useId();
   const details = joinParts([card.start, card.place, card.price]);
   const { showTeaser, showPending, reserve } = useTeaserSlot({
     teaser,
     pending,
     fallback: card.fallback,
-    lines: GRID_TEASER_LINES,
+    lines: pendingLines,
   });
   // Beschreibung = die sichtbaren Zeilen (Name = Titel per aria-label)
   const describedBy = [
@@ -231,13 +253,11 @@ function Card({ card, teaser = null, teaserArrivedAt = null, pending = null }) {
             id={`${id}-t`}
             text={teaser}
             arrivedAt={teaserArrivedAt}
-            lines={GRID_TEASER_LINES}
+            lines={lines}
             reserve={reserve}
           />
         )}
-        {showPending && (
-          <TeaserPending text={pending} lines={GRID_TEASER_LINES} />
-        )}
+        {showPending && <TeaserPending text={pending} lines={pendingLines} />}
         {details && (
           <span
             id={`${id}-d`}
@@ -285,14 +305,16 @@ const statusStyle = (bookable) => ({
 // Zeilen-Karte (courseCardsLayout "rows", Kartenbreite >= 480 px): links
 // Wochentag + Uhrzeit in Akzentfarbe (Tabellenziffern), Mitte Titel, Meta-
 // Zeile und Teaser (höchstens 2 Zeilen) bzw. Platzhalter, rechts die
-// Status-Pille; Zeit und Pille mittig zum Kopfblock Titel + Meta (Variante C). Wie die Rasterkarte EIN Link (Name = Titel), Beschreibung =
-// sichtbare Zeilen; Hover/Fokus über .allm-course-card (main.jsx).
+// Status-Pille; Zeit und Pille vertikal mittig zur ganzen Karte. Wie die
+// Rasterkarte EIN Link (Name = Titel), Beschreibung = sichtbare Zeilen;
+// Hover/Fokus über .allm-course-card (main.jsx).
 function CardRow({
   card,
   teaser = null,
   teaserArrivedAt = null,
   pending = null,
   lines = 2,
+  pendingLines = lines,
 }) {
   const id = useId();
   const lead = rowLead(card);
@@ -301,7 +323,7 @@ function CardRow({
     teaser,
     pending,
     fallback: card.fallback,
-    lines,
+    lines: pendingLines,
   });
   const describedBy = [
     lead && `${id}-s`,
@@ -311,16 +333,22 @@ function CardRow({
   ]
     .filter(Boolean)
     .join(" ");
-  // Variante C (Entwurf der Designerin): Zeit und Status-Pille sitzen auf der
-  // Mitte des Kopfblocks aus Titel + Metazeile; der Teaser (oder Platzhalter)
-  // hängt als eigene Zeile darunter. Raster statt Flex, damit die Spalten die
-  // Kopfzeilen überspannen können; ohne Metazeile zentriert auf den Titel.
+  // Zeit (links) und Status-Pille (rechts) sitzen auf der Mitte der GESAMTEN
+  // Karte: Titel + Metazeile + Teaser bzw. Platzhalter (Demo-Rückmeldung
+  // 06.10.2026, Nachfrage 20.10.2026; davor Variante C: Mitte des Kopfblocks
+  // Titel + Meta, der Teaser hing darunter). Raster statt Flex, damit die
+  // Seitenspalten alle Zeilen des Textblocks überspannen; der Textblock
+  // selbst bleibt oben (alignItems "start"). Einzeilige Karte (ohne Meta und
+  // Teaser): eine Zeile, nichts ändert sich sichtbar.
   const headRows = meta ? 2 : 1;
+  // Teaser und Platzhalter schließen sich aus (useTeaserSlot): höchstens
+  // eine Zeile unter dem Kopfblock
+  const totalRows = headRows + (showTeaser || showPending ? 1 : 0);
   const contentCol = lead ? 2 : 1;
   const statusCol = contentCol + 1;
   const sideCell = {
     alignSelf: "center",
-    gridRow: `1 / ${headRows + 1}`,
+    gridRow: `1 / ${totalRows + 1}`,
   };
   return (
     <li style={itemStyle}>
@@ -424,7 +452,7 @@ function CardRow({
         {showPending && (
           <TeaserPending
             text={pending}
-            lines={lines}
+            lines={pendingLines}
             placement={{
               gridColumn: contentCol,
               gridRow: headRows + (showTeaser ? 2 : 1),
@@ -537,6 +565,14 @@ function CardList({
   const width = useListWidth(ref, rows);
   const wide = width >= ROW_CARD_MIN_PX;
   const Item = rows && wide ? CardRow : Card;
+  const { inline } = useEmbedMode();
+  // Inline: Klammer nach Kartenart/-breite; Chatblase: ganzer Teaser
+  const lines = !inline
+    ? BUBBLE_TEASER_LINES
+    : Item === CardRow
+      ? rowTeaserLines(width)
+      : GRID_TEASER_LINES;
+  const pendingLines = lines ?? BUBBLE_TEASER_PENDING_LINES;
   return (
     <ul
       ref={ref}
@@ -558,7 +594,8 @@ function CardList({
           teaser={teasers?.get(card.key)}
           teaserArrivedAt={teaserArrivedAt}
           pending={pending}
-          {...(Item === CardRow && { lines: rowTeaserLines(width) })}
+          lines={lines}
+          pendingLines={pendingLines}
         />
       ))}
     </ul>
@@ -650,7 +687,7 @@ function CourseCards({
   if (part === "footer" && footerCards.length > 0) {
     return (
       <section
-        aria-label="Weitere genannte Kurse"
+        aria-label={uiTexts(embedderSettings.settings).moreCourses}
         data-course-cards-footer=""
         className="allm-course-cards-footer allm-font-sans allm-mt-2 allm-ml-[54px] allm-mr-6"
         style={{ color: TEXT }}
@@ -681,7 +718,7 @@ function CourseCards({
 
   return (
     <section
-      aria-label="Genannte Kurse"
+      aria-label={uiTexts(embedderSettings.settings).courses}
       data-course-cards=""
       data-compact={compact ? "true" : "false"}
       data-position={above ? "above" : "below"}

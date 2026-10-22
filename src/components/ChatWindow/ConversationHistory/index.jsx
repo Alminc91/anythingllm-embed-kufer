@@ -13,6 +13,7 @@ import {
   accentTintFallback,
   headerButtonClass,
 } from "@/utils/theme";
+import { uiTexts } from "@/utils/layout";
 
 // KIE-503: Vollbild-Ansicht "Frühere Chats" (Mockup: Burger + Vollbild-Liste).
 // Zeigt die Konversationen der aktuellen Session (serverseitig session-gebunden,
@@ -81,7 +82,7 @@ export default function ConversationHistory({
           <button
             type="button"
             onClick={onBack}
-            aria-label="Zurück zum Chat"
+            aria-label={uiTexts(settings).backToChat}
             className={`${buttonClass} allm-p-1 allm-flex allm-items-center`}
             style={HEADER_ICON_STYLE}
           >
@@ -91,7 +92,7 @@ export default function ConversationHistory({
             className="allm-font-semibold allm-text-sm allm-truncate allm-font-sans"
             style={{ color: "var(--allmi-header-text, #1f2937)" }}
           >
-            {settings.historyTitleText || "Frühere Chats"}
+            {settings.historyTitleText || uiTexts(settings).menuHistory}
           </span>
         </div>
         <div className="allm-flex allm-items-center allm-px-[22px]">

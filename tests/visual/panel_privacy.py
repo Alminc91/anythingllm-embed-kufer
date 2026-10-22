@@ -543,7 +543,7 @@ def check_privacy_bubble(browser, base_url):
               and st["greet"] == "Hallo! Ich bin Ihr digitaler Berater mit künstlicher Intelligenz (KI). "
                                  "Beschreiben Sie einfach, was Sie suchen."
               and st["paras"][0].startswith("Datenschutz:Ihre Anfragen bleiben auf Servern in Deutschland")
-              and "Mitarbeitende der Einrichtung können" in st["paras"][0]
+              and "Mitarbeiter der Einrichtung können" in st["paras"][0]
               and st["paras"][0].endswith("nötig sind. Datenschutz")
               and st["strong"] == ["Datenschutz:"] and st["titleWeight"] >= 600 and st["titleOwnLine"]
               and st["link"] == "/datenschutz"
@@ -594,11 +594,17 @@ def check_disclaimer(browser, base_url):
               const inp = window.__q('#message-input').closest('form') || window.__q('#message-input');
               const r = n.getBoundingClientRect(), ir = inp.getBoundingClientRect(), cs = getComputedStyle(n);
               const win = window.__q('#anything-llm-chat').getBoundingClientRect();
+              const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
               return { text: n.textContent, role: n.getAttribute('role'), size: cs.fontSize, align: cs.textAlign,
                        gap: Math.round(r.top - ir.bottom), visible: r.height > 0 && r.bottom <= win.bottom + 0.5,
+                       lines: Math.round(r.height / lh), whiteSpace: cs.whiteSpace,
                        pointer: cs.cursor }; }""")
-            ok = (st["text"] == "Ich bin eine KI und kann Fehler machen. Bitte überprüfen Sie meine Antworten."
-                  and st["role"] == "note" and st["size"] == "11.5px" and st["align"] == "center"
+            # Text und Größe seit Design Center vereinfacht (PANEL_TEXTS.aiDisclaimer,
+            # 11 px), immer eine Zeile (Fixliste 7.22-rc7 Nr. 22); Wortlaut
+            # Fixliste 7.22-rc8 R1 (Messung: tests/visual/disclaimer_measure.py)
+            ok = (st["text"] == "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten."
+                  and st["role"] == "note" and st["size"] == "11px" and st["align"] == "center"
+                  and st["lines"] == 1 and st["whiteSpace"] == "nowrap"
                   and 0 <= st["gap"] <= 12 and st["visible"])
             record(f"KI-Hinweis unter dem Eingabefeld ({name})", ok, json.dumps(st, ensure_ascii=False))
         finally:

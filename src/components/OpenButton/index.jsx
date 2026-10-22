@@ -6,7 +6,11 @@ import {
   MagnifyingGlass,
   MagicWand,
 } from "@phosphor-icons/react";
+import { useEffect } from "react";
 import useBubbleDismissal from "@/hooks/useBubbleDismissal";
+import { ON_ACCENT_TEXT } from "@/utils/theme";
+import { uiTexts, welcomeBubblesMode } from "@/utils/layout";
+import { isPhoneViewport } from "@/utils/platform";
 
 const CHAT_ICONS = {
   plus: Plus,
@@ -22,19 +26,62 @@ export function resolveChatIcon(name, fallback = Plus) {
   return CHAT_ICONS.hasOwnProperty(name) ? CHAT_ICONS[name] : fallback;
 }
 
-export default function OpenButton({ settings, isOpen, toggleOpen }) {
-  // Default welcome messages - can be customized via settings
-  const defaultBubbleMessages = [
-    "Hallo! Ich bin Kuno, Ihr Online-Berater!",
-    "Möchten Sie mehr über unser Angebot erfahren? Ich helfe gerne weiter!",
-  ];
+// Gerät für die Willkommensblasen (KIE-568): EINMAL beim Laden der Seite nach
+// der Fensterbreite bestimmt. Auf Modulebene, weil OpenButton bei jedem
+// Öffnen des Chats aus- und beim Schließen wieder eingehängt wird; sonst
+// gälte nach einer Größenänderung plötzlich der andere Gerätemodus
+// (Fixliste 7.22-rc7 Nr. 19). Den ersten Aufruf macht App beim ersten
+// Rendern, nicht erst OpenButton: Startet der Chat offen, gilt sonst das
+// Gerät beim ersten Schließen (Fixliste 7.22-rc13 W08).
+let loadDevicePhone = null;
+export function phoneAtLoad() {
+  if (loadDevicePhone === null) loadDevicePhone = isPhoneViewport();
+  return loadDevicePhone;
+}
+// nur für Tests: Gerät neu bestimmen lassen
+export function resetPhoneAtLoad() {
+  loadDevicePhone = null;
+}
 
+// So lange müssen die Willkommensblasen zu sehen sein, bis sie im Modus
+// „Bei jedem Besuch“ für diesen Tab als gezeigt gelten. Öffnet der Chat
+// sofort (openOnLoad, wiederhergestellter Offen-Zustand), waren sie nie
+// wirklich zu sehen und erscheinen beim nächsten Schließen bzw. auf der
+// nächsten Seite (Fixliste 7.22-rc7 Nr. 19).
+export const BUBBLES_SHOWN_AFTER_MS = 600;
+
+export default function OpenButton({ settings, isOpen, toggleOpen }) {
+  // Standard-Willkommensblasen in der Sprache des Widgets, solange keine
+  // eigenen gespeichert sind (deutsch wortgleich mit dem Vorschlag im Design
+  // Center, DEFAULT_WELCOME_BUBBLES)
+  const ui = uiTexts(settings);
   const welcomeMessages =
     settings?.chatbotBubblesMessages?.length > 0
       ? settings.chatbotBubblesMessages
-      : defaultBubbleMessages;
-  const { bubblesVisible, dismissBubbles, dismissBubblesOnChatOpen } =
-    useBubbleDismissal(settings);
+      : ui.welcomeBubbles;
+  // Willkommensblasen je Gerät (KIE-568): Handy/Desktop einmal beim Laden
+  // nach der Fensterbreite bestimmt (phoneAtLoad), Modus off/first/every
+  // vom Server
+  const bubbleMode = welcomeBubblesMode(settings, phoneAtLoad());
+  const {
+    bubblesVisible,
+    dismissBubbles,
+    dismissBubblesOnChatOpen,
+    markBubblesShown,
+  } = useBubbleDismissal(settings, bubbleMode);
+  const showBubbles =
+    !isOpen &&
+    bubbleMode !== "off" &&
+    !!settings.displayChatbotBubbles &&
+    bubblesVisible;
+  // "Bei jedem Besuch": gezeigt -> im selben Tab nicht erneut. Erst wenn sie
+  // BUBBLES_SHOWN_AFTER_MS lang zu sehen waren (nicht schon im ersten Frame
+  // vor einem automatischen Öffnen).
+  useEffect(() => {
+    if (!showBubbles) return;
+    const t = setTimeout(markBubblesShown, BUBBLES_SHOWN_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [showBubbles]);
 
   // Auto-detect bubble direction based on button position to prevent overflow
   const position = settings?.position || "bottom-right";
@@ -61,8 +108,9 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
   return (
     <div className="allm-relative">
       {/* Welcome message bubbles */}
-      {settings.displayChatbotBubbles && bubblesVisible && (
+      {showBubbles && (
         <div
+          data-welcome-bubbles={bubbleMode}
           className={bubbleContainerClasses}
           onClick={() => {
             dismissBubblesOnChatOpen();
@@ -71,13 +119,13 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
         >
           {/* Single X button for entire group */}
           <button
-            className="allm-absolute allm-top-0 allm-z-10 allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-bg-[color:var(--allmi-surface,#fff)] allm-shadow-sm allm-border"
+            className="allm-welcome-close allm-absolute allm-top-0 allm-z-10 allm-text-[color:var(--allmi-text-muted,#9ca3af)] hover:allm-text-[color:var(--allmi-text,#4b5563)] allm-rounded-full allm-p-2 allm-w-7 allm-h-7 allm-flex allm-items-center allm-justify-center allm-text-sm allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] allm-opacity-0 group-hover:allm-opacity-100 hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)] allm-bg-[color:var(--allmi-surface,#fff)] allm-shadow-sm allm-border"
             style={closeButtonPosition}
             onClick={(e) => {
               e.stopPropagation();
               dismissBubbles();
             }}
-            aria-label="Close all chat bubbles"
+            aria-label={ui.closeWelcomeBubbles}
           >
             ×
           </button>
@@ -108,6 +156,9 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
       <button
         style={{
           backgroundColor: `var(--allmi-accent, ${settings.buttonColor})`,
+          // Icon in der Schrift auf der Kundenfarbe aus dem Design Center
+          // (--allmi-on-accent, Gruppe A)
+          color: ON_ACCENT_TEXT,
           ...(settings.buttonOutline === "white" && {
             border: "2px solid rgba(255, 255, 255, 0.8)",
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
@@ -122,10 +173,10 @@ export default function OpenButton({ settings, isOpen, toggleOpen }) {
           dismissBubblesOnChatOpen();
           toggleOpen();
         }}
-        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-white allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] hover:allm-scale-105`}
-        aria-label="Toggle Menu"
+        className={`hover:allm-cursor-pointer allm-border-none allm-flex allm-items-center allm-justify-center allm-p-4 allm-rounded-full allm-text-2xl hover:allm-opacity-95 allm-transition-all allm-duration-[var(--allmi-transition,200ms)] allm-ease-[var(--allmi-easing,cubic-bezier(0.4,0,0.2,1))] hover:allm-scale-105`}
+        aria-label={ui.openChat}
       >
-        <ChatIcon weight="fill" className="text-white" />
+        <ChatIcon weight="fill" />
       </button>
 
       {/* Custom styles for animations */}

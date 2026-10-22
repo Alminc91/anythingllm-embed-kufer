@@ -6,21 +6,132 @@ import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
   DEFAULT_INLINE_EFFECT,
   DEFAULT_INLINE_HEIGHT,
-  DEFAULT_INLINE_INPUT_PLACEHOLDER,
   DEFAULT_INLINE_LAYOUT,
   DEFAULT_INLINE_OPEN_ON,
-  DEFAULT_INLINE_SEND_TEXT,
   DEFAULT_MOUNT_SELECTOR,
+  applyFixedStandards,
+  dropLegacyDefaults,
   layoutValidations,
-  normalizePanelSettings,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
-import { applyTheme } from "@/utils/theme";
+import { applyTheme, userTextColorFor } from "@/utils/theme";
+import { syncI18nLanguage } from "@/i18n";
+import { widgetLanguage } from "@/utils/language";
 
-// Nur aus der Server-Config übernehmen, nie aus Script-Attributen: Bestands-
-// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height="77%"
-// / data-window-width="25%", die früher wirkungslos waren und es bleiben müssen.
-const SERVER_ONLY_SETTINGS = ["windowWidth", "windowHeight"];
+// Rangfolge der Einbau-Angaben (Fixliste 7.22-rc17, E23 und E24):
+// - Gruppe A (DC_COVERED): im Design Center 2.0 einstellbar (je ein Feld im
+//   Reiter Aussehen oder Inhalt, Fork EmbedAppearance/AppearanceTab.jsx und
+//   ContentTab.jsx). Es gilt nur das Design Center: der Wert vom Server
+//   (gespeichert oder sein Standard), sonst der Standard des Widgets. Skript-
+//   Angaben werden vor dem Zusammenführen verworfen, auch wenn nichts
+//   gespeichert ist; CSS-Variablen der Seite wirken dafür ebenfalls nicht
+//   (utils/theme.js, Variablen mit dc).
+// - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
+//   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
+//   Ausnahme: Ist der Datenschutz-Hinweis an, gilt greetingStyle "bubble"
+//   (E26, utils/layout.js applyFixedStandards).
+// - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
+//   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
+//   Sponsor-Zeile): wirken immer.
+// - E24: Der KI-Hinweis (disclaimer, disclaimerText) ist auf keinem Weg
+//   abschaltbar oder änderbar (utils/layout.js AI_NOTICE).
+export const DC_COVERED = [
+  "displayMode", // Darstellung
+  "theme", // Farbschema
+  "buttonColor", // Akzentfarbe (der Server liefert sie als diese drei)
+  "userBgColor",
+  "linkColor",
+  "userTextColor", // Schrift auf der Akzentfarbe
+  "brandImageUrl", // Logo (Kopfzeile und Avatar)
+  "assistantIcon",
+  "chatIcon", // Chat-Icon
+  "position", // Position des Chat-Buttons
+  "courseCards", // Kurse anzeigen als
+  "courseCardsPosition", // Reihenfolge
+  "brandText", // Name (Kopfzeile und über den Antworten)
+  "assistantName",
+  "assistantSubtitle", // Untertitel
+  "greeting", // Begrüßungstext
+  "greetingBubbleText",
+  "privacyNotice", // Schalter Datenschutz-Hinweis
+  "privacyTitle",
+  "privacyText",
+  "privacyUrl",
+  "defaultMessages", // Startvorschläge
+  "sendMessageText", // Platzhalter im Eingabefeld
+  "chatbotBubblesMessages", // Willkommensblasen (Texte und Anzeige)
+  "displayChatbotBubbles",
+  "bubblePersistence",
+  "welcomeBubblesDesktop",
+  "welcomeBubblesMobile",
+  "supportEmail", // Support-E-Mail
+];
+// Ohne Wirkung, aber nicht aus dem Design Center: der KI-Hinweis (E24) und
+// Altangaben, die schon früher nichts bewirkten (Fenstergröße: Bestands-
+// Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height
+// "77%" und data-window-width "25%"; Online-Punkt: im Kopf entfallen).
+const IGNORED_HINTS = {
+  disclaimer: "Der KI-Hinweis ist fest und lässt sich nicht abschalten.",
+  disclaimerText: "Der Text des KI-Hinweises ist fest.",
+  windowWidth: "Die Fenstergröße ist fest.",
+  windowHeight: "Die Fenstergröße ist fest.",
+  onlineDot: "Den Online-Punkt gibt es nicht mehr.",
+};
+const DC_HINTS = {
+  bubblePersistence:
+    "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
+  privacyNotice:
+    "Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.",
+};
+// Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
+// „Frühere Chats“, KIE-503; kein Feld des Design Centers)
+const SERVER_WINS = ["historyEnabled"];
+
+// data-Attribut zum Schlüssel im dataset (buttonColor -> data-button-color)
+function dataAttributeName(key) {
+  return `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+}
+
+// Gruppe A und wirkungslose Angaben aus den Skript-Attributen entfernen,
+// eine Warnung je entfernter Angabe (Fixliste 7.22-rc17 W50).
+export function dropIneffectiveAttributes(dataset = {}) {
+  const out = { ...dataset };
+  for (const key of Object.keys(out)) {
+    const dc = DC_COVERED.includes(key);
+    const ignored = Object.prototype.hasOwnProperty.call(IGNORED_HINTS, key);
+    if (!dc && !ignored) continue;
+    delete out[key];
+    const hint = dc
+      ? DC_HINTS[key] ||
+        "Diese Einstellung kommt aus dem Design Center (gespeichert oder Standard)."
+      : IGNORED_HINTS[key];
+    console.warn(
+      `[AnythingLLM Embed] Einbau-Angabe ${dataAttributeName(key)} wirkt nicht. ${hint}`,
+    );
+  }
+  return out;
+}
+
+// Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“):
+// privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
+// (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
+const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
+// Kennzeichen der Startvorschläge vom Server (Vertrag mit dem Fork, GET
+// /embed/:id/config, Fixliste 7.22-rc13 F02): defaultMessagesSaved = im
+// Design Center gespeichert, auch als leere Liste; defaultMessagesStandard =
+// nichts gespeichert, die Liste ist der Standard der Sprache. Beide werden
+// nach dem Auflösen entfernt (applyDefaultMessagesOrder).
+const DEFAULT_MESSAGES_SAVED = "defaultMessagesSaved";
+const DEFAULT_MESSAGES_STANDARD = "defaultMessagesStandard";
+
+// Rohe Script-Attribute (data-*), wie die Seite sie gesetzt hat, bevor
+// embedderSettings.settings mit den aufgelösten Werten überschrieben wird.
+// Für Hinweise, die nur bei einem Attribut der Seite gelten
+// (warnIfInlineInputIgnored), nicht bei festen Standards des Servers.
+let scriptDataset = {};
+export function scriptAttributes() {
+  return scriptDataset;
+}
 
 export const DEFAULT_SETTINGS = {
   embedId: null, //required
@@ -36,13 +147,22 @@ export const DEFAULT_SETTINGS = {
   chatIcon: "chatBubble",
   brandImageUrl:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // will be forced into 100x50px container
-  brandText: "Ihr Online-Berater", // brand text to display next to brand image
-  greeting:
-    "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.", // Datenschutz-Standardhinweis (greeting) – wird bei fehlender server-/scriptseitiger Konfiguration angezeigt.
+  // Name im Kopf; null = Standardname der Sprache (PANEL_TEXTS
+  // assistantName „KI-Berater“ bzw. „AI Advisor“, applyFixedStandards)
+  brandText: null,
+  // Begrüßungstext = Text der Begrüßungsblase (utils/layout.js greetingText:
+  // greetingBubbleText > greeting > Standard der Sprache). null = Standard.
+  // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
+  // Datenschutz-Blase (privacyText).
+  greeting: null,
   buttonColor: "#01a5a9", // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
   userBgColor: "#01a5a9", // user text bubble color
-  userTextColor: "#FFFFFF", // user text bubble text color (only "#FFFFFF" or "#000000" via admin)
+  // Schrift auf der Kundenfarbe (Nutzerblasen und alle Flächen in
+  // Kundenfarbe): Wahl im Design Center (Weiß oder Schwarz); null = Empfehlung
+  // nach WCAG-Kontrast aus der Kundenfarbe (utils/theme.js userTextColorFor,
+  // onAccentTextColor; KIE-565 Nachtrag)
+  userTextColor: null,
   assistantBgColor: "#FFFFFF", // assistant text bubble color
   linkColor: "#01a5a9", // color for links in assistant messages (Kufer accent)
   headerBgColor: null, // header background color (default: white)
@@ -52,7 +172,7 @@ export const DEFAULT_SETTINGS = {
   sponsorText: "Ein Dienst der Kufer Software GmbH", // default sponsor textNo
   sponsorLink: "https://kufer.de", // default sponsor link
   position: "bottom-left", // position of chat button/window
-  assistantName: "Ihr Online-Berater", // default assistant name
+  assistantName: null, // Name über den Antworten; null wie brandText
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
   // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
@@ -60,14 +180,17 @@ export const DEFAULT_SETTINGS = {
   // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
   // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
   // Bestandskunden. data-window-width/-height am Script werden verworfen
-  // (SERVER_ONLY_SETTINGS).
+  // (IGNORED_HINTS, mit Warnung).
   windowHeight: null, // z. B. "600px" | "80%" | "70vh"
   windowWidth: null, // z. B. "420px" | "25%" | "30vw"
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
   offsetY: null, // Randabstand Button/Fenster in px (0–200), null = 16px
 
-  // Darstellung: "bubble" (Chat-Blase) | "inline" (in der Seite, im Platzhalter
-  // <div id="kufer-assistent">). Ohne Platzhalter fällt inline auf die Blase zurück.
+  // Darstellung: "bubble" (Chatfenster) | "inline" (in der Seite, im
+  // Platzhalter <div id="kufer-assistent">). Ohne Platzhalter fällt inline auf
+  // das Chatfenster zurück. Nach der Entscheidung (App.jsx, applyDisplayed)
+  // steht in den Settings der Komponenten die TATSÄCHLICHE Darstellung; sie
+  // geht mit jeder Chat-Anfrage an den Server (stream-chat, displayMode).
   displayMode: "bubble",
   mount: DEFAULT_MOUNT_SELECTOR, // nur per data-mount (CSS-Selektor)
   inlineCollapsedText: DEFAULT_INLINE_COLLAPSED_TEXT,
@@ -84,8 +207,12 @@ export const DEFAULT_SETTINGS = {
   // defaultMessages als Chips (max. 6). false = Klickfläche wie bisher.
   // Nur Inline-Modus (Blase: ignoriert, eine Warnung).
   inlineInput: false,
-  inlineInputPlaceholder: DEFAULT_INLINE_INPUT_PLACEHOLDER, // max. 120 Zeichen
-  inlineSendText: DEFAULT_INLINE_SEND_TEXT, // Knopf, max. 40 Zeichen
+  // Platzhalter (max. 120 Zeichen) und Knopf (max. 40 Zeichen) der
+  // Eingabe-Leiste; null = Demo-Texte der Sprache („Stellen Sie hier Ihre
+  // Frage …“/„Chatten“, englisch „Ask your question here …“/„Chat“;
+  // utils/layout.js inlineBarTexts). Nicht der Platzhalter im Chat-Feld.
+  inlineInputPlaceholder: null,
+  inlineSendText: null,
   // Eingabe-Leiste: "submit" = öffnet erst beim Absenden (bisher) | "focus" =
   // schon beim Klick/Tippen ins Feld (nur Zeiger/Touch, nie per Tab-Fokus).
   inlineOpenOn: DEFAULT_INLINE_OPEN_ON,
@@ -94,62 +221,91 @@ export const DEFAULT_SETTINGS = {
   inlineTheme: null,
   // Theme des ganzen Fensters: "light" | "dark" | "auto" (folgt
   // prefers-color-scheme). Setzt den Standard-Satz der CSS-Variablen
-  // (utils/theme.js); Seiten-CSS (--allm-*) gewinnt immer.
+  // (utils/theme.js). Nur aus dem Design Center (Gruppe A, E23);
+  // Flächen- und Textfarben verfeinert Seiten-CSS (--allm-*).
   theme: "light",
-  inheritFont: false, // Inline: Schrift der Webseite übernehmen
-  // Kurskarten unter Antworten, die Kurse nennen: "off" | "auto". Braucht
+  // Inline: Schrift der Webseite übernehmen. Im Inline-Modus ohne Angabe an
+  // (INLINE_STANDARDS, wie die Demo); in der Chatblase ohne Wirkung.
+  inheritFont: false,
+  // Kurskarten zu Antworten, die Kurse nennen: "off" | "auto". Braucht
   // courseSources vom Server (Fork-Image >= 7.9); sonst ohne Wirkung.
-  courseCards: "off",
-  // Kurskarten über ("above") oder unter ("below") der Antwort. Bei "above"
-  // erscheinen vom Server angekündigte Kurse schon vor dem Text (Fork >= 7.10).
+  // Im Design Center wählbar (KIE-567 „Antworten mit Kursen“: Kurskarten /
+  // Nur Text mit Links); der Server liefert den Wert nur, wenn gespeichert.
+  // null = nicht gespeichert: Standard nach der tatsächlichen Darstellung
+  // (Fixliste 7.22-rc8 R4: In der Seite "auto", Chatfenster "off"), gesetzt
+  // in App.jsx (utils/layout.js applyDisplayed), sobald die Darstellung
+  // feststeht. Ein data-course-cards am Skript wirkt nicht.
+  courseCards: null,
+  // Kurskarten über ("above", Standard: Karten zuerst, danach der kurze Text)
+  // oder unter ("below", Text zuerst, danach Karten und Folgefragen) der
+  // Antwort (KIE-567 „Reihenfolge“). Vom Server angekündigte Kurse erscheinen
+  // bei "above" schon vor dem Text (Fork >= 7.10), bei "below" unter der
+  // fertigen Antwort (utils/courseCards.js selectBelowCourseCards).
   courseCardsPosition: DEFAULT_COURSE_CARDS_POSITION,
-  // Kartenlayout "grid" (Raster) | "rows" (Zeilen-Karten über die volle
-  // Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
+  // Kartenlayout "grid" (Raster) | "rows" (Standard, Zeilen-Karten über die
+  // volle Breite, data-course-cards-layout bzw. visual_config courseCardsLayout)
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
-  // Panel-Optik (opt-in, Standard = bisher): Vorschläge "bars" | "pills",
-  // Begrüßung "text" | "bubble" (greetingBubbleText als Assistenten-Blase,
-  // greeting klein darunter); Kopfzeile: Untertitel unter dem Namen und
-  // dekorativer Online-Punkt am Icon. Icon-Bild = brandImageUrl (Kopfzeile)
-  // bzw. assistantIcon (Blase), im Design Center per Logo gesetzt.
-  suggestionStyle: "bars",
-  greetingStyle: "text",
-  greetingBubbleText: null, // max. 300 Zeichen; null = Standard der Sprache
-  assistantSubtitle: null, // max. 60 Zeichen
+  // Panel-Optik, Standard seit Design Center vereinfacht (utils/layout.js
+  // FIXED_STANDARDS, Gruppe B: eine Skript-Angabe verfeinert ihn, E23):
+  // Vorschläge als Pillen, Begrüßung als Blase, darunter die
+  // Datenschutz-Blase, Folgefragen als Pillen. KI-Hinweis fest unter der
+  // Eingabe (AI_NOTICE, E24). Die Datenschutz-Blase schaltet allein der
+  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting).
+  // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
+  // Design Center per Logo gesetzt.
+  suggestionStyle: "pills",
+  greetingStyle: "bubble",
+  greetingBubbleText: null, // max. 300 Zeichen; Vorrang vor greeting
+  // Untertitel unter dem Namen (max. 60 Zeichen): null = Standard der
+  // Sprache („Online-Berater mit künstlicher Intelligenz“, Fixliste 7.22-rc8
+  // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
+  assistantSubtitle: null,
   onlineDot: false,
-  // Datenschutz-Hinweis: "none" | "bubble" (Absätze in der Begrüßungsblase,
-  // ohne Bestätigung; setzt greetingStyle "bubble", normalisiert in
-  // loadEmbedSettings) | "modal" (einmalige Karte beim ersten Öffnen,
-  // Bestätigung in localStorage allm-privacy-ack-<embedId>). Texte null =
-  // Standard der Sprache (utils/layout.js PANEL_TEXTS).
-  privacyNotice: "none",
+  privacyNotice: "bubble",
+  // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),
+  // freier Text (Zeilen mit „•“/„-“ = Punkte, sonst Absätze; null = Standard
+  // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen
-  privacyText: null, // Stichpunkte je Zeile bzw. "|", max. 5 × 160 Zeichen
-  privacyButtonText: null, // max. 40 Zeichen, Standard „Start“
+  privacyText: null, // max. 12 Zeilen à 500 Zeichen, 1000 Zeichen gesamt
+  privacyButtonText: null, // nur früherer Einmal-Hinweis („modal“)
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
-  // Fester KI-Hinweis unter dem Eingabefeld: "none" | "footer";
-  // disclaimerText max. 160 Zeichen, null = Standard der Sprache
-  // (utils/layout.js PANEL_TEXTS.aiDisclaimer)
-  disclaimer: "none",
-  disclaimerText: null,
-  // Folgefragen des Modells als Pillen unter der letzten Antwort: "none" |
-  // "pills" (Server-Chunk "followUps", Fork >= 7.14; ohne Wirkung sonst)
-  followUps: "none",
+  disclaimer: "footer",
+  disclaimerText: null, // ignoriert: Text fest (PANEL_TEXTS.aiDisclaimer)
+  // Folgefragen des Modells als Pillen unter der letzten Antwort (Server-
+  // Chunk "followUps", Fork >= 7.14; ohne Wirkung sonst)
+  followUps: "pills",
   textSize: 14, // text size in px (number only)
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
-  sendMessageText: "Wie kann ich Ihnen helfen?", // override text for send message button
+  // Platzhalter im Eingabefeld; null = Standard der Sprache
+  // (PANEL_TEXTS.inputPlaceholder „Ihre Frage eingeben“)
+  sendMessageText: null,
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
-  resetBurgerText: "Chat zurücksetzen", // override text for reset option in burger menu
-  emailBurgerText: "E-Mail Support", // override text for email support option in burger menu
-  sessionBurgerText: "Chat-ID", // override text for chat ID option in burger menu (copies conversationId)
+  // Menütexte (Burger-Menü): null = Text in der Sprache des Widgets
+  // (utils/layout.js uiTexts: „Chat zurücksetzen“, „E-Mail Support“,
+  // „Chat-ID“, „Frühere Chats“ bzw. englisch); eigener Text per Attribut
+  resetBurgerText: null,
+  emailBurgerText: null,
+  sessionBurgerText: null, // kopiert die conversationId
+  historyBurgerText: null,
 
   // behaviors
   openOnLoad: "off", // or "on"
   supportEmail: "info@kufer.de", // string of email for contact
   username: null, // The display or readable name set on a script
-  defaultMessages: [], // list of strings for default messages.
+  // Startvorschläge (Liste von Strings): gespeichert im Design Center (auch
+  // leer) vor dem Standard der Sprache vom Server (applyDefaultMessagesOrder,
+  // E10 neu, Fixliste 7.22-rc17); data-default-messages wirkt nicht
+  defaultMessages: [],
   displayChatbotBubbles: true, // controls whether welcome message bubbles are shown
   chatbotBubblesMessages: [], // messages to display in welcome bubbles
+  // Willkommensblasen je Gerät (KIE-568, Design Center „Willkommensblasen
+  // anzeigen“): "off" | "first" (beim ersten Besuch, localStorage) | "every"
+  // (bei jedem Besuch, einmal je Browser-Tab). Allein der Server-Wert zählt
+  // (utils/layout.js applyFixedStandards), Handy = Viewport < 768 px beim
+  // Laden (utils/platform.js isPhoneViewport).
+  welcomeBubblesDesktop: "first",
+  welcomeBubblesMobile: "first",
 
   // audio features
   enableStt: true, // true/false - show STT microphone if server supports it
@@ -157,44 +313,86 @@ export const DEFAULT_SETTINGS = {
   ttsPosition: "bottom-right", // "bottom-right" or "icon-left" (under avatar)
 
   // KIE-503: "Frühere Chats" im Burger-Menü. Abschaltbar per Admin
-  // (visual_config.historyEnabled=false) oder data-history-enabled="false".
+  // (visual_config.historyEnabled=false, gewinnt: SERVER_WINS) oder
+  // data-history-enabled="false".
   historyEnabled: true,
 };
 
 // Script-Attribute + Server-visual_config zu den finalen Settings auflösen
-// (ohne Seiteneffekte; testbar mit gemocktem fetch).
-// Priority: defaults < script data-attributes < server config (live design)
+// (ohne Seiteneffekte; testbar mit gemocktem fetch). Rangfolge nach E23
+// (oben): Gruppe A nur vom Server, sonst Standard; übrige Angaben
+// Standard < Server < Skript-Attribut (die Skript-Angabe schlägt einen vom
+// Server gelieferten festen Standard; FIXED_STANDARDS gelten ohne
+// Skript-Angabe auch gegen den Server), Ausnahme SERVER_WINS.
 export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
-  const scriptSettings = parseAndValidateEmbedSettings(dataset);
-  for (const key of SERVER_ONLY_SETTINGS) delete scriptSettings[key];
+  const effective = dropIneffectiveAttributes(dataset);
+  const scriptSettings = parseAndValidateEmbedSettings(effective);
 
   // Fetch live visual config from server (admin panel settings)
   let serverConfig = {};
   try {
     const res = await fetchFn(
-      `${scriptSettings.baseApiUrl}/${scriptSettings.embedId}/config`,
+      embedConfigUrl({ ...DEFAULT_SETTINGS, ...scriptSettings }),
     );
     if (res.ok) serverConfig = await res.json();
   } catch (e) {
     console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
   }
 
-  // Only merge non-empty server values so script attributes remain as fallback
+  // Nur nicht leere Server-Werte übernehmen (Ausnahme privacyTitle und
+  // assistantSubtitle: "" = im Design Center bewusst geleert)
   const mergedServerConfig = {};
   for (const [key, value] of Object.entries(serverConfig || {})) {
-    if (value !== null && value !== undefined && value !== "")
+    if (value === "" && EMPTY_MEANS_NONE.includes(key))
+      mergedServerConfig[key] = value;
+    else if (value !== null && value !== undefined && value !== "")
       mergedServerConfig[key] = value;
   }
-
-  const resolved = normalizePanelSettings({
-    ...DEFAULT_SETTINGS,
-    ...scriptSettings,
-    ...parseAndValidateEmbedSettings(mergedServerConfig),
-    loaded: true,
-  });
+  // Frühere Standardtexte gelten je Quelle als nicht gesetzt (der nächst-
+  // niedrigere Wert greift); danach feste Standards und Inline-Standards.
+  const script = dropLegacyDefaults(scriptSettings);
+  const server = dropLegacyDefaults(
+    parseAndValidateEmbedSettings(mergedServerConfig),
+  );
+  applyDefaultMessagesOrder(script, server);
+  const serverWins = {};
+  for (const key of SERVER_WINS)
+    if (server[key] !== undefined) serverWins[key] = server[key];
+  const resolved = applyFixedStandards(
+    { ...DEFAULT_SETTINGS, ...server, ...script, ...serverWins, loaded: true },
+    server,
+    new Set(Object.keys(script)),
+  );
   // Ungültige Enums erst hier melden: die Warnung nennt den wirksamen Wert.
-  warnInvalidInlineEnums(dataset, mergedServerConfig, resolved);
+  warnInvalidInlineEnums(effective, mergedServerConfig, resolved);
   return resolved;
+}
+
+// Abruf der Konfiguration mit der Sprache des Widgets (Fixliste 7.22-rc13
+// F01, Entscheidung E12): Die Sprache steht nur im Skript (data-language,
+// sonst "de"); der Server wählt damit die Standard-Startvorschläge
+// (fehlend oder unbekannt = de). Die Abfrage trennt auch den Cache je
+// Sprache (max-age=300).
+export function embedConfigUrl(settings = {}) {
+  const language = encodeURIComponent(widgetLanguage(settings));
+  return `${settings.baseApiUrl}/${settings.embedId}/config?language=${language}`;
+}
+
+// Startvorschläge (E10 neu, Fixliste 7.22-rc17): gespeicherte Liste (auch
+// leer) vor dem Standard des Servers (defaultMessagesStandard); ein
+// gespeichertes [] (defaultMessagesSaved) heißt „keine Startvorschläge“.
+// data-default-messages am Skript wirkt nicht (Gruppe A, DC_COVERED), auch
+// ohne Liste vom Server (älterer Server, keine Antwort: keine
+// Startvorschläge). Entfernt die Kennzeichen aus beiden Quellen, ändert
+// server und script an Ort und Stelle.
+export function applyDefaultMessagesOrder(script = {}, server = {}) {
+  const saved = server[DEFAULT_MESSAGES_SAVED] === true;
+  for (const source of [server, script]) {
+    delete source[DEFAULT_MESSAGES_SAVED];
+    delete source[DEFAULT_MESSAGES_STANDARD];
+  }
+  if (saved && !Array.isArray(server.defaultMessages))
+    server.defaultMessages = [];
 }
 
 export default function useGetScriptAttributes() {
@@ -214,6 +412,7 @@ export default function useGetScriptAttributes() {
           "[AnythingLLM Embed Module::Abort] - Invalid script tag setup detected. Missing required parameters for boot!",
         );
 
+      scriptDataset = { ...embedderSettings.settings };
       const finalSettings = await loadEmbedSettings(embedderSettings.settings);
 
       // Update module-level settings so components that read embedderSettings
@@ -231,8 +430,7 @@ export default function useGetScriptAttributes() {
       // Update module-level styles so chat bubbles use live colors
       if (finalSettings.userBgColor)
         embedderSettings.USER_STYLES.msgBg = finalSettings.userBgColor;
-      if (finalSettings.userTextColor)
-        embedderSettings.USER_STYLES.msgText = finalSettings.userTextColor;
+      embedderSettings.USER_STYLES.msgText = userTextColorFor(finalSettings);
       if (finalSettings.assistantBgColor)
         embedderSettings.ASSISTANT_STYLES.msgBg =
           finalSettings.assistantBgColor;
@@ -242,6 +440,8 @@ export default function useGetScriptAttributes() {
       // Theme entsteht. Ersetzt die frühere Link-Farb-Injektion.
       if (embedderSettings.themeStyle)
         applyTheme(embedderSettings.themeStyle, finalSettings);
+      // i18next-Texte in der Sprache des Widgets (Script bzw. Server)
+      syncI18nLanguage(finalSettings);
 
       setSettings(finalSettings);
     }
@@ -256,35 +456,32 @@ const validations = {
   // undefined = ungültig -> Feld wird verworfen (siehe unten).
   ...layoutValidations,
 
-  _fallbacks: {
-    defaultMessages: [],
-    chatbotBubblesMessages: [],
-  },
-
-  defaultMessages: function (value = null) {
-    if (typeof value !== "string") return this._fallbacks.defaultMessages;
-    const list = value
-      .split(",")
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter((v) => v.length > 0);
-    return list;
-  },
-
-  chatbotBubblesMessages: function (value = null) {
-    if (typeof value !== "string")
-      return this._fallbacks.chatbotBubblesMessages;
-    const list = value
-      .split(",")
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter((v) => v.length > 0);
-    return list;
-  },
+  defaultMessages: messageList,
+  chatbotBubblesMessages: messageList,
 };
+
+// Startvorschläge und Willkommensblasen: Der Server liefert ein Array von
+// Strings (Fixliste 7.22-rc13 F03, Entscheidung E11), jeder Eintrag bleibt
+// ganz, auch mit Komma („Gibt es Kurse, die abends stattfinden?“). An Kommas
+// getrennt wird nur ein String: das Skript-Attribut (data-default-messages=
+// "A,B", Bestand) und die Antwort älterer Server. Leere Einträge und
+// Nicht-Strings fallen weg; alles andere ergibt eine leere Liste.
+function messageList(value = null) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return items
+    .filter((v) => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+}
 
 export function parseAndValidateEmbedSettings(settings = {}) {
   const validated = {};
   for (let [key, value] of Object.entries(settings)) {
-    if (!validations.hasOwnProperty(key)) {
+    if (!Object.prototype.hasOwnProperty.call(validations, key)) {
       validated[key] = value;
       continue;
     }

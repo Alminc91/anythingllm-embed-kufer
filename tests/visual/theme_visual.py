@@ -10,7 +10,10 @@ Aufruf (aus dem Repo-Wurzelverzeichnis):
 
   #    Ausnahme NEW_STATES (Zustände, die es auf main nicht gab): Referenz aus
   #    diesem Branch, nur gezielt: --baseline --only <zustand> …
-  #    Bestehende Referenzen nie überschreiben.
+  #    Bestehende Referenzen nur aus einem abgenommenen Stand erneuern: seit
+  #    Fixliste 7.22-rc20 W83 alle aus dem Build von 4c73b6d (rc19, im
+  #    Browser abgenommen; vorher main vom 06. und 09.10., vor Design
+  #    Center 2.0).
 
   # 2) Neuen Build prüfen (npm run build vorher)
   python3 tests/visual/theme_visual.py
@@ -47,6 +50,8 @@ import threading
 import time
 import urllib.parse
 
+import re
+
 import numpy as np
 from PIL import Image
 from playwright.sync_api import sync_playwright
@@ -62,6 +67,10 @@ EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
 VIEWPORT = {"width": 1000, "height": 700}
 MOBILE = {"width": 390, "height": 700}
 MAX_DIFF_RATIO = 0.001  # 0,1 %
+# Button „⋮“ im Kopf, sprachunabhängig (Fixliste 7.22-rc19 W71): aria-label
+# kommt aus UI_TEXTS (layout.js), „Options“ bei language=en, sonst
+# „Optionen“ (seit rc16 auch ohne data-language)
+OPTIONS_BUTTON = "button[aria-label=Optionen], button[aria-label=Options]"
 # Basis = main nach Feinschliff, 2026-10-06 (c6bc308, gemessen 797.168 B)
 BASE_JS_SIZE = 797_168
 # Basis = main nach Kurskarten v2, 2026-10-06 (1e538e5)
@@ -93,6 +102,42 @@ HISTORY_ANSWER = [
 ]
 
 BASE_ATTRS = {"embed-id": EMBED_ID, "base-api-url": API}
+
+
+# Gruppe A (Fixliste 7.22-rc17 E23): Einbau-Angaben zu Feldern des Design
+# Centers verwirft das Widget seit rc17 (src/hooks/useScriptAttributes.js
+# DC_COVERED). Die Suiten geben Darstellung, Farbschema, Farben und Texte
+# deshalb als Antwort des gemockten Servers vor, wie rc17_rangfolge.py
+# (Fixliste 7.22-rc18 W65): open_page verschiebt solche Angaben aus
+# cfg["attrs"] in die Mock-config. Gibt die Mock-config denselben Schlüssel
+# vor, gilt ihr Wert (wie vor rc17, als der Server das Skript schlug).
+# cfg["script_attrs"] = True lässt die Angaben am Skript (Prüfung, dass sie
+# nicht wirken). Die Liste kommt aus dem Quelltext, damit sie nicht veraltet.
+def _dc_covered():
+    src = (ROOT / "src" / "hooks" / "useScriptAttributes.js").read_text(encoding="utf-8")
+    m = re.search(r"export const DC_COVERED = \[(.*?)\];", src, re.S)
+    keys = re.findall(r'"(\w+)"', m.group(1)) if m else []
+    if not keys:
+        raise SystemExit("DC_COVERED nicht gefunden (src/hooks/useScriptAttributes.js)")
+    return keys
+
+
+def _attr_name(key):
+    return re.sub(r"[A-Z]", lambda c: "-" + c.group(0).lower(), key)
+
+
+DC_ATTRS = {_attr_name(k): k for k in _dc_covered()}
+
+
+def split_dc_attrs(attrs):
+    """(Skript-Angaben ohne Gruppe A, Gruppe A als Schlüssel der Server-config)"""
+    script, moved = {}, {}
+    for name, value in (attrs or {}).items():
+        if name in DC_ATTRS:
+            moved[DC_ATTRS[name]] = value
+        else:
+            script[name] = value
+    return script, moved
 
 # Zustände, die es auf main nicht gab (dunkles Theme, Seiten-CSS): Referenz
 # stammt aus diesem Branch (Regressionsschutz), nicht vom alten Build.
@@ -230,6 +275,15 @@ def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light
     )
     ctx.add_init_script(INIT_JS)
     brand = (FIXTURES / "brand.png").read_bytes()
+    mock = mock or Mock()
+    if not live and not cfg.get("script_attrs"):
+        attrs, moved = split_dc_attrs(cfg.get("attrs"))
+        cfg = {**cfg, "attrs": attrs}
+        # Ausgangs-config einmal merken: dieselbe Mock-Instanz kann mehrere
+        # Seiten mit verschiedenen Angaben bedienen
+        if not hasattr(mock, "base_config"):
+            mock.base_config = mock.config
+        mock.config = {**moved, **(mock.base_config or {})}
 
     def route_all(route):
         u = route.request.url
@@ -238,7 +292,7 @@ def open_page(browser, base_url, cfg, mock=None, live=False, color_scheme="light
         if u.startswith(API):
             if live:
                 return route.continue_()
-            return (mock or Mock()).handle(route)
+            return mock.handle(route)
         if route.request.resource_type == "image":
             return route.fulfill(body=brand, content_type="image/png")
         if live:
@@ -405,7 +459,7 @@ def run_action(page, action):
         page.wait_for_function(
             "() => !!window.__q('.allm-dot-falling') || !!window.__q('.allm-reply a')", timeout=10000)
     if action in ("menu", "history"):
-        page.evaluate("() => window.__q('button[aria-label=Options]').click()")
+        page.evaluate("(s) => window.__q(s).click()", OPTIONS_BUTTON)
         page.wait_for_timeout(200)
     if action == "history":
         page.evaluate(
@@ -519,8 +573,10 @@ def check_host_css_wins(browser, base_url):
 
 
 def check_precedence(browser, base_url):
+    # Angabe am Skript lassen (script_attrs): das Widget verwirft sie selbst
+    # (Gruppe A), der Wert vom Server gilt (Fixliste 7.22-rc20 W83)
     ctx, page = open_page(
-        browser, base_url, {"attrs": {**OPEN, "user-bg-color": "#111111"}},
+        browser, base_url, {"attrs": {**OPEN, "user-bg-color": "#111111"}, "script_attrs": True},
         Mock(config={**PRAES_CONFIG, "userBgColor": "#222222"}, history=HISTORY_ANSWER),
     )
     try:
@@ -545,7 +601,8 @@ def dark_probe(page):
       const bubble = q('.allm-anything-llm-assistant-message');
       const bubbleText = bubble && bubble.querySelector('span');
       const link = q('.allm-anything-llm-assistant-message a');
-      const muted = [...window.__allmShadow.querySelectorAll('div')].find(d => d.children.length === 0 && d.textContent.trim() === 'Ihr Online-Berater');
+      // gedämpfter Text: Untertitel im Kopf (Design Center 2.0, W83)
+      const muted = q('#anything-llm-header-subtitle');
       return {
         window: s(q('#anything-llm-chat'), 'background-color'),
         headerBorder: s(header, 'border-bottom-color'),
@@ -740,13 +797,14 @@ def check_brand_header_dark(browser, base_url):
         wait_shadow(page, ".allm-anything-llm-assistant-message")
         settle(page, 300)
         p = page.evaluate(
-            """() => {
+            """(sel) => {
           const h = window.__q('#anything-llm-header');
           const brand = h.querySelector('span');
-          const icon = h.querySelector('button[aria-label=Options]');
+          const icon = h.querySelector(sel);
           return {bg: getComputedStyle(h).backgroundColor, text: getComputedStyle(brand).color,
                   icon: getComputedStyle(icon).color};
-        }"""
+        }""",
+            OPTIONS_BUTTON,
         )
         bg = parse_rgb(p["bg"])
         ct = contrast(parse_rgb(p["text"]), bg)
@@ -885,8 +943,11 @@ def check_reduced_motion(browser, base_url):
 
 
 def check_focus_ring(browser, base_url):
-    """--allm-focus-ring: hell ungesetzt = Browser-Standard (revert), dunkel = 2px Akzent."""
-    for theme, expect_style in (("light", "auto"), ("dark", "solid")):
+    """Fokus per Tab: seit Design Center 2.0 ist die Leiste ein Eingabefeld
+    (inlineInput), der Fokus liegt im Feld, der Ring (2 px Akzent) an der
+    Leiste, hell und dunkel (Fixliste 7.22-rc20 W83; gemessen in
+    .test-storage/rc19/probe_fokus_schrift.log)."""
+    for theme in ("light", "dark"):
         ctx, page = open_page(
             browser, base_url,
             {"attrs": {**BASE_ATTRS, "display-mode": "inline", "theme": theme}, "inline": True}, Mock())
@@ -895,8 +956,9 @@ def check_focus_ring(browser, base_url):
             page.keyboard.press("Tab")
             page.wait_for_timeout(100)
             st = page.evaluate(
-                "() => { const a = window.__allmShadow.activeElement; if (!a) return null; const c = getComputedStyle(a); return {id: a.id, style: c.outlineStyle, width: c.outlineWidth, color: c.outlineColor}; }")
-            ok = bool(st) and st["id"] == "anything-llm-inline-bar" and st["style"] == expect_style
+                "() => { const a = window.__allmShadow.activeElement; const bar = window.__q('#anything-llm-inline-bar'); if (!a || !bar) return null; const c = getComputedStyle(bar); return {id: a.id, style: c.outlineStyle, width: c.outlineWidth, color: c.outlineColor}; }")
+            ok = (bool(st) and st["id"] == "anything-llm-inline-input" and st["style"] == "solid"
+                  and st["width"] == "2px" and st["color"] == "rgb(255, 161, 2)")
             record(f"Fokus-Ring ({theme})", ok, json.dumps(st))
         finally:
             ctx.close()
@@ -1022,7 +1084,8 @@ def check_snippet(browser, base_url):
         settle(page, 300)
         res = page.evaluate(
             """() => ({
-          greeting: [...window.__allmShadow.querySelectorAll('p')].some(p => p.textContent.includes('Hallo Snippet-Test')),
+          // Begrüßung in der Begrüßungsblase (Design Center 2.0, W83)
+          greeting: (window.__q('#anything-llm-greeting-bubble')?.textContent || '').includes('Hallo Snippet-Test'),
           header: !!window.__q('#anything-llm-header'),
           win: (() => { const r = window.__q('#anything-llm-chat').getBoundingClientRect(); return {top: r.top, right: innerWidth - r.right}; })(),
         })"""
@@ -1040,10 +1103,11 @@ def check_snippet(browser, base_url):
         record("NAK-5 Snippet (data-inherit-font)", "Georgia" in ff, f"Leiste font-family={ff}")
     finally:
         ctx.close()
-    # --allm-font auf dem Host wirkt (ohne inheritFont)
+    # --allm-font auf dem Host wirkt (ohne inheritFont; In der Seite übernimmt
+    # seit rc3 standardmäßig die Schrift der Seite, W83)
     ctx, page = open_page(
         browser, base_url,
-        {"attrs": {**BASE_ATTRS, "display-mode": "inline"}, "inline": True,
+        {"attrs": {**BASE_ATTRS, "display-mode": "inline", "inherit-font": "false"}, "inline": True,
          "css": "#kufer-assistent { --allm-font: 'Courier New', monospace; --allm-bar-radius: 999px; }"},
         Mock(config={}))
     try:

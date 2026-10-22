@@ -418,6 +418,16 @@ export function cardsAnnounced(entry) {
   return Number.isInteger(n) && n > 0;
 }
 
+// Kurskarten je Antwort (Fixliste 7.22-rc13 W07): Eine Antwort, zu der der
+// Server Karten angekündigt hat, wurde im Kartenmodus beantwortet (kurzer
+// Text ohne Kursnamen und Links, z. B. „In der Seite“). Sie zeigt ihre
+// Karten auch dort, wo sonst „Nur Text mit Links“ gilt, etwa wenn derselbe
+// Verlauf auf einer Unterseite ohne Platzhalter im Chatfenster lädt. Für
+// alle anderen Antworten gilt die Einstellung (settings.courseCards).
+export function entryCourseCards(settings = {}, entry = null) {
+  return cardsAnnounced(entry) ? "auto" : settings?.courseCards;
+}
+
 /**
  * Markdown-Zeichen aus einem Linktext entfernen ("**Umwelt und Gesundheit**"
  * -> "Umwelt und Gesundheit"): Backticks, ** und __, sowie * und _ am
@@ -1132,6 +1142,44 @@ export function selectAnnouncedCourseCards(
     categoryLink: layout.categoryLink || findCategoryLink(links, ctx),
     footerCards: extra.slice(0, slots).map(cardOf),
     footerMore: extra.length - Math.min(slots, extra.length),
+  };
+}
+
+/**
+ * Karten unter der Antwort (courseCardsPosition "below", „Text zuerst“,
+ * KIE-567): Hat der Server Kurse über den Marker angekündigt, gilt dieselbe
+ * Auswahl wie bei Karten oben (selectAnnouncedCourseCards): Der kurze
+ * Antworttext nennt die Kurse weder mit Titel noch mit Link, eine Auswahl
+ * nur aus dem Text fände keine Karte. Fallback-Karten (Kursseiten ohne
+ * Serverdaten) hängen hier direkt an die Karten an (ein Block unter dem
+ * Text). Ohne Ankündigung (ältere Server, Antwort ohne Kurse):
+ * selectCourseCards wie bisher.
+ * @param {string} replyText
+ * @param {object[]} courseSources
+ * @param {object} settings
+ * @param {{announced?: number, pageHost?: string, fallback?: boolean}} [options]
+ */
+export function selectBelowCourseCards(
+  replyText,
+  courseSources,
+  settings = {},
+  options = {},
+) {
+  const announced = Number.isInteger(options.announced) ? options.announced : 0;
+  if (announced <= 0)
+    return selectCourseCards(replyText, courseSources, settings, options);
+  const sel = selectAnnouncedCourseCards(
+    typeof replyText === "string" ? replyText : "",
+    courseSources,
+    settings,
+    options,
+  );
+  const { footerCards = [], footerMore = 0, ...rest } = sel;
+  if (footerCards.length === 0) return rest;
+  return {
+    ...rest,
+    cards: [...(rest.cards || []), ...footerCards],
+    more: (rest.more || 0) + footerMore,
   };
 }
 

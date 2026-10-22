@@ -8,6 +8,7 @@ import {
   courseCardsAbove,
   courseCardsEnabled,
   courseCardsLayout,
+  entryCourseCards,
   followUpsList,
   selectAnnouncedCourseCards,
   teaserMap,
@@ -25,7 +26,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
-import { panelTexts } from "@/utils/layout";
+import { greetingText, panelTexts, uiTexts } from "@/utils/layout";
 import debounce from "lodash.debounce";
 import { sendSuggestion } from "..";
 
@@ -47,8 +48,11 @@ export default function ChatHistory({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const chatHistoryRef = useRef(null);
   const arrowSlot = useContext(ScrollArrowSlotContext);
-  const cardsAbove = courseCardsAbove(settings);
-  // Kurskarten oben: Nachführen zum Anker je Turn (length = Verlaufslänge des
+  // Mit Kurskarten (oben wie unten, KIE-567): beim Antworten höchstens so weit
+  // nachführen, dass die Frage oben steht (Anker je Turn). Ohne Karten ("Nur
+  // Text mit Links") wie früher immer ans Ende.
+  const anchorScroll = courseCardsEnabled(settings);
+  // Kurskarten an: Nachführen zum Anker je Turn (length = Verlaufslänge des
   // Turns, follow = noch nachführen, top = zuletzt selbst gesetzte Position,
   // scrolled = Nutzer hat in diesem Turn selbst gescrollt, pillsAt = schon ins
   // Bild geholte Folgefragen)
@@ -78,7 +82,7 @@ export default function ChatHistory({
   const pillsAt = followUps.length > 0 ? last.followUpsArrivedAt : undefined;
 
   useEffect(() => {
-    if (!cardsAbove) {
+    if (!anchorScroll) {
       scrollToBottom();
       return;
     }
@@ -93,23 +97,43 @@ export default function ChatHistory({
     if (a.follow) a.follow = scrollToLatestTurn();
   }, [history]);
 
-  // Kurskarten oben: Folgefragen kommen nach der (oft langen) Antwort und
-  // lägen unter dem sichtbaren Bereich -> sanft ans Ende scrollen, aber nur,
-  // wenn der Nutzer seit Beginn der Antwort nicht selbst gescrollt hat.
+  // Kurskarten an (oben oder unten): Folgefragen kommen nach der (oft
+  // langen) Antwort und lägen unter dem sichtbaren Bereich -> sanft ans Ende
+  // scrollen, aber nur, wenn der Nutzer seit Beginn der Antwort nicht selbst
+  // gescrollt hat. Karten unten (Text zuerst): Karten und Folgefragen kommen
+  // am Ende, die Frage bleibt oben stehen, der Pfeil führt weiter nach unten.
+  // Antwort mit Kurskarten (KIE-565, K-1): höchstens so weit, dass die Frage
+  // oben steht. Der Antwortbeginn (Frage, Karten) bleibt im Blick, wie im
+  // Inline-Panel; passt der ganze Turn, kommen die Folgefragen trotzdem ins
+  // Bild. Nie nach oben scrollen.
+  // Ohne Kurskarten („Nur Text mit Links“, KIE-567): Die Pillen erscheinen
+  // erst, wenn die Antwort fertig ist (canSend), also nach dem letzten
+  // Scrollen ans Ende -> einmal ans Ende nachziehen (ohne Animation, wie
+  // der Verlauf in diesem Modus sonst auch).
   useEffect(() => {
     const a = anchorRef.current;
     const el = chatHistoryRef.current;
-    if (!cardsAbove || !pillsAt || !el || a.scrolled || a.pillsAt === pillsAt)
+    if (!pillsAt || !el || a.pillsAt === pillsAt) return;
+    if (!anchorScroll) {
+      a.pillsAt = pillsAt;
+      scrollToBottom();
       return;
+    }
+    if (a.scrolled) return;
+    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth";
     a.pillsAt = pillsAt;
     a.follow = false;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
-  }, [pillsAt, cardsAbove]);
+    const anchorTop = latestTurnHasCards(el) ? latestTurnAnchorTop(el) : null;
+    const top =
+      anchorTop === null
+        ? el.scrollHeight
+        : Math.min(el.scrollHeight, Math.max(0, anchorTop - 8));
+    if (anchorTop !== null && top <= el.scrollTop + 1) return;
+    el.scrollTo({ top, behavior });
+  }, [pillsAt, anchorScroll]);
 
   // Eigenes Scrollen des Nutzers (Rad, Wischen, Tastatur, Pfeil) beendet das
   // Nachführen für diesen Turn — kein Zurückspringen mehr.
@@ -136,15 +160,39 @@ export default function ChatHistory({
   };
 
   const debouncedScroll = debounce(handleScroll, 100);
+  // Scroll-Listener am Verlauf. Den Scroll-Container gibt es erst ab der
+  // ersten Nachricht (leerer Chat: Begrüßung ohne #chat-history); früher hing
+  // der Listener nur beim ersten Einhängen an und fehlte deshalb in jedem
+  // neu begonnenen Chat (Pfeil verschwand nach dem Scrollen nicht).
+  const hasHistory = history.length > 0;
   useEffect(() => {
-    function watchScrollEvent() {
-      if (!chatHistoryRef.current) return null;
-      const chatHistoryElement = chatHistoryRef.current;
-      if (!chatHistoryElement) return null;
-      chatHistoryElement.addEventListener("scroll", debouncedScroll);
-    }
-    watchScrollEvent();
-  }, []);
+    const el = chatHistoryRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", debouncedScroll);
+    return () => {
+      el.removeEventListener("scroll", debouncedScroll);
+      debouncedScroll.cancel?.();
+    };
+  }, [hasHistory]);
+
+  // Der Pfeil richtet sich nicht nur nach dem Scrollen des Nutzers: Wächst
+  // der Inhalt unter dem sichtbaren Bereich, ohne dass gescrollt wird (Text
+  // zuerst: die Frage bleibt oben stehen, darunter kommen Text, Karten und
+  // Folgefragen; Teaser, Bilder), muss er ebenfalls erscheinen (Fixliste
+  // 7.22-rc7 Nr. 36). Darum nach jeder Änderung des Verlaufs und bei jeder
+  // Größenänderung des Inhalts neu prüfen.
+  const contentRef = useRef(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => handleScroll());
+    return () => cancelAnimationFrame(id);
+  }, [history, followUps]);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => debouncedScroll());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasHistory]);
 
   const scrollToBottom = () => {
     if (chatHistoryRef.current) {
@@ -162,45 +210,43 @@ export default function ChatHistory({
   const scrollToLatestTurn = () => {
     const el = chatHistoryRef.current;
     if (!el) return false;
-    const turns = el.querySelectorAll("[data-assistant-turn]");
-    const turn = turns[turns.length - 1];
-    const anchor = turn?.previousElementSibling || turn;
     let top = el.scrollHeight;
-    if (anchor) {
-      const anchorTop =
-        anchor.getBoundingClientRect().top -
-        el.getBoundingClientRect().top +
-        el.scrollTop;
-      top = Math.min(top, Math.max(0, anchorTop - 8));
-    }
+    const anchorTop = latestTurnAnchorTop(el);
+    if (anchorTop !== null) top = Math.min(top, Math.max(0, anchorTop - 8));
     el.scrollTo({ top, behavior: "auto" });
     anchorRef.current.top = el.scrollTop;
     return el.scrollTop < top - 1;
   };
 
+  // Klickfläche ist der ganze Kreis (32 px), nicht nur das Icon
   const scrollArrow = (
     <div className="allm-absolute allm-bottom-[5.5rem] allm-right-4 allm-z-50 allm-cursor-pointer allm-animate-pulse">
       <div className="allm-flex allm-flex-col allm-items-center">
-        <div className="allm-rounded-full allm-border allm-border-white/10 allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center">
+        <button
+          type="button"
+          id="scroll-to-bottom-button"
+          aria-label={uiTexts(settings).scrollToBottom}
+          onClick={() => {
+            stopFollow();
+            scrollToBottom();
+          }}
+          className="allm-p-0 allm-m-0 allm-cursor-pointer allm-rounded-full allm-border-none allm-bg-black/20 hover:allm-bg-black/50 allm-w-8 allm-h-8 allm-flex allm-items-center allm-justify-center"
+        >
           <ArrowDown
             weight="bold"
             className="allm-text-white/50 allm-w-4 allm-h-4"
-            onClick={() => {
-              stopFollow();
-              scrollToBottom();
-            }}
-            id="scroll-to-bottom-button"
-            aria-label="Scroll to bottom"
+            aria-hidden="true"
           />
-        </div>
+        </button>
       </div>
     </div>
   );
 
   if (history.length === 0) {
-    // Panel-Optik (opt-in): Pillen statt Balken, Begrüßung als Blase
-    // (privacyNotice "bubble" ist in loadEmbedSettings schon auf
-    // greetingStyle "bubble" normalisiert)
+    // Panel-Optik: Pillen statt Balken, Begrüßung als Blase. Ist der
+    // Datenschutz-Hinweis an, steht greetingStyle immer auf "bubble"
+    // (utils/layout.js applyFixedStandards, E26): nur die Begrüßungsblase
+    // trägt die Datenschutz-Blase. "text" nur bei abgeschaltetem Hinweis.
     const bubble = settings?.greetingStyle === "bubble";
     const suggestions =
       settings?.suggestionStyle === "pills" ? (
@@ -214,10 +260,12 @@ export default function ChatHistory({
     if (bubble)
       return <PanelWelcome settings={settings} suggestions={suggestions} />;
     return (
-      <div className="allm-h-full allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
+      <div className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
           <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
-            {settings?.greeting ?? "Send a chat to get started."}
+            {/* Begrüßung wie in der Blase: gespeichert (gekürzt) oder
+                Standard der Sprache (Fixliste 7.22-rc18 W61) */}
+            {greetingText(settings)}
           </p>
           {suggestions}
         </div>
@@ -225,18 +273,24 @@ export default function ChatHistory({
     );
   }
 
+  // allm-box-border: Höhe inklusive Polsterung (im Shadow DOM gilt kein
+  // globales box-sizing). Sonst ragte der Verlauf um die Polsterung (48 px)
+  // unter die Eingabe, und die Zeitstempelzeile der letzten Antwort lag am
+  // Scroll-Ende teils darunter (Browser-Fund B-08). Unten 8 px statt 32 px:
+  // der Abstand zur Eingabe kommt jetzt sichtbar aus dem Rand des Verlaufs
+  // (allm-mb-8 im ChatContainer), nicht mehr aus verdeckter Polsterung.
   return (
     <div
-      className="allm-h-full allm-overflow-y-auto allm-px-2 allm-pt-4 allm-pb-8 allm-flex allm-flex-col allm-justify-start allm-no-scroll"
+      className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-pt-4 allm-pb-2 allm-flex allm-flex-col allm-justify-start allm-no-scroll"
       id="chat-history"
       ref={chatHistoryRef}
-      {...(cardsAbove && {
+      {...(anchorScroll && {
         onScroll: handleUserScroll,
         onWheel: stopFollow,
         onTouchMove: stopFollow,
       })}
     >
-      <div className="allm-flex allm-flex-col allm-gap-y-4">
+      <div ref={contentRef} className="allm-flex allm-flex-col allm-gap-y-4">
         {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
             Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
             darunter gibt es nur im leeren Chat. Mit greetingStyle "text"
@@ -251,7 +305,12 @@ export default function ChatHistory({
           // Kurskarten über der Antwort: stabiler Block je Antwort (Name,
           // Karten, Antwort). Die Karten bleiben beim Wechsel PromptReply ->
           // HistoricalMessage am Stream-Ende im DOM (kein Neuaufbau).
-          const above = cardsAbove && props.role === "assistant";
+          // Kurskarten dieser Antwort: Einstellung, bei vom Server
+          // angekündigten Karten immer an (W07, utils/courseCards.js)
+          const courseCards = entryCourseCards(settings, props);
+          const above =
+            props.role === "assistant" &&
+            courseCardsAbove({ ...settings, courseCards });
 
           // selection: Kurskarten-Auswahl des Blocks oben (nur "above") ->
           // HistoricalMessage zeigt damit nur den Abschlusslink
@@ -280,8 +339,10 @@ export default function ChatHistory({
                 // Sprachausgabe; der Fuß zeigt keine Teaser
                 courseTeasers={above ? null : props.courseTeasers}
                 courseTeaserMap={teasers}
-                courseCards={settings?.courseCards}
+                courseCards={courseCards}
                 courseCardsFinal={!above && replyFinal(props)}
+                // Karten unten: angekündigte Kurse wie oben auswählen
+                courseCardsAnnounced={above ? null : props.courseCardsAnnounced}
                 courseCardsSelection={selection}
                 chatId={props.chatId}
                 feedbackScore={props.feedbackScore}
@@ -296,12 +357,21 @@ export default function ChatHistory({
               />
             );
 
-          if (!above) return renderBody();
+          // Karten unten (Text zuerst): Antwort als Turn markieren (Anker
+          // für das Nachführen, latestTurn); Aufbau sonst wie bisher
+          if (!above)
+            return anchorScroll && props.role === "assistant" ? (
+              <div key={index} data-answer-turn="below">
+                {renderBody()}
+              </div>
+            ) : (
+              renderBody()
+            );
           return (
             <AssistantTurnAbove
               key={index}
               message={props}
-              courseCards={settings?.courseCards}
+              courseCards={courseCards}
               layout={courseCardsLayout(settings)}
               pendingText={panelTexts(settings).teaserPending}
               renderBody={renderBody}
@@ -313,6 +383,30 @@ export default function ChatHistory({
         (arrowSlot ? createPortal(scrollArrow, arrowSlot) : scrollArrow)}
     </div>
   );
+}
+
+// Position der letzten Frage (Anker des letzten Assistenten-Turns bei
+// Kurskarten oben oder unten) im Inhalt des Scroll-Containers in px, null
+// ohne Turn.
+function latestTurn(el) {
+  const turns = el.querySelectorAll(
+    "[data-assistant-turn], [data-answer-turn]",
+  );
+  return turns[turns.length - 1] || null;
+}
+function latestTurnAnchorTop(el) {
+  const turn = latestTurn(el);
+  const anchor = turn?.previousElementSibling || turn;
+  if (!anchor) return null;
+  return (
+    anchor.getBoundingClientRect().top -
+    el.getBoundingClientRect().top +
+    el.scrollTop
+  );
+}
+// Zeigt der letzte Turn Kurskarten (über oder unter der Antwort)?
+function latestTurnHasCards(el) {
+  return !!latestTurn(el)?.querySelector("[data-course-cards]");
 }
 
 // Antwort fertig (Abschluss-Chunk mit chatId verarbeitet bzw. aus dem

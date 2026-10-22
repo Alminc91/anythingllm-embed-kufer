@@ -172,19 +172,31 @@ describe("Karten-Marker im Text (Abwehr in der Tiefe)", () => {
 
 describe("Settings: courseCardsPosition", () => {
   const ok = (json) => ({ ok: true, json: async () => json });
-  it("Standard below; data-course-cards-position=above; visual_config gewinnt; ungültig verworfen", async () => {
+  // Standard seit Design Center vereinfacht (15.10.2026) "above" statt
+  // "below" (bewusste Änderung: Karten zuerst, danach der kurze Text)
+  // Bewusste Änderung (Fixliste 7.22-rc17 E23): „Reihenfolge“ stellt das
+  // Design Center ein (Gruppe A), data-course-cards-position wirkt nicht
+  it("Standard above; data-course-cards-position wirkt nicht; visual_config gewinnt; ungültig verworfen", async () => {
     const base = { embedId: "e", baseApiUrl: "https://x/api/embed" };
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(
       (await loadEmbedSettings(base, async () => ok({}))).courseCardsPosition,
-    ).toBe("below");
+    ).toBe("above");
     expect(
       (
         await loadEmbedSettings(
-          { ...base, courseCardsPosition: "above" },
+          { ...base, courseCardsPosition: "below" },
           async () => ok({}),
         )
       ).courseCardsPosition,
     ).toBe("above");
+    expect(
+      (
+        await loadEmbedSettings(base, async () =>
+          ok({ courseCardsPosition: "below" }),
+        )
+      ).courseCardsPosition,
+    ).toBe("below");
     expect(
       (
         await loadEmbedSettings(
@@ -200,7 +212,7 @@ describe("Settings: courseCardsPosition", () => {
           async () => ok({}),
         )
       ).courseCardsPosition,
-    ).toBe("below");
+    ).toBe("above");
   });
 });
 
