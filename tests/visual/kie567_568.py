@@ -140,8 +140,12 @@ def kie567(browser, base_url):
         # Script-Attribut verlangt Karten, Server sagt Nur Text: Server gewinnt
         ("567-off-script-auto", {"courseCards": "off", "courseCardsPosition": "above"}, classic_events(), DESKTOP,
          {"course-cards": "auto", "course-cards-position": "above"}, False),
-        # Bestand: Server ohne die Schlüssel -> Karten zuerst
-        ("567-legacy-default", {}, cards_events(), DESKTOP, None, False),
+        # Server ab 7.22 ohne gespeicherte Wahl (Fork embedStandards.js: kein
+        # courseCards, courseCardsPosition "above"): im Chatfenster gilt
+        # "off", der Server antwortet klassisch mit Links (Fixliste 7.22-rc21
+        # W93; vorher Altserver ohne beide Schlüssel mit Kartenstrom, den ein
+        # Server ab 7.22 so nicht schickt)
+        ("567-standard-off-desktop", {"courseCardsPosition": "above"}, classic_events(), DESKTOP, None, False),
     ]
     for name, config, events, vp, attrs, inline in cases:
         ctx, page = open_chat(browser, base_url, config, events, vp, attrs, inline)
