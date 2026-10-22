@@ -46,6 +46,9 @@ clientWidth), Text vollständig innerhalb der Titelleiste, Abstand Text zu ⋮
 Kurzer Name: Kopf 77 px (kompakt 57 px, je ±0,5 px; mit Kopffarbe ohne
 Unterlinie 76 bzw. 56 px), Menü 64 px unter der Oberkante. Kompakt: kein
 Untertitel.
+Logo-Rahmen mit Rand (kurz-rand, kurz-glas; Fixliste 7.22-rc20 E34, W84):
+normal content-box wie rc14, das Logo hat mindestens 2 px Abstand zum Rand;
+kompakt border-box, Rahmen 44 px hoch.
 """
 
 import argparse
@@ -209,7 +212,14 @@ def case(b, base, out, label, mode, width, text):
     m["logo"] = page.evaluate("""() => { const h = window.__q('#anything-llm-header');
       const f = h && h.firstElementChild && h.firstElementChild.firstElementChild;
       if (!f) return null; const cs = getComputedStyle(f); const r = f.getBoundingClientRect();
-      return { height: +r.height.toFixed(1), boxSizing: cs.boxSizing, border: cs.borderTopWidth }; }""")
+      const img = f.querySelector('img'); const i = img ? img.getBoundingClientRect() : null;
+      const bw = parseFloat(cs.borderTopWidth) || 0;
+      // Abstand Logo zum Rand (Innenkante des Rahmens), kleinste Seite (W84)
+      const gap = i ? Math.min(i.left - r.left - bw, r.right - bw - i.right,
+                               i.top - r.top - bw, r.bottom - bw - i.bottom) : null;
+      return { height: +r.height.toFixed(1), width: +r.width.toFixed(1), boxSizing: cs.boxSizing,
+               border: cs.borderTopWidth, img: i ? +i.height.toFixed(1) : null,
+               gap: gap === null ? null : +gap.toFixed(1) }; }""")
     stem = f"n3-{label}-{mode}-{width}-{text}"
     crop_header(page, out / f"{stem}-kopf.png")
     if text == "eigen":
@@ -254,6 +264,15 @@ def verdict(m, mode, text):
             probs.append(f"Kopf {ist} px statt {soll} px (W40)")
         if not compact and abs((m["menuOpen"]["menuTop"] or 0) - MENU_TOP_SHORT) > TOL:
             probs.append(f"Menü bei {m['menuOpen']['menuTop']} px statt {MENU_TOP_SHORT} px")
+    if text in ICON_STYLE:
+        logo = m.get("logo") or {}
+        box = "border-box" if compact else "content-box"
+        if logo.get("boxSizing") != box:
+            probs.append(f"Rahmen {logo.get('boxSizing')} statt {box} (E34)")
+        if compact and abs((logo.get("height") or 0) - 44) > TOL:
+            probs.append(f"Rahmen {logo.get('height')} px statt 44 px (W64)")
+        if not compact and (logo.get("gap") is None or logo["gap"] < 2 - TOL):
+            probs.append(f"Logo {logo.get('gap')} px vom Rand statt mindestens 2 px (W84)")
     return probs
 
 
@@ -294,7 +313,9 @@ def main():
     for k, m in res.items():
         n, s = m["name"], m["subtitle"]
         bad += bool(m["probleme"])
-        print(f"{k:30s} box={m['box']} kopf={m['header']['height']} logo={(m.get('logo') or {}).get('height')} "
+        lg = m.get("logo") or {}
+        print(f"{k:30s} box={m['box']} kopf={m['header']['height']} logo={lg.get('height')} "
+              f"rand={lg.get('boxSizing')}/{lg.get('border')} abstand={lg.get('gap')} "
               f"name={n.get('lines')}Z abst={n.get('gapToMenu')} "
               f"unter={'-' if s.get('missing') else str(s.get('lines')) + 'Z'} abst={s.get('gapToMenu')} "
               f"menü={m['menuOpen']['menuTop']} -> {'OK' if not m['probleme'] else '; '.join(m['probleme'])}")

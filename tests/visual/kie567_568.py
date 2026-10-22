@@ -205,7 +205,9 @@ def kie568(browser, base_url):
         s1 = {**page.evaluate(STATE_JS), **page.evaluate(KEY_JS)}
         page.screenshot(path=str(OUT / f"568-first-{label}.png"))
         s2 = load_button(page, base_url, cfg)  # Unterseite, keine Interaktion
-        page.evaluate("() => window.__q('[aria-label=\"Close all chat bubbles\"]').click()")
+        # X der Willkommensblasen sprachunabhängig (aria-label seit rc16
+        # deutsch „Willkommensblasen schließen“, Fixliste 7.22-rc20 W83)
+        page.evaluate("() => window.__q('.allm-welcome-close').click()")
         page.wait_for_timeout(300)
         s3 = {**page.evaluate(STATE_JS), **page.evaluate(KEY_JS)}
         p2 = ctx.new_page()  # neuer Tab

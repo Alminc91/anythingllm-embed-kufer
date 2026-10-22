@@ -10,7 +10,10 @@ Aufruf (aus dem Repo-Wurzelverzeichnis):
 
   #    Ausnahme NEW_STATES (Zustände, die es auf main nicht gab): Referenz aus
   #    diesem Branch, nur gezielt: --baseline --only <zustand> …
-  #    Bestehende Referenzen nie überschreiben.
+  #    Bestehende Referenzen nur aus einem abgenommenen Stand erneuern: seit
+  #    Fixliste 7.22-rc20 W83 alle aus dem Build von 4c73b6d (rc19, im
+  #    Browser abgenommen; vorher main vom 06. und 09.10., vor Design
+  #    Center 2.0).
 
   # 2) Neuen Build prüfen (npm run build vorher)
   python3 tests/visual/theme_visual.py
@@ -570,8 +573,10 @@ def check_host_css_wins(browser, base_url):
 
 
 def check_precedence(browser, base_url):
+    # Angabe am Skript lassen (script_attrs): das Widget verwirft sie selbst
+    # (Gruppe A), der Wert vom Server gilt (Fixliste 7.22-rc20 W83)
     ctx, page = open_page(
-        browser, base_url, {"attrs": {**OPEN, "user-bg-color": "#111111"}},
+        browser, base_url, {"attrs": {**OPEN, "user-bg-color": "#111111"}, "script_attrs": True},
         Mock(config={**PRAES_CONFIG, "userBgColor": "#222222"}, history=HISTORY_ANSWER),
     )
     try:
@@ -596,7 +601,8 @@ def dark_probe(page):
       const bubble = q('.allm-anything-llm-assistant-message');
       const bubbleText = bubble && bubble.querySelector('span');
       const link = q('.allm-anything-llm-assistant-message a');
-      const muted = [...window.__allmShadow.querySelectorAll('div')].find(d => d.children.length === 0 && d.textContent.trim() === 'Ihr Online-Berater');
+      // gedämpfter Text: Untertitel im Kopf (Design Center 2.0, W83)
+      const muted = q('#anything-llm-header-subtitle');
       return {
         window: s(q('#anything-llm-chat'), 'background-color'),
         headerBorder: s(header, 'border-bottom-color'),
@@ -937,8 +943,11 @@ def check_reduced_motion(browser, base_url):
 
 
 def check_focus_ring(browser, base_url):
-    """--allm-focus-ring: hell ungesetzt = Browser-Standard (revert), dunkel = 2px Akzent."""
-    for theme, expect_style in (("light", "auto"), ("dark", "solid")):
+    """Fokus per Tab: seit Design Center 2.0 ist die Leiste ein Eingabefeld
+    (inlineInput), der Fokus liegt im Feld, der Ring (2 px Akzent) an der
+    Leiste, hell und dunkel (Fixliste 7.22-rc20 W83; gemessen in
+    .test-storage/rc19/probe_fokus_schrift.log)."""
+    for theme in ("light", "dark"):
         ctx, page = open_page(
             browser, base_url,
             {"attrs": {**BASE_ATTRS, "display-mode": "inline", "theme": theme}, "inline": True}, Mock())
@@ -947,8 +956,9 @@ def check_focus_ring(browser, base_url):
             page.keyboard.press("Tab")
             page.wait_for_timeout(100)
             st = page.evaluate(
-                "() => { const a = window.__allmShadow.activeElement; if (!a) return null; const c = getComputedStyle(a); return {id: a.id, style: c.outlineStyle, width: c.outlineWidth, color: c.outlineColor}; }")
-            ok = bool(st) and st["id"] == "anything-llm-inline-bar" and st["style"] == expect_style
+                "() => { const a = window.__allmShadow.activeElement; const bar = window.__q('#anything-llm-inline-bar'); if (!a || !bar) return null; const c = getComputedStyle(bar); return {id: a.id, style: c.outlineStyle, width: c.outlineWidth, color: c.outlineColor}; }")
+            ok = (bool(st) and st["id"] == "anything-llm-inline-input" and st["style"] == "solid"
+                  and st["width"] == "2px" and st["color"] == "rgb(255, 161, 2)")
             record(f"Fokus-Ring ({theme})", ok, json.dumps(st))
         finally:
             ctx.close()
@@ -1074,7 +1084,8 @@ def check_snippet(browser, base_url):
         settle(page, 300)
         res = page.evaluate(
             """() => ({
-          greeting: [...window.__allmShadow.querySelectorAll('p')].some(p => p.textContent.includes('Hallo Snippet-Test')),
+          // Begrüßung in der Begrüßungsblase (Design Center 2.0, W83)
+          greeting: (window.__q('#anything-llm-greeting-bubble')?.textContent || '').includes('Hallo Snippet-Test'),
           header: !!window.__q('#anything-llm-header'),
           win: (() => { const r = window.__q('#anything-llm-chat').getBoundingClientRect(); return {top: r.top, right: innerWidth - r.right}; })(),
         })"""
@@ -1092,10 +1103,11 @@ def check_snippet(browser, base_url):
         record("NAK-5 Snippet (data-inherit-font)", "Georgia" in ff, f"Leiste font-family={ff}")
     finally:
         ctx.close()
-    # --allm-font auf dem Host wirkt (ohne inheritFont)
+    # --allm-font auf dem Host wirkt (ohne inheritFont; In der Seite übernimmt
+    # seit rc3 standardmäßig die Schrift der Seite, W83)
     ctx, page = open_page(
         browser, base_url,
-        {"attrs": {**BASE_ATTRS, "display-mode": "inline"}, "inline": True,
+        {"attrs": {**BASE_ATTRS, "display-mode": "inline", "inherit-font": "false"}, "inline": True,
          "css": "#kufer-assistent { --allm-font: 'Courier New', monospace; --allm-bar-radius: 999px; }"},
         Mock(config={}))
     try:
