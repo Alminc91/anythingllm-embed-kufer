@@ -119,7 +119,9 @@ const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
 // Kennzeichen der Startvorschläge vom Server (Vertrag mit dem Fork, GET
 // /embed/:id/config, Fixliste 7.22-rc13 F02): defaultMessagesSaved = im
 // Design Center gespeichert, auch als leere Liste; defaultMessagesStandard =
-// nichts gespeichert, die Liste ist der Standard der Sprache. Beide werden
+// nichts gespeichert, die Liste ist der Standard der Sprache (seit E42,
+// 7.22-rc23, leer: keine Startvorschläge; das Widget hat keine eigene
+// Standardliste, DEFAULT_SETTINGS.defaultMessages []). Beide werden
 // nach dem Auflösen entfernt (applyDefaultMessagesOrder).
 const DEFAULT_MESSAGES_SAVED = "defaultMessagesSaved";
 const DEFAULT_MESSAGES_STANDARD = "defaultMessagesStandard";

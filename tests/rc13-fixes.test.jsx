@@ -71,6 +71,11 @@ const BASE = {
   baseApiUrl: "https://praesentation.ki.kufer.de/api/embed",
 };
 const CONFIG_URL = `${BASE.baseApiUrl}/${BASE.embedId}/config`;
+// Liste eines Servers mit Kennzeichen defaultMessagesStandard: die
+// Beispiele, die der Fork bis 7.22-rc22 als Standard lieferte. Seit E42
+// (7.22-rc23) liefert er [] (Prüfung in e42-startvorschlaege.test.jsx); die
+// Fälle hier zeigen, dass das Widget eine Liste mit Kennzeichen so zeigt,
+// wie sie kommt, und das Skript-Attribut auch dann nicht wirkt.
 const STANDARD = {
   de: ["Ich suche einen Deutschkurs.", "Gibt es Excel-Kurse am Abend?"],
   en: [

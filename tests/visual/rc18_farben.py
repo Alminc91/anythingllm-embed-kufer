@@ -63,6 +63,8 @@ SERVER = {
     "courseCardsPosition": "above",
     "welcomeBubblesDesktop": "off",
     "welcomeBubblesMobile": "off",
+    # Pillen zum Messen der Farben: Liste eines Servers bis 7.22-rc22 (seit E42
+    # liefert der Fork ohne gespeicherte Liste [])
     "defaultMessages": ["Ich suche einen Deutschkurs.", "Gibt es Excel-Kurse am Abend?"],
     "defaultMessagesStandard": True,
     "buttonColor": "#0b5f8a",
