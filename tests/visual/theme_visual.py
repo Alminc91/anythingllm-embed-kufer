@@ -64,6 +64,10 @@ EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
 VIEWPORT = {"width": 1000, "height": 700}
 MOBILE = {"width": 390, "height": 700}
 MAX_DIFF_RATIO = 0.001  # 0,1 %
+# Button „⋮“ im Kopf, sprachunabhängig (Fixliste 7.22-rc19 W71): aria-label
+# kommt aus UI_TEXTS (layout.js), „Options“ bei language=en, sonst
+# „Optionen“ (seit rc16 auch ohne data-language)
+OPTIONS_BUTTON = "button[aria-label=Optionen], button[aria-label=Options]"
 # Basis = main nach Feinschliff, 2026-10-06 (c6bc308, gemessen 797.168 B)
 BASE_JS_SIZE = 797_168
 # Basis = main nach Kurskarten v2, 2026-10-06 (1e538e5)
@@ -452,7 +456,7 @@ def run_action(page, action):
         page.wait_for_function(
             "() => !!window.__q('.allm-dot-falling') || !!window.__q('.allm-reply a')", timeout=10000)
     if action in ("menu", "history"):
-        page.evaluate("() => window.__q('button[aria-label=Options]').click()")
+        page.evaluate("(s) => window.__q(s).click()", OPTIONS_BUTTON)
         page.wait_for_timeout(200)
     if action == "history":
         page.evaluate(
@@ -787,13 +791,14 @@ def check_brand_header_dark(browser, base_url):
         wait_shadow(page, ".allm-anything-llm-assistant-message")
         settle(page, 300)
         p = page.evaluate(
-            """() => {
+            """(sel) => {
           const h = window.__q('#anything-llm-header');
           const brand = h.querySelector('span');
-          const icon = h.querySelector('button[aria-label=Options]');
+          const icon = h.querySelector(sel);
           return {bg: getComputedStyle(h).backgroundColor, text: getComputedStyle(brand).color,
                   icon: getComputedStyle(icon).color};
-        }"""
+        }""",
+            OPTIONS_BUTTON,
         )
         bg = parse_rgb(p["bg"])
         ct = contrast(parse_rgb(p["text"]), bg)
