@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // W90 dc-Variablen: gültige Farbfunktionen (rgb()/rgba() auch mit Prozent,
 //   hsl()/hsla()) und #rgba bleiben, Farbnamen nur aus der festen Liste der
 //   CSS-Farbnamen plus transparent; Tippfehler und Systemfarben ergeben den
-//   Standard.
+//   Standard. Bewusste Änderung E41 (Fixliste 7.22-rc22): Die Erweiterung
+//   entfällt, die dc-Variablen nehmen nur, was parseColor liest; die Werte
+//   aus VALID ergeben jetzt den Standard (tests/rc22-widget.test.jsx).
 // W91 parseColor: in rgb() nur Kommas oder nur Leerzeichen, Alpha als
 //   strenge Zahl (gemischte Trenner lehnt CSS ab).
 // W92 Herkunft in der Warnzeile für courseCardsLayout und die Inline-
@@ -89,7 +91,8 @@ function dcValue(key, name, value) {
 }
 
 // ---------------------------------------------------------------------------
-describe("W90: dc-Variablen mit gültigen Farbfunktionen und festen Farbnamen", () => {
+describe("W90: dc-Variablen mit gültigen Farbfunktionen und festen Farbnamen (Bewusste Änderung E41: ergeben den Standard)", () => {
+  // bis rc21 angenommen; seit E41 (Fixliste 7.22-rc22) der Standard
   const VALID = [
     "hsl(180, 100%, 33%)",
     "hsla(180, 100%, 33%, 0.5)",
@@ -126,9 +129,10 @@ describe("W90: dc-Variablen mit gültigen Farbfunktionen und festen Farbnamen", 
   ];
 
   for (const value of VALID)
-    it(`${value} bleibt in jeder dc-Variable`, () => {
+    it(`${value} ergibt in jeder dc-Variable den Standard (Bewusste Änderung E41, bis rc21: blieb)`, () => {
       for (const [key, name] of DC_KEYS)
-        expect(dcValue(key, name, value), key).toBe(value);
+        expect(dcValue(key, name, value), key).toBe(STANDARD);
+      expect(theme.dcColor(value, "STANDARD")).toBe("STANDARD");
     });
 
   for (const value of INVALID)
@@ -138,13 +142,13 @@ describe("W90: dc-Variablen mit gültigen Farbfunktionen und festen Farbnamen", 
       expect(theme.dcColor(value, "STANDARD")).toBe("STANDARD");
     });
 
-  it("über die Antwort des Servers: hsl() bleibt, ein Tippfehler ergibt den Standard", async () => {
+  it("über die Antwort des Servers: hsl() und ein Tippfehler ergeben den Standard (Bewusste Änderung E41, bis rc21: hsl() blieb)", async () => {
     const hsl = await load(
       {},
       { ...SERVER_STANDARDS, buttonColor: "hsl(180, 100%, 33%)" },
     );
     expect(theme.buildThemeCss(hsl, "light")).toContain(
-      "--allmi-accent: hsl(180, 100%, 33%) !important;",
+      `--allmi-accent: ${STANDARD} !important;`,
     );
     const typo = await load({}, { ...SERVER_STANDARDS, buttonColor: "blau" });
     const css = theme.buildThemeCss(typo, "light");

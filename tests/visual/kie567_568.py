@@ -67,8 +67,8 @@ def cards_events(uuid="u-1"):
     return ev
 
 
-def classic_events(uuid="u-1"):
-    ev = [{"uuid": uuid, "type": "textResponseChunk", "close": False, "sources": [], "textResponse": CLASSIC}]
+def classic_events(uuid="u-1", text=CLASSIC):
+    ev = [{"uuid": uuid, "type": "textResponseChunk", "close": False, "sources": [], "textResponse": text}]
     ev[-1]["close"] = True
     ev.append({"uuid": uuid, "type": "followUps", "followUps": FU, "close": False, "error": False})
     ev.append({"uuid": uuid, "type": "finalizeResponseStream", "close": True, "error": False, "chatId": 4712})
@@ -89,6 +89,8 @@ ORDER_JS = r"""
   const qr = q ? q.getBoundingClientRect() : null;
   return {
     cards: cards ? cards.querySelectorAll('.allm-course-card').length : 0,
+    // alle Karten im Widget, auch Fallback-Karten unter der Antwort
+    allCards: window.__allmShadow.querySelectorAll('.allm-course-card').length,
     cardsPosition: cards ? cards.getAttribute('data-position') : null,
     textBeforeCards: pos(text, cards),
     cardsBeforeText: pos(cards, text),
@@ -128,6 +130,11 @@ def open_chat(browser, base_url, config, events, viewport, attrs=None, inline=Fa
 
 
 def kie567(browser, base_url):
+    # klassische Antwort mit Kurslinks auf der Domain der Testseite: wie beim
+    # Kunden, dessen Seite und Kurse dieselbe Domain haben. Bei "auto" zeigt
+    # das Widget dafür Karten auch ohne courseSources (Fallback-Karten);
+    # nur so unterscheidet der Fall "off" von "auto" (Fixliste 7.22-rc22 W101)
+    own_site = classic_events(text=CLASSIC.replace("https://www.vhs-bergisch-land.de", base_url))
     cases = [
         ("567-above-desktop", {"courseCards": "auto", "courseCardsPosition": "above"}, cards_events(), DESKTOP, None, False),
         ("567-below-desktop", {"courseCards": "auto", "courseCardsPosition": "below"}, cards_events(), DESKTOP, None, False),
@@ -144,8 +151,12 @@ def kie567(browser, base_url):
         # courseCards, courseCardsPosition "above"): im Chatfenster gilt
         # "off", der Server antwortet klassisch mit Links (Fixliste 7.22-rc21
         # W93; vorher Altserver ohne beide Schlüssel mit Kartenstrom, den ein
-        # Server ab 7.22 so nicht schickt)
-        ("567-standard-off-desktop", {"courseCardsPosition": "above"}, classic_events(), DESKTOP, None, False),
+        # Server ab 7.22 so nicht schickt). Kurslinks auf der Seitendomain:
+        # bei falschem Standard "auto" erschienen Karten (W101)
+        ("567-standard-off-desktop", {"courseCardsPosition": "above"}, own_site, DESKTOP, None, False),
+        # Gegenprobe zu W101: dieselbe Antwort mit "auto" zeigt Karten
+        ("567-standard-gegenprobe-auto", {"courseCards": "auto", "courseCardsPosition": "above"}, own_site,
+         DESKTOP, None, False),
     ]
     for name, config, events, vp, attrs, inline in cases:
         ctx, page = open_chat(browser, base_url, config, events, vp, attrs, inline)
@@ -153,8 +164,10 @@ def kie567(browser, base_url):
             info = page.evaluate(ORDER_JS)
             page.screenshot(path=str(OUT / f"{name}.png"))
             errs = tv.errors_of(page)
-            if "off" in name:
-                ok = (info["cards"] == 0 and len(info["links"]) == 3 and info["pills"] and info["textBeforePills"]
+            if "gegenprobe-auto" in name:
+                ok = info["allCards"] > 0 and info["pills"]
+            elif "off" in name:
+                ok = (info["allCards"] == 0 and len(info["links"]) == 3 and info["pills"] and info["textBeforePills"]
                       and info["pillsVisible"])
             elif "below" in name:
                 ok = (info["cards"] == 3 and info["cardsPosition"] == "below" and info["textBeforeCards"]

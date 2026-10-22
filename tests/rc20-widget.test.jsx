@@ -7,6 +7,7 @@ import tailwindConfig from "../tailwind.config.js";
 // fixliste-7.22-rc20.md, Details review-7.22-nachreview-rc19.md):
 // W80 dc-Variablen (Gruppe A) nur mit Farben, die parseColor lesen kann, und
 //   Farbnamen; var(), env(), attr() und currentcolor ergeben den Standard.
+//   Seit Fixliste 7.22-rc22 E41 auch Farbnamen (Bewusste Änderung E41).
 // W81 eine Warnzeile, wenn data-greeting-style="text" wegen des
 //   Datenschutz-Hinweises nicht wirkt (E26).
 // W82 Herkunft in der Warnzeile bei festen Standards: „Standard“ statt
@@ -149,7 +150,7 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       ).toBe("#01a5a9");
     });
 
-  it("über die Antwort des Servers: var(--allm-accent) als Akzentfarbe wirkt nicht, Farbcodes und Farbnamen bleiben", async () => {
+  it("über die Antwort des Servers: var(--allm-accent) als Akzentfarbe wirkt nicht, Farbcodes bleiben, Farbnamen ergeben den Standard (E41)", async () => {
     const s = await load(
       {},
       {
@@ -164,7 +165,7 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
     expect(page).toContain("--allmi-user-bg: #01a5a9 !important;");
     expect(page).toContain("--allmi-link: #01a5a9 !important;");
     expect(page).not.toContain("var(--allm-accent)");
-    // Farbcodes wie im Design Center und Farbnamen bleiben
+    // Farbcodes wie im Design Center bleiben
     for (const value of [
       "#0b5f8a",
       "#FFA102",
@@ -172,11 +173,15 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       "#0b5f8aff",
       "rgb(1, 2, 3)",
       "rgba(1, 2, 3, 0.5)",
-      "teal",
-      "RebeccaPurple",
     ]) {
       const css = theme.buildThemeCss({ buttonColor: value }, "light");
       expect(css, value).toContain(`--allmi-accent: ${value} !important;`);
+    }
+    // Bewusste Änderung E41 (Fixliste 7.22-rc22): Farbnamen ergeben den
+    // Standard (rc20 bis rc21: blieben)
+    for (const value of ["teal", "RebeccaPurple"]) {
+      const css = theme.buildThemeCss({ buttonColor: value }, "light");
+      expect(css, value).toContain("--allmi-accent: #01a5a9 !important;");
     }
     // Schrift auf der Kundenfarbe wie im Design Center gewählt
     const css = theme.buildThemeCss(

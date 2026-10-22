@@ -717,10 +717,11 @@ export const layoutValidations = {
   // verworfen -> null -> Standard der tatsächlichen Darstellung
   // (displayedCourseCards)
   courseCards: (v) => oneOf(v, COURSE_CARDS_VALUES),
-  // Position der Kurskarten; ungültig -> verworfen -> Standard "below"
+  // Position der Kurskarten; ungültig -> verworfen -> Standard "above"
+  // (DEFAULT_COURSE_CARDS_POSITION)
   courseCardsPosition: (v) => oneOf(v, COURSE_CARDS_POSITION_VALUES),
-  // Kartenlayout; ungültig -> verworfen -> Standard "grid" (Warnung wie
-  // unten, warnInvalidInlineEnums)
+  // Kartenlayout; ungültig -> verworfen -> Standard "rows"
+  // (DEFAULT_COURSE_CARDS_LAYOUT; Warnung wie unten, warnInvalidInlineEnums)
   courseCardsLayout: (v) => oneOf(v, COURSE_CARDS_LAYOUT_VALUES),
   // Inline-Box schwebend (overlay) und Aufklapp-Effekt; ungültig -> verworfen,
   // die Warnung (mit dem tatsächlich geltenden Wert) schreibt
