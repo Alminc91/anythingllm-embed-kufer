@@ -778,16 +778,28 @@ export const layoutValidations = {
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
 // zusammengeführte Settings. Herkunft bei festen Standards (FIXED_STANDARDS,
-// im Inline-Modus INLINE_STANDARDS, KI-Hinweis AI_NOTICE): ein Server-Wert
-// wirkt dort nicht, es gilt das Script-Attribut, wenn sein Wert wirkt, sonst
-// der „Standard“ (applyFixedStandards; Fixliste 7.22-rc20 W82).
+// INLINE_STANDARDS, KI-Hinweis AI_NOTICE und SERVER_FIXED_KEYS): ein
+// Server-Wert ist dort kein Wert aus dem Design Center, es gilt das
+// Script-Attribut, wenn sein Wert wirkt, sonst der „Standard“
+// (applyFixedStandards; Fixliste 7.22-rc20 W82). Die Inline-Schlüssel
+// zählen auch im Chatfenster dazu: der Server schickt sie an jedes Widget
+// (Fork server/utils/chats/embedStandards.js INLINE_FIXED_STANDARDS,
+// Fixliste 7.22-rc21 W92).
 const ENUM_SOURCES = [
   ["script", "Script-Attribut"],
   ["server", "Design Center"],
 ];
-function isFixedStandard(key, settings) {
-  if (key in AI_NOTICE || key in FIXED_STANDARDS) return true;
-  return key in INLINE_STANDARDS && settings.displayMode === "inline";
+// Vom Server immer als fester Standard geliefert, ohne Feld im Design Center
+// und ohne Eintrag in FIXED_STANDARDS (Fork EMBED_FIXED_STANDARDS; die
+// Skript-Angabe schlägt ihn, Gruppe B; W92)
+const SERVER_FIXED_KEYS = ["courseCardsLayout"];
+function isFixedStandard(key) {
+  return (
+    key in AI_NOTICE ||
+    key in FIXED_STANDARDS ||
+    key in INLINE_STANDARDS ||
+    SERVER_FIXED_KEYS.includes(key)
+  );
 }
 export function warnInvalidInlineEnums(
   script = {},
@@ -815,7 +827,7 @@ export function warnInvalidInlineEnums(
         !(key in AI_NOTICE) &&
         valid("script") &&
         settings[key] === oneOf(raw.script[key], allowed);
-      const origin = isFixedStandard(key, settings)
+      const origin = isFixedStandard(key)
         ? scriptWins
           ? "Script-Attribut"
           : "Standard"

@@ -154,18 +154,74 @@ export function cssValue(value, fallback = null) {
   return v;
 }
 
-// Werte der dc-Variablen (Gruppe A): nur Farben, die nichts von der Seite
-// holen. Erlaubt sind Farbcodes, die parseColor lesen kann (#rgb, #rrggbb,
-// #rrggbbaa, rgb()/rgba(); so prüft auch das Design Center), und Farbnamen
-// aus Buchstaben außer currentcolor. var(), env(), attr() und currentcolor
-// holten sonst einen Wert der Seite (`--allmi-accent: var(--allm-accent)`),
-// sie ergeben den Standard (Fixliste 7.22-rc20 W80).
-const NAMED_COLOR = /^[a-z]+$/i;
+// Werte der dc-Variablen (Gruppe A): nur gültige Farben, die nichts von der
+// Seite holen (Fixliste 7.22-rc20 W80, rc21 W90). Erlaubt sind:
+// - Farbcodes, die parseColor lesen kann (#rgb, #rrggbb, #rrggbbaa,
+//   rgb()/rgba() mit ganzen Zahlen; so prüft auch das Design Center,
+//   accentColorError), dazu #rgba;
+// - rgb()/rgba() mit Zahlen oder Prozent und hsl()/hsla() (Farbton als Zahl
+//   oder Winkel, Sättigung und Helligkeit in Prozent), wie CSS nur mit
+//   Kommas oder nur mit Leerzeichen, Alpha nach Komma bzw. „/“;
+// - die festen CSS-Farbnamen und transparent, ohne Groß- und Kleinschreibung.
+// Alles andere ergibt den Standard: var(), env(), attr() und currentcolor
+// holten einen Wert der Seite (`--allmi-accent: var(--allm-accent)`),
+// Systemfarben (Canvas, LinkText …) hängen vom Farbschema der Seite ab, und
+// ein Tippfehler („blau“) machte den Chat-Button durchsichtig. Bewusst nicht
+// erlaubt: hwb(), lab(), lch(), oklab(), oklch() (erst in neueren Browsern,
+// sonst ebenfalls durchsichtig; das Design Center nimmt sie nicht an).
+const CSS_NAMED_COLORS = new Set(
+  (
+    "aliceblue antiquewhite aqua aquamarine azure beige bisque black " +
+    "blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse " +
+    "chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan " +
+    "darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta " +
+    "darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen " +
+    "darkslateblue darkslategray darkslategrey darkturquoise darkviolet " +
+    "deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite " +
+    "forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green " +
+    "greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender " +
+    "lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan " +
+    "lightgoldenrodyellow lightgray lightgreen lightgrey lightpink " +
+    "lightsalmon lightseagreen lightskyblue lightslategray lightslategrey " +
+    "lightsteelblue lightyellow lime limegreen linen magenta maroon " +
+    "mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen " +
+    "mediumslateblue mediumspringgreen mediumturquoise mediumvioletred " +
+    "midnightblue mintcream mistyrose moccasin navajowhite navy oldlace " +
+    "olive olivedrab orange orangered orchid palegoldenrod palegreen " +
+    "paleturquoise palevioletred papayawhip peachpuff peru pink plum " +
+    "powderblue purple rebeccapurple red rosybrown royalblue saddlebrown " +
+    "salmon sandybrown seagreen seashell sienna silver skyblue slateblue " +
+    "slategray slategrey snow springgreen steelblue tan teal thistle tomato " +
+    "turquoise violet wheat white whitesmoke yellow yellowgreen transparent"
+  ).split(" "),
+);
+const NUM = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+const PCT = `${NUM}%`;
+const HUE = `-?${NUM}(?:deg|grad|rad|turn)?`;
+// name(a, b, c[, Alpha]) oder name(a b c[ / Alpha])
+function colorFunction(name, a, b, c) {
+  const alpha = `${NUM}%?`;
+  return new RegExp(
+    `^${name}\\(\\s*(?:${a}\\s*,\\s*${b}\\s*,\\s*${c}(?:\\s*,\\s*${alpha})?|${a}\\s+${b}\\s+${c}(?:\\s*\\/\\s*${alpha})?)\\s*\\)$`,
+    "i",
+  );
+}
+const COLOR_FUNCTIONS = [
+  colorFunction("rgba?", NUM, NUM, NUM),
+  colorFunction("rgba?", PCT, PCT, PCT),
+  colorFunction("hsla?", HUE, PCT, PCT),
+];
+const HEX_RGBA = /^#[0-9a-f]{4}$/i;
 export function dcColor(value, fallback = null) {
   const v = cssValue(value);
   if (v === null) return fallback;
-  if (parseColor(v)) return v;
-  if (NAMED_COLOR.test(v) && v.toLowerCase() !== "currentcolor") return v;
+  if (
+    parseColor(v) ||
+    HEX_RGBA.test(v) ||
+    COLOR_FUNCTIONS.some((re) => re.test(v)) ||
+    CSS_NAMED_COLORS.has(v.toLowerCase())
+  )
+    return v;
   return fallback;
 }
 
