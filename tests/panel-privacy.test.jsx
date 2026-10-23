@@ -752,9 +752,11 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect(bubble.style.boxSizing).toBe("border-box");
     expect(privacy.style.boxSizing).toBe("border-box");
-    // Bewusste Änderung (Fixliste 7.22-rc18 E25): eigene feste Fläche wie
-    // der KI-Hinweis, im Standard gleich der Antwortblase
-    expect(privacy.style.backgroundColor).toContain("--allmi-privacy-bg");
+    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 aus
+    // Fixliste 7.22-rc18): Fläche wie die Begrüßungsblase, keine eigene
+    // feste Fläche mehr
+    expect(privacy.style.backgroundColor).toBe(bubble.style.backgroundColor);
+    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
     expect(privacy.style.borderRadius).toBe(bubble.style.borderRadius);
     // altes Format (|) -> Aufzählung, Überschrift „Datenschutz“ ohne Doppelpunkt
     expect(privacy.querySelector("strong").textContent).toBe("Datenschutz");
@@ -1418,10 +1420,16 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     expect(link.getAttribute("href")).toBe("/datenschutz");
     expect(link.textContent).toBe("Datenschutzerklärung");
     expect(privacy.lastElementChild).toBe(link);
-    // kleiner und gedämpft (Mockup). Bewusste Änderung (Fixliste 7.22-rc18
-    // E25): feste Farbe der Datenschutz-Blase statt --allmi-text-muted
-    expect(privacy.style.fontSize).toBe("12.5px");
-    expect(privacy.style.color).toContain("--allmi-privacy-text");
+    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 und die
+    // kleinere, gedämpfte Schrift des Mockups): Schriftgröße, Zeilenhöhe und
+    // Textfarbe wie die Begrüßungsblase, nie --allmi-text-muted; die
+    // Überschrift ohne eigene Farbe
+    expect(privacy.style.fontSize).toBe(bubble.style.fontSize);
+    expect(privacy.style.lineHeight).toBe(bubble.style.lineHeight);
+    expect(privacy.style.color).toBe(bubble.style.color);
+    expect(privacy.style.color).toContain("--allmi-assistant-text");
+    expect(privacy.getAttribute("style")).not.toContain("text-muted");
+    expect(title.style.color).toBe("");
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect($("#anything-llm-privacy-notice")).toBe(null);
     expect($("#message-input").disabled).toBe(false);

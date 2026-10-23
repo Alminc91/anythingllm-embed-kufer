@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Playwright-Beleg Fixliste 7.22-rc18 (W62, E25, E26, W61): feste Farben
-direkt am Element gegen Seiten-CSS und @property der Seite.
+"""Playwright-Beleg Fixliste 7.22-rc18 (W62, E26, W61): feste Farben des
+KI-Hinweises und der Gruppe A direkt am Element gegen Seiten-CSS und
+@property der Seite; Datenschutz-Blase wie die Begrüßungsblase
+(Nutzerentscheidung 23.10.2026, ersetzt E25: keine festen Farben mehr).
 
 Testseite per page.set_content (wie tests/visual/rc17_rangfolge.py), alle
 Aufrufe an den Server gemockt (/config wie ein Server ab 7.22). Seiten-CSS:
-  --allm-text-muted: transparent, --allm-assistant-text: transparent,
-  --allm-assistant-bg gleich der Textfarbe der Datenschutz-Blase,
-  @property --allmi-ai-notice-text { syntax: "<color>"; inherits: false;
-  initial-value: transparent } und dieselbe Registrierung für die übrigen
-  internen Farben (KI-Hinweis-Fläche, Datenschutz, Akzent), dazu
-  data-assistant-bg-color gleich der Textfarbe und data-greeting-style="text".
-Gemessen werden die berechneten Farben von KI-Hinweis, Datenschutz-Blase
-(Text, Überschrift, Punkte, Fläche) und Chat-Button bzw. Senden-Button
-(Akzent, Gruppe A); Kontrast mindestens 4,5:1 hell und dunkel.
+  --allm-text-muted: transparent, --allm-surface gleich der Farbe des
+  KI-Hinweises, @property --allmi-ai-notice-text { syntax: "<color>";
+  inherits: false; initial-value: transparent } und dieselbe Registrierung
+  für die übrigen festen internen Farben (KI-Hinweis-Fläche, Akzent) und
+  --allmi-text-muted; dazu data-assistant-bg-color und (Fälle mit
+  data-greeting-style="text" und In der Seite) --allm-assistant-bg der Seite.
+Gemessen werden die berechneten Farben von KI-Hinweis und Chat-Button bzw.
+Senden-Button (Akzent, Gruppe A) sowie die Datenschutz-Blase: Fläche,
+Textfarbe, Schriftgröße, Zeilenhöhe und Innenabstand gleich der
+Begrüßungsblase, Überschrift und Punkte in der Textfarbe, Überschrift fett;
+die Fläche folgt data-assistant-bg-color (hell) bzw. --allm-assistant-bg der
+Seite; Kontrast mindestens 4,5:1 hell und dunkel.
 
 Aufruf (aus dem Repo-Wurzelverzeichnis, npm run build vorher):
 
@@ -72,30 +77,41 @@ SERVER = {
     "linkColor": "#0b5f8a",
 }
 ACCENT = (11, 95, 138)
-# feste Farben (utils/theme.js AI_NOTICE_COLORS, PRIVACY_NOTICE_COLORS)
+# feste Farben des KI-Hinweises (utils/theme.js AI_NOTICE_COLORS)
 WANT = {
-    "hell": {"notice": ((107, 114, 128), (255, 255, 255)),
-             "privacy": ((87, 83, 78), (34, 38, 40), (255, 255, 255))},
-    "dunkel": {"notice": ((166, 168, 173), (29, 29, 33)),
-               "privacy": ((166, 168, 173), (244, 242, 239), (42, 42, 47))},
+    "hell": {"notice": ((107, 114, 128), (255, 255, 255))},
+    "dunkel": {"notice": ((166, 168, 173), (29, 29, 33))},
 }
-REGISTER = ["ai-notice-text", "ai-notice-bg", "text-muted", "assistant-text", "assistant-bg",
-            "privacy-text", "privacy-title", "privacy-bg", "accent", "on-accent", "link"]
+# Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026):
+# Textfarbe der Antwortblasen (hell #222628, dunkel DARK.text), Fläche nach
+# data-assistant-bg-color (nur hell, dunkel DARK.assistantBg) bzw. nach
+# --allm-assistant-bg der Seite
+BUBBLE_TEXT = {"hell": (34, 38, 40), "dunkel": (244, 242, 239)}
+ATTR_BG = "#fde68a"
+ATTR_BG_WANT = {"hell": (253, 230, 138), "dunkel": (42, 42, 47)}
+PAGE_BG = {"hell": "#ece7df", "dunkel": "#33363d"}
+PAGE_BG_WANT = {"hell": (236, 231, 223), "dunkel": (51, 54, 61)}
+# Farbe, mit der die Seite den KI-Hinweis unsichtbar machen will
+TRAP = {"hell": "#57534e", "dunkel": "#A6A8AD"}
+# per @property registriert: die festen Farben und --allmi-text-muted (darf
+# die Datenschutz-Blase nicht erreichen). --allmi-assistant-* bewusst nicht:
+# sie änderten Begrüßung und Datenschutz-Blase gleich (gewollt seit
+# 23.10.2026) und gehören nicht zu den festen Farben.
+REGISTER = ["ai-notice-text", "ai-notice-bg", "text-muted", "accent", "on-accent", "link"]
 
 
-def page_css(text_hex):
+def page_css(trap_hex, assistant_bg=None):
     props = "\n".join(
         f'@property --allmi-{n} {{ syntax: "<color>"; inherits: false; '
-        f'initial-value: {"hotpink" if n in ("accent", "link") else ("transparent" if "bg" not in n else text_hex)}; }}'
+        f'initial-value: {"hotpink" if n in ("accent", "link") else ("transparent" if "bg" not in n else trap_hex)}; }}'
         for n in REGISTER
     )
+    bubble = f"\n  --allm-assistant-bg: {assistant_bg};" if assistant_bg else ""
     return f"""
 {props}
 #anythingllm-embed-widget, body {{
   --allm-text-muted: transparent;
-  --allm-assistant-text: transparent;
-  --allm-assistant-bg: {text_hex};
-  --allm-surface: {text_hex};
+  --allm-surface: {trap_hex};{bubble}
 }}
 body {{ margin: 0; font-family: sans-serif; background: #e9e7e4; }}
 main {{ max-width: 760px; margin: 40px auto; }}
@@ -197,6 +213,9 @@ def wait(page, sel, timeout=15000):
 PROBE = r"""() => {
   const q = (s) => window.__q(s);
   const col = (el, p) => el ? getComputedStyle(el)[p] : null;
+  const look = (el) => ({ color: col(el, 'color'), bg: col(el, 'backgroundColor'),
+                          size: col(el, 'fontSize'), lh: col(el, 'lineHeight'),
+                          pad: col(el, 'padding') });
   const p = q('#anything-llm-ai-disclaimer');
   const span = p && p.querySelector('span');
   const priv = q('#anything-llm-privacy-bubble');
@@ -210,10 +229,10 @@ PROBE = r"""() => {
   return {
     notice: p ? { text: p.textContent, color: col(p, 'color'), bg: col(span, 'backgroundColor'),
                   w: p.getBoundingClientRect().width } : null,
-    privacy: priv ? { color: col(priv, 'color'), bg: col(priv, 'backgroundColor'),
-                      title: col(title, 'color'), li: col(li, 'color'), link: col(link, 'color'),
+    privacy: priv ? { ...look(priv), title: col(title, 'color'), titleWeight: col(title, 'fontWeight'),
+                      li: col(li, 'color'), link: col(link, 'color'),
                       text: priv.textContent.slice(0, 80) } : null,
-    greeting: greet ? { text: greet.textContent, color: col(greet, 'color'), bg: col(greet, 'backgroundColor') } : null,
+    greeting: greet ? { text: greet.textContent, ...look(greet) } : null,
     centered: centered ? centered.textContent : null,
     button: btn ? col(btn, 'backgroundColor') : null,
     send: send ? col(send, 'color') : null,
@@ -221,7 +240,7 @@ PROBE = r"""() => {
 }"""
 
 
-def check(page, label, scheme, assert_on, extra_key=""):
+def check(page, label, scheme, assert_on, want_bg, extra_key=""):
     st = page.evaluate(PROBE)
     want = WANT[scheme]
     n = st["notice"]
@@ -229,33 +248,37 @@ def check(page, label, scheme, assert_on, extra_key=""):
     record(f"{label} E24/W62: KI-Hinweis lesbar ({scheme}){extra_key}",
            n is not None and n["text"] == NOTICE_DE and (nt, nb) == want["notice"] and contrast(nt, nb) >= 4.5,
            {"color": n and n["color"], "bg": n and n["bg"], "kontrast": contrast(nt, nb)}, assert_on)
-    pr = st["privacy"]
-    if pr is None:
-        record(f"{label} E25: Datenschutz-Blase vorhanden ({scheme}){extra_key}", False, st, assert_on)
+    pr, gr = st["privacy"], st["greeting"]
+    if pr is None or gr is None:
+        record(f"{label} Datenschutz- und Begrüßungsblase vorhanden ({scheme}){extra_key}", False, st, assert_on)
         return st
-    pt, ptt, pb = rgb(pr["color"]), rgb(pr["title"]), rgb(pr["bg"])
-    li = rgb(pr["li"])
-    ok = ((pt, ptt, pb) == want["privacy"] and li == pt and contrast(pt, pb) >= 4.5
-          and contrast(ptt, pb) >= 4.5)
-    record(f"{label} E25: Datenschutz-Text lesbar ({scheme}){extra_key}", ok,
-           {"text": pr["color"], "titel": pr["title"], "punkt": pr["li"], "fläche": pr["bg"],
-            "kontrast_text": contrast(pt, pb), "kontrast_titel": contrast(ptt, pb), "link": pr["link"]},
+    # Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung
+    # 23.10.2026, ersetzt E25); --allm-text-muted: transparent wirkt nicht
+    pt, pb = rgb(pr["color"]), rgb(pr["bg"])
+    same = all(pr[k] == gr[k] for k in ("color", "bg", "size", "lh", "pad"))
+    ok = (same and pt == BUBBLE_TEXT[scheme] and pb == want_bg
+          and rgb(pr["title"]) == pt and rgb(pr["li"]) == pt
+          and float(pr["titleWeight"] or 0) >= 700 and contrast(pt, pb) >= 4.5)
+    record(f"{label} Datenschutz-Blase wie die Begrüßungsblase, lesbar ({scheme}){extra_key}", ok,
+           {"datenschutz": {k: pr[k] for k in ("color", "bg", "size", "lh", "pad", "title", "titleWeight", "li")},
+            "begrüßung": {k: gr[k] for k in ("color", "bg", "size", "lh", "pad")},
+            "fläche_soll": want_bg, "kontrast": contrast(pt, pb), "link": pr["link"]},
            assert_on)
     return st
 
 
 def case_privacy_only(browser, dist, out, label, dark, assert_on):
-    # ohne data-greeting-style: nur die Farben (E25, W62), auch am alten Stand
-    # mit Datenschutz-Blase
+    # ohne data-greeting-style: nur die Farben (W62, Datenschutz-Blase wie
+    # die Begrüßung); Fläche nach data-assistant-bg-color (dunkel ohne
+    # Wirkung, wie bei den Antwortblasen)
     scheme = "dunkel" if dark else "hell"
-    text_hex = "#A6A8AD" if dark else "#57534e"
     config = {**SERVER, **({"theme": "dark"} if dark else {})}
-    attrs = {"assistant-bg-color": text_hex, "open-on-load": "on"}
-    ctx, page = open_page(browser, dist, config, attrs, page_css(text_hex))
+    attrs = {"assistant-bg-color": ATTR_BG, "open-on-load": "on"}
+    ctx, page = open_page(browser, dist, config, attrs, page_css(TRAP[scheme]))
     try:
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(700)
-        check(page, label, scheme, assert_on, " ohne data-greeting-style")
+        check(page, label, scheme, assert_on, ATTR_BG_WANT[scheme], " mit data-assistant-bg-color")
         page.screenshot(path=str(out / f"{label}-chatfenster-{scheme}-farben.png"))
     finally:
         ctx.close()
@@ -263,14 +286,14 @@ def case_privacy_only(browser, dist, out, label, dark, assert_on):
 
 def case_bubble(browser, dist, out, label, dark, assert_on):
     scheme = "dunkel" if dark else "hell"
-    text_hex = "#A6A8AD" if dark else "#57534e"
     config = {**SERVER, **({"theme": "dark"} if dark else {})}
-    attrs = {"greeting-style": "text", "assistant-bg-color": text_hex, "open-on-load": "on"}
-    ctx, page = open_page(browser, dist, config, attrs, page_css(text_hex))
+    attrs = {"greeting-style": "text", "assistant-bg-color": ATTR_BG, "open-on-load": "on"}
+    ctx, page = open_page(browser, dist, config, attrs, page_css(TRAP[scheme], PAGE_BG[scheme]))
     try:
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(700)
-        st = check(page, label, scheme, assert_on)
+        # --allm-assistant-bg der Seite gilt vor data-assistant-bg-color
+        st = check(page, label, scheme, assert_on, PAGE_BG_WANT[scheme], " mit --allm-assistant-bg der Seite")
         record(f"{label} E26/W60: Datenschutz an, Begrüßung als Blase trotz data-greeting-style=text ({scheme})",
                st["greeting"] is not None and st["privacy"] is not None and st["greeting"]["text"] == GREETING_DE,
                {"begrüßung": st["greeting"], "mittig": st["centered"]}, assert_on)
@@ -288,10 +311,9 @@ def case_bubble(browser, dist, out, label, dark, assert_on):
 
 
 def case_inline(browser, dist, out, label, assert_on):
-    text_hex = "#57534e"
     config = {**SERVER, "displayMode": "inline"}
-    attrs = {"greeting-style": "text", "assistant-bg-color": text_hex}
-    ctx, page = open_page(browser, dist, config, attrs, page_css(text_hex), inline=True)
+    attrs = {"greeting-style": "text", "assistant-bg-color": ATTR_BG}
+    ctx, page = open_page(browser, dist, config, attrs, page_css(TRAP["hell"], PAGE_BG["hell"]), inline=True)
     try:
         wait(page, "#anything-llm-inline-input")
         page.wait_for_timeout(600)
@@ -305,7 +327,7 @@ def case_inline(browser, dist, out, label, assert_on):
         page.mouse.click(box[0], box[1])
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(1200)
-        check(page, label, "hell", assert_on, " In der Seite")
+        check(page, label, "hell", assert_on, PAGE_BG_WANT["hell"], " In der Seite")
         page.screenshot(path=str(out / f"{label}-seite-hell.png"))
     finally:
         ctx.close()
@@ -315,7 +337,8 @@ def case_text(browser, dist, out, label, assert_on):
     # Gegenprobe: Datenschutz aus -> data-greeting-style=text wirkt, Text mit
     # dem Begrüßungsstandard der Sprache (W61)
     config = {**SERVER, "privacyNotice": "none"}
-    ctx, page = open_page(browser, dist, config, {"greeting-style": "text", "open-on-load": "on"}, page_css("#57534e"))
+    ctx, page = open_page(browser, dist, config, {"greeting-style": "text", "open-on-load": "on"},
+                          page_css(TRAP["hell"]))
     try:
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(600)
