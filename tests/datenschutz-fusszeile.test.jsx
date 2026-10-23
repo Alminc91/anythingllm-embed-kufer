@@ -16,7 +16,7 @@ describe("Vertrag: Texte de/en wortgleich mit dem Fork", () => {
       privacyLinkText: "Datenschutz",
       privacyAiTitle: "Hinweis zur KI",
       privacyAiText:
-        "Unser KI-Berater ist auf richtige Auskünfte aus unserem Kursangebot optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Sicherheit immer auch auf der Kursseite.",
+        "Unser KI-Berater ist auf richtige Auskünfte optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Kontrolle immer auf unserer Website.",
       privacyCloseText: "Schließen",
       privacyCloseLabel: "Datenschutz schließen",
       privacyTitle: "Datenschutz",
@@ -27,7 +27,7 @@ describe("Vertrag: Texte de/en wortgleich mit dem Fork", () => {
       privacyLinkText: "Privacy",
       privacyAiTitle: "About the AI",
       privacyAiText:
-        "Our AI advisor is optimised for accurate information about our courses. Like any AI, it can still make the occasional mistake. For safety, you can always find important details such as dates and prices on the course page.",
+        "Our AI advisor is optimised for accurate information. Like any AI, it can still make the occasional mistake. You can always check important details such as dates and prices on our website.",
       privacyCloseText: "Close",
       privacyCloseLabel: "Close privacy notice",
       privacyTitle: "Privacy",

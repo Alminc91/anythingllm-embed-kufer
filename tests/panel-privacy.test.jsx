@@ -961,23 +961,17 @@ describe("Datenschutz-Texte (AK-5, E30)", () => {
     // Datenschutz-Satz spricht für die Einrichtung des Kunden, nicht „Unser Team“
     expect(JSON.stringify(PANEL_TEXTS)).not.toMatch(/Unser Team|Our team/);
     expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
-    // Bewusste Änderung (Datenschutz in der Fußzeile, 23.10.2026): der Punkt
-    // „Hinweis zur KI“ im Datenschutz-Fenster nennt Kursangebot und
-    // Kursseite (Wortlaut vom Nutzer freigegeben); alle übrigen Texte bleiben
-    // neutral
-    const neutral = (texts) => {
-      const { privacyAiText, ...rest } = texts;
-      return rest;
-    };
-    const all = JSON.stringify({
-      de: neutral(PANEL_TEXTS.de),
-      en: neutral(PANEL_TEXTS.en),
-    });
+    // Alle Texte neutral, auch der Punkt „Hinweis zur KI“ im
+    // Datenschutz-Fenster (ein Wortlaut für alle Kunden ohne Kurs-Wörter,
+    // Nutzerentscheidung F8 vom 23.10.2026). „Wichtig:“ als Vorspann (bis
+    // 10/2026 in der Blase) bleibt verboten; „Wichtige Angaben“ im KI-Punkt
+    // ist freigegebener Wortlaut.
+    const all = JSON.stringify(PANEL_TEXTS);
     for (const word of [
       "Volkshochschule",
       "Kursberater",
       "Kurs",
-      "Wichtig",
+      "Wichtig:",
       "adult education",
       "course",
     ])
