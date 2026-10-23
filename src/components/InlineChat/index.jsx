@@ -26,6 +26,7 @@ import {
   INLINE_RADIUS_VARS,
   ON_ACCENT_TEXT,
   DEFAULT_ACCENT,
+  inlinePanelShadow,
 } from "@/utils/theme";
 import { PILL_CLASS } from "@/components/ChatWindow/ChatContainer/ChatHistory/Pill";
 import {
@@ -718,8 +719,9 @@ const TEXT_RESET = {
 
 // Leiste: Farben aus den CSS-Variablen --allm-bar-* (Standard je nach
 // inlineTheme bzw. theme, siehe BAR_THEMES in utils/theme.js). Fallbacks =
-// bisherige helle Leiste. --allmi-bar-backdrop/-ring sind nur bei dunkler
-// Leiste gesetzt (sonst ungültig -> none, wie bisher).
+// helle Leiste (seit 23.10.2026 wie die rhein-Demo).
+// --allmi-bar-backdrop/-ring sind nur bei dunkler Leiste gesetzt (sonst
+// ungültig -> none, wie bisher).
 const BAR_STYLE = {
   backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
   color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
@@ -776,13 +778,17 @@ const chatClasses = {
   overlay:
     "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]",
 };
-// Flächen über CSS-Variablen; Fallbacks = bisherige Klassenwerte.
+// Flächen über CSS-Variablen; Fallbacks = bisherige Klassenwerte. Schatten
+// seit 23.10.2026 aus der Akzentfarbe wie die rhein-Demo
+// (--allmi-inline-panel-shadow, utils/theme.js inlinePanelShadow, darin
+// gewinnt --allm-shadow der Seite); Fallback der helle Standard mit der
+// Standard-Akzentfarbe.
 const chatStyles = {
   box: {
     backgroundColor: "var(--allmi-surface, #FFFFFF)",
     borderColor: "var(--allmi-border, #d1d5db)",
     borderRadius: "var(--allmi-radius, 16px)",
-    boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.12))",
+    boxShadow: `var(--allmi-inline-panel-shadow, ${inlinePanelShadow()})`,
   },
   overlay: { backgroundColor: "var(--allmi-surface, #FFFFFF)" },
 };

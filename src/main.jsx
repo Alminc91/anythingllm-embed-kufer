@@ -178,11 +178,12 @@ const customCss = `
     opacity: 0.8;
   }
 
-  /* Tastatur-Fokus: --allm-focus-ring (z. B. "2px solid #F3A04C"). Ohne Wert
-     (helles Theme) gilt wie bisher der Browser-Standard (revert). */
+  /* Tastatur-Fokus: --allm-focus-ring (z. B. "2px solid #F3A04C"), sonst
+     2px Akzent, seit 23.10.2026 auch im hellen Theme (vorher dort der
+     Browser-Standard, revert); deckend für einen sichtbaren Fokus-Indikator. */
   #anythingllm-embed-root button:focus-visible,
   #anythingllm-embed-root a:focus-visible {
-    outline: var(--allmi-focus-ring, revert);
+    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, ${DEFAULT_ACCENT}));
   }
 
   .allm-course-card:hover,.allm-course-row:hover{background-color:var(--allmi-hover-bg,#f3f4f6)!important}

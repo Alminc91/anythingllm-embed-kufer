@@ -280,9 +280,13 @@ describe("theme.test.js", () => {
       "border",
       "shadow",
       "hover-bg",
-      "focus-ring",
     ])
       expect(css).toContain(`--allmi-${name}: var(--allm-${name});`);
+    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, Optik der
+    // rhein-Demo): der Fokusring hat auch hell einen Standard, 2px Akzent
+    expect(css).toContain(
+      "--allmi-focus-ring: var(--allm-focus-ring, 2px solid var(--allmi-accent));",
+    );
     expect(css).toContain("--allmi-surface: var(--allm-surface, #FFFFFF);");
     expect(css).toContain("--allmi-radius: var(--allm-radius, 16px);");
     // Kurskarten getrennt rundbar, Standard 0,75 × --allm-radius (AK-6)

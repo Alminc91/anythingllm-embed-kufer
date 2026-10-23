@@ -60,18 +60,23 @@ export const THEME_STYLE_ID = "allm-theme-vars";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 // Leiste (Inline-Modus, eingeklappt) — bisher BAR_THEMES in InlineChat.
+// Rand und Schatten seit 23.10.2026 wie die rhein-Demo (Nutzerentscheidung:
+// ihre Optik wird Standard für „In der Seite“; vorher hell Rand #d1d5db und
+// Schatten 0 1px 3px rgba(0, 0, 0, 0.06), dunkel Schatten
+// 0 4px 16px rgba(0, 0, 0, 0.18)). Dunkel bleiben Fläche und Rand.
+// --allm-bar-border und --allm-bar-shadow der Seite gewinnen (Gruppe B).
 export const BAR_THEMES = {
   light: {
     bg: "#FFFFFF",
     text: "#1f2937",
-    border: "#d1d5db",
-    shadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
+    border: "rgba(23, 24, 27, 0.04)",
+    shadow: "0 18px 40px -22px rgba(23, 24, 27, 0.45)",
   },
   dark: {
     bg: "rgba(17, 24, 39, 0.78)",
     text: "#FFFFFF",
     border: "rgba(255, 255, 255, 0.16)",
-    shadow: "0 4px 16px rgba(0, 0, 0, 0.18)",
+    shadow: "0 18px 40px -20px rgba(0, 0, 0, 0.8)",
   },
 };
 
@@ -212,6 +217,24 @@ export function onAccentTextColor(settings = {}) {
     dcColor(settings.userTextColor) ||
     recommendedTextColor(dcColor(settings.buttonColor, DEFAULTS.accent))
   );
+}
+
+// Schatten des aufgeklappten Inline-Panels (23.10.2026, Nutzerentscheidung:
+// Optik der rhein-Demo wird Standard für „In der Seite“; vorher
+// 0 4px 14px rgba(0, 0, 0, 0.12), dunkel DARK.shadow). Getönt aus der
+// wirksamen Akzentfarbe aus dem Design Center (dcColor, ungültig oder nicht
+// lesbar: DEFAULT_ACCENT). Hell ein weicher Schatten in der Akzentfarbe mal
+// 0,33 (je Kanal gerundet: #007c82 -> rgba(0, 41, 43, 0.45), #C4430A ->
+// rgba(65, 22, 3, 0.45)), dunkel ein schwarzer Schatten mit 1px Kante in
+// der Akzentfarbe (10 %). Gilt nur für das Inline-Panel
+// (--allmi-inline-panel-shadow, buildThemeCss); das Chatfenster
+// (Blasen-Modus, App.jsx) behält --allmi-shadow.
+export function inlinePanelShadow(settings = {}, mode = "light") {
+  const [r, g, b] = parseColor(dcColor(settings.buttonColor, DEFAULTS.accent));
+  if (mode === "dark")
+    return `0 40px 100px -30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(${r}, ${g}, ${b}, 0.10)`;
+  const [dr, dg, db] = [r, g, b].map((v) => Math.round(v * 0.33));
+  return `0 40px 90px -30px rgba(${dr}, ${dg}, ${db}, 0.45), 0 4px 14px rgba(23, 24, 27, 0.06)`;
 }
 
 // Text der Pillen (Startvorschläge und Folgefragen) in Kundenfarbe mit
@@ -378,9 +401,13 @@ export const THEME_VARIABLES = [
   { name: "effect-close-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
+  // Fokusring: seit 23.10.2026 auch hell 2px in der Akzentfarbe (vorher
+  // ohne Standard = Browser-Standard), wie die rhein-Demo. Bewusst deckend,
+  // nicht halbtransparent: der Fokus-Indikator braucht sichtbaren Kontrast
+  // zur Umgebung.
   {
     name: "focus-ring",
-    light: null,
+    light: "2px solid var(--allmi-accent)",
     dark: "2px solid var(--allmi-accent)",
   },
   // Inline-Leiste
@@ -513,6 +540,9 @@ export function buildThemeCss(settings = {}, mode = "light") {
     // Webseite): hell Weiß wie die Pillen, dunkel der Fensterton, auf dem
     // --allmi-pill-accent-text mindestens 4,5:1 hat (pillTextColor)
     `--allmi-chip-bg: ${mode === "dark" ? DARK.bg : PILL_BG_LIGHT};`,
+    // Schatten des aufgeklappten Inline-Panels aus der Akzentfarbe
+    // (inlinePanelShadow); --allm-shadow der Seite gewinnt (Gruppe B)
+    `--allmi-inline-panel-shadow: var(--allm-shadow, ${inlinePanelShadow(settings, mode)});`,
   );
   if (resolveBarTheme(settings, mode) === "dark")
     decls.push(
