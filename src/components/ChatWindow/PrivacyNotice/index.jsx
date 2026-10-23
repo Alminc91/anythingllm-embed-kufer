@@ -1,15 +1,14 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { X } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import {
-  DARK,
   DEFAULT_ACCENT,
   ON_ACCENT_TEXT,
   PRIVACY_DIALOG_BODY_ID,
+  PRIVACY_DIALOG_COLORS,
   PRIVACY_DIALOG_ID,
   PRIVACY_DIALOG_TITLE_ID,
 } from "@/utils/theme";
-import { contrastRatio, MIN_TEXT_CONTRAST } from "@/utils/contrast";
 import {
   groupPrivacyBlocks,
   panelTexts,
@@ -40,20 +39,20 @@ import {
 // Fenster. Escape schließt über die Escape-Ebene (ChatWindow). Der Fokus
 // darf auch sonst nicht hinter das Fenster (ChatWindow, onFocus).
 //
-// Optik (D2): Fläche und Schrift der Antwortblasen (--allmi-assistant-bg,
-// --allmi-assistant-text, --allmi-font-size; folgen data-assistant-bg-color
-// und den Variablen der Seite), Rundung des Panels (das Fenster liegt im
-// Panel, dessen Rundung schneidet es zu). Ergeben die Variablen der Seite
-// eine unlesbare Fläche (durchsichtig, Kontrast unter 4,5:1, Schrift unter
-// 12 px), gelten feste Standardfarben bzw. 14 px (NAK-2, readableColors).
-// z-index 60 wie „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50).
+// Optik (R1-D1, ersetzt D2): Fläche, Schrift, Trennlinien, Link und
+// Fokusrahmen fest je Farbschema, als Regel direkt am Element im
+// Theme-Stylesheet (utils/theme.js PRIVACY_DIALOG_COLORS, buildThemeCss);
+// keine Variable der Seite wirkt darauf, auch nicht data-assistant-bg-color.
+// Die Inline-Stile tragen nur die hellen Werte als Rückfall und feste
+// Schriftgrößen (14 px wie die Begrüßung, Überschrift 17 px). Nur der
+// Button „Schließen“ nutzt die Akzentfarbe und die Schrift darauf aus dem
+// Design Center (Gruppe A). Rundung des Panels (das Fenster liegt im Panel,
+// dessen Rundung schneidet es zu). z-index 60 wie „Frühere Chats“: über dem
+// Scroll-nach-unten-Pfeil (z-50).
 
-const FALLBACK = {
-  light: { color: "#222628", backgroundColor: "#FFFFFF" },
-  dark: { color: DARK.text, backgroundColor: DARK.assistantBg },
-};
-const MIN_FONT_PX = 12;
-const LINE = "var(--allmi-header-border, 1px solid #E9E9E9)";
+const FALLBACK = PRIVACY_DIALOG_COLORS.light;
+const LINE = `1px solid ${FALLBACK.line}`;
+const FONT_SIZE = "14px";
 
 export default function PrivacyDialog({
   settings = {},
@@ -66,7 +65,6 @@ export default function PrivacyDialog({
   const href = privacyHref(settings.privacyUrl);
   const ownRef = useRef(null);
   const titleRef = useRef(null);
-  const [guard, setGuard] = useState(null);
 
   const setRef = (el) => {
     ownRef.current = el;
@@ -75,10 +73,9 @@ export default function PrivacyDialog({
   };
 
   // Fokus beim Öffnen auf die Überschrift (das Fenster öffnet nur ein Klick
-  // bzw. Enter im Widget, der Fokus liegt also schon hier); Lesbarkeit prüfen
+  // bzw. Enter im Widget, der Fokus liegt also schon hier)
   useLayoutEffect(() => {
     titleRef.current?.focus({ preventScroll: true });
-    setGuard(readableGuard(ownRef.current));
   }, []);
 
   const trapTab = (e) => {
@@ -112,12 +109,13 @@ export default function PrivacyDialog({
         flexDirection: "column",
         boxSizing: "border-box",
         overflow: "hidden",
-        backgroundColor: "var(--allmi-assistant-bg, #FFFFFF)",
-        color: "var(--allmi-assistant-text, #222628)",
-        ...guard,
+        backgroundColor: FALLBACK.bg,
+        color: FALLBACK.text,
+        fontSize: FONT_SIZE,
       }}
     >
       <div
+        className="allm-privacy-dialog-line"
         style={{
           flex: "none",
           padding: "16px 60px 12px 20px",
@@ -153,7 +151,7 @@ export default function PrivacyDialog({
           display: "flex",
           flexDirection: "column",
           gap: "14px",
-          fontSize: guard?.fontSize || "var(--allmi-font-size, 14px)",
+          fontSize: FONT_SIZE,
           lineHeight: 1.55,
           overflowWrap: "anywhere",
         }}
@@ -194,7 +192,7 @@ export default function PrivacyDialog({
             rel="noopener noreferrer"
             style={{
               alignSelf: "flex-start",
-              color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
+              color: DEFAULT_ACCENT,
               fontWeight: 500,
               textDecoration: "underline",
               textUnderlineOffset: "2px",
@@ -205,6 +203,7 @@ export default function PrivacyDialog({
         )}
       </div>
       <div
+        className="allm-privacy-dialog-line"
         style={{
           flex: "none",
           display: "flex",
@@ -241,7 +240,7 @@ export default function PrivacyDialog({
         style={{
           position: "absolute",
           top: "6px",
-          right: "8px",
+          right: "10px",
           width: "44px",
           height: "44px",
           display: "flex",
@@ -266,51 +265,4 @@ function focusables(container) {
   return [
     ...container.querySelectorAll('a[href], button, [tabindex="0"]'),
   ].filter((el) => !el.disabled);
-}
-
-// Lesbarkeit gegen Variablen der Seite (NAK-2): Farben und Schriftgröße so,
-// wie der Browser sie berechnet. Unlesbar (Fläche nicht deckend, Kontrast
-// unter 4,5:1, Schrift unter 12 px) -> feste Standardwerte des Farbschemas
-// (Stylesheet-Modus utils/theme.js render, data-mode). Ohne berechnete
-// Farben (jsdom, alte Browser) bleibt es bei den Variablen.
-export function readableGuard(el, mode = themeMode()) {
-  if (!el || typeof getComputedStyle !== "function") return null;
-  const cs = getComputedStyle(el);
-  const fg = rgba(cs.color);
-  const bg = rgba(cs.backgroundColor);
-  const out = {};
-  if (fg && bg) {
-    const hex = (c) =>
-      `#${c
-        .slice(0, 3)
-        .map((v) => Math.round(v).toString(16).padStart(2, "0"))
-        .join("")}`;
-    const ratio = contrastRatio(hex(fg), hex(bg));
-    if (bg[3] < 1 || fg[3] < 1 || ratio === null || ratio < MIN_TEXT_CONTRAST)
-      Object.assign(out, FALLBACK[mode === "dark" ? "dark" : "light"]);
-  }
-  const body = el.querySelector?.(`#${PRIVACY_DIALOG_BODY_ID}`);
-  const size = body ? parseFloat(getComputedStyle(body).fontSize) : NaN;
-  if (Number.isFinite(size) && size < MIN_FONT_PX) out.fontSize = "14px";
-  return Object.keys(out).length ? out : null;
-}
-
-function themeMode() {
-  return embedderSettings.themeStyle?.dataset?.mode === "dark"
-    ? "dark"
-    : "light";
-}
-
-// "rgb(1, 2, 3)" / "rgba(1, 2, 3, 0.5)" / "rgb(1 2 3 / 50%)" -> [r, g, b, a];
-// sonst null
-function rgba(value) {
-  if (typeof value !== "string") return null;
-  const m =
-    /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/i.exec(
-      value.trim(),
-    );
-  if (!m) return null;
-  const a =
-    m[4] === undefined ? 1 : parseFloat(m[4]) / (m[5] === "%" ? 100 : 1);
-  return [Number(m[1]), Number(m[2]), Number(m[3]), a];
 }

@@ -1,0 +1,265 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+
+// Datenschutz in der Fußzeile, Korrekturen nach rc1
+// (issues/datenschutz-fusszeile/fixliste-rc1.md, Widget W2 bis W10,
+// Entscheidungen R1-D1 bis R1-D3 vom 23.10.2026).
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+vi.mock("../src/main.jsx", () => ({
+  embedderSettings: {
+    settings: {},
+    USER_STYLES: { msgBg: "#01a5a9", msgText: "#FFFFFF" },
+    ASSISTANT_STYLES: {},
+    shadowRoot: null,
+    hostElement: null,
+  },
+  inlineTailwindStyles: () => Promise.resolve(false),
+}));
+const chatService = vi.hoisted(() => ({
+  streamChat: vi.fn(() => new Promise(() => {})),
+  getAudioStatus: vi.fn(async () => ({ stt: false, tts: false })),
+}));
+vi.mock("@/models/chatService", () => ({ default: chatService }));
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (k) => k }),
+}));
+const historyState = vi.hoisted(() => ({ value: [] }));
+vi.mock("@/hooks/chat/useChatHistory", () => ({
+  default: () => ({
+    chatHistory: historyState.value,
+    setChatHistory: () => {},
+    loading: false,
+  }),
+}));
+
+import { embedderSettings } from "../src/main.jsx";
+import * as theme from "../src/utils/theme.js";
+import { contrastRatio } from "../src/utils/contrast.js";
+import ChatWindow from "../src/components/ChatWindow/index.jsx";
+
+const BASE = {
+  embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
+  baseApiUrl: "https://praesentation.ki.kufer.de/api/embed",
+};
+const OWN = {
+  ...BASE,
+  privacyTitle: "Datenschutz bei der VHS",
+  privacyText: "• Punkt A\n• Punkt B\nAbsatz C",
+  privacyUrl: "https://vhs.example/datenschutz",
+};
+
+let container;
+let root;
+if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  embedderSettings.settings = {};
+  historyState.value = [];
+  chatService.streamChat.mockClear();
+  window.localStorage.clear();
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.restoreAllMocks();
+});
+function render(el) {
+  act(() => root.render(el));
+}
+const $ = (sel) => container.querySelector(sel);
+const click = (el) =>
+  act(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+const link = () => $("#anything-llm-privacy-link");
+const dialog = () => $("[role=dialog]");
+function renderWindow(settings, props = {}) {
+  render(
+    <ChatWindow
+      closeChat={() => {}}
+      settings={{ ...settings, enableStt: false }}
+      sessionId="s-1"
+      conversationId="c-1"
+      {...props}
+    />,
+  );
+}
+function openDialog(settings = OWN) {
+  renderWindow(settings);
+  link().focus();
+  click(link());
+  return dialog();
+}
+const closeButton = (d = dialog()) =>
+  [...d.querySelectorAll("button")].find((b) => !b.getAttribute("aria-label"));
+// Regel des Theme-Stylesheets zu einem Selektor (eine Zeile je Regel)
+const rule = (css, sel) =>
+  css.split("\n").find((l) => l.startsWith(`${sel} {`)) || "";
+const valueOf = (decl, prop) =>
+  new RegExp(`(?:^|[\\s{;])${prop}: ([^;!]+) !important`)
+    .exec(decl)?.[1]
+    ?.trim();
+// alle Variablen, die Inline-Stile im Fenster lesen
+const varsInDialog = (d) => {
+  const used = new Set();
+  for (const el of [d, ...d.querySelectorAll("*")])
+    for (const m of (el.getAttribute("style") || "").matchAll(
+      /var\(\s*(--[\w-]+)/g,
+    ))
+      used.add(m[1]);
+  return [...used].sort();
+};
+
+// ---------------------------------------------------------------------------
+describe("W2, W3 (R1-D1): Datenschutz-Fenster mit festen Farben je Farbschema", () => {
+  const D = `#${theme.PRIVACY_DIALOG_ID}`;
+
+  it("Inline-Stile lesen keine Variable der Seite; nur „Schließen“ nutzt Akzent und Schrift darauf (Gruppe A)", () => {
+    const d = openDialog();
+    expect(varsInDialog(d)).toEqual(["--allmi-accent", "--allmi-on-accent"]);
+    const close = closeButton(d);
+    expect(close.style.backgroundColor).toContain("--allmi-accent");
+    expect(close.style.color).toContain("--allmi-on-accent");
+    // Rückfall ohne Theme-Stylesheet: die hellen festen Werte
+    expect(d.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(d.style.color).toBe("rgb(34, 38, 40)");
+  });
+
+  it("Schriftgrößen fest: Fenster und Text 14 px, Überschrift 17 px (kein --allmi-font-size)", () => {
+    const d = openDialog();
+    expect(d.style.fontSize).toBe("14px");
+    expect($(`#${theme.PRIVACY_DIALOG_BODY_ID}`).style.fontSize).toBe("14px");
+    expect(d.querySelector("h2").style.fontSize).toBe("17px");
+  });
+
+  it("W3: Trennlinien mit eigener fester Linie statt --allmi-header-border", () => {
+    const d = openDialog();
+    const lines = [...d.querySelectorAll(".allm-privacy-dialog-line")];
+    expect(lines).toHaveLength(2);
+    expect(lines[0].style.borderBottom).toBe("1px solid rgb(233, 233, 233)");
+    expect(lines[1].style.borderTop).toBe("1px solid rgb(233, 233, 233)");
+    for (const el of lines)
+      expect(el.getAttribute("style")).not.toContain("header-border");
+  });
+
+  it.each(["light", "dark"])(
+    "%s: Regeln direkt am Fenster ohne var(), Fläche und Schrift lesbar",
+    (mode) => {
+      const css = theme.buildThemeCss({}, mode);
+      const c = theme.PRIVACY_DIALOG_COLORS[mode];
+      const decl = rule(css, D);
+      expect(valueOf(decl, "color")).toBe(c.text);
+      expect(valueOf(decl, "background-color")).toBe(c.bg);
+      expect(contrastRatio(c.text, c.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        valueOf(rule(css, `${D} .allm-privacy-dialog-line`), "border-color"),
+      ).toBe(c.line);
+      const dialogRules = css
+        .split("\n")
+        .filter((l) => l.includes(theme.PRIVACY_DIALOG_ID));
+      expect(dialogRules.length).toBeGreaterThanOrEqual(5);
+      for (const l of dialogRules) expect(l, l).not.toContain("var(");
+    },
+  );
+
+  it("hell wie die Standard-Antwortblase, dunkel deren Fläche (D4)", () => {
+    expect(theme.PRIVACY_DIALOG_COLORS.light).toMatchObject({
+      text: "#222628",
+      bg: "#FFFFFF",
+    });
+    expect(theme.PRIVACY_DIALOG_COLORS.dark).toMatchObject({
+      text: theme.DARK.text,
+      bg: theme.DARK.assistantBg,
+    });
+  });
+
+  // Werte der Seite in modernen Farbformaten (oklch, color-mix) und
+  // data-assistant-bg-color: das Theme-Stylesheet des Fensters bleibt gleich
+  it.each(["light", "dark"])(
+    "%s: data-assistant-bg-color, Blasenfarben und Schriftgröße ändern nichts am Fenster",
+    (mode) => {
+      const plain = theme.buildThemeCss({}, mode);
+      const other = theme.buildThemeCss(
+        {
+          assistantBgColor: "oklch(0.98 0 0)",
+          headerBgColor: "color-mix(in srgb, red 50%, blue)",
+          textSize: 10,
+        },
+        mode,
+      );
+      const dialogRules = (css) =>
+        css.split("\n").filter((l) => l.includes(theme.PRIVACY_DIALOG_ID));
+      expect(dialogRules(plain).length).toBeGreaterThanOrEqual(5);
+      expect(dialogRules(other)).toEqual(dialogRules(plain));
+    },
+  );
+
+  it.each([
+    ["Standard", {}],
+    ["helle Linkfarbe #FFA102", { linkColor: "#FFA102" }],
+    ["helle Linkfarbe #63b4e3", { linkColor: "#63b4e3" }],
+    ["Linkfarbe wie die Fläche", { linkColor: "#FFFFFF" }],
+  ])(
+    "%s: Link im Fenster mindestens 4,5:1, Fokusrahmen mindestens 3:1 (hell und dunkel)",
+    (_n, settings) => {
+      for (const mode of ["light", "dark"]) {
+        const css = theme.buildThemeCss(settings, mode);
+        const bg = theme.PRIVACY_DIALOG_COLORS[mode].bg;
+        const color = valueOf(rule(css, `${D} a`), "color");
+        expect(color, mode).toBe(theme.privacyLinkColor(settings, mode));
+        expect(contrastRatio(color, bg), mode).toBeGreaterThanOrEqual(4.5);
+        for (const sel of [
+          `${D} a:focus-visible, ${D} button:focus-visible`,
+          `#${theme.PRIVACY_DIALOG_BODY_ID}:focus-visible, ${D} .allm-privacy-dialog-close:focus-visible`,
+        ]) {
+          const outline = valueOf(rule(css, sel), "outline");
+          expect(outline, `${mode} ${sel}`).toBe(`2px solid ${color}`);
+          expect(
+            contrastRatio(outline.replace("2px solid ", ""), bg),
+            `${mode} ${sel}`,
+          ).toBeGreaterThanOrEqual(3);
+        }
+        // derselbe Wert wie der Link „Datenschutz“ in der Fußzeile, der
+        // auch auf dessen Fläche reicht
+        expect(
+          valueOf(rule(css, `#${theme.PRIVACY_LINK_ID}`), "color"),
+          mode,
+        ).toBe(color);
+        expect(
+          contrastRatio(color, theme.AI_NOTICE_COLORS[mode].bg),
+          mode,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it("Fokusrahmen mit Abstand, damit er nur an die Fensterfläche grenzt; Textbereich und Schließen-Symbol innen (Panel-Rundung schneidet nicht)", () => {
+    const css = theme.buildThemeCss({}, "light");
+    expect(
+      valueOf(
+        rule(css, `${D} a:focus-visible, ${D} button:focus-visible`),
+        "outline-offset",
+      ),
+    ).toBe("2px");
+    expect(
+      valueOf(
+        rule(
+          css,
+          `#${theme.PRIVACY_DIALOG_BODY_ID}:focus-visible, ${D} .allm-privacy-dialog-close:focus-visible`,
+        ),
+        "outline-offset",
+      ),
+    ).toBe("-2px");
+  });
+
+  it("Hover des Schließen-Symbols fest je Farbschema", () => {
+    for (const mode of ["light", "dark"])
+      expect(theme.buildThemeCss({}, mode)).toContain(
+        `@media (hover: hover) { ${D} .allm-privacy-dialog-close:hover { background-color: ${theme.PRIVACY_DIALOG_COLORS[mode].hover} !important; } }`,
+      );
+  });
+});

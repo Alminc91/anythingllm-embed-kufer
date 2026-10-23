@@ -278,16 +278,10 @@ const customCss = `
     .allm-privacy-link:hover {
       text-decoration-thickness: 2px !important;
     }
-    .allm-privacy-dialog-close:hover {
-      background-color: var(--allmi-hover-bg, #f3f4f6) !important;
-    }
   }
-  /* Datenschutz-Fenster: Textbereich per Tastatur scrollbar, sichtbarer
-     Fokus wie bei Buttons und Links */
-  #anything-llm-privacy-dialog-body:focus-visible {
-    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, ${DEFAULT_ACCENT}));
-    outline-offset: -2px;
-  }
+  /* Datenschutz-Fenster: Farben, Fokusrahmen und Hover des
+     Schließen-Symbols fest je Farbschema im Theme-Stylesheet
+     (utils/theme.js buildThemeCss, R1-D1) */
   /* Schließen-X der Willkommensblasen: ohne Hover-Zeiger (Touch) immer
      sichtbar, sonst wie bisher erst beim Hover über die Blasen */
   @media (hover: none) {

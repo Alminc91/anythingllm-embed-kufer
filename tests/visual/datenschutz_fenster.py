@@ -16,15 +16,23 @@ Vollbild In der Seite), hell und dunkel, deutsch und englisch:
   - Escape schließt nur das Fenster (Chat bleibt offen), Fokus zurück auf
     den Link, angefangene Eingabe bleibt
   - Enter auf dem Link öffnet; „Schließen“ und Symbol schließen
+  - Fokusrahmen jedes bedienbaren Elements im Fenster mindestens 3:1 zur
+    Fensterfläche (rc2, W2)
 Einmalig (deutsch, hell): langer Text scrollt im Fenster (die Seite nicht),
 Fokus bleibt bei Tab und programmatischem Fokus im Fenster, kein Senden,
 Klicks gehen nicht auf die Seite darunter, Einklappen In der Seite schließt
 das Fenster, Seiten-CSS mit Fallen (NAK-2) macht Link und Fenster nicht
 unsichtbar.
+Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
+  - W2, W3 (R1-D1): Seiten-CSS mit Fallen in oklch() und color-mix()
+    ändert Fläche, Schrift, Schriftgröße und Trennlinien des Fensters nicht
+    (genau die festen Werte des Farbschemas); helle Linkfarben #FFA102 und
+    #63b4e3: Link im Fenster mindestens 4,5:1, Fokusrahmen mindestens 3:1,
+    hell und dunkel
 
 Aufruf (aus dem Repo, npm run build vorher):
 
-  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1]
+  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only]
 
 Ergebnis: .test-storage/datenschutz-fenster-<tag>.json, Bilder
 .test-storage/start-*.png (beim Start) und fenster-*.png (Fenster offen),
@@ -129,7 +137,13 @@ STATE_JS = r"""
       close: close ? { text: close.textContent, rect: r(close), color: getComputedStyle(close).color, bg: getComputedStyle(close).backgroundColor } : null,
       icon: icon ? { label: icon.getAttribute('aria-label'), rect: r(icon) } : null,
       link: a ? { href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel'), text: a.textContent,
-        color: getComputedStyle(a).color } : null,
+        color: getComputedStyle(a).color, rect: r(a) } : null,
+      lines: [...d.querySelectorAll('.allm-privacy-dialog-line')].map((e, i) => {
+        const c = getComputedStyle(e);
+        return i === 0 ? c.borderBottomColor : c.borderTopColor; }),
+      bodyRect: body ? r(body) : null,
+      ring: active && d.contains(active) ? (() => { const c = getComputedStyle(active);
+        return { color: c.outlineColor, style: c.outlineStyle, width: c.outlineWidth }; })() : null,
     };
   }
   return out;
@@ -229,9 +243,16 @@ def check_view(browser, base_url, name, display, width, height, theme, lang):
                icon.get("w", 0) >= 44 and icon.get("h", 0) >= 44 and close_r.get("h", 0) >= 44 and not st["hScroll"],
                {"icon": icon, "close": close_r, "hScroll": st["hScroll"]})
         order = []
+        rings = []
         for _ in range(5):
             page.keyboard.press("Tab")
-            order.append(state(page)["active"])
+            st_tab = state(page)
+            order.append(st_tab["active"])
+            ring = (st_tab.get("dialog") or {}).get("ring") or {}
+            rings.append({"aktiv": st_tab["active"], "stil": ring.get("style"), "breite": ring.get("width"),
+                          "kontrast": contrast_of(ring.get("color", "rgba(0,0,0,0)"), d.get("bg", "rgb(0,0,0)"))})
+        record(f"W2 Fokusrahmen im Fenster ≥ 3:1 zur Fläche ({tag})",
+               all(x["stil"] == "solid" and x["breite"] == "2px" and x["kontrast"] >= 3 for x in rings), rings)
         want = ["anything-llm-privacy-dialog-body", "Datenschutzerklärung" if lang == "de" else "Privacy statement",
                 close_text, "Datenschutz schließen" if lang == "de" else "Close privacy notice",
                 "anything-llm-privacy-dialog-body"]
@@ -350,6 +371,78 @@ def check_once(browser, base_url):
                 ctx.close()
 
 
+# Fallen in modernen Farbformaten (W2, R1-D1): Variablen der Antwortblasen,
+# Text, Rahmen, Kopf, Fokusring, Hover und Schriftgröße der Seite
+TRAP_CSS_MODERN = """
+#anythingllm-embed-widget {
+  --allm-assistant-bg: oklch(0.98 0 0);
+  --allm-assistant-text: oklch(0.97 0 0);
+  --allm-text: color-mix(in srgb, white 95%, black);
+  --allm-border: oklch(1 0 0 / 0);
+  --allm-header-bg: color-mix(in oklch, red 50%, blue);
+  --allm-focus-ring: none;
+  --allm-hover-bg: oklch(0.5 0.2 30);
+  --allm-font-size: 0px;
+  --allm-link: oklch(1 0 0);
+}
+"""
+FIXED = {
+    # Fläche, Schrift, Trennlinien je Farbschema (utils/theme.js PRIVACY_DIALOG_COLORS)
+    "light": ("rgb(34, 38, 40)", "rgb(255, 255, 255)", "rgb(233, 233, 233)"),
+    "dark": ("rgb(244, 242, 239)", "rgb(42, 42, 47)", "rgb(120, 123, 130)"),
+}
+
+
+def tab_rings(page, n=4):
+    out = []
+    for _ in range(n):
+        page.keyboard.press("Tab")
+        st = state(page)
+        d = st.get("dialog") or {}
+        ring = d.get("ring") or {}
+        out.append({"aktiv": st["active"], "stil": ring.get("style"),
+                    "kontrast": contrast_of(ring.get("color", "rgba(0,0,0,0)"), d.get("bg", "rgb(0,0,0)"))})
+    return out
+
+
+def check_rc2(browser, base_url):
+    # W2, W3: Fallen in oklch() und color-mix() ändern nichts am Fenster
+    for display in ("bubble", "inline"):
+        for theme in ("light", "dark"):
+            ctx, page = open_view(browser, base_url, display, 1440, 900, theme, "de", css=TRAP_CSS_MODERN)
+            try:
+                click_link(page)
+                d = state(page).get("dialog") or {}
+                text, bg, line = FIXED[theme]
+                link_ratio = contrast_of((d.get("link") or {}).get("color", "rgb(0,0,0)"), d.get("bg", "rgb(0,0,0)"))
+                rings = tab_rings(page)
+                page.screenshot(path=str(OUT_DIR / f"rc2-fenster-fallen-modern-{display}-{theme}.png"))
+                record(f"W2/W3 Fallen in oklch() und color-mix(): Fenster fest ({display}, {theme})",
+                       d.get("color") == text and d.get("bg") == bg and d.get("lines") == [line, line]
+                       and d.get("bodyFont") == "14px" and link_ratio >= 4.5
+                       and all(x["stil"] == "solid" and x["kontrast"] >= 3 for x in rings),
+                       {"schrift": d.get("color"), "flaeche": d.get("bg"), "linien": d.get("lines"),
+                        "groesse": d.get("bodyFont"), "link": link_ratio, "fokus": rings})
+            finally:
+                ctx.close()
+    # W2: helle Linkfarben aus dem Design Center
+    for link_color in ("#FFA102", "#63b4e3"):
+        for theme in ("light", "dark"):
+            ctx, page = open_view(browser, base_url, "bubble", 1280, 800, theme, "de", config={"linkColor": link_color})
+            try:
+                st = state(page)
+                foot = contrast_of(st["link"]["color"], st["link"]["bg"])
+                click_link(page)
+                d = state(page).get("dialog") or {}
+                link_ratio = contrast_of((d.get("link") or {}).get("color", "rgb(0,0,0)"), d.get("bg", "rgb(0,0,0)"))
+                rings = tab_rings(page)
+                record(f"W2 Linkfarbe {link_color}: Link im Fenster ≥ 4,5:1, Fokusrahmen ≥ 3:1 ({theme})",
+                       link_ratio >= 4.5 and foot >= 4.5 and all(x["stil"] == "solid" and x["kontrast"] >= 3 for x in rings),
+                       {"fusszeile": foot, "fensterlink": link_ratio, "farbe": (d.get("link") or {}).get("color"), "fokus": rings})
+            finally:
+                ctx.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", default=str(ROOT / "dist"))
@@ -358,6 +451,7 @@ def main():
     ap.add_argument("--themes", nargs="+", default=["light", "dark"])
     ap.add_argument("--views", nargs="+", default=[v[0] for v in VIEWS])
     ap.add_argument("--skip-once", action="store_true")
+    ap.add_argument("--rc2-only", action="store_true", help="nur die Prüfungen der Korrekturen nach rc1")
     args = ap.parse_args()
     OUT_DIR.mkdir(exist_ok=True)
     srv, base_url = tv.start_server(args.dist)
@@ -365,15 +459,18 @@ def main():
         browser = p.chromium.launch()
         for lang in args.lang:
             for name, display, width, height in VIEWS:
-                if name not in args.views:
+                if args.rc2_only or name not in args.views:
                     continue
                 for theme in args.themes:
                     try:
                         check_view(browser, base_url, name, display, width, height, theme, lang)
                     except Exception as e:  # weiter prüfen, Fehler festhalten
                         record(f"Ablauf {lang} {name} {theme}", False, str(e).splitlines()[0])
-        if not args.skip_once:
+        if args.rc2_only:
+            check_rc2(browser, base_url)
+        elif not args.skip_once:
             check_once(browser, base_url)
+            check_rc2(browser, base_url)
         browser.close()
     srv.shutdown()
     out = OUT_DIR / f"datenschutz-fenster-{args.tag}.json"

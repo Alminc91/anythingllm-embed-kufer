@@ -303,16 +303,19 @@ function resolveCss(value, decls, page = {}) {
 }
 
 // Bewusste Änderung (7.23): statt der Datenschutz-Blase das Datenschutz-
-// Fenster; es nutzt Fläche, Schrift und Schriftgröße der Antwortblasen wie
-// die Begrüßungsblase (D2)
-describe("Datenschutz-Fenster wie die Begrüßungsblase (Fläche, Schrift, Schriftgröße; ersetzt E25)", () => {
+// Fenster. Bis 7.23-rc1 nutzte es Fläche, Schrift und Schriftgröße der
+// Antwortblasen wie die Begrüßungsblase (D2). Bewusste Änderung (R1-D1,
+// 7.23-rc2): feste Farben je Farbschema als Regel am Element wie der
+// KI-Hinweis, keine Variable der Seite wirkt darauf; die Begrüßungsblase
+// folgt weiter data-assistant-bg-color und den Variablen der Seite.
+describe("Datenschutz-Fenster mit festen Farben, Begrüßungsblase wie bisher (R1-D1, ersetzt D2 und E25)", () => {
   const settings = { buttonColor: "#0b5f8a", userTextColor: "#FFFFFF" };
   const dialogParts = () => ({
     dialog: $("#anything-llm-privacy-dialog"),
     body: $("#anything-llm-privacy-dialog-body"),
   });
 
-  it("keine festen Farben des Fensters im Theme-Stylesheet, KI-Hinweis und Link fest (hell und dunkel)", () => {
+  it("Theme-Stylesheet: feste Regeln für Fenster, KI-Hinweis und Link (hell und dunkel)", () => {
     for (const name of [
       "PRIVACY_NOTICE_COLORS",
       "PRIVACY_TEXT",
@@ -327,8 +330,10 @@ describe("Datenschutz-Fenster wie die Begrüßungsblase (Fläche, Schrift, Schri
         { ...settings, assistantBgColor: "#fde68a" },
         mode,
       );
-      expect(ruleFor(css, "#anything-llm-privacy-dialog"), mode).toBe("");
-      expect(css, mode).not.toContain("privacy-dialog");
+      const c = theme.PRIVACY_DIALOG_COLORS[mode];
+      expect(ruleFor(css, "#anything-llm-privacy-dialog"), mode).toBe(
+        `#anything-llm-privacy-dialog { color: ${c.text} !important; background-color: ${c.bg} !important; }`,
+      );
       expect(css, mode).not.toContain("privacy-bubble");
       expect(ruleFor(css, "#anything-llm-ai-disclaimer"), mode).toBe(
         `#anything-llm-ai-disclaimer { color: ${theme.AI_NOTICE_COLORS[mode].text} !important; }`,
@@ -344,7 +349,7 @@ describe("Datenschutz-Fenster wie die Begrüßungsblase (Fläche, Schrift, Schri
     );
   });
 
-  it("im DOM: Fläche, Textfarbe und Schriftgröße der Begrüßungsblase; Überschrift fett ohne eigene Farbe", async () => {
+  it("im DOM: Fenster ohne Variable der Antwortblasen, Schrift 14 px wie die Begrüßung, Überschrift fett ohne eigene Farbe", async () => {
     const s = await load({});
     render(
       <>
@@ -352,72 +357,49 @@ describe("Datenschutz-Fenster wie die Begrüßungsblase (Fläche, Schrift, Schri
         <PrivacyDialog settings={s} onClose={() => {}} />
       </>,
     );
-    const greeting = $("#anything-llm-greeting-bubble");
     const { dialog, body } = dialogParts();
-    expect(dialog.style.backgroundColor).toBe(greeting.style.backgroundColor);
-    expect(dialog.style.color).toBe(greeting.style.color);
-    expect(dialog.style.backgroundColor).toContain("--allmi-assistant-bg");
-    expect(dialog.style.color).toContain("--allmi-assistant-text");
-    expect(body.style.fontSize).toBe(greeting.style.fontSize);
+    expect(body.style.fontSize).toBe("14px");
     const title = dialog.querySelector("h2");
     expect(title.style.fontWeight).toBe("700");
     expect(title.style.color).toBe("");
-    // kein Element des Fensters greift auf --allmi-text-muted oder eine
-    // eigene Datenschutz-Farbe zurück
+    // kein Element des Fensters greift auf Variablen der Antwortblasen,
+    // --allmi-text-muted oder eine eigene Datenschutz-Farbe zurück
     for (const el of [dialog, ...dialog.querySelectorAll("*")])
       expect(el.getAttribute("style") || "", el.tagName).not.toMatch(
-        /text-muted|--allmi-privacy-/,
+        /text-muted|--allmi-privacy-|--allmi-assistant-|--allmi-font-size/,
       );
   });
 
-  it("hell und dunkel: folgt data-assistant-bg-color und --allm-assistant-bg der Seite wie die Begrüßung; --allm-text-muted: transparent ändert es nicht", async () => {
+  it("hell und dunkel: Begrüßung folgt data-assistant-bg-color und --allm-assistant-bg der Seite, das Fenster nicht", async () => {
     const s = await load({ assistantBgColor: "#fde68a" });
     expect(s.assistantBgColor).toBe("#fde68a");
-    render(
-      <>
-        <ChatHistory settings={s} history={[]} />
-        <PrivacyDialog settings={s} onClose={() => {}} />
-      </>,
-    );
+    render(<ChatHistory settings={s} history={[]} />);
     const greeting = $("#anything-llm-greeting-bubble");
-    const { dialog, body } = dialogParts();
     const cases = [
-      // [Seiten-CSS, Fläche hell, Fläche dunkel, Text hell, Text dunkel]
-      [{}, "#fde68a", theme.DARK.assistantBg, "#222628", theme.DARK.text],
-      [
-        { "--allm-assistant-bg": "#123456" },
-        "#123456",
-        "#123456",
-        "#222628",
-        theme.DARK.text,
-      ],
+      // [Seiten-CSS, Fläche der Begrüßung hell, dunkel]
+      [{}, "#fde68a", theme.DARK.assistantBg],
+      [{ "--allm-assistant-bg": "#123456" }, "#123456", "#123456"],
       [
         { "--allm-text-muted": "transparent" },
         "#fde68a",
         theme.DARK.assistantBg,
-        "#222628",
-        theme.DARK.text,
       ],
     ];
-    for (const [page, bgLight, bgDark, textLight, textDark] of cases)
+    for (const [page, bgLight, bgDark] of cases)
       for (const mode of ["light", "dark"]) {
-        const decls = themeDecls(theme.buildThemeCss(s, mode));
-        const at = (el, prop) => resolveCss(el.style[prop], decls, page);
+        const css = theme.buildThemeCss(s, mode);
+        const decls = themeDecls(css);
         const key = `${mode} ${JSON.stringify(page)}`;
-        for (const prop of ["backgroundColor", "color"])
-          expect(at(dialog, prop), `${key} ${prop}`).toBe(at(greeting, prop));
-        expect(at(dialog, "backgroundColor"), key).toBe(
-          mode === "dark" ? bgDark : bgLight,
+        expect(
+          resolveCss(greeting.style.backgroundColor, decls, page),
+          key,
+        ).toBe(mode === "dark" ? bgDark : bgLight);
+        // Fenster: feste Regel, unabhängig von Setting und Seite
+        const c = theme.PRIVACY_DIALOG_COLORS[mode];
+        expect(ruleFor(css, "#anything-llm-privacy-dialog"), key).toBe(
+          `#anything-llm-privacy-dialog { color: ${c.text} !important; background-color: ${c.bg} !important; }`,
         );
-        expect(at(dialog, "color"), key).toBe(
-          mode === "dark" ? textDark : textLight,
-        );
-        expect(at(body, "fontSize"), key).toBe("14px");
-        if (Object.keys(page).length === 0)
-          expect(
-            contrastRatio(at(dialog, "color"), at(dialog, "backgroundColor")),
-            key,
-          ).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(c.text, c.bg), key).toBeGreaterThanOrEqual(4.5);
       }
   });
 });

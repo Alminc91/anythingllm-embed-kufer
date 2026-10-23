@@ -50,7 +50,6 @@ import { closeEscapeLayerFor, escapeLayerCount } from "../src/utils/escape.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import ChatWindow from "../src/components/ChatWindow/index.jsx";
-import { readableGuard } from "../src/components/ChatWindow/PrivacyNotice/index.jsx";
 
 const { PANEL_TEXTS } = layout;
 const BASE = {
@@ -446,9 +445,11 @@ describe("AK-3, AK-5: Datenschutz-Fenster über dem ganzen Chat", () => {
     expect(d.style.position).toBe("absolute");
     expect(["0", "0px"]).toContain(d.style.inset);
     expect(Number(d.style.zIndex)).toBeGreaterThanOrEqual(60);
-    // Fläche und Schrift der Antwortblasen (D2)
-    expect(d.style.backgroundColor).toContain("--allmi-assistant-bg");
-    expect(d.style.color).toContain("--allmi-assistant-text");
+    // Bewusste Änderung (R1-D1, 7.23-rc2): Fläche und Schrift fest je
+    // Farbschema statt aus den Variablen der Antwortblasen (D2); Regeln im
+    // Theme-Stylesheet, inline der helle Rückfall (tests/datenschutz-rc2)
+    expect(d.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(d.style.color).toBe("rgb(34, 38, 40)");
   });
 
   it("Enter auf dem Link (Tastatur) öffnet ebenfalls: echter Button ohne eigene Tastenlogik", () => {
@@ -785,82 +786,9 @@ describe("Datenschutz-Text im Fenster: Absätze und Punkte, Link am Ende", () =>
 });
 
 // ---------------------------------------------------------------------------
-describe("NAK-2: Seiten-CSS macht das Fenster nicht unlesbar (readableGuard)", () => {
-  // Werte, wie der Browser sie berechnet (jsdom rechnet keine Variablen)
-  function guardWith({ color, backgroundColor, fontSize = "14px" }, mode) {
-    const el = document.createElement("div");
-    const body = document.createElement("div");
-    body.id = "anything-llm-privacy-dialog-body";
-    el.appendChild(body);
-    const real = window.getComputedStyle;
-    const spy = vi
-      .spyOn(window, "getComputedStyle")
-      .mockImplementation((node) =>
-        node === el
-          ? { color, backgroundColor }
-          : node === body
-            ? { fontSize }
-            : real(node),
-      );
-    try {
-      return readableGuard(el, mode);
-    } finally {
-      spy.mockRestore();
-    }
-  }
-
-  it("lesbare Farben der Seite bleiben", () => {
-    expect(
-      guardWith({
-        color: "rgb(34, 38, 40)",
-        backgroundColor: "rgb(255, 255, 255)",
-      }),
-    ).toBe(null);
-    expect(
-      guardWith({
-        color: "rgb(11, 61, 107)",
-        backgroundColor: "rgb(236, 231, 223)",
-        fontSize: "16px",
-      }),
-    ).toBe(null);
-  });
-
-  it.each([
-    ["Schrift durchsichtig", "rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"],
-    ["Fläche durchsichtig", "rgb(34, 38, 40)", "rgba(0, 0, 0, 0)"],
-    ["gleiche Farbe", "rgb(255, 255, 255)", "rgb(255, 255, 255)"],
-    ["zu wenig Kontrast", "rgb(150, 150, 150)", "rgb(255, 255, 255)"],
-  ])("%s -> feste Standardfarben (hell und dunkel)", (_n, color, bg) => {
-    expect(guardWith({ color, backgroundColor: bg }, "light")).toEqual({
-      color: "#222628",
-      backgroundColor: "#FFFFFF",
-    });
-    expect(guardWith({ color, backgroundColor: bg }, "dark")).toEqual({
-      color: theme.DARK.text,
-      backgroundColor: theme.DARK.assistantBg,
-    });
-  });
-
-  it("Schrift unter 12 px (z. B. --allm-font-size: 0) -> 14 px", () => {
-    expect(
-      guardWith({
-        color: "rgb(34, 38, 40)",
-        backgroundColor: "rgb(255, 255, 255)",
-        fontSize: "0px",
-      }),
-    ).toEqual({ fontSize: "14px" });
-  });
-
-  it("feste Werte gelten im gerenderten Fenster vor den Variablen", () => {
-    const real = window.getComputedStyle;
-    vi.spyOn(window, "getComputedStyle").mockImplementation((node) =>
-      node?.id === "anything-llm-privacy-dialog"
-        ? { color: "rgba(0, 0, 0, 0)", backgroundColor: "rgb(255, 255, 255)" }
-        : real(node),
-    );
-    renderWindow(BASE);
-    click(link());
-    expect(dialog().style.color).toBe("rgb(34, 38, 40)");
-    expect(dialog().style.backgroundColor).toBe("rgb(255, 255, 255)");
-  });
-});
+// NAK-2, Seiten-CSS: bis 7.23-rc1 prüfte readableGuard die berechneten
+// Farben (nur rgb()) und fiel auf feste Werte zurück. Bewusste Änderung
+// (R1-D1): das Fenster hat immer feste Farben je Farbschema, keine Variable
+// der Seite wirkt darauf; Tests in tests/datenschutz-rc2.test.jsx, im
+// Browser tests/visual/datenschutz_fenster.py (Fallen mit oklch() und
+// color-mix()).
