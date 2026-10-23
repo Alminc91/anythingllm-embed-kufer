@@ -10,7 +10,7 @@ Alle `data-*` Attribute für das Embed-Script und ihre Wirkung ab Widget 7.22 (F
 | **B · Feste Standards** | Was es im Design Center nicht zum Einstellen gibt: Inline-Design (Layout, Effekt, Höhe, Startzustand, Öffnen, Eingabeleiste, Texte der Leiste, Schrift der Seite), Begrüßungs- und Vorschlagsstil, Folgefragen, Kartenlayout, Randabstände, Kopffarben, Icon-Stil, Textgröße, Radien, Schatten, Flächen- und Textfarben | Es gilt der feste Standard (der Server liefert ihn mit). Entwickler dürfen ihn per Einbau-Angabe oder CSS-Variable verfeinern; die Einbau-Angabe schlägt den vom Server gelieferten Standard. |
 | **C · Technik** | Widget-ID, Adresse, Sprache, Einhängepunkt, Besuchername, KI-Overrides, Audio, Öffnen beim Laden, Menütexte, Sponsor-Zeile | Wirken immer. |
 
-**KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus; ist er an, gilt die Begrüßung als Blase, auch gegen `data-greeting-style="text"` (E26). Die Datenschutz-Blase sieht seit 23.10.2026 aus wie die Begrüßungsblase und folgt denselben Farben (`data-assistant-bg-color`, `--allm-assistant-bg`, `--allm-assistant-text`); `--allm-text-muted` wirkt auf sie nicht (ersetzt E25).
+**KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Seit 7.23 steht in derselben Zeile immer der Link „Datenschutz“ (en „Privacy“, feste Farben wie der KI-Hinweis, Kontrast mindestens 4,5:1); er öffnet das Datenschutz-Fenster über dem ganzen Chat. Den Datenschutz-Hinweis gibt es nur noch so: keine Datenschutz-Blase beim Start, kein Pop-up mit Bestätigung, keine Auswahl im Design Center, und `data-greeting-style="text"` wirkt wieder (E26 entfällt). Das Datenschutz-Fenster folgt den Farben der Antwortblasen (`data-assistant-bg-color`, `--allm-assistant-bg`, `--allm-assistant-text`); unlesbare Werte der Seite ersetzt es durch die Standardfarben, `--allm-text-muted` wirkt darauf nicht.
 
 Umsetzung: `src/hooks/useScriptAttributes.js` (`DC_COVERED`, `dropIneffectiveAttributes`, `loadEmbedSettings`), `src/utils/layout.js` (`FIXED_STANDARDS`, `INLINE_STANDARDS`, `AI_NOTICE`), `src/utils/theme.js` (Variablen mit `dc`, `AI_NOTICE_COLORS`).
 
@@ -59,8 +59,8 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-brand-text`, `data-assistant-name` | Inhalt: Name | `KI-Berater` (`en`: `AI Advisor`) |
 | `data-assistant-subtitle` | Inhalt: Untertitel | `Online-Berater mit künstlicher Intelligenz` (`en`: `Online advisor powered by artificial intelligence`) |
 | `data-greeting`, `data-greeting-bubble-text` | Inhalt: Begrüßungstext | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` |
-| `data-privacy-notice` | Inhalt: Schalter Datenschutz-Hinweis | an (eigene Blase unter der Begrüßung) |
-| `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link) | `Datenschutz`, Standardtext der Sprache, kein Link |
+| `data-privacy-notice` | keine Auswahl mehr (seit 7.23) | immer der Link „Datenschutz“ unter der Eingabe; gespeicherte Altwerte wirken nicht |
+| `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link zur Datenschutzerklärung im Datenschutz-Fenster) | `Datenschutz` (auch bei leerer Überschrift), Standardtext der Sprache, kein Link |
 | `data-default-messages` | Inhalt: Startvorschläge | keine: der Standard vom Server ist leer (E42, 7.22-rc23); es gilt nur eine im Design Center gespeicherte Liste (E10 neu: gespeichert, auch leer, vor Standard) |
 | `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
 | `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence`, `data-welcome-bubbles-desktop`, `data-welcome-bubbles-mobile` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
@@ -70,7 +70,7 @@ Ebenfalls ohne Wirkung (mit Warnzeile), aber nicht aus dem Design Center:
 
 | Attribut | Grund |
 |----------|-------|
-| `data-disclaimer`, `data-disclaimer-text` | KI-Hinweis fest (E24): immer unter dem Eingabefeld, genau eine Zeile (11 px, in schmalen Fenstern bis 10 px, sonst mit „…“ gekürzt, voller Text im Tooltip), Text „Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.“ (`en`: „Our AI can make mistakes. Please double-check the answers.“) |
+| `data-disclaimer`, `data-disclaimer-text` | KI-Hinweis fest (E24): immer unter dem Eingabefeld, genau eine Zeile (11 px, in schmalen Fenstern bis 10 px, sonst mit „…“ gekürzt, voller Text im Tooltip), Text „Unsere KI kann Fehler machen“ (`en`: „Our AI can make mistakes“), daneben der Link „Datenschutz“ („Privacy“); gekürzt wird nur der Satz, nie der Link |
 | `data-window-width`, `data-window-height` | Fenstergröße fest (Tablet 40 %, Desktop ab 1280 px 25 % Breite, 77 % Höhe; mobil Vollbild) |
 | `data-online-dot` | Den Online-Punkt gibt es nicht mehr |
 
@@ -94,7 +94,7 @@ Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite)
 | `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
 | `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
 | `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
-| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); `text` wirkt nur bei abgeschaltetem Datenschutz-Hinweis, sonst gilt `bubble` (E26, mit Warnzeile) |
+| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); seit 7.23 wirkt `text` immer (bis 7.22.2 nur bei abgeschaltetem Datenschutz-Hinweis, E26) |
 | `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
 | `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
 | `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |
