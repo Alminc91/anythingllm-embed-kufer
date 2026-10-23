@@ -282,8 +282,10 @@ export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 // Eingeklappte Inline-Leiste (inlineInput): Platzhalter und Knopftext. Ein
 // eigener Text (inlineInputPlaceholder bzw. inlineSendText, z. B. früher im
 // Design Center gespeichert oder per Script-Attribut) gewinnt, sonst die
-// Demo-Texte in der Sprache des Widgets. Der Platzhalter im Chat-Eingabefeld
-// (sendMessageText bzw. inputPlaceholder) gilt hier bewusst nicht.
+// Texte in der Sprache des Widgets. Seit 7.22.2 liefert der Server bei einem
+// eigenen Platzhalter des Chats (sendMessageText) denselben Text als
+// inlineInputPlaceholder, und der Standard der Leiste gleicht dem des
+// Eingabefelds: eingeklappt und aufgeklappt derselbe Text (Nutzer 23.10.2026).
 export function inlineBarTexts(settings = {}) {
   const t = panelTexts(settings);
   return {
@@ -315,7 +317,12 @@ export const LEGACY_DEFAULT_TEXTS = {
   // bisherige Überschrift mit Doppelpunkt
   privacyTitle: ["Datenschutz:", "Privacy:"],
   // alter Platzhalter = dieselbe Frage wie die neue Begrüßung
-  sendMessageText: ["Wie kann ich Ihnen helfen?"],
+  // frühere Standards (bis 7.22.1 „Ihre Frage eingeben“/„Enter your question“), wie der Server
+  sendMessageText: [
+    "Wie kann ich Ihnen helfen?",
+    "Ihre Frage eingeben",
+    "Enter your question",
+  ],
   // frühere feste Menütexte (Widget-Standard bzw. Einbau-Beispiel): gelten
   // als nicht gesetzt, damit die Sprache des Widgets greift (uiTexts)
   resetBurgerText: ["Chat zurücksetzen", "Reset Chat"],
