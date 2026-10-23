@@ -81,10 +81,13 @@ const load = (script, server = {}) =>
   loadEmbedSettings({ ...BASE, ...script }, fetchConfig(server));
 const DE_SUBTITLE = "Online-Berater mit künstlicher Intelligenz";
 const EN_SUBTITLE = "Online advisor powered by artificial intelligence";
-const DE_DISCLAIMER =
-  "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.";
-const EN_DISCLAIMER =
-  "Our AI can make mistakes. Please double-check the answers.";
+// Bewusste Änderung (Datenschutz in der Fußzeile, Nutzerentscheidung
+// 23.10.2026): Kurzfassung ohne Bitte um Prüfung, daneben der Link
+// „Datenschutz“ (tests/datenschutz-fusszeile.test.jsx); vorher „Unsere KI
+// kann Fehler machen. Bitte prüfen Sie die Antworten.“ bzw. „Our AI can make
+// mistakes. Please double-check the answers.“
+const DE_DISCLAIMER = "Unsere KI kann Fehler machen";
+const EN_DISCLAIMER = "Our AI can make mistakes";
 
 let container;
 let root;

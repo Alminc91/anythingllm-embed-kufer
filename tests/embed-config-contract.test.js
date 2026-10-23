@@ -153,6 +153,12 @@ describeFork(
           privacyTitle: w.privacyTitle,
           privacyText: w.privacyText,
           disclaimerText: w.aiDisclaimer,
+          // Datenschutz in der Fußzeile (23.10.2026): Linktext, Punkt
+          // „Hinweis zur KI“ und Button im Datenschutz-Fenster
+          privacyLinkText: w.privacyLinkText,
+          privacyAiTitle: w.privacyAiTitle,
+          privacyAiText: w.privacyAiText,
+          privacyCloseText: w.privacyCloseText,
           inlineInputPlaceholder: w.inlineBarPlaceholder,
           inlineSendText: w.inlineSendText,
         });

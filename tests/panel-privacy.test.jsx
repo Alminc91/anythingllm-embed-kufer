@@ -1013,7 +1013,18 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     // Datenschutz-Satz spricht für die Einrichtung des Kunden, nicht „Unser Team“
     expect(JSON.stringify(PANEL_TEXTS)).not.toMatch(/Unser Team|Our team/);
     expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
-    const all = JSON.stringify(PANEL_TEXTS);
+    // Bewusste Änderung (Datenschutz in der Fußzeile, 23.10.2026): der Punkt
+    // „Hinweis zur KI“ im Datenschutz-Fenster nennt Kursangebot und
+    // Kursseite (Wortlaut vom Nutzer freigegeben); alle übrigen Texte bleiben
+    // neutral
+    const neutral = (texts) => {
+      const { privacyAiText, ...rest } = texts;
+      return rest;
+    };
+    const all = JSON.stringify({
+      de: neutral(PANEL_TEXTS.de),
+      en: neutral(PANEL_TEXTS.en),
+    });
     for (const word of [
       "Volkshochschule",
       "Kursberater",
@@ -1560,14 +1571,11 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
 
   it("Standardtexte de/en in PANEL_TEXTS (ein Mechanismus, kein i18n-Schlüssel)", async () => {
     // neuer Text (Nutzer 15.10.2026), ein Text für beide Stile; Wortlaut
-    // seit Fixliste 7.22-rc8 R1 („Unsere KI …“, Kurzfassung „prüfen“ nach
-    // Messung, tests/rc8-fixes.test.jsx)
-    expect(PANEL_TEXTS.de.aiDisclaimer).toBe(
-      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
-    );
-    expect(PANEL_TEXTS.en.aiDisclaimer).toBe(
-      "Our AI can make mistakes. Please double-check the answers.",
-    );
+    // seit Fixliste 7.22-rc8 R1 („Unsere KI …“). Bewusste Änderung
+    // (Datenschutz in der Fußzeile, 23.10.2026): Kurzfassung ohne „Bitte
+    // prüfen Sie die Antworten.“ (tests/datenschutz-fusszeile.test.jsx)
+    expect(PANEL_TEXTS.de.aiDisclaimer).toBe("Unsere KI kann Fehler machen");
+    expect(PANEL_TEXTS.en.aiDisclaimer).toBe("Our AI can make mistakes");
     const de = (await import("../src/locales/de/common.js")).default;
     const en = (await import("../src/locales/en/common.js")).default;
     expect(de.chat["ai-disclaimer"]).toBeUndefined();

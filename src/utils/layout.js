@@ -126,16 +126,27 @@ export const PANEL_TEXTS = {
     privacyButton: "Start",
     privacyMoreLead: "Weitere Informationen in der ",
     privacyMoreLink: "Erklärung zum Datenschutz",
-    // Link am Ende der Datenschutz-Blase (nur mit privacyUrl)
+    // Link zur Datenschutzerklärung im Datenschutz-Fenster (nur mit privacyUrl)
     privacyBubbleLink: "Datenschutzerklärung",
-    // fest, nicht änderbar (disclaimerText wird ignoriert); Wortlaut
-    // Fixliste 7.22-rc8 R1 („Unsere KI …“, eindeutiger als „KI …“) in der
-    // Kurzfassung „prüfen“: die Langfassung „überprüfen“ bräuchte im
-    // Chatfenster bei 1280 px (320 px breit) unter 10 px Schrift
-    // (gemessen: 337 px bei 10 px, 304 px Platz; tests/visual/
-    // disclaimer_measure.py, Ergebnis in .test-storage/disclaimer-*.json)
-    aiDisclaimer:
-      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
+    // KI-Hinweis unter der Eingabe: fest, nicht änderbar (disclaimerText wird
+    // ignoriert, E24). Seit dem Link in der Fußzeile (Nutzerentscheidung
+    // 23.10.2026, Variante 1) die Kurzfassung „Unsere KI …“ ohne Bitte um
+    // Prüfung; diese steht als eigener Punkt im Datenschutz-Fenster
+    // (privacyAiTitle, privacyAiText). Die Zeile lautet KI-Hinweis + " · " +
+    // privacyLinkText, nur der Linktext ist klickbar (ChatContainer
+    // AiDisclaimer). Messung: tests/visual/disclaimer_measure.py.
+    aiDisclaimer: "Unsere KI kann Fehler machen",
+    // Link in der Zeile des KI-Hinweises, öffnet das Datenschutz-Fenster
+    privacyLinkText: "Datenschutz",
+    // eigener Punkt im Datenschutz-Fenster (Wortlaut vom Nutzer freigegeben
+    // am 23.10.2026)
+    privacyAiTitle: "Hinweis zur KI",
+    privacyAiText:
+      "Unser KI-Berater ist auf richtige Auskünfte aus unserem Kursangebot optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Sicherheit immer auch auf der Kursseite.",
+    // Button unten im Datenschutz-Fenster und Beschriftung des
+    // Schließen-Symbols oben (für Screenreader)
+    privacyCloseText: "Schließen",
+    privacyCloseLabel: "Datenschutz schließen",
     // Standard für leere Felder (Name in der Titelleiste, Untertitel,
     // Platzhalter im Eingabefeld). Untertitel seit Fixliste 7.22-rc8 R5 auch
     // live der Standard, wenn der Server keinen liefert (assistantSubtitleText)
@@ -167,7 +178,13 @@ export const PANEL_TEXTS = {
     privacyMoreLead: "More information in our ",
     privacyMoreLink: "privacy statement",
     privacyBubbleLink: "Privacy statement",
-    aiDisclaimer: "Our AI can make mistakes. Please double-check the answers.",
+    aiDisclaimer: "Our AI can make mistakes",
+    privacyLinkText: "Privacy",
+    privacyAiTitle: "About the AI",
+    privacyAiText:
+      "Our AI advisor is optimised for accurate information about our courses. Like any AI, it can still make the occasional mistake. For safety, you can always find important details such as dates and prices on the course page.",
+    privacyCloseText: "Close",
+    privacyCloseLabel: "Close privacy notice",
     assistantName: "AI Advisor",
     assistantSubtitle: "Online advisor powered by artificial intelligence",
     inputPlaceholder: "Ask your question here …",
