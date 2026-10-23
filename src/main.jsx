@@ -248,18 +248,45 @@ const customCss = `
     border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important;
     color: ${ON_ACCENT_TEXT} !important;
   }
-  /* KI-Hinweis unter der Eingabe: eine Zeile, 11 px; in schmalen Fenstern
-     bis 10 px kleiner, damit der ganze Satz passt (Fixliste 7.22-rc7 Nr. 22).
-     Teiler 34 = Breite des Satzes je px Schriftgröße (Fixliste 7.22-rc8 R1,
-     gemessen: deutsch 345 px bei 11 px in DejaVu Sans, Inline mit breiter
-     Seitenschrift bis 356 px), 4 px = Seitenränder (ChatContainer
-     AiDisclaimer). Ohne Containerabfragen gilt die erste Angabe (11 px). */
+  /* KI-Hinweis unter der Eingabe mit dem Link „Datenschutz“: eine Zeile,
+     11 px; in schmalen Fenstern bis 10 px kleiner, damit die ganze Zeile
+     passt (Fixliste 7.22-rc7 Nr. 22). Teiler 25 = Breite der Zeile je px
+     Schriftgröße mit Reserve für breitere Schriften (7.23, gemessen mit
+     tests/visual/disclaimer_measure.py: deutsch 251,5 px bei 11 px in
+     DejaVu Sans, In der Seite mit geerbter Serifenschrift 258 px, also 23,5
+     je px; bis 7.22.2 Teiler 34 für den längeren Satz), 4 px =
+     Seitenränder (ChatContainer AiDisclaimer). Ohne Containerabfragen gilt
+     die erste Angabe (11 px). */
   .allm-ai-disclaimer-box {
     container-type: inline-size;
   }
   .allm-ai-disclaimer {
     font-size: 11px;
-    font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px);
+    font-size: clamp(10px, calc((100cqi - 4px) / 25), 11px);
+  }
+  /* Link „Datenschutz“ in derselben Zeile (7.23): Trefferfläche mindestens
+     24 px hoch (style), mobil (Vollbild unter 768 px) und auf Touch 44 px
+     hoch und breit (AK-2); Hover nur mit echtem Zeiger. */
+  @media (max-width: 767px), (pointer: coarse) {
+    .allm-privacy-link {
+      min-height: 44px !important;
+      min-width: 44px;
+      justify-content: center;
+    }
+  }
+  @media (hover: hover) {
+    .allm-privacy-link:hover {
+      text-decoration-thickness: 2px !important;
+    }
+    .allm-privacy-dialog-close:hover {
+      background-color: var(--allmi-hover-bg, #f3f4f6) !important;
+    }
+  }
+  /* Datenschutz-Fenster: Textbereich per Tastatur scrollbar, sichtbarer
+     Fokus wie bei Buttons und Links */
+  #anything-llm-privacy-dialog-body:focus-visible {
+    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, ${DEFAULT_ACCENT}));
+    outline-offset: -2px;
   }
   /* Schließen-X der Willkommensblasen: ohne Hover-Zeiger (Touch) immer
      sichtbar, sonst wie bisher erst beim Hover über die Blasen */

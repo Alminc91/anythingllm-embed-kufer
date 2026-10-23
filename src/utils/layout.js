@@ -67,10 +67,13 @@ export const DEFAULT_INLINE_OPEN_ON = "submit";
 // Assistenten-Blase ("bubble", der greeting-Text steht dann klein darunter).
 export const SUGGESTION_STYLE_VALUES = ["bars", "pills"];
 export const GREETING_STYLE_VALUES = ["text", "bubble"];
-// Datenschutz-Hinweis: keiner ("none"), als Absätze in der Begrüßungsblase
-// ("bubble", ohne Bestätigung) oder einmalig als Karte beim ersten Öffnen
-// ("modal", Bestätigung per Knopf, gespeichert in localStorage).
-export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
+// Datenschutz-Hinweis: seit 7.23 immer als Link „Datenschutz“ in der Zeile
+// des KI-Hinweises ("link", Nutzerentscheidung 23.10.2026, keine Auswahl im
+// Design Center). Die früheren Werte "none" (aus), "bubble" (Blase unter der
+// Begrüßung) und "modal" (Einmal-Hinweis mit Bestätigung) gelten als gültig
+// (gespeicherte Altwerte, keine Warnung), wirken aber nicht
+// (privacyNoticeSetting).
+export const PRIVACY_NOTICE_VALUES = ["link", "none", "bubble", "modal"];
 // Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
 // (Fork >= 7.14) liefert sie als Chunk "followUps" bzw. im Verlauf.
@@ -116,7 +119,7 @@ export const URL_MAX_LEN = 512;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble: "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
-    // Überschrift der Datenschutz-Blase; leerer privacyTitle = keine
+    // Überschrift des Datenschutz-Fensters (ohne eigenen privacyTitle)
     privacyTitle: "Datenschutz",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
@@ -403,8 +406,10 @@ export function assistantSubtitleText(settings = {}) {
   return panelTexts(settings).assistantSubtitle;
 }
 
-// Überschrift der Datenschutz-Blase: "" = bewusst keine Überschrift (aus dem
-// Design Center: Feld geleert), null/undefined = Standard der Sprache.
+// Gespeicherte Überschrift des Datenschutz-Hinweises: "" = im Design Center
+// geleert, null/undefined = Standard der Sprache. Das Datenschutz-Fenster
+// braucht immer eine Überschrift (aria-labelledby): dort gilt "" als
+// Standard (privacyDialogTitle).
 export function privacyTitleText(settings = {}) {
   if (settings.privacyTitle === "") return "";
   if (typeof settings.privacyTitle === "string" && settings.privacyTitle.trim())
@@ -446,7 +451,13 @@ export function parsePrivacyText(text) {
     .filter((b) => b.text.length > 0);
 }
 
-// Wirksame Blöcke der Datenschutz-Blase: privacyText bzw. Standard der Sprache.
+// Überschrift des Datenschutz-Fensters: gespeicherter Titel, sonst (auch bei
+// "") der Standard der Sprache („Datenschutz“ bzw. „Privacy“).
+export function privacyDialogTitle(settings = {}) {
+  return privacyTitleText(settings) || panelTexts(settings).privacyTitle;
+}
+
+// Wirksame Blöcke des Datenschutz-Texts: privacyText bzw. Standard der Sprache.
 export function privacyBlocks(settings = {}) {
   const own = parsePrivacyText(settings.privacyText);
   return own.length > 0
@@ -468,13 +479,46 @@ export function privacyPoints(settings = {}) {
   return privacyBlocks(settings).map((b) => b.text);
 }
 
+// Aufeinanderfolgende Aufzählungspunkte -> eine Liste; Absätze einzeln
+// (Darstellung im Datenschutz-Fenster).
+export function groupPrivacyBlocks(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    const last = out[out.length - 1];
+    if (b.type === "bullet") {
+      if (last?.type === "list") last.items.push(b.text);
+      else out.push({ type: "list", items: [b.text] });
+    } else out.push({ type: "paragraph", text: b.text });
+  }
+  return out;
+}
+
+// Link zur Datenschutzerklärung (privacyUrl) im Datenschutz-Fenster: nur ein
+// Wert, den safeUrl annimmt (absolute https-URL oder Pfad der eigenen
+// Seite), und nur, wenn er gegen die Adresse der Seite aufgelöst http: oder
+// https: ergibt (ein Pfad auf einer file:-Seite wird nicht verlinkt). Prüft
+// auch Werte, die nicht über loadEmbedSettings kamen. Sonst null (kein Link).
+export function privacyHref(value) {
+  const url = safeUrl(value);
+  if (!url) return null;
+  try {
+    const base = typeof document !== "undefined" ? document.baseURI : undefined;
+    const { protocol } = new URL(url, base);
+    return protocol === "https:" || protocol === "http:" ? url : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Feste Standards (Design Center vereinfacht, 15.10.2026), ohne Feld im
 // Design Center: Gruppe B nach E23 (Fixliste 7.22-rc17). Eine Skript-Angabe
 // verfeinert sie; ohne Skript-Angabe gilt der feste Wert, auch gegen einen
 // Altwert vom Server (der Server liefert dieselben Werte). Dieselbe Regel
 // gilt für INLINE_STANDARDS (applyFixedStandards, Fixliste 7.22-rc18 C18).
-// Ausnahme greetingStyle: Ist der Datenschutz-Hinweis an, gilt "bubble"
-// (E26, applyFixedStandards).
+// Bis 7.22.2 galt bei angeschaltetem Datenschutz-Hinweis greetingStyle
+// "bubble" auch gegen eine Skript-Angabe (E26): die Datenschutz-Blase stand
+// unter der Begrüßungsblase. Seit 7.23 gibt es die Blase nicht mehr (Link in
+// der Fußzeile), die Ausnahme entfällt.
 // Randabstände der Chatblase (offsetX/offsetY, Standard 16 px), Max. Breite
 // der Inline-Box (inlineMaxWidth, Standard volle Breite des Platzhalters) und
 // Stil der Inline-Leiste (inlineTheme, Standard: folgt dem Farbschema).
@@ -513,17 +557,14 @@ export const INLINE_STANDARDS = {
   inheritFont: true,
 };
 
-// Datenschutz-Hinweis (KIE-565 Nachtrag, Nutzer 15.10.2026; Gruppe A nach
-// E24): nur im Design Center abschaltbar (Schalter „Datenschutz-Hinweis
-// anzeigen“). Allein der Wert vom Server zählt: "none" = keine zweite Blase,
-// jeder andere und ein fehlender Wert = "bubble", auch das frühere "modal"
-// (Einmal-Hinweis entfällt). Ein Script-Attribut (data-privacy-notice) kann
-// den Hinweis weder ab- noch einschalten; ohne Antwort vom Server bleibt er
-// an.
-export function privacyNoticeSetting(serverValue) {
-  return oneOf(serverValue, PRIVACY_NOTICE_VALUES) === "none"
-    ? "none"
-    : "bubble";
+// Datenschutz-Hinweis (Nutzerentscheidung 23.10.2026, 7.23): immer der Link
+// „Datenschutz“ in der Zeile des KI-Hinweises, ohne Auswahl im Design
+// Center. Der Server liefert fest "link"; gespeicherte Altwerte ("bubble",
+// "none", "modal"), ein fehlender Wert und ein Script-Attribut
+// (data-privacy-notice, Gruppe A) ändern nichts. Keine Datenschutz-Blase beim
+// Start und kein Einmal-Hinweis mit Bestätigung (Hard Constraint 2).
+export function privacyNoticeSetting() {
+  return "link";
 }
 
 // Willkommensblasen je Gerät (KIE-568, Nutzer 15.10.2026): wie der
@@ -546,8 +587,8 @@ export function welcomeBubblesMode(settings = {}, phone = false) {
 
 // Einmal beim Laden (loadEmbedSettings): feste Standards und im Inline-Modus
 // die Inline-Standards setzen, außer das Skript gibt den Wert vor
-// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis fest,
-// Datenschutz-Hinweis und Willkommensblasen aus dem Server-Wert (server =
+// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis und Link
+// „Datenschutz“ fest, Willkommensblasen aus dem Server-Wert (server =
 // geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
 // Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
 // bzw. „AI Advisor“).
@@ -559,23 +600,10 @@ export function applyFixedStandards(
   const out = {
     ...settings,
     ...AI_NOTICE,
-    privacyNotice: privacyNoticeSetting(server?.privacyNotice),
+    privacyNotice: privacyNoticeSetting(),
   };
   for (const [key, value] of Object.entries(FIXED_STANDARDS))
     if (!scriptKeys.has(key)) out[key] = value;
-  // Datenschutz-Hinweis an (Schalter im Design Center): Begrüßung als Blase,
-  // auch gegen data-greeting-style="text" (E26, Fixliste 7.22-rc18 W60). Nur
-  // die Begrüßungsblase trägt die Datenschutz-Blase (ChatHistory:
-  // PanelWelcome im leeren Chat, PanelGreeting im Verlauf); "text" wirkt nur
-  // bei abgeschaltetem Hinweis. Eine Warnzeile, wenn das Skript "text"
-  // vorgibt (Fixliste 7.22-rc20 W81).
-  if (out.privacyNotice === "bubble") {
-    if (scriptKeys.has("greetingStyle") && out.greetingStyle === "text")
-      console.warn(
-        '[AnythingLLM Embed] Einbau-Angabe data-greeting-style="text" wirkt nur bei abgeschaltetem Datenschutz-Hinweis (Schalter im Design Center), es gilt "bubble".',
-      );
-    out.greetingStyle = "bubble";
-  }
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
   // (data-bubble-persistence wirkt nicht, Gruppe A)
   for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"])

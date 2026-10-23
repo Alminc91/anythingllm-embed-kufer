@@ -3,11 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 // KIE-565 Nachtrag (Nutzer 15.10.2026): Datenschutz-Hinweis im Design Center
-// abschaltbar. Allein der Server-Wert zählt: privacyNotice "none" = keine
-// zweite Blase (Chatblase und Inline, leerer Chat und Verlauf), jeder andere
-// und ein fehlender Wert = Blase, auch das frühere "modal". Ein Script-
-// Attribut kann den Hinweis weder ab- noch einschalten (Server gewinnt wie
-// beim Farbschema, D5).
+// abschaltbar (Schalter, privacyNotice "none" oder "bubble").
+// Bewusste Änderung (7.23, Nutzerentscheidung 23.10.2026 „ob wir diese
+// Option im Backend gar nicht erst anbieten … er ist immer dabei“): kein
+// Schalter mehr, der Datenschutz-Hinweis ist immer der Link „Datenschutz“
+// unter der Eingabe (privacyNotice "link"). Kein gespeicherter Wert, kein
+// Script-Attribut und kein fehlender Server zeigt eine Datenschutz-Blase oder
+// schaltet den Link ab. Weitere Fälle: tests/datenschutz-fenster.test.jsx.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,7 +39,6 @@ import {
   applyFixedStandards,
   privacyNoticeSetting,
 } from "../src/utils/layout.js";
-import { _resetPrivacyMemory } from "../src/utils/privacy.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
@@ -66,7 +67,6 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   window.localStorage.clear();
-  _resetPrivacyMemory();
   embedderSettings.settings = {};
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -87,26 +87,26 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
   });
 
   it.each([
-    ["none", "none"],
-    [" NONE ", "none"],
-    ["bubble", "bubble"],
-    ["modal", "bubble"],
-    ["popup", "bubble"],
-    [undefined, "bubble"],
-    [null, "bubble"],
-    ["", "bubble"],
-    [false, "bubble"],
+    ["none", "link"],
+    [" NONE ", "link"],
+    ["bubble", "link"],
+    ["modal", "link"],
+    ["popup", "link"],
+    [undefined, "link"],
+    [null, "link"],
+    ["", "link"],
+    [false, "link"],
   ])("privacyNoticeSetting(%j) -> %s", (value, expected) => {
     expect(privacyNoticeSetting(value)).toBe(expected);
   });
 
-  it("Server none -> none", async () => {
+  it("Server none -> link (kein Abschalten mehr)", async () => {
     expect((await load({}, { privacyNotice: "none" })).privacyNotice).toBe(
-      "none",
+      "link",
     );
   });
 
-  it("Wert fehlt, bubble oder Altwert modal vom Server -> bubble", async () => {
+  it("Wert fehlt, bubble oder Altwert modal vom Server -> link", async () => {
     for (const server of [
       {},
       { privacyNotice: "bubble" },
@@ -114,23 +114,21 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
       { privacyNotice: "kaputt" },
       { privacyNotice: "" },
     ])
-      expect((await load({}, server)).privacyNotice).toBe("bubble");
+      expect((await load({}, server)).privacyNotice).toBe("link");
   });
 
-  it("Script-Attribut hebelt den Server-Wert nicht aus, in beide Richtungen", async () => {
-    // Script will an, Design Center sagt aus
+  it("Script-Attribut ändert nichts, in beide Richtungen", async () => {
     for (const privacyNotice of ["bubble", "modal"])
       expect(
         (await load({ privacyNotice }, { privacyNotice: "none" }))
           .privacyNotice,
-      ).toBe("none");
-    // Script will aus, Design Center sagt an bzw. nichts
+      ).toBe("link");
     expect(
       (await load({ privacyNotice: "none" }, { privacyNotice: "bubble" }))
         .privacyNotice,
-    ).toBe("bubble");
+    ).toBe("link");
     expect((await load({ privacyNotice: "none" }, {})).privacyNotice).toBe(
-      "bubble",
+      "link",
     );
   });
 
@@ -141,21 +139,20 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
         throw new Error("offline");
       }),
     );
-    expect(s.privacyNotice).toBe("bubble");
+    expect(s.privacyNotice).toBe("link");
   });
 
-  it("applyFixedStandards ohne Server-Angabe: bubble", () => {
+  it("applyFixedStandards: immer link", () => {
     expect(applyFixedStandards({ privacyNotice: "none" }).privacyNotice).toBe(
-      "bubble",
+      "link",
     );
     expect(
-      applyFixedStandards({}, { privacyNotice: "none" })
-        .privacyNotice,
-    ).toBe("none");
+      applyFixedStandards({}, { privacyNotice: "none" }).privacyNotice,
+    ).toBe("link");
   });
 });
 
-describe("Darstellung: Schalter aus = keine Datenschutz-Blase", () => {
+describe("Darstellung: nie eine Datenschutz-Blase, Link immer da", () => {
   it("leerer Chat: nur die Begrüßungsblase, keine leere Hülle, kein Abstand", async () => {
     const settings = await load(
       {},
@@ -208,8 +205,13 @@ describe("Darstellung: Schalter aus = keine Datenschutz-Blase", () => {
     }
   });
 
-  it("Wert fehlt oder Altwert modal: Blase da, keine Karte mit Sperre", async () => {
-    for (const server of [{}, { privacyNotice: "modal" }]) {
+  // Bewusste Änderung (7.23): auch ohne Wert und mit Altwert keine Blase
+  it("Wert fehlt, bubble oder Altwert modal: keine Blase, keine Karte mit Sperre, Link da", async () => {
+    for (const server of [
+      {},
+      { privacyNotice: "bubble" },
+      { privacyNotice: "modal" },
+    ]) {
       const settings = await load({}, server);
       render(
         <ChatContainer
@@ -219,8 +221,9 @@ describe("Darstellung: Schalter aus = keine Datenschutz-Blase", () => {
           settings={{ ...settings, enableStt: false }}
         />,
       );
-      expect($("#anything-llm-privacy-bubble")).not.toBe(null);
+      expect($("#anything-llm-privacy-bubble")).toBe(null);
       expect($("#anything-llm-privacy-notice")).toBe(null);
+      expect($("#anything-llm-privacy-link")).not.toBe(null);
       expect($("#message-input").disabled).toBe(false);
     }
   });

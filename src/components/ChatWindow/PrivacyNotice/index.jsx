@@ -1,55 +1,89 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { X } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
-import useEmbedMode from "@/hooks/useEmbedMode";
-import { ON_ACCENT_TEXT, DEFAULT_ACCENT } from "@/utils/theme";
-import { panelTexts, privacyPoints } from "@/utils/layout";
-import { isTouchDevice } from "@/utils/platform";
-import { focusIsElsewhereOnPage } from "../ChatContainer/PromptInput";
+import {
+  DARK,
+  DEFAULT_ACCENT,
+  ON_ACCENT_TEXT,
+  PRIVACY_DIALOG_BODY_ID,
+  PRIVACY_DIALOG_ID,
+  PRIVACY_DIALOG_TITLE_ID,
+} from "@/utils/theme";
+import { contrastRatio, MIN_TEXT_CONTRAST } from "@/utils/contrast";
+import {
+  groupPrivacyBlocks,
+  panelTexts,
+  privacyBlocks,
+  privacyDialogTitle,
+  privacyHref,
+} from "@/utils/layout";
 
-// Einmaliger Datenschutz-Hinweis (privacyNotice "modal"): Karte über dem Chat
-// IM Panel (Shadow DOM), kein Overlay über der Webseite, kein Scroll-Lock.
-// Aufbau: Überschrift („Datenschutz:“), Stichpunkte (privacyText, je Zeile
-// ein Punkt), optional „Weitere Informationen in der Erklärung zum
-// Datenschutz“ (privacyUrl), mittig der Knopf („Start“, privacyButtonText).
-// ChatContainer zeigt sie, solange nicht bestätigt (utils/privacy.js), und
-// sperrt bis dahin die Eingabe. Tastatur: Fokus auf den Knopf (Regel wie
-// PromptInput, s. u.), Tab bleibt in der Karte; Escape bestätigt nicht —
-// im Inline-Modus klappt es wie gewohnt das Panel ein, im Blasen-Modus
-// schließt es das Chatfenster wie der Schließen-Knopf (Listener am document
-// in ChatContainer, auch bei Fokus auf der Webseite) -> keine
-// Tastaturfalle, der Hinweis kommt beim nächsten Öffnen wieder. z-index 60
-// wie das Overlay „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50).
-// Alle Texte als Text (nie HTML); Farben über --allmi-*.
-export default function PrivacyNotice({
+// Datenschutz-Fenster (7.23, Nutzerentscheidungen 23.10.2026): öffnet sich
+// über den Link „Datenschutz“ neben dem KI-Hinweis unter der Eingabe und
+// deckt den ganzen Chat ab (Chatfenster, aufgeklapptes „In der Seite“,
+// mobiles Vollbild; ChatWindow legt es über Kopf, Verlauf und Eingabe, wie
+// „Frühere Chats“). Ersetzt die Datenschutz-Blase unter der Begrüßung und den
+// früheren Einmal-Hinweis mit Bestätigung („modal“), aus dem Aufbau und
+// Tab-Falle stammen. Kein Pop-up vor dem Chat (Hard Constraint 2).
+//
+// Aufbau: Überschrift (privacyTitle, sonst Standard), Text (privacyText,
+// Zeilen mit „•“/„-“ als Aufzählung, andere als Absätze; sonst die
+// Standardpunkte), Punkt „Hinweis zur KI“, Link zur Datenschutzerklärung
+// (nur mit privacyUrl, nur http/https, neuer Tab), Button „Schließen“; das
+// Schließen-Symbol steht oben rechts, im Dokument aber zuletzt.
+// Alle Texte als Text (nie HTML).
+//
+// Tastatur und Screenreader: role dialog, aria-modal, aria-labelledby auf
+// die Überschrift. Beim Öffnen bekommt die Überschrift den Fokus (tabIndex
+// -1, wird zuerst vorgelesen); Tab-Reihenfolge Text (Textbereich, per
+// Tastatur scrollbar), Link, Schließen, Schließen-Symbol, und Tab bleibt im
+// Fenster. Escape schließt über die Escape-Ebene (ChatWindow). Der Fokus
+// darf auch sonst nicht hinter das Fenster (ChatWindow, onFocus).
+//
+// Optik (D2): Fläche und Schrift der Antwortblasen (--allmi-assistant-bg,
+// --allmi-assistant-text, --allmi-font-size; folgen data-assistant-bg-color
+// und den Variablen der Seite), Rundung des Panels (das Fenster liegt im
+// Panel, dessen Rundung schneidet es zu). Ergeben die Variablen der Seite
+// eine unlesbare Fläche (durchsichtig, Kontrast unter 4,5:1, Schrift unter
+// 12 px), gelten feste Standardfarben bzw. 14 px (NAK-2, readableColors).
+// z-index 60 wie „Frühere Chats“: über dem Scroll-nach-unten-Pfeil (z-50).
+
+const FALLBACK = {
+  light: { color: "#222628", backgroundColor: "#FFFFFF" },
+  dark: { color: DARK.text, backgroundColor: DARK.assistantBg },
+};
+const MIN_FONT_PX = 12;
+const LINE = "var(--allmi-header-border, 1px solid #E9E9E9)";
+
+export default function PrivacyDialog({
   settings = {},
-  onAcknowledge,
-  // wie PromptInput: Frage per Touch aus der Leiste abgeschickt -> kein
-  // Auto-Fokus (keine Bildschirmtastatur/kein Fokus-Sprung)
-  suppressAutoFocus = false,
+  onClose,
+  dialogRef = null,
 }) {
-  const embedMode = useEmbedMode();
-  const cardRef = useRef(null);
-  const buttonRef = useRef(null);
   const texts = panelTexts(settings);
-  const title = settings.privacyTitle || texts.privacyTitle;
-  const points = privacyPoints(settings);
-  const buttonText = settings.privacyButtonText || texts.privacyButton;
-  const url = settings.privacyUrl || null;
+  const title = privacyDialogTitle(settings);
+  const groups = groupPrivacyBlocks(privacyBlocks(settings));
+  const href = privacyHref(settings.privacyUrl);
+  const ownRef = useRef(null);
+  const titleRef = useRef(null);
+  const [guard, setGuard] = useState(null);
 
-  // Fokus auf den Knopf, einmalig beim Mount und nur wenn erlaubt — dieselbe
-  // Regel wie das Eingabefeld (PromptInput): nie einem Element der Webseite
-  // den Fokus wegnehmen; im Inline-Seitenfluss auf Touch kein Auto-Fokus
-  // (Seitensprung); nicht bei suppressAutoFocus (Frage per Touch aus der Leiste).
-  useEffect(() => {
-    const inlineFlow = embedMode.inline && !embedMode.overlay;
-    if (suppressAutoFocus || (inlineFlow && isTouchDevice())) return;
-    if (focusIsElsewhereOnPage()) return;
-    buttonRef.current?.focus({ preventScroll: true });
+  const setRef = (el) => {
+    ownRef.current = el;
+    if (typeof dialogRef === "function") dialogRef(el);
+    else if (dialogRef) dialogRef.current = el;
+  };
+
+  // Fokus beim Öffnen auf die Überschrift (das Fenster öffnet nur ein Klick
+  // bzw. Enter im Widget, der Fokus liegt also schon hier); Lesbarkeit prüfen
+  useLayoutEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    setGuard(readableGuard(ownRef.current));
   }, []);
 
   const trapTab = (e) => {
     if (e.key !== "Tab") return;
-    const items = [...cardRef.current.querySelectorAll("a[href], button")];
+    const items = focusables(ownRef.current);
     if (items.length === 0) return;
     const root = embedderSettings.shadowRoot;
     const active = root ? root.activeElement : document.activeElement;
@@ -63,132 +97,220 @@ export default function PrivacyNotice({
 
   return (
     <div
-      id="anything-llm-privacy-notice"
+      ref={setRef}
+      id={PRIVACY_DIALOG_ID}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={PRIVACY_DIALOG_TITLE_ID}
+      onKeyDown={trapTab}
       className="allm-font-sans"
       style={{
         position: "absolute",
         inset: 0,
         zIndex: 60,
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "12px 0",
-        overflowY: "auto",
+        flexDirection: "column",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        backgroundColor: "var(--allmi-assistant-bg, #FFFFFF)",
+        color: "var(--allmi-assistant-text, #222628)",
+        ...guard,
       }}
     >
       <div
-        aria-hidden="true"
         style={{
-          position: "absolute",
-          inset: 0,
-          backgroundColor: "var(--allmi-surface, #FFFFFF)",
-          opacity: 0.86,
-        }}
-      />
-      <div
-        ref={cardRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="anything-llm-privacy-title"
-        aria-describedby="anything-llm-privacy-text"
-        onKeyDown={trapTab}
-        style={{
-          position: "relative",
-          boxSizing: "border-box",
-          width: "90%",
-          maxWidth: "520px",
-          margin: "auto",
-          padding: "22px 24px 20px",
-          backgroundColor: "var(--allmi-surface, #FFFFFF)",
-          color: "var(--allmi-text, #1f2937)",
-          border: "1px solid var(--allmi-border, transparent)",
-          borderRadius: "24px",
-          boxShadow:
-            "var(--allmi-shadow, 0 10px 30px rgba(0, 0, 0, 0.16)), 0 2px 6px rgba(0, 0, 0, 0.06)",
+          flex: "none",
+          padding: "16px 60px 12px 20px",
+          borderBottom: LINE,
         }}
       >
         <h2
-          id="anything-llm-privacy-title"
+          ref={titleRef}
+          id={PRIVACY_DIALOG_TITLE_ID}
+          tabIndex={-1}
           style={{
             margin: 0,
-            fontSize: "20px",
+            fontSize: "17px",
             fontWeight: 700,
-            lineHeight: 1.3,
-            textAlign: "left",
+            lineHeight: 1.35,
+            overflowWrap: "anywhere",
+            outline: "none",
           }}
         >
           {title}
         </h2>
-        <ul
-          id="anything-llm-privacy-text"
-          style={{
-            margin: "12px 0 0",
-            paddingLeft: "20px",
-            listStyle: "disc",
-            fontSize: "14px",
-            lineHeight: 1.5,
-          }}
-        >
-          {points.map((point, i) => (
-            <li
+      </div>
+      <div
+        id={PRIVACY_DIALOG_BODY_ID}
+        tabIndex={0}
+        style={{
+          flex: "1 1 auto",
+          minHeight: 0,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          boxSizing: "border-box",
+          padding: "16px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px",
+          fontSize: guard?.fontSize || "var(--allmi-font-size, 14px)",
+          lineHeight: 1.55,
+          overflowWrap: "anywhere",
+        }}
+      >
+        {groups.map((g, i) =>
+          g.type === "list" ? (
+            <ul
               key={i}
-              style={{ marginTop: i ? "6px" : 0, overflowWrap: "anywhere" }}
-            >
-              {point}
-            </li>
-          ))}
-        </ul>
-        {url && (
-          <p
-            style={{
-              margin: "12px 0 0",
-              fontSize: "12.5px",
-              lineHeight: 1.5,
-              color: "var(--allmi-text-muted, #4b5563)",
-            }}
-          >
-            {texts.privacyMoreLead}
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
               style={{
-                color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
-                textDecoration: "underline",
+                margin: 0,
+                paddingLeft: "1.15em",
+                listStyle: "disc",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
               }}
             >
-              {texts.privacyMoreLink}
-            </a>
-          </p>
+              {g.items.map((text, j) => (
+                <li key={j}>{text}</li>
+              ))}
+            </ul>
+          ) : (
+            <p key={i} style={{ margin: 0 }}>
+              {g.text}
+            </p>
+          ),
         )}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            marginTop: "18px",
-          }}
-        >
-          <button
-            ref={buttonRef}
-            type="button"
-            onClick={onAcknowledge}
-            className="allm-cursor-pointer allm-font-sans"
+        <div>
+          <strong style={{ display: "block", fontWeight: 700 }}>
+            {texts.privacyAiTitle}
+          </strong>
+          <p style={{ margin: "4px 0 0" }}>{texts.privacyAiText}</p>
+        </div>
+        {href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
-              minHeight: "44px",
-              minWidth: "140px",
-              border: "none",
-              borderRadius: "999px",
-              padding: "10px 28px",
-              backgroundColor: `var(--allmi-accent, ${DEFAULT_ACCENT})`,
-              color: ON_ACCENT_TEXT,
-              fontSize: "15px",
-              fontWeight: 600,
+              alignSelf: "flex-start",
+              color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
+              fontWeight: 500,
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
             }}
           >
-            {buttonText}
-          </button>
-        </div>
+            {texts.privacyBubbleLink}
+          </a>
+        )}
       </div>
+      <div
+        style={{
+          flex: "none",
+          display: "flex",
+          justifyContent: "flex-end",
+          padding: "12px 16px 16px",
+          borderTop: LINE,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          className="allm-cursor-pointer allm-font-sans"
+          style={{
+            minHeight: "44px",
+            padding: "0 22px",
+            border: "none",
+            borderRadius: "12px",
+            backgroundColor: `var(--allmi-accent, ${DEFAULT_ACCENT})`,
+            color: ON_ACCENT_TEXT,
+            fontSize: "14px",
+            fontWeight: 600,
+            lineHeight: 1.2,
+          }}
+        >
+          {texts.privacyCloseText}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={() => onClose?.()}
+        aria-label={texts.privacyCloseLabel}
+        title={texts.privacyCloseLabel}
+        className="allm-cursor-pointer allm-privacy-dialog-close"
+        style={{
+          position: "absolute",
+          top: "6px",
+          right: "8px",
+          width: "44px",
+          height: "44px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "none",
+          borderRadius: "10px",
+          backgroundColor: "transparent",
+          color: "inherit",
+        }}
+      >
+        <X size={18} weight="bold" aria-hidden="true" />
+      </button>
     </div>
   );
+}
+
+// Bedienbare Elemente im Fenster in Dokumentreihenfolge (Tab-Falle)
+function focusables(container) {
+  if (!container) return [];
+  return [
+    ...container.querySelectorAll('a[href], button, [tabindex="0"]'),
+  ].filter((el) => !el.disabled);
+}
+
+// Lesbarkeit gegen Variablen der Seite (NAK-2): Farben und Schriftgröße so,
+// wie der Browser sie berechnet. Unlesbar (Fläche nicht deckend, Kontrast
+// unter 4,5:1, Schrift unter 12 px) -> feste Standardwerte des Farbschemas
+// (Stylesheet-Modus utils/theme.js render, data-mode). Ohne berechnete
+// Farben (jsdom, alte Browser) bleibt es bei den Variablen.
+export function readableGuard(el, mode = themeMode()) {
+  if (!el || typeof getComputedStyle !== "function") return null;
+  const cs = getComputedStyle(el);
+  const fg = rgba(cs.color);
+  const bg = rgba(cs.backgroundColor);
+  const out = {};
+  if (fg && bg) {
+    const hex = (c) =>
+      `#${c
+        .slice(0, 3)
+        .map((v) => Math.round(v).toString(16).padStart(2, "0"))
+        .join("")}`;
+    const ratio = contrastRatio(hex(fg), hex(bg));
+    if (bg[3] < 1 || fg[3] < 1 || ratio === null || ratio < MIN_TEXT_CONTRAST)
+      Object.assign(out, FALLBACK[mode === "dark" ? "dark" : "light"]);
+  }
+  const body = el.querySelector?.(`#${PRIVACY_DIALOG_BODY_ID}`);
+  const size = body ? parseFloat(getComputedStyle(body).fontSize) : NaN;
+  if (Number.isFinite(size) && size < MIN_FONT_PX) out.fontSize = "14px";
+  return Object.keys(out).length ? out : null;
+}
+
+function themeMode() {
+  return embedderSettings.themeStyle?.dataset?.mode === "dark"
+    ? "dark"
+    : "light";
+}
+
+// "rgb(1, 2, 3)" / "rgba(1, 2, 3, 0.5)" / "rgb(1 2 3 / 50%)" -> [r, g, b, a];
+// sonst null
+function rgba(value) {
+  if (typeof value !== "string") return null;
+  const m =
+    /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/i.exec(
+      value.trim(),
+    );
+  if (!m) return null;
+  const a =
+    m[4] === undefined ? 1 : parseFloat(m[4]) / (m[5] === "%" ? 100 : 1);
+  return [Number(m[1]), Number(m[2]), Number(m[3]), a];
 }

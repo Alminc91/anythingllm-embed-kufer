@@ -90,17 +90,19 @@ export const AI_NOTICE_COLORS = {
 };
 export const AI_NOTICE_TEXT = "var(--allmi-ai-notice-text, #6b7280)";
 export const AI_NOTICE_BG = "var(--allmi-ai-notice-bg, #FFFFFF)";
-// Element mit festen Farben (Regeln direkt am Element, buildThemeCss)
+// Zeile mit festen Farben (Regeln direkt am Element, buildThemeCss): der
+// KI-Hinweis (Text AI_NOTICE_TEXT_ID) und daneben der Link „Datenschutz“
+// (PRIVACY_LINK_ID, seit 7.23)
 export const AI_NOTICE_ID = "anything-llm-ai-disclaimer";
-// Datenschutz-Blase und ihre Überschrift: feste Kennungen (Barrierefreiheit,
-// Tests, Messungen), aber keine festen Farben mehr. Seit 23.10.2026
-// (Nutzerentscheidung, ersetzt E25 aus Fixliste 7.22-rc18) sieht die Blase
-// aus wie die Begrüßungsblase und die Antwortblasen: Fläche, Schrift und
-// Schriftgröße folgen --allmi-assistant-bg, --allmi-assistant-text und
-// --allmi-font-size, also auch data-assistant-bg-color und den Variablen der
-// Seite (Gruppe B). --allm-text-muted erreicht sie nicht.
-export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
-export const PRIVACY_TITLE_ID = "anything-llm-bubble-privacy-title";
+export const AI_NOTICE_TEXT_ID = "anything-llm-ai-disclaimer-text";
+export const PRIVACY_LINK_ID = "anything-llm-privacy-link";
+// Datenschutz-Fenster (seit 7.23, ersetzt die Datenschutz-Blase unter der
+// Begrüßung): feste Kennungen für Barrierefreiheit (aria-labelledby), Tests
+// und Messungen. Fläche und Schrift wie die Antwortblasen (D2), keine festen
+// Farben im Theme-Stylesheet.
+export const PRIVACY_DIALOG_ID = "anything-llm-privacy-dialog";
+export const PRIVACY_DIALOG_TITLE_ID = "anything-llm-privacy-dialog-title";
+export const PRIVACY_DIALOG_BODY_ID = "anything-llm-privacy-dialog-body";
 
 // Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
 // Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,
@@ -254,6 +256,23 @@ export function pillTextColor(settings = {}, mode = "light") {
   if (!text) return mode === "dark" ? DARK.text : "var(--allmi-accent)";
   const same = parseColor(text).every((v, i) => v === parseColor(accent)[i]);
   return same ? "var(--allmi-accent)" : text;
+}
+
+// Farbe des Links „Datenschutz“ neben dem KI-Hinweis (7.23): die Linkfarbe
+// des Widgets (hell aus dem Design Center, Gruppe A; dunkel DARK.link) mit
+// mindestens 4,5:1 zur festen Fläche des KI-Hinweises (AI_NOTICE_COLORS,
+// hell abgedunkelt, dunkel aufgehellt, wenn nötig). Reicht die Linkfarbe,
+// bleibt sie unverändert. Gilt als Regel direkt am Element (buildThemeCss),
+// damit weder Seiten-CSS noch eine zu helle Kundenfarbe den Link unlesbar
+// machen.
+export function privacyLinkColor(settings = {}, mode = "light") {
+  const scheme = mode === "dark" ? "dark" : "light";
+  const link =
+    scheme === "dark" ? DARK.link : dcColor(settings.linkColor, DEFAULTS.link);
+  const text = accessibleTextColor(link, [AI_NOTICE_COLORS[scheme].bg]);
+  if (!text) return link;
+  const same = parseColor(text).every((v, i) => v === parseColor(link)[i]);
+  return same ? link : text;
 }
 
 // textSize: bisher Klasse `allm-text-[${textSize}px]` — die gab es im Build nur
@@ -519,9 +538,9 @@ export function buildThemeCss(settings = {}, mode = "light") {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // KI-Hinweis (E24) fest. Die Datenschutz-Blase hat seit 23.10.2026 keine
-  // festen Farben mehr (Nutzerentscheidung, ersetzt E25): sie folgt wie die
-  // Begrüßungsblase den Variablen der Antwortblasen.
+  // KI-Hinweis (E24) und daneben der Link „Datenschutz“ (7.23) fest. Das
+  // Datenschutz-Fenster hat keine festen Farben: es folgt wie die
+  // Begrüßungsblase den Variablen der Antwortblasen (D2).
   const scheme = mode === "dark" ? "dark" : "light";
   const notice = AI_NOTICE_COLORS[scheme];
   fixed.push(
@@ -555,6 +574,7 @@ export function buildThemeCss(settings = {}, mode = "light") {
     // feste Farben des KI-Hinweises direkt am Element, ohne Variable (W62)
     `#${AI_NOTICE_ID} { color: ${notice.text} !important; }\n` +
     `#${AI_NOTICE_ID} > span { background-color: ${notice.bg} !important; }\n` +
+    `#${PRIVACY_LINK_ID} { color: ${privacyLinkColor(settings, scheme)} !important; background-color: ${notice.bg} !important; }\n` +
     // Reduzierte Bewegung schlägt auch eine per Seiten-CSS gesetzte Dauer.
     // Aufklapp-Effekt der Inline-Box: bewusst NICHT hier über die Dauer,
     // sondern an genau einer Stelle per animation: none (main.jsx, .allm-effect).

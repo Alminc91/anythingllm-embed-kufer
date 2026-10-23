@@ -1,32 +1,20 @@
 import { useLayoutEffect, useRef } from "react";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { embedderSettings } from "@/main";
-import {
-  BUBBLE_RADIUS,
-  BUBBLE_SHADOW,
-  LOGO_RADIUS,
-  PRIVACY_BUBBLE_ID,
-  PRIVACY_TITLE_ID,
-  DEFAULT_ACCENT,
-} from "@/utils/theme";
-import {
-  greetingText,
-  panelPills,
-  panelTexts,
-  privacyBlocks,
-  privacyTitleText,
-} from "@/utils/layout";
+import { BUBBLE_RADIUS, BUBBLE_SHADOW, LOGO_RADIUS } from "@/utils/theme";
+import { greetingText, panelPills } from "@/utils/layout";
 import { sendSuggestion } from "../..";
 import Pill from "../Pill";
 
 // Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B; seit Design Center
 // vereinfacht fester Standard: suggestionStyle "pills", greetingStyle
-// "bubble"; privacyNotice "bubble" oder "none"); Vorschläge nur im leeren Chat, die
-// Begrüßungs- und Datenschutz-Blase bleiben auch im Verlauf (PanelGreeting).
-// Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
-// Theme); die Datenschutz-Blase sieht aus wie die Begrüßungsblase
-// (Nutzerentscheidung 23.10.2026, ersetzt E25). Texte immer als Text, nie
-// als HTML.
+// "bubble"); Vorschläge nur im leeren Chat, die Begrüßungsblase bleibt auch
+// im Verlauf (PanelGreeting). Seit 7.23 keine Datenschutz-Blase mehr: der
+// Datenschutz-Hinweis steht als Link „Datenschutz“ neben dem KI-Hinweis unter
+// der Eingabe und öffnet ein Fenster über dem Chat (Nutzerentscheidung
+// 23.10.2026, ChatContainer AiDisclaimer, PrivacyNotice). Farben/Rundung
+// ausschließlich über --allmi-* (hell/dunkel folgen dem Theme). Texte immer
+// als Text, nie als HTML.
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
@@ -63,13 +51,9 @@ export function SuggestedPills({ settings, align = "center" }) {
 }
 
 // greetingStyle "bubble": Begrüßung als Assistenten-Blase mit Avatar, darunter
-// die Vorschläge (Pillen links eingerückt, Balken wie bisher mittig).
-// privacyNotice "bubble" (Standard): der Datenschutz-Hinweis steht als
-// eigene zweite Blase direkt unter der Begrüßungsblase (Design Center
-// vereinfacht, 15.10.2026), nicht mehr als Absatz in derselben Blase.
-// privacyNotice "none" (im Design Center ausgeschaltet, KIE-565 Nachtrag):
-// keine zweite Blase, auch kein leerer Rahmen oder Abstand; die Spalte
-// enthält dann nur die Begrüßungsblase.
+// die Vorschläge (Pillen links eingerückt, Balken wie bisher mittig). Die
+// Spalte enthält nur die Begrüßungsblase (bis 7.22.2 darunter die
+// Datenschutz-Blase; ein gespeicherter privacyNotice-Wert wirkt nicht mehr).
 // Beim Öffnen (ohne Animation): Die Begrüßungsblase muss sichtbar sein
 // (KIE-565, Browser-Fund B-02: bei 700 px Fensterhöhe stand sie über dem
 // sichtbaren Bereich). Bei Überlauf wird deshalb höchstens so weit Richtung
@@ -117,19 +101,18 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
 }
 
 // Begrüßung bleibt im Verlauf (greetingStyle "bubble"): nach der ersten
-// Frage und nach dem Laden eines Verlaufs stehen Begrüßungs- und
-// Datenschutz-Blase als feste erste Elemente über den Nachrichten (kein
-// Chat-Eintrag, wird nie gesendet oder gespeichert; ChatHistory), ohne die
-// Vorschläge.
+// Frage und nach dem Laden eines Verlaufs steht die Begrüßungsblase als
+// festes erstes Element über den Nachrichten (kein Chat-Eintrag, wird nie
+// gesendet oder gespeichert; ChatHistory), ohne die Vorschläge.
 export function PanelGreeting({ settings = {} }) {
   return <WelcomeBlock settings={settings} persistent />;
 }
 
-// gemeinsame Optik beider Blasen (Begrüßung, Datenschutz), wie die
-// Antwortblasen: Fläche und Schrift folgen data-assistant-bg-color und den
-// Variablen der Seite (--allm-assistant-bg, --allm-assistant-text);
-// Innenabstand, Schriftgröße und Zeilenhöhe für beide gleich
-// (Nutzerentscheidung 23.10.2026)
+// Optik der Begrüßungsblase wie die Antwortblasen: Fläche und Schrift folgen
+// data-assistant-bg-color und den Variablen der Seite (--allm-assistant-bg,
+// --allm-assistant-text); Innenabstand, Schriftgröße und Zeilenhöhe wie 7.22.2
+// (Nutzerentscheidung 23.10.2026). Das Datenschutz-Fenster nutzt dieselbe
+// Fläche und Schrift (D2).
 const BUBBLE_STYLE = {
   boxSizing: "border-box",
   maxWidth: "100%",
@@ -143,11 +126,9 @@ const BUBBLE_STYLE = {
   lineHeight: 1.5,
 };
 
-// Blasen (Avatar + Begrüßung + Datenschutz); children = Vorschläge darunter
-// (nur im leeren Chat). Der Avatar steht neben der letzten Blase der Gruppe.
+// Avatar + Begrüßungsblase; children = Vorschläge darunter (nur im leeren
+// Chat). Der Avatar steht neben der Blase.
 function WelcomeBlock({ settings, persistent = false, children = null }) {
-  const texts = panelTexts(settings);
-  const privacyBubble = settings.privacyNotice === "bubble";
   const avatar =
     embedderSettings.settings.assistantIcon ||
     embedderSettings.settings.brandImageUrl ||
@@ -200,107 +181,9 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
           >
             {greetingText(settings)}
           </div>
-          {privacyBubble && <PrivacyBubble settings={settings} texts={texts} />}
         </div>
       </div>
       {children}
     </div>
   );
-}
-
-// Datenschutz-Blase (privacyNotice "bubble"): optionale fette Überschrift
-// (privacyTitle; "" = keine, Standard „Datenschutz“), darunter der Text
-// (privacyText: Zeilen mit „•“/„-“ als Aufzählung, andere als Absätze; altes
-// Format ein Punkt je Zeile weiter als Aufzählung), am Ende der Link zur
-// Datenschutzerklärung (privacyUrl) in eigener Zeile. Alles Text, nie HTML.
-// Optik wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026, ersetzt E25
-// aus Fixliste 7.22-rc18 und die kleinere, gedämpfte Schrift des Mockups):
-// gleiche Fläche, Textfarbe, Schriftgröße, Zeilenhöhe und Innenabstand
-// (BUBBLE_STYLE). Ändert sich die Farbe der Blasen (Einbau-Angabe, CSS der
-// Seite oder künftig das Design Center), gilt sie auch hier. Die Überschrift
-// ist nur fett, ohne eigene Farbe; --allm-text-muted wirkt nicht.
-function PrivacyBubble({ settings, texts }) {
-  const title = privacyTitleText(settings);
-  const groups = groupPrivacyBlocks(privacyBlocks(settings));
-  return (
-    <div
-      id={PRIVACY_BUBBLE_ID}
-      className="allm-font-sans"
-      style={{
-        ...BUBBLE_STYLE,
-        display: "flex",
-        flexDirection: "column",
-        gap: "5px",
-      }}
-    >
-      {title && (
-        <strong
-          id={PRIVACY_TITLE_ID}
-          style={{
-            display: "block",
-            fontWeight: 700,
-          }}
-        >
-          {title}
-        </strong>
-      )}
-      {groups.map((g, i) =>
-        g.type === "list" ? (
-          <ul
-            key={i}
-            style={{
-              margin: 0,
-              paddingLeft: "1.15em",
-              listStyle: "disc",
-              display: "flex",
-              flexDirection: "column",
-              gap: "3px",
-            }}
-          >
-            {g.items.map((text, j) => (
-              <li key={j}>{text}</li>
-            ))}
-          </ul>
-        ) : (
-          <p key={i} style={{ margin: 0 }}>
-            {g.text}
-          </p>
-        ),
-      )}
-      {settings.privacyUrl && (
-        <a
-          href={settings.privacyUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            alignSelf: "flex-start",
-            color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
-            fontWeight: 500,
-            textDecoration: "underline",
-          }}
-        >
-          {texts.privacyBubbleLink}
-        </a>
-      )}
-    </div>
-  );
-}
-
-// Aufeinanderfolgende Aufzählungspunkte -> eine Liste; Absätze einzeln.
-export function groupPrivacyBlocks(blocks) {
-  const out = [];
-  for (const b of blocks) {
-    const last = out[out.length - 1];
-    if (b.type === "bullet") {
-      if (last?.type === "list") last.items.push(b.text);
-      else out.push({ type: "list", items: [b.text] });
-    } else out.push({ type: "paragraph", text: b.text });
-  }
-  return out;
-}
-
-// Früher: Punkte als Fließtext in der Begrüßungsblase. Bleibt als Helfer
-// (Satzzeichen am Ende ergänzen) für bestehende Aufrufer.
-export function privacyParagraph(points) {
-  return points.map((p) => (/[.!?…:;]$/.test(p) ? p : `${p}.`)).join(" ");
 }

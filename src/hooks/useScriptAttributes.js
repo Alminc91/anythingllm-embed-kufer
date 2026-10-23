@@ -28,8 +28,8 @@ import { widgetLanguage } from "@/utils/language";
 //   (utils/theme.js, Variablen mit dc).
 // - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
 //   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
-//   Ausnahme: Ist der Datenschutz-Hinweis an, gilt greetingStyle "bubble"
-//   (E26, utils/layout.js applyFixedStandards).
+//   (Die Ausnahme E26 für greetingStyle entfällt seit 7.23: es gibt keine
+//   Datenschutz-Blase mehr, die eine Begrüßungsblase bräuchte.)
 // - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
 //   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
 //   Sponsor-Zeile): wirken immer.
@@ -53,7 +53,7 @@ export const DC_COVERED = [
   "assistantSubtitle", // Untertitel
   "greeting", // Begrüßungstext
   "greetingBubbleText",
-  "privacyNotice", // Schalter Datenschutz-Hinweis
+  "privacyNotice", // Datenschutz-Hinweis (seit 7.23 immer der Link)
   "privacyTitle",
   "privacyText",
   "privacyUrl",
@@ -81,7 +81,7 @@ const DC_HINTS = {
   bubblePersistence:
     "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
   privacyNotice:
-    "Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.",
+    "Der Datenschutz-Hinweis erscheint immer als Link „Datenschutz“ unter der Eingabe.",
 };
 // Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
 // „Frühere Chats“, KIE-503; kein Feld des Design Centers)
@@ -154,8 +154,8 @@ export const DEFAULT_SETTINGS = {
   brandText: null,
   // Begrüßungstext = Text der Begrüßungsblase (utils/layout.js greetingText:
   // greetingBubbleText > greeting > Standard der Sprache). null = Standard.
-  // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
-  // Datenschutz-Blase (privacyText).
+  // Früher stand hier der Datenschutzsatz; der steht jetzt im
+  // Datenschutz-Fenster (privacyText, Link „Datenschutz“ unter der Eingabe).
   greeting: null,
   buttonColor: DEFAULT_ACCENT, // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
@@ -249,10 +249,10 @@ export const DEFAULT_SETTINGS = {
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
   // Panel-Optik, Standard seit Design Center vereinfacht (utils/layout.js
   // FIXED_STANDARDS, Gruppe B: eine Skript-Angabe verfeinert ihn, E23):
-  // Vorschläge als Pillen, Begrüßung als Blase, darunter die
-  // Datenschutz-Blase, Folgefragen als Pillen. KI-Hinweis fest unter der
-  // Eingabe (AI_NOTICE, E24). Die Datenschutz-Blase schaltet allein der
-  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting).
+  // Vorschläge als Pillen, Begrüßung als Blase, Folgefragen als Pillen.
+  // KI-Hinweis fest unter der Eingabe (AI_NOTICE, E24), in derselben Zeile
+  // der Link „Datenschutz“ (privacyNotice immer "link", utils/layout.js
+  // privacyNoticeSetting; keine Datenschutz-Blase beim Start).
   // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
   // Design Center per Logo gesetzt.
   suggestionStyle: "pills",
@@ -263,8 +263,8 @@ export const DEFAULT_SETTINGS = {
   // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
   assistantSubtitle: null,
   onlineDot: false,
-  privacyNotice: "bubble",
-  // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),
+  privacyNotice: "link",
+  // Datenschutz-Fenster: Überschrift (null oder "" = Standard der Sprache),
   // freier Text (Zeilen mit „•“/„-“ = Punkte, sonst Absätze; null = Standard
   // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen

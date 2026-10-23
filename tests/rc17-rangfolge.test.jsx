@@ -244,23 +244,28 @@ describe("W50: Gruppe A (im Design Center einstellbar) nur aus dem Design Center
     expect(s.displayMode).toBe("bubble");
     const lines = warnLines();
     for (const attr of ["data-mount", "data-language", "data-username"])
-      expect(lines.some((l) => l.includes(attr)), attr).toBe(false);
+      expect(
+        lines.some((l) => l.includes(attr)),
+        attr,
+      ).toBe(false);
     expect(lines.filter((l) => l.includes("data-display-mode"))).toHaveLength(
       1,
     );
   });
 
-  it("Datenschutz-Hinweis nur über den Schalter im Design Center (data-privacy-notice ohne Wirkung)", async () => {
+  // Bewusste Änderung (7.23): kein Schalter mehr, der Datenschutz-Hinweis
+  // ist immer der Link „Datenschutz“ unter der Eingabe
+  it("Datenschutz-Hinweis immer als Link (data-privacy-notice ohne Wirkung, Server-Altwert ebenso)", async () => {
     const off = await load({ privacyNotice: "none" });
-    expect(off.privacyNotice).toBe("bubble");
+    expect(off.privacyNotice).toBe("link");
     const line = warnLines().find((l) => l.includes("data-privacy-notice"));
     expect(line).toContain("wirkt nicht");
-    expect(line).toContain("Schalter im Design Center");
+    expect(line).toContain("immer als Link „Datenschutz“");
     const on = await load(
       { privacyNotice: "bubble" },
       { ...SERVER_STANDARDS, privacyNotice: "none" },
     );
-    expect(on.privacyNotice).toBe("none");
+    expect(on.privacyNotice).toBe("link");
   });
 });
 
@@ -280,9 +285,9 @@ describe("W50: Gruppe B (feste Standards ohne Feld) per Skript-Angabe verfeinerb
     expect(warnLines().some((l) => l.includes("wirkt nicht"))).toBe(false);
   });
 
-  // Bewusste Änderung (Fixliste 7.22-rc18 E26): data-greeting-style="text"
-  // wirkt nur bei abgeschaltetem Datenschutz-Hinweis (Fälle in
-  // rc18-widget.test.jsx)
+  // Fixliste 7.22-rc18 E26 (data-greeting-style="text" nur bei
+  // abgeschaltetem Datenschutz-Hinweis) entfällt seit 7.23 mit der
+  // Datenschutz-Blase: "text" wirkt mit jeder Server-Antwort
   it("Optik ohne Feld (Kopffarbe, Begrüßungsstil) wirkt, ein Altwert vom Server bei festen Standards nicht", async () => {
     const off = { ...SERVER_STANDARDS, privacyNotice: "none" };
     const s = await load(
@@ -299,7 +304,10 @@ describe("W50: Gruppe B (feste Standards ohne Feld) per Skript-Angabe verfeinerb
 // ---------------------------------------------------------------------------
 describe("W50: CSS-Variablen der Seite wirken nicht für Gruppe A", () => {
   it("--allm-accent gegen gespeicherte Akzentfarbe und gegen den Akzent-Standard", async () => {
-    const saved = await load({}, { ...SERVER_STANDARDS, buttonColor: "#0b5f8a" });
+    const saved = await load(
+      {},
+      { ...SERVER_STANDARDS, buttonColor: "#0b5f8a" },
+    );
     const standard = await load({});
     for (const [s, accent] of [
       [saved, "#0b5f8a"],
@@ -326,7 +334,13 @@ describe("W50: CSS-Variablen der Seite wirken nicht für Gruppe A", () => {
     host.remove();
     // übrige Variablen (Gruppe B) bleiben über --allm-* verfeinerbar
     const css = theme.buildThemeCss(standard, "light");
-    for (const name of ["radius", "surface", "text", "bar-radius", "pill-border"])
+    for (const name of [
+      "radius",
+      "surface",
+      "text",
+      "bar-radius",
+      "pill-border",
+    ])
       expect(css).toContain(`--allmi-${name}: var(--allm-${name}`);
   });
 });
@@ -364,7 +378,11 @@ describe("E24: KI-Hinweis auf keinem Weg abschalt- oder änderbar", () => {
     );
     const note = $("#anything-llm-ai-disclaimer");
     expect(note).not.toBeNull();
-    expect(note.textContent).toBe(layout.PANEL_TEXTS.de.aiDisclaimer);
+    // seit 7.23 mit dem Link „Datenschutz“ in derselben Zeile
+    expect($("#anything-llm-ai-disclaimer-text").textContent).toBe(
+      layout.PANEL_TEXTS.de.aiDisclaimer,
+    );
+    expect($("#anything-llm-privacy-link")).not.toBeNull();
   });
 
   it("mit gesetzten CSS-Variablen lesbar: Farben fest je Farbschema, ohne --allm-*", () => {
@@ -375,12 +393,15 @@ describe("E24: KI-Hinweis auf keinem Weg abschalt- oder änderbar", () => {
     );
     const note = $("#anything-llm-ai-disclaimer");
     // Schrift und eigene Fläche hinter dem Satz aus internen Variablen
+    // (seit 7.23 auch hinter Trenner und Link „Datenschutz“)
     expect(note.style.color).toBe(theme.AI_NOTICE_TEXT);
     const span = note.querySelector("span");
-    expect(span.textContent).toBe(note.textContent);
+    expect(span.textContent).toBe(layout.PANEL_TEXTS.de.aiDisclaimer);
     expect(span.style.backgroundColor).toBe(theme.AI_NOTICE_BG);
-    for (const el of [note, span])
-      expect(el.getAttribute("style")).not.toMatch(/--allm-/);
+    const link = $("#anything-llm-privacy-link");
+    expect(link.style.backgroundColor).toBe(theme.AI_NOTICE_BG);
+    for (const el of [note, ...note.querySelectorAll("*")])
+      expect(el.getAttribute("style") || "").not.toMatch(/--allm-/);
     // die internen Variablen stehen fest und mit !important im Stylesheet
     // (schlägt jede Angabe der Seite am Host), lesbar in beiden Schemata
     for (const mode of ["light", "dark"]) {
