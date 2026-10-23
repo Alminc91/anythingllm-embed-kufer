@@ -108,8 +108,8 @@ const $ = (sel) => container.querySelector(sel);
 describe("W50: Gruppe A (im Design Center einstellbar) nur aus dem Design Center", () => {
   it("data-button-color wirkt nicht, auch ohne gespeicherten Wert; gespeichert gilt der Wert vom Server", async () => {
     const none = await load({ buttonColor: "#ff0000", userBgColor: "#ff0000" });
-    expect(none.buttonColor).toBe("#01a5a9");
-    expect(none.userBgColor).toBe("#01a5a9");
+    expect(none.buttonColor).toBe(theme.DEFAULT_ACCENT);
+    expect(none.userBgColor).toBe(theme.DEFAULT_ACCENT);
     const saved = await load(
       { buttonColor: "#ff0000" },
       { ...SERVER_STANDARDS, buttonColor: "#0b5f8a" },
@@ -122,7 +122,7 @@ describe("W50: Gruppe A (im Design Center einstellbar) nur aus dem Design Center
         throw new Error("offline");
       }),
     );
-    expect(offline.buttonColor).toBe("#01a5a9");
+    expect(offline.buttonColor).toBe(theme.DEFAULT_ACCENT);
   });
 
   it("data-default-messages und data-theme ohne Wirkung, auch wenn nichts gespeichert ist", async () => {
@@ -303,7 +303,7 @@ describe("W50: CSS-Variablen der Seite wirken nicht für Gruppe A", () => {
     const standard = await load({});
     for (const [s, accent] of [
       [saved, "#0b5f8a"],
-      [standard, "#01a5a9"],
+      [standard, theme.DEFAULT_ACCENT],
     ])
       for (const mode of ["light", "dark"]) {
         const css = theme.buildThemeCss(s, mode);
@@ -320,7 +320,9 @@ describe("W50: CSS-Variablen der Seite wirken nicht für Gruppe A", () => {
     host.attachShadow({ mode: "open" }).appendChild(styleEl);
     theme.applyTheme(styleEl, standard);
     expect(styleEl.textContent).toBe(theme.buildThemeCss(standard, "light"));
-    expect(styleEl.textContent).toContain("--allmi-accent: #01a5a9 !important;");
+    expect(styleEl.textContent).toContain(
+      `--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`,
+    );
     host.remove();
     // übrige Variablen (Gruppe B) bleiben über --allm-* verfeinerbar
     const css = theme.buildThemeCss(standard, "light");

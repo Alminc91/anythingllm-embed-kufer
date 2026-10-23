@@ -141,7 +141,9 @@ export const PANEL_TEXTS = {
     // live der Standard, wenn der Server keinen liefert (assistantSubtitleText)
     assistantName: "KI-Berater",
     assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
-    inputPlaceholder: "Ihre Frage eingeben",
+    // gleich wie die eingeklappte Inline-Leiste (Nutzer 23.10.2026, vorher
+    // „Ihre Frage eingeben“): eingeklappt und aufgeklappt derselbe Text
+    inputPlaceholder: "Stellen Sie hier Ihre Frage …",
     followUps: "Vorschläge für Ihre nächste Frage",
     // Platzhalter an der Teaser-Stelle, solange der KI-Teaser erwartet wird
     teaserPending: "KI-Beschreibung wird erstellt …",
@@ -168,7 +170,7 @@ export const PANEL_TEXTS = {
     aiDisclaimer: "Our AI can make mistakes. Please double-check the answers.",
     assistantName: "AI Advisor",
     assistantSubtitle: "Online advisor powered by artificial intelligence",
-    inputPlaceholder: "Enter your question",
+    inputPlaceholder: "Ask your question here …",
     followUps: "Suggestions for your next question",
     teaserPending: "AI description is being written …",
     inlineBarPlaceholder: "Ask your question here …",
@@ -280,8 +282,10 @@ export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 // Eingeklappte Inline-Leiste (inlineInput): Platzhalter und Knopftext. Ein
 // eigener Text (inlineInputPlaceholder bzw. inlineSendText, z. B. früher im
 // Design Center gespeichert oder per Script-Attribut) gewinnt, sonst die
-// Demo-Texte in der Sprache des Widgets. Der Platzhalter im Chat-Eingabefeld
-// (sendMessageText bzw. inputPlaceholder) gilt hier bewusst nicht.
+// Texte in der Sprache des Widgets. Seit 7.22.2 liefert der Server bei einem
+// eigenen Platzhalter des Chats (sendMessageText) denselben Text als
+// inlineInputPlaceholder, und der Standard der Leiste gleicht dem des
+// Eingabefelds: eingeklappt und aufgeklappt derselbe Text (Nutzer 23.10.2026).
 export function inlineBarTexts(settings = {}) {
   const t = panelTexts(settings);
   return {
@@ -313,7 +317,12 @@ export const LEGACY_DEFAULT_TEXTS = {
   // bisherige Überschrift mit Doppelpunkt
   privacyTitle: ["Datenschutz:", "Privacy:"],
   // alter Platzhalter = dieselbe Frage wie die neue Begrüßung
-  sendMessageText: ["Wie kann ich Ihnen helfen?"],
+  // frühere Standards (bis 7.22.1 „Ihre Frage eingeben“/„Enter your question“), wie der Server
+  sendMessageText: [
+    "Wie kann ich Ihnen helfen?",
+    "Ihre Frage eingeben",
+    "Enter your question",
+  ],
   // frühere feste Menütexte (Widget-Standard bzw. Einbau-Beispiel): gelten
   // als nicht gesetzt, damit die Sprache des Widgets greift (uiTexts)
   resetBurgerText: ["Chat zurücksetzen", "Reset Chat"],

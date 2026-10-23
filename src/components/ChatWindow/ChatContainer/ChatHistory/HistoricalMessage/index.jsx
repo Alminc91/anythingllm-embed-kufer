@@ -41,6 +41,7 @@ import {
   MESSAGE_META_CLASS,
   LOGO_RADIUS,
   ON_ACCENT_TEXT,
+  DEFAULT_ACCENT,
 } from "@/utils/theme";
 import { uiTexts } from "@/utils/layout";
 import { useEscapeLayer } from "@/utils/escape";
@@ -371,7 +372,7 @@ const FeedbackButtons = ({ chatId, feedbackScore, sessionId }) => {
 
   const btnBase =
     "allm-bg-transparent allm-border-none allm-cursor-pointer allm-p-1.5 allm-flex allm-items-center allm-transition-colors disabled:allm-opacity-60";
-  const accent = embedderSettings.settings.buttonColor || "#01a5a9";
+  const accent = embedderSettings.settings.buttonColor || DEFAULT_ACCENT;
 
   return (
     <>

@@ -554,6 +554,49 @@ def check_privacy_bubble(browser, base_url):
         ctx.close()
 
 
+PRIVACY_LOOK = """() => {
+  const look = (el) => { if (!el) return null; const cs = getComputedStyle(el);
+    return { color: cs.color, bg: cs.backgroundColor, size: cs.fontSize, lh: cs.lineHeight, pad: cs.padding,
+             family: cs.fontFamily }; };
+  const t = window.__q('#anything-llm-bubble-privacy-title');
+  const li = window.__q('#anything-llm-privacy-bubble li');
+  return { greeting: look(window.__q('#anything-llm-greeting-bubble')),
+           privacy: look(window.__q('#anything-llm-privacy-bubble')),
+           title: t && getComputedStyle(t).color, titleWeight: t && +getComputedStyle(t).fontWeight,
+           li: li && getComputedStyle(li).color };
+}"""
+
+
+def check_privacy_like_greeting(browser, base_url):
+    """Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung
+    23.10.2026, ersetzt E25 und die kleinere, gedämpfte Schrift): Fläche,
+    Textfarbe, Schriftgröße, Zeilenhöhe, Innenabstand und Schrift gleich,
+    Überschrift fett und Punkte in der Textfarbe; hell und dunkel, ohne und
+    mit --allm-assistant-bg der Seite (folgt wie die Begrüßung),
+    --allm-text-muted: transparent wirkt nicht."""
+    page_css = "#anythingllm-embed-widget { --allm-assistant-bg: #ece7df; --allm-text-muted: transparent; }"
+    for scheme, extra in (("hell", {}), ("dunkel", {"theme": "dark"})):
+        for css in (None, page_css):
+            cfg = {"attrs": {**PRIVACY_BUBBLE, **extra}}
+            if css:
+                cfg["css"] = css
+            ctx, page = tv.open_page(browser, base_url, cfg, mock())
+            try:
+                tv.wait_shadow(page, "#anything-llm-privacy-bubble")
+                tv.settle(page, 400)
+                st = page.evaluate(PRIVACY_LOOK)
+                g, pr = st["greeting"], st["privacy"]
+                ok = (g is not None and pr is not None and pr == g
+                      and st["title"] == pr["color"] and st["li"] == pr["color"]
+                      and (st["titleWeight"] or 0) >= 700
+                      and (css is None or pr["bg"] == "rgb(236, 231, 223)"))
+                key = "mit --allm-assistant-bg der Seite" if css else "ohne Seiten-CSS"
+                record(f"Datenschutz-Blase wie die Begrüßungsblase ({scheme}, {key})", ok,
+                       json.dumps(st, ensure_ascii=False))
+            finally:
+                ctx.close()
+
+
 BUBBLE_GEOM = """() => {
   const b = window.__q('#anything-llm-greeting-bubble'), row = b.parentElement;
   const cs = getComputedStyle(b), lh = parseFloat(cs.lineHeight);
@@ -657,6 +700,7 @@ def main():
                 check_bubble_scrolled_to_pills(browser, base_url)
                 check_dot_ring_dark_header(browser, base_url)
                 check_privacy_bubble(browser, base_url)
+                check_privacy_like_greeting(browser, base_url)
                 check_bubble_two_paragraphs(browser, base_url)
                 check_greeting_persist(browser, base_url)
                 check_disclaimer(browser, base_url)

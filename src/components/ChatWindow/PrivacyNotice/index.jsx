@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { embedderSettings } from "@/main";
 import useEmbedMode from "@/hooks/useEmbedMode";
-import { ON_ACCENT_TEXT } from "@/utils/theme";
+import { ON_ACCENT_TEXT, DEFAULT_ACCENT } from "@/utils/theme";
 import { panelTexts, privacyPoints } from "@/utils/layout";
 import { isTouchDevice } from "@/utils/platform";
 import { focusIsElsewhereOnPage } from "../ChatContainer/PromptInput";
@@ -153,7 +153,7 @@ export default function PrivacyNotice({
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                color: "var(--allmi-link, #01a5a9)",
+                color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
                 textDecoration: "underline",
               }}
             >
@@ -179,7 +179,7 @@ export default function PrivacyNotice({
               border: "none",
               borderRadius: "999px",
               padding: "10px 28px",
-              backgroundColor: "var(--allmi-accent, #01a5a9)",
+              backgroundColor: `var(--allmi-accent, ${DEFAULT_ACCENT})`,
               color: ON_ACCENT_TEXT,
               fontSize: "15px",
               fontWeight: 600,

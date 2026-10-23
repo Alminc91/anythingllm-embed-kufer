@@ -1,4 +1,5 @@
 import { embedderSettings } from "@/main";
+import { DEFAULT_ACCENT } from "@/utils/theme";
 
 // Pille im Panel: EINE Komponente für Startvorschläge (Wunschfragen im
 // leeren Chat) und Folgefragen unter der Antwort (KIE-565 Nachtrag, Punkt 4:
@@ -21,7 +22,7 @@ export const PILL_CLASS =
   "allm-inline-chip allm-pill-accent allm-font-sans allm-cursor-pointer";
 
 export default function Pill({ text, label = text, onClick }) {
-  const accent = `var(--allmi-accent, ${embedderSettings.settings?.buttonColor || "#01a5a9"})`;
+  const accent = `var(--allmi-accent, ${embedderSettings.settings?.buttonColor || DEFAULT_ACCENT})`;
   return (
     <button
       type="button"

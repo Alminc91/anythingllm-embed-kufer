@@ -5,11 +5,9 @@ import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
   LOGO_RADIUS,
-  PRIVACY_BG,
   PRIVACY_BUBBLE_ID,
-  PRIVACY_TEXT,
-  PRIVACY_TITLE,
   PRIVACY_TITLE_ID,
+  DEFAULT_ACCENT,
 } from "@/utils/theme";
 import {
   greetingText,
@@ -26,8 +24,8 @@ import Pill from "../Pill";
 // "bubble"; privacyNotice "bubble" oder "none"); Vorschläge nur im leeren Chat, die
 // Begrüßungs- und Datenschutz-Blase bleiben auch im Verlauf (PanelGreeting).
 // Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
-// Theme); die Datenschutz-Blase hat feste Farben (E25, utils/theme.js
-// PRIVACY_NOTICE_COLORS, Regel direkt am Element). Texte immer als Text, nie
+// Theme); die Datenschutz-Blase sieht aus wie die Begrüßungsblase
+// (Nutzerentscheidung 23.10.2026, ersetzt E25). Texte immer als Text, nie
 // als HTML.
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
@@ -127,7 +125,11 @@ export function PanelGreeting({ settings = {} }) {
   return <WelcomeBlock settings={settings} persistent />;
 }
 
-// gemeinsame Optik beider Blasen (Begrüßung, Datenschutz)
+// gemeinsame Optik beider Blasen (Begrüßung, Datenschutz), wie die
+// Antwortblasen: Fläche und Schrift folgen data-assistant-bg-color und den
+// Variablen der Seite (--allm-assistant-bg, --allm-assistant-text);
+// Innenabstand, Schriftgröße und Zeilenhöhe für beide gleich
+// (Nutzerentscheidung 23.10.2026)
 const BUBBLE_STYLE = {
   boxSizing: "border-box",
   maxWidth: "100%",
@@ -136,6 +138,9 @@ const BUBBLE_STYLE = {
   borderRadius: BUBBLE_RADIUS.assistant,
   boxShadow: BUBBLE_SHADOW,
   overflowWrap: "anywhere",
+  padding: "11px 16px",
+  fontSize: "var(--allmi-font-size, 14px)",
+  lineHeight: 1.5,
 };
 
 // Blasen (Avatar + Begrüßung + Datenschutz); children = Vorschläge darunter
@@ -190,9 +195,6 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
             className="allm-font-sans"
             style={{
               ...BUBBLE_STYLE,
-              padding: "11px 16px",
-              fontSize: "var(--allmi-font-size, 14px)",
-              lineHeight: 1.5,
               whiteSpace: "pre-line",
             }}
           >
@@ -210,14 +212,13 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
 // (privacyTitle; "" = keine, Standard „Datenschutz“), darunter der Text
 // (privacyText: Zeilen mit „•“/„-“ als Aufzählung, andere als Absätze; altes
 // Format ein Punkt je Zeile weiter als Aufzählung), am Ende der Link zur
-// Datenschutzerklärung (privacyUrl) in eigener Zeile. Etwas kleiner und
-// gedämpft wie im Mockup. Alles Text, nie HTML.
-// Farben fest je Farbschema wie der KI-Hinweis (E25, Fixliste 7.22-rc18):
-// Weder Einbau-Angaben (data-assistant-bg-color) noch CSS-Variablen der
-// Seite (--allm-text-muted, --allm-assistant-text, --allm-assistant-bg, auch
-// per @property) machen den Text unsichtbar. Die Regel direkt am Element
-// steht im Theme-Stylesheet (utils/theme.js buildThemeCss); die Werte hier
-// gelten nur ohne dieses Stylesheet.
+// Datenschutzerklärung (privacyUrl) in eigener Zeile. Alles Text, nie HTML.
+// Optik wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026, ersetzt E25
+// aus Fixliste 7.22-rc18 und die kleinere, gedämpfte Schrift des Mockups):
+// gleiche Fläche, Textfarbe, Schriftgröße, Zeilenhöhe und Innenabstand
+// (BUBBLE_STYLE). Ändert sich die Farbe der Blasen (Einbau-Angabe, CSS der
+// Seite oder künftig das Design Center), gilt sie auch hier. Die Überschrift
+// ist nur fett, ohne eigene Farbe; --allm-text-muted wirkt nicht.
 function PrivacyBubble({ settings, texts }) {
   const title = privacyTitleText(settings);
   const groups = groupPrivacyBlocks(privacyBlocks(settings));
@@ -227,14 +228,9 @@ function PrivacyBubble({ settings, texts }) {
       className="allm-font-sans"
       style={{
         ...BUBBLE_STYLE,
-        padding: "10px 15px",
         display: "flex",
         flexDirection: "column",
         gap: "5px",
-        fontSize: "12.5px",
-        lineHeight: 1.45,
-        backgroundColor: PRIVACY_BG,
-        color: PRIVACY_TEXT,
       }}
     >
       {title && (
@@ -243,7 +239,6 @@ function PrivacyBubble({ settings, texts }) {
           style={{
             display: "block",
             fontWeight: 700,
-            color: PRIVACY_TITLE,
           }}
         >
           {title}
@@ -279,7 +274,7 @@ function PrivacyBubble({ settings, texts }) {
           rel="noopener noreferrer"
           style={{
             alignSelf: "flex-start",
-            color: "var(--allmi-link, #01a5a9)",
+            color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
             fontWeight: 500,
             textDecoration: "underline",
           }}

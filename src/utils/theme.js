@@ -17,18 +17,20 @@
 //   auf dem Host und gewinnt immer gegen den Fallback. (Würden die Standards
 //   direkt als `--allm-*` auf :host stehen, schlüge :host jeden Vorfahren und
 //   ein Inline-Style auf dem Host sogar das Seiten-CSS.)
-// Ausnahmen (E23, E24, E25): Variablen mit dc (Akzentfarbe und was der
-// Server daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
-// Center ein, die Farben des KI-Hinweises und der Datenschutz-Blase sind
-// fest. Die dc-Variablen setzt das Widget direkt und mit !important, ohne
-// Rückgriff auf `--allm-*`, und zwar auf `:host` UND auf jedem Element im
-// Shadow-Root (`:host, :host * { --allmi-accent: #01a5a9 !important; }`).
+// Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
+// daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
+// Center ein, die Farben des KI-Hinweises sind fest. Die Datenschutz-Blase
+// ist seit 23.10.2026 keine Ausnahme mehr (Nutzerentscheidung, ersetzt E25):
+// sie sieht aus wie die Begrüßungsblase. Die dc-Variablen setzt das Widget
+// direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
+// `:host` UND auf jedem Element im Shadow-Root
+// (`:host, :host * { --allmi-accent: #007c82 !important; }`).
 // Nur am Host reichte nicht: Registriert die Seite die interne Variable per
 // `@property … { inherits: false }`, erben die Elemente den Wert des Hosts
 // nicht und bekämen den `initial-value` der Seite (Fixliste 7.22-rc18 W62).
 // Ein wichtiger Wert im Shadow-Root schlägt jede Angabe der Seite am Host,
-// auch eine `--allmi-*` mit !important. KI-Hinweis und Datenschutz-Blase
-// bekommen ihre festen Farben zusätzlich als Regel direkt am Element
+// auch eine `--allmi-*` mit !important. Der KI-Hinweis bekommt seine festen
+// Farben zusätzlich als Regel direkt am Element
 // (`#anything-llm-ai-disclaimer { color: #6b7280 !important; }`), ganz ohne
 // Variable: so ändert sie auch eine Registrierung mit anderer Syntax nicht.
 // Rest für Gruppe A: Registriert die Seite eine interne Variable mit anderer
@@ -58,18 +60,23 @@ export const THEME_STYLE_ID = "allm-theme-vars";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 // Leiste (Inline-Modus, eingeklappt) — bisher BAR_THEMES in InlineChat.
+// Rand und Schatten seit 23.10.2026 wie die rhein-Demo (Nutzerentscheidung:
+// ihre Optik wird Standard für „In der Seite“; vorher hell Rand #d1d5db und
+// Schatten 0 1px 3px rgba(0, 0, 0, 0.06), dunkel Schatten
+// 0 4px 16px rgba(0, 0, 0, 0.18)). Dunkel bleiben Fläche und Rand.
+// --allm-bar-border und --allm-bar-shadow der Seite gewinnen (Gruppe B).
 export const BAR_THEMES = {
   light: {
     bg: "#FFFFFF",
     text: "#1f2937",
-    border: "#d1d5db",
-    shadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
+    border: "rgba(23, 24, 27, 0.04)",
+    shadow: "0 18px 40px -22px rgba(23, 24, 27, 0.45)",
   },
   dark: {
     bg: "rgba(17, 24, 39, 0.78)",
     text: "#FFFFFF",
     border: "rgba(255, 255, 255, 0.16)",
-    shadow: "0 4px 16px rgba(0, 0, 0, 0.18)",
+    shadow: "0 18px 40px -20px rgba(0, 0, 0, 0.8)",
   },
 };
 
@@ -83,8 +90,15 @@ export const AI_NOTICE_COLORS = {
 };
 export const AI_NOTICE_TEXT = "var(--allmi-ai-notice-text, #6b7280)";
 export const AI_NOTICE_BG = "var(--allmi-ai-notice-bg, #FFFFFF)";
-// Elemente mit festen Farben (Regeln direkt am Element, buildThemeCss)
+// Element mit festen Farben (Regeln direkt am Element, buildThemeCss)
 export const AI_NOTICE_ID = "anything-llm-ai-disclaimer";
+// Datenschutz-Blase und ihre Überschrift: feste Kennungen (Barrierefreiheit,
+// Tests, Messungen), aber keine festen Farben mehr. Seit 23.10.2026
+// (Nutzerentscheidung, ersetzt E25 aus Fixliste 7.22-rc18) sieht die Blase
+// aus wie die Begrüßungsblase und die Antwortblasen: Fläche, Schrift und
+// Schriftgröße folgen --allmi-assistant-bg, --allmi-assistant-text und
+// --allmi-font-size, also auch data-assistant-bg-color und den Variablen der
+// Seite (Gruppe B). --allm-text-muted erreicht sie nicht.
 export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
 export const PRIVACY_TITLE_ID = "anything-llm-bubble-privacy-title";
 
@@ -114,25 +128,18 @@ export const DARK = {
   hoverBg: "rgba(255, 255, 255, 0.08)",
 };
 
-// Datenschutz-Blase (E25, Fixliste 7.22-rc18): Text, Überschrift und Fläche
-// fest je Farbschema wie der KI-Hinweis, unabhängig von --allm-* und
-// data-assistant-bg-color (Kontrast hell 7,6:1, dunkel 6,0:1 für den Text).
-// Die Fläche entspricht dem Standard der Antwortblasen; setzt die Seite
-// --allm-assistant-bg oder das Skript data-assistant-bg-color, behält die
-// Datenschutz-Blase ihre eigene Fläche.
-export const PRIVACY_NOTICE_COLORS = {
-  light: { text: "#57534e", title: "#222628", bg: "#FFFFFF" },
-  dark: { text: DARK.textMuted, title: DARK.text, bg: DARK.assistantBg },
-};
-export const PRIVACY_TEXT = "var(--allmi-privacy-text, #57534e)";
-export const PRIVACY_TITLE = "var(--allmi-privacy-title, #222628)";
-export const PRIVACY_BG = "var(--allmi-privacy-bg, #FFFFFF)";
+// Standard-Akzentfarbe des Widgets (Kufer-Petrol, gleicher Farbton wie der
+// Würfel, nur dunkler): Weiß darauf 4,99:1, die Schrift nach Kontrast wird
+// damit Weiß (Nutzerentscheidung 23.10.2026, vorher Würfel-Türkis mit
+// schwarzer Schrift). Einzige Quelle; Komponenten nehmen sie als
+// Rückfallwert der CSS-Variablen, das Design Center hat denselben Wert.
+export const DEFAULT_ACCENT = "#007c82";
 
 const DEFAULTS = {
-  accent: "#01a5a9",
-  userBg: "#01a5a9",
+  accent: DEFAULT_ACCENT,
+  userBg: DEFAULT_ACCENT,
   assistantBg: "#FFFFFF",
-  link: "#01a5a9",
+  link: DEFAULT_ACCENT,
 };
 
 // Werte aus Settings landen als CSS-Text im Stylesheet -> nur harmlose Zeichen
@@ -210,6 +217,24 @@ export function onAccentTextColor(settings = {}) {
     dcColor(settings.userTextColor) ||
     recommendedTextColor(dcColor(settings.buttonColor, DEFAULTS.accent))
   );
+}
+
+// Schatten des aufgeklappten Inline-Panels (23.10.2026, Nutzerentscheidung:
+// Optik der rhein-Demo wird Standard für „In der Seite“; vorher
+// 0 4px 14px rgba(0, 0, 0, 0.12), dunkel DARK.shadow). Getönt aus der
+// wirksamen Akzentfarbe aus dem Design Center (dcColor, ungültig oder nicht
+// lesbar: DEFAULT_ACCENT). Hell ein weicher Schatten in der Akzentfarbe mal
+// 0,33 (je Kanal gerundet: #007c82 -> rgba(0, 41, 43, 0.45), #C4430A ->
+// rgba(65, 22, 3, 0.45)), dunkel ein schwarzer Schatten mit 1px Kante in
+// der Akzentfarbe (10 %). Gilt nur für das Inline-Panel
+// (--allmi-inline-panel-shadow, buildThemeCss); das Chatfenster
+// (Blasen-Modus, App.jsx) behält --allmi-shadow.
+export function inlinePanelShadow(settings = {}, mode = "light") {
+  const [r, g, b] = parseColor(dcColor(settings.buttonColor, DEFAULTS.accent));
+  if (mode === "dark")
+    return `0 40px 100px -30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(${r}, ${g}, ${b}, 0.10)`;
+  const [dr, dg, db] = [r, g, b].map((v) => Math.round(v * 0.33));
+  return `0 40px 90px -30px rgba(${dr}, ${dg}, ${db}, 0.45), 0 4px 14px rgba(23, 24, 27, 0.06)`;
 }
 
 // Text der Pillen (Startvorschläge und Folgefragen) in Kundenfarbe mit
@@ -376,9 +401,13 @@ export const THEME_VARIABLES = [
   { name: "effect-close-easing", light: null, dark: null },
   { name: "overlay-z", light: "1000", dark: "1000" },
   { name: "hover-bg", light: null, dark: DARK.hoverBg },
+  // Fokusring: seit 23.10.2026 auch hell 2px in der Akzentfarbe (vorher
+  // ohne Standard = Browser-Standard), wie die rhein-Demo. Bewusst deckend,
+  // nicht halbtransparent: der Fokus-Indikator braucht sichtbaren Kontrast
+  // zur Umgebung.
   {
     name: "focus-ring",
-    light: null,
+    light: "2px solid var(--allmi-accent)",
     dark: "2px solid var(--allmi-accent)",
   },
   // Inline-Leiste
@@ -439,7 +468,7 @@ function pick(spec, settings, mode) {
 }
 
 // Wirksame Standardwerte je öffentlicher Variable (ohne Seiten-CSS) für
-// Tests/Doku: { "--allm-accent": "#01a5a9", "--allm-text": null, … }.
+// Tests/Doku: { "--allm-accent": "#007c82", "--allm-text": null, … }.
 // Kettenwerte werden aufgelöst (header-text -> text usw.).
 export function resolveThemeVars(settings = {}, mode = "light") {
   const bar = BAR_THEMES[resolveBarTheme(settings, mode)];
@@ -490,16 +519,14 @@ export function buildThemeCss(settings = {}, mode = "light") {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // KI-Hinweis (E24) und Datenschutz-Blase (E25) fest
+  // KI-Hinweis (E24) fest. Die Datenschutz-Blase hat seit 23.10.2026 keine
+  // festen Farben mehr (Nutzerentscheidung, ersetzt E25): sie folgt wie die
+  // Begrüßungsblase den Variablen der Antwortblasen.
   const scheme = mode === "dark" ? "dark" : "light";
   const notice = AI_NOTICE_COLORS[scheme];
-  const privacy = PRIVACY_NOTICE_COLORS[scheme];
   fixed.push(
     `--allmi-ai-notice-text: ${notice.text} !important;`,
     `--allmi-ai-notice-bg: ${notice.bg} !important;`,
-    `--allmi-privacy-text: ${privacy.text} !important;`,
-    `--allmi-privacy-title: ${privacy.title} !important;`,
-    `--allmi-privacy-bg: ${privacy.bg} !important;`,
   );
   // interne Hilfswerte
   decls.push(
@@ -513,6 +540,9 @@ export function buildThemeCss(settings = {}, mode = "light") {
     // Webseite): hell Weiß wie die Pillen, dunkel der Fensterton, auf dem
     // --allmi-pill-accent-text mindestens 4,5:1 hat (pillTextColor)
     `--allmi-chip-bg: ${mode === "dark" ? DARK.bg : PILL_BG_LIGHT};`,
+    // Schatten des aufgeklappten Inline-Panels aus der Akzentfarbe
+    // (inlinePanelShadow); --allm-shadow der Seite gewinnt (Gruppe B)
+    `--allmi-inline-panel-shadow: var(--allm-shadow, ${inlinePanelShadow(settings, mode)});`,
   );
   if (resolveBarTheme(settings, mode) === "dark")
     decls.push(
@@ -522,11 +552,9 @@ export function buildThemeCss(settings = {}, mode = "light") {
   return (
     `:host { ${decls.join(" ")} }\n` +
     `:host, :host * { ${fixed.join(" ")} }\n` +
-    // feste Farben direkt am Element, ohne Variable (W62, E25)
+    // feste Farben des KI-Hinweises direkt am Element, ohne Variable (W62)
     `#${AI_NOTICE_ID} { color: ${notice.text} !important; }\n` +
     `#${AI_NOTICE_ID} > span { background-color: ${notice.bg} !important; }\n` +
-    `#${PRIVACY_BUBBLE_ID} { color: ${privacy.text} !important; background-color: ${privacy.bg} !important; }\n` +
-    `#${PRIVACY_TITLE_ID} { color: ${privacy.title} !important; }\n` +
     // Reduzierte Bewegung schlägt auch eine per Seiten-CSS gesetzte Dauer.
     // Aufklapp-Effekt der Inline-Box: bewusst NICHT hier über die Dauer,
     // sondern an genau einer Stelle per animation: none (main.jsx, .allm-effect).

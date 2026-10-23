@@ -9,9 +9,13 @@ import tailwindConfig from "../tailwind.config.js";
 //   data-greeting-style="text", die Datenschutz-Blase ist sichtbar (leerer
 //   Chat und Verlauf); Hinweis aus: "text" wirkt.
 // W61 Textzweig mit dem Begrüßungsstandard der Sprache.
-// W62/E25 feste Farben des KI-Hinweises und der Datenschutz-Blase direkt am
-//   Element, Gruppe A auf jedem Element (gegen @property der Seite; der
-//   Browser-Beleg steht in tests/visual/rc18_farben.py).
+// W62 feste Farben des KI-Hinweises direkt am Element, Gruppe A auf jedem
+//   Element (gegen @property der Seite; der Browser-Beleg steht in
+//   tests/visual/rc18_farben.py).
+// E25 (feste Farben der Datenschutz-Blase) ist seit 23.10.2026 ersetzt
+//   (Nutzerentscheidung): die Datenschutz-Blase sieht aus wie die
+//   Begrüßungsblase und folgt denselben Variablen; --allm-text-muted
+//   erreicht sie weiter nicht.
 // W64 Logo-Rahmen mit Rand im kompakten Kopf: border-box, 57 px (seit
 //   Fixliste 7.22-rc20 E34 nur kompakt, normal content-box wie rc14).
 // N17 CSS-weite Schlüsselwörter in cssValue abgelehnt.
@@ -222,7 +226,7 @@ function ruleFor(css, selector) {
   return rules(css).find((r) => r.startsWith(`${selector} {`)) || "";
 }
 
-describe("W62/E25: feste Farben direkt am Element, Gruppe A auf jedem Element", () => {
+describe("W62: feste Farben direkt am Element, Gruppe A auf jedem Element", () => {
   const settings = { buttonColor: "#0b5f8a", userTextColor: "#FFFFFF" };
 
   it("Gruppe A und feste Farben als Block für :host und jedes Element, mit !important", () => {
@@ -260,46 +264,179 @@ describe("W62/E25: feste Farben direkt am Element, Gruppe A auf jedem Element", 
       expect(contrastRatio(text, bg)).toBeGreaterThanOrEqual(4.5);
     }
   });
+});
 
-  it("E25 Datenschutz-Blase: Text, Überschrift und Fläche fest je Farbschema, Kontrast mindestens 4,5:1", () => {
-    const colors = theme.PRIVACY_NOTICE_COLORS;
-    expect(colors).toBeTruthy();
+// ---------------------------------------------------------------------------
+// Wirksamer Wert einer Stilangabe mit var(), wie im Browser: Deklarationen des
+// Theme-Stylesheets (:host, dazu :host * mit Gruppe A und KI-Hinweis), davor
+// die öffentlichen Variablen --allm-* der Seite (page). Innerstes var()
+// zuerst; ohne Wert und ohne Rückfall ungültig (null).
+function themeDecls(css) {
+  const out = {};
+  for (const sel of [":host", ":host, :host *"]) {
+    const r = ruleFor(css, sel);
+    for (const d of r
+      .slice(r.indexOf("{") + 1, r.lastIndexOf("}"))
+      .split(";")) {
+      const i = d.indexOf(":");
+      if (i > 0)
+        out[d.slice(0, i).trim()] = d
+          .slice(i + 1)
+          .replace("!important", "")
+          .trim();
+    }
+  }
+  return out;
+}
+const INNER_VAR =
+  /var\(\s*(--[\w-]+)\s*(?:,\s*((?:(?!var\()[^()]|\([^()]*\))*?))?\s*\)/;
+function resolveCss(value, decls, page = {}) {
+  let v = value;
+  for (let n = 0; n < 50; n++) {
+    const m = v.match(INNER_VAR);
+    if (!m) return v;
+    const [all, name, fallback] = m;
+    let rep = name.startsWith("--allm-")
+      ? (page[name] ?? null)
+      : decls[name] != null
+        ? resolveCss(decls[name], decls, page)
+        : null;
+    if (rep == null) rep = fallback != null ? fallback.trim() : null;
+    if (rep == null) return null;
+    v = v.replace(all, rep);
+  }
+  return v;
+}
+
+describe("Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026, ersetzt E25)", () => {
+  const settings = { buttonColor: "#0b5f8a", userTextColor: "#FFFFFF" };
+  const PROPS = [
+    "backgroundColor",
+    "color",
+    "fontSize",
+    "lineHeight",
+    "padding",
+    "borderRadius",
+    "boxShadow",
+  ];
+
+  // Bewusste Änderung (vorher E25: Text, Überschrift und Fläche fest je
+  // Farbschema, Regel direkt am Element)
+  it("keine festen Farben der Datenschutz-Blase im Theme-Stylesheet, KI-Hinweis bleibt fest (hell und dunkel)", () => {
+    for (const name of [
+      "PRIVACY_NOTICE_COLORS",
+      "PRIVACY_TEXT",
+      "PRIVACY_TITLE",
+      "PRIVACY_BG",
+    ])
+      expect(theme[name], name).toBeUndefined();
     for (const mode of ["light", "dark"]) {
-      // auch mit Einbau-Angabe data-assistant-bg-color gleich der Textfarbe
       const css = theme.buildThemeCss(
-        { ...settings, assistantBgColor: colors[mode].text },
+        { ...settings, assistantBgColor: "#fde68a" },
         mode,
       );
-      const { text, title, bg } = colors[mode];
-      expect(ruleFor(css, "#anything-llm-privacy-bubble"), mode).toBe(
-        `#anything-llm-privacy-bubble { color: ${text} !important; background-color: ${bg} !important; }`,
+      expect(ruleFor(css, "#anything-llm-privacy-bubble"), mode).toBe("");
+      expect(ruleFor(css, "#anything-llm-bubble-privacy-title"), mode).toBe("");
+      expect(css, mode).not.toContain("privacy");
+      expect(ruleFor(css, "#anything-llm-ai-disclaimer"), mode).toBe(
+        `#anything-llm-ai-disclaimer { color: ${theme.AI_NOTICE_COLORS[mode].text} !important; }`,
       );
-      expect(ruleFor(css, "#anything-llm-bubble-privacy-title"), mode).toBe(
-        `#anything-llm-bubble-privacy-title { color: ${title} !important; }`,
-      );
-      expect(contrastRatio(text, bg), mode).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(title, bg), mode).toBeGreaterThanOrEqual(4.5);
     }
-    // Fläche = Standard der Antwortblase (kein sichtbarer Unterschied ohne
-    // Seiten-CSS)
-    expect(colors.light.bg).toBe(
-      theme.resolveThemeVars({}, "light")["--allm-assistant-bg"],
-    );
-    expect(colors.dark.bg).toBe(theme.DARK.assistantBg);
+    // Kennungen bleiben (Barrierefreiheit, Messungen)
+    expect(theme.PRIVACY_BUBBLE_ID).toBe("anything-llm-privacy-bubble");
+    expect(theme.PRIVACY_TITLE_ID).toBe("anything-llm-bubble-privacy-title");
   });
 
-  it("E25: Datenschutz-Blase im DOM ohne öffentliche Variable der Seite", async () => {
+  it("im DOM: Fläche, Textfarbe, Schriftgröße, Zeilenhöhe und Innenabstand der Begrüßungsblase; Überschrift fett ohne eigene Farbe", async () => {
     const s = await load({});
     render(<ChatHistory settings={s} history={[]} />);
+    const greeting = $("#anything-llm-greeting-bubble");
     const privacy = $("#anything-llm-privacy-bubble");
     const title = $("#anything-llm-bubble-privacy-title");
-    expect(privacy.style.color).toBe(theme.PRIVACY_TEXT);
-    expect(privacy.style.backgroundColor).toBe(theme.PRIVACY_BG);
-    expect(title.style.color).toBe(theme.PRIVACY_TITLE);
-    for (const el of [privacy, title])
-      expect(el.getAttribute("style")).not.toMatch(
-        /--allm-|--allmi-text-muted|--allmi-assistant-/,
+    for (const prop of PROPS)
+      expect(privacy.style[prop], prop).toBe(greeting.style[prop]);
+    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
+    expect(privacy.style.color).toContain("--allmi-assistant-text");
+    expect(privacy.style.fontSize).toContain("--allmi-font-size");
+    expect(privacy.style.lineHeight).toBe("1.5");
+    expect(privacy.style.padding).toBe("11px 16px");
+    expect(title.style.fontWeight).toBe("700");
+    expect(title.style.color).toBe("");
+    // kein Element der Blase greift auf --allmi-text-muted oder eine eigene
+    // Datenschutz-Farbe zurück
+    for (const el of [privacy, ...privacy.querySelectorAll("*")])
+      expect(el.getAttribute("style") || "", el.tagName).not.toMatch(
+        /text-muted|--allmi-privacy-/,
       );
+  });
+
+  it("hell und dunkel: folgt data-assistant-bg-color und --allm-assistant-bg der Seite wie die Begrüßung; --allm-text-muted: transparent ändert sie nicht", async () => {
+    const s = await load({ assistantBgColor: "#fde68a" });
+    expect(s.assistantBgColor).toBe("#fde68a");
+    render(<ChatHistory settings={s} history={[]} />);
+    const greeting = $("#anything-llm-greeting-bubble");
+    const privacy = $("#anything-llm-privacy-bubble");
+    const title = $("#anything-llm-bubble-privacy-title");
+    const cases = [
+      // [Seiten-CSS, Fläche hell, Fläche dunkel, Text hell, Text dunkel]
+      [{}, "#fde68a", theme.DARK.assistantBg, "#222628", theme.DARK.text],
+      [
+        { "--allm-assistant-bg": "#123456" },
+        "#123456",
+        "#123456",
+        "#222628",
+        theme.DARK.text,
+      ],
+      [
+        { "--allm-text-muted": "transparent" },
+        "#fde68a",
+        theme.DARK.assistantBg,
+        "#222628",
+        theme.DARK.text,
+      ],
+      [
+        {
+          "--allm-text-muted": "transparent",
+          "--allm-assistant-bg": "#ece7df",
+          "--allm-assistant-text": "#0b3d6b",
+        },
+        "#ece7df",
+        "#ece7df",
+        "#0b3d6b",
+        "#0b3d6b",
+      ],
+    ];
+    for (const [page, bgLight, bgDark, textLight, textDark] of cases)
+      for (const mode of ["light", "dark"]) {
+        const decls = themeDecls(theme.buildThemeCss(s, mode));
+        const at = (el, prop) => resolveCss(el.style[prop], decls, page);
+        const key = `${mode} ${JSON.stringify(page)}`;
+        for (const prop of PROPS)
+          expect(at(privacy, prop), `${key} ${prop}`).toBe(at(greeting, prop));
+        expect(at(privacy, "backgroundColor"), key).toBe(
+          mode === "dark" ? bgDark : bgLight,
+        );
+        expect(at(privacy, "color"), key).toBe(
+          mode === "dark" ? textDark : textLight,
+        );
+        expect(at(privacy, "fontSize"), key).toBe("14px");
+        // ohne Seiten-CSS lesbar wie die Begrüßung
+        if (Object.keys(page).length === 0)
+          expect(
+            contrastRatio(at(privacy, "color"), at(privacy, "backgroundColor")),
+            key,
+          ).toBeGreaterThanOrEqual(4.5);
+        // Überschrift ohne eigene Farbe: erbt die Schrift der Blase
+        expect(title.style.color, key).toBe("");
+      }
+    // Gegenprobe des Prüfwerkzeugs: eine Angabe mit --allmi-text-muted
+    // folgte --allm-text-muted der Seite
+    const decls = themeDecls(theme.buildThemeCss(s, "light"));
+    expect(
+      resolveCss("var(--allmi-text-muted, #6b7280)", decls, {
+        "--allm-text-muted": "transparent",
+      }),
+    ).toBe("transparent");
   });
 });
 
@@ -320,7 +457,9 @@ describe("N17: CSS-weite Schlüsselwörter in cssValue abgelehnt", () => {
     for (const v of ["#0b5f8a", "teal", "transparent", "rgb(1, 2, 3)"])
       expect(theme.cssValue(v), v).toBe(v);
     const css = theme.buildThemeCss({ buttonColor: "inherit" }, "light");
-    expect(css).toContain("--allmi-accent: #01a5a9 !important;");
+    expect(css).toContain(
+      `--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`,
+    );
     expect(css).not.toMatch(/:\s*inherit\b/);
   });
 });

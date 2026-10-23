@@ -681,7 +681,11 @@ describe("Teaser als Untertext (AK-5)", () => {
 // (Issue embed-zeilenkarten-tasten-morph-datenschutz, AK-1, AK-4, AK-5,
 // NAK-2, NAK-3, NAK-7). Höhen/Umbrüche im Browser: tests/visual/course_cards.py
 // ---------------------------------------------------------------------------
-import { courseCardsLayout, rowLead, rowMeta } from "../src/utils/courseCards.js";
+import {
+  courseCardsLayout,
+  rowLead,
+  rowMeta,
+} from "../src/utils/courseCards.js";
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import { PANEL_TEXTS } from "../src/utils/layout.js";
 import { teasersExpected } from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
@@ -734,9 +738,9 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(
       (await load({}, { courseCardsLayout: "rows" })).courseCardsLayout,
     ).toBe("rows");
-    expect((await load({}, { courseCardsLayout: "grid" })).courseCardsLayout).toBe(
-      "grid",
-    );
+    expect(
+      (await load({}, { courseCardsLayout: "grid" })).courseCardsLayout,
+    ).toBe("grid");
     // Bewusste Änderung (Fixliste 7.22-rc17 E23): kein Feld im Design Center
     // (Gruppe B), das Script-Attribut schlägt den Wert vom Server
     expect(
@@ -759,9 +763,7 @@ describe("Zeilen-Karten (AK-1)", () => {
     expect(rowLead(formatCourse({ ...KI, weekdays: ",wed,mon," }))).toBe(
       "Mo, Mi 18:30",
     );
-    expect(rowMeta(card)).toBe(
-      "ab 22.09.2026 · 6 Termine · Raum 2.11 · 60 €",
-    );
+    expect(rowMeta(card)).toBe("ab 22.09.2026 · 6 Termine · Raum 2.11 · 60 €");
     const el = mount(
       h(ChatHistory, {
         settings: ROWS_ABOVE,
@@ -784,6 +786,11 @@ describe("Zeilen-Karten (AK-1)", () => {
     const when = row.querySelector(".allm-course-when");
     expect(when.textContent).toBe("Di 18:30");
     expect(when.style.color).toContain("--allmi-accent");
+    // Datum als Schrift: Pillen-Textfarbe (mindestens 4,5:1 hell und dunkel),
+    // Akzentfarbe nur als Rückfall (Fixliste 7.22.2, Petrol dunkel 3,36:1)
+    expect(when.style.color.startsWith("var(--allmi-pill-accent-text,")).toBe(
+      true,
+    );
     expect(when.style.fontVariantNumeric).toBe("tabular-nums");
     expect(row.querySelector(".allm-course-title").textContent).toBe(KI.title);
     expect(row.querySelector(".allm-course-details").textContent).toBe(
@@ -1045,12 +1052,12 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
     expect(teasersExpected(streaming({ courseTeasers: {} }))).toBe(false);
     expect(teasersExpected(streaming({ content: "Ja" }))).toBe(false);
     expect(teasersExpected(streaming({ content: "  " }))).toBe(true);
-    expect(
-      teasersExpected(streaming({ animate: false, pending: false })),
-    ).toBe(false);
-    expect(teasersExpected(streaming({ courseCardsAnnounced: undefined }))).toBe(
+    expect(teasersExpected(streaming({ animate: false, pending: false }))).toBe(
       false,
     );
+    expect(
+      teasersExpected(streaming({ courseCardsAnnounced: undefined })),
+    ).toBe(false);
     expect(teasersExpected(streaming({ error: "x" }))).toBe(false);
     expect(teasersExpected(null)).toBe(false);
   });
@@ -1144,8 +1151,7 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
   it("Stream über handleChat: courseSources -> Platzhalter, courseTeasers -> Teaser (englisch: eigener Text)", () => {
     const hist = [];
     let shown = [];
-    const chunk = (c) =>
-      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    const chunk = (c) => handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
     const el = mount(
       h(ChatHistory, { settings: { ...ABOVE, language: "en" }, history: [] }),
     );
@@ -1181,8 +1187,7 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
   it("::teaser-pending-end — Stream endet ohne courseTeasers: kein Platzhalter mehr", () => {
     const hist = [];
     let shown = [];
-    const chunk = (c) =>
-      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    const chunk = (c) => handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
     const el = mount(h(ChatHistory, { settings: ABOVE, history: [] }));
     const show = () =>
       act(() =>
@@ -1207,7 +1212,12 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
     });
     show();
     expect(pendingEls(el)).toHaveLength(0);
-    chunk({ uuid: "u", type: "finalizeResponseStream", close: true, chatId: 7 });
+    chunk({
+      uuid: "u",
+      type: "finalizeResponseStream",
+      close: true,
+      chatId: 7,
+    });
     show();
     expect(pendingEls(el)).toHaveLength(0);
     expect(cards(el)).toHaveLength(2);
@@ -1276,8 +1286,7 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
   it("NAK-3: ohne Ankündigung (fremdsprachige Antwort, [[KARTEN: -]]) keine Karten und kein Platzhalter", () => {
     const hist = [];
     let shown = [];
-    const chunk = (c) =>
-      handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
+    const chunk = (c) => handleChat(c, vi.fn(), (x) => (shown = x), [], hist);
     chunk({
       uuid: "u",
       type: "textResponseChunk",
@@ -1291,7 +1300,12 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
     expect(el.querySelector("[data-course-cards]")).toBeNull();
     expect(pendingEls(el)).toHaveLength(0);
     // leere Ankündigung zählt nicht
-    chunk({ uuid: "u", type: "courseSources", courseSources: [], close: false });
+    chunk({
+      uuid: "u",
+      type: "courseSources",
+      courseSources: [],
+      close: false,
+    });
     act(() =>
       root.render(
         h(ChatHistory, { settings: ROWS_ABOVE, history: [user, ...shown] }),
@@ -1315,7 +1329,9 @@ describe("Teaser-Platzhalter (AK-4, AK-5, NAK-2, NAK-3, NAK-7)", () => {
             content: "Siehe Karte.",
             courseSources: clone([evil]),
             courseCardsAnnounced: 1,
-            courseTeasers: { [KI.url]: "<b>Fett</b> und [Link](https://evil.test)" },
+            courseTeasers: {
+              [KI.url]: "<b>Fett</b> und [Link](https://evil.test)",
+            },
           }),
         ],
       }),

@@ -21,7 +21,13 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
-import { BAR_THEMES, INLINE_RADIUS_VARS, ON_ACCENT_TEXT } from "@/utils/theme";
+import {
+  BAR_THEMES,
+  INLINE_RADIUS_VARS,
+  ON_ACCENT_TEXT,
+  DEFAULT_ACCENT,
+  inlinePanelShadow,
+} from "@/utils/theme";
 import { PILL_CLASS } from "@/components/ChatWindow/ChatContainer/ChatHistory/Pill";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
@@ -713,8 +719,9 @@ const TEXT_RESET = {
 
 // Leiste: Farben aus den CSS-Variablen --allm-bar-* (Standard je nach
 // inlineTheme bzw. theme, siehe BAR_THEMES in utils/theme.js). Fallbacks =
-// bisherige helle Leiste. --allmi-bar-backdrop/-ring sind nur bei dunkler
-// Leiste gesetzt (sonst ungültig -> none, wie bisher).
+// helle Leiste (seit 23.10.2026 wie die rhein-Demo).
+// --allmi-bar-backdrop/-ring sind nur bei dunkler Leiste gesetzt (sonst
+// ungültig -> none, wie bisher).
 const BAR_STYLE = {
   backgroundColor: `var(--allmi-bar-bg, ${BAR_THEMES.light.bg})`,
   color: `var(--allmi-bar-text, ${BAR_THEMES.light.text})`,
@@ -728,7 +735,7 @@ const BAR_STYLE = {
 // Akzent der Leiste (Icon-Kreis, Absende-Knopf): Akzentfarbe aus dem Design
 // Center (--allmi-accent), Fallback buttonColor bzw. der Kufer-Standard.
 function barAccent(settings) {
-  return `var(--allmi-accent, ${settings.buttonColor || "#01a5a9"})`;
+  return `var(--allmi-accent, ${settings.buttonColor || DEFAULT_ACCENT})`;
 }
 
 // Unsichtbares Hilfsfeld fürs erste Öffnen des Overlays: existiert das echte
@@ -771,13 +778,17 @@ const chatClasses = {
   overlay:
     "allm-fixed allm-inset-0 allm-w-full allm-h-full allm-overflow-hidden allm-flex allm-flex-col allm-rounded-none allm-z-[9999]",
 };
-// Flächen über CSS-Variablen; Fallbacks = bisherige Klassenwerte.
+// Flächen über CSS-Variablen; Fallbacks = bisherige Klassenwerte. Schatten
+// seit 23.10.2026 aus der Akzentfarbe wie die rhein-Demo
+// (--allmi-inline-panel-shadow, utils/theme.js inlinePanelShadow, darin
+// gewinnt --allm-shadow der Seite); Fallback der helle Standard mit der
+// Standard-Akzentfarbe.
 const chatStyles = {
   box: {
     backgroundColor: "var(--allmi-surface, #FFFFFF)",
     borderColor: "var(--allmi-border, #d1d5db)",
     borderRadius: "var(--allmi-radius, 16px)",
-    boxShadow: "var(--allmi-shadow, 0 4px 14px rgba(0, 0, 0, 0.12))",
+    boxShadow: `var(--allmi-inline-panel-shadow, ${inlinePanelShadow()})`,
   },
   overlay: { backgroundColor: "var(--allmi-surface, #FFFFFF)" },
 };
@@ -1472,7 +1483,11 @@ export default function InlineChat({
   const rootPagePos = () => {
     const r = rootRef.current?.getBoundingClientRect();
     if (!r) return null;
-    return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width };
+    return {
+      x: r.left + window.scrollX,
+      y: r.top + window.scrollY,
+      w: r.width,
+    };
   };
   // Steht die Inline-Fläche noch dort, wo sie am Ende des Aufklappens stand
   // (± 1 px, gleiche Breite)? Ohne Bezug (Zuklappen mitten im Aufklappen):
@@ -1504,7 +1519,13 @@ export default function InlineChat({
       if (pill) Object.assign(g, measureBar(pill));
       else if (root) {
         const r = root.getBoundingClientRect();
-        Object.assign(g, { x: r.left, y: r.top, w: r.width, h: g.barH, r: g.barR });
+        Object.assign(g, {
+          x: r.left,
+          y: r.top,
+          w: r.width,
+          h: g.barH,
+          r: g.barR,
+        });
       }
     } finally {
       if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
@@ -1988,10 +2009,10 @@ const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
   padding: "6px 14px",
-  border: "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
+  border: `1px solid var(--allmi-pill-border, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
   borderRadius: "var(--allmi-bar-radius, 999px)",
   backgroundColor: "var(--allmi-chip-bg, #FFFFFF)",
-  color: "var(--allmi-pill-accent-text, var(--allmi-accent, #01a5a9))",
+  color: `var(--allmi-pill-accent-text, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
   lineHeight: 1.3,
   textAlign: "center",
   overflowWrap: "anywhere",

@@ -42,6 +42,7 @@ import { embedderSettings } from "../src/main.jsx";
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import {
   DARK,
+  DEFAULT_ACCENT,
   ON_ACCENT_TEXT,
   buildThemeCss,
   resolveThemeVars,
@@ -82,7 +83,8 @@ const inline = (el) => (
 );
 
 const KUNDENFARBEN = [
-  "#01a5a9", // Kufer-Standard
+  DEFAULT_ACCENT, // Kufer-Standard (Petrol #007c82 seit 23.10.2026)
+  "#01a5a9", // Würfel-Türkis, Standard bis 23.10.2026
   "#607D8B",
   "#FFA102",
   "#ffd400",
@@ -109,6 +111,8 @@ describe("Punkt 2: Kontrast nach WCAG 2.x (utils/contrast.js)", () => {
     expect(contrastRatio("#767676", "#FFFFFF")).toBeCloseTo(4.54, 2);
     expect(contrastRatio("#01a5a9", "#FFFFFF")).toBeCloseTo(3.02, 2);
     expect(contrastRatio("#01a5a9", "#000000")).toBeCloseTo(6.96, 2);
+    expect(contrastRatio("#007c82", "#FFFFFF")).toBeCloseTo(4.99, 2);
+    expect(contrastRatio("#007c82", "#222628")).toBeCloseTo(3.06, 2);
     expect(relativeLuminance("blau")).toBe(null);
     expect(contrastRatio("blau", "#FFFFFF")).toBe(null);
   });
@@ -118,6 +122,7 @@ describe("Punkt 2: Kontrast nach WCAG 2.x (utils/contrast.js)", () => {
   it("Empfehlung: höherer Kontrast gewinnt, Gleichstand Weiß, ungültig Weiß", async () => {
     const { recommendedTextColor, contrastRatio } = await contrastModule();
     expect(recommendedTextColor("#01a5a9")).toBe("#222628");
+    expect(recommendedTextColor("#007c82")).toBe("#FFFFFF");
     expect(recommendedTextColor("#0b5f8a")).toBe("#FFFFFF");
     expect(recommendedTextColor("#FFFFFF")).toBe("#222628");
     expect(recommendedTextColor("#000000")).toBe("#FFFFFF");
@@ -169,9 +174,10 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
         expect(vars["--allm-user-text"]).toBe(recommendedTextColor(c));
         expect(vars["--allm-on-accent"]).toBe(recommendedTextColor(c));
       }
-    // Kufer-Standard ohne jede Angabe: Schwarz #222628 (5,06:1 statt 3,02:1)
-    expect(resolveThemeVars({}, "light")["--allm-user-text"]).toBe("#222628");
-    expect(resolveThemeVars({}, "light")["--allm-on-accent"]).toBe("#222628");
+    // Kufer-Standard Petrol ohne jede Angabe: Weiß (4,99:1 statt 3,06:1 mit
+    // #222628; bis 23.10.2026 beim Türkis Schwarz #222628)
+    expect(resolveThemeVars({}, "light")["--allm-user-text"]).toBe("#FFFFFF");
+    expect(resolveThemeVars({}, "light")["--allm-on-accent"]).toBe("#FFFFFF");
   });
 
   it("gewählter Wert gilt wie gewählt, auch unter 4,5:1 (Weiß, Schwarz, #222628 vom Server)", () => {
@@ -245,10 +251,10 @@ describe("Punkt 2: Schrift auf der Kundenfarbe (userTextColor)", () => {
     const main = src("src/main.jsx").replace(/\s+/g, " ");
     expect(main).toContain(
       // Hover nur mit echtem Zeiger (Fixliste 7.22-rc7 Nr. 34), Fokus immer
-      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; } }",
+      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; color: ${ON_ACCENT_TEXT} !important; } }",
     );
     expect(main).toContain(
-      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
+      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; color: ${ON_ACCENT_TEXT} !important; }",
     );
   });
 });
@@ -323,10 +329,17 @@ describe("Punkt 4: Startvorschlag-Pillen = Folgefragen-Pillen", () => {
         "--allm-pill-accent-text"
       ],
     ).toBe("var(--allmi-accent)");
-    // Kufer-Standard hell abgedunkelt (3,02:1 reicht nicht)
+    // Kufer-Standard Petrol reicht hell (4,99:1 auf Weiß): Text bleibt die
+    // Akzentfarbe
     expect(resolveThemeVars({}, "light")["--allm-pill-accent-text"]).toBe(
-      "#018487",
+      "var(--allmi-accent)",
     );
+    // Türkis hell abgedunkelt (3,02:1 reicht nicht, #018487 hat 4,52:1)
+    expect(
+      resolveThemeVars({ buttonColor: "#01a5a9" }, "light")[
+        "--allm-pill-accent-text"
+      ],
+    ).toBe("#018487");
   });
 
   it("Hover/Fokus füllt in Kundenfarbe mit der Schrift auf der Kundenfarbe", () => {

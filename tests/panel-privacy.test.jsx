@@ -42,6 +42,7 @@ import {
 import * as layout from "../src/utils/layout.js";
 import { _resetPrivacyMemory, privacyAckKey } from "../src/utils/privacy.js";
 import {
+  DEFAULT_ACCENT,
   THEME_VARIABLES,
   buildThemeCss,
   resolveThemeVars,
@@ -118,7 +119,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.disclaimer).toBe("footer");
     expect(s.disclaimerText).toBe(null);
     expect(s.followUps).toBe("pills");
-    expect(s.sendMessageText).toBe(null); // Standard „Ihre Frage eingeben“
+    expect(s.sendMessageText).toBe(null); // Standard „Stellen Sie hier Ihre Frage …“
     expect(s.assistantName).toBe("KI-Berater");
     expect(s.brandText).toBe("KI-Berater");
   });
@@ -500,9 +501,10 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const pills = $$("#anything-llm-suggestion-pills button");
     expect(pills.map((b) => b.textContent)).toEqual(MSGS);
     expect($$(".msg-suggestion")).toHaveLength(0);
-    // KIE-565 Nachtrag Punkt 4: Rand in Kundenfarbe wie die Folgefragen
+    // KIE-565 Nachtrag Punkt 4: Rand in Kundenfarbe wie die Folgefragen;
+    // ohne buttonColor der Kufer-Standard
     expect(pills[0].style.border).toBe(
-      "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
+      `1px solid var(--allmi-pill-border, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
     );
     expect(pills[0].style.borderRadius).toBe("var(--allmi-bar-radius, 999px)");
     expect($("#anything-llm-suggestion-pills").style.flexWrap).toBe("wrap");
@@ -750,9 +752,11 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect(bubble.style.boxSizing).toBe("border-box");
     expect(privacy.style.boxSizing).toBe("border-box");
-    // Bewusste Änderung (Fixliste 7.22-rc18 E25): eigene feste Fläche wie
-    // der KI-Hinweis, im Standard gleich der Antwortblase
-    expect(privacy.style.backgroundColor).toContain("--allmi-privacy-bg");
+    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 aus
+    // Fixliste 7.22-rc18): Fläche wie die Begrüßungsblase, keine eigene
+    // feste Fläche mehr
+    expect(privacy.style.backgroundColor).toBe(bubble.style.backgroundColor);
+    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
     expect(privacy.style.borderRadius).toBe(bubble.style.borderRadius);
     // altes Format (|) -> Aufzählung, Überschrift „Datenschutz“ ohne Doppelpunkt
     expect(privacy.querySelector("strong").textContent).toBe("Datenschutz");
@@ -1416,10 +1420,16 @@ describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
     expect(link.getAttribute("href")).toBe("/datenschutz");
     expect(link.textContent).toBe("Datenschutzerklärung");
     expect(privacy.lastElementChild).toBe(link);
-    // kleiner und gedämpft (Mockup). Bewusste Änderung (Fixliste 7.22-rc18
-    // E25): feste Farbe der Datenschutz-Blase statt --allmi-text-muted
-    expect(privacy.style.fontSize).toBe("12.5px");
-    expect(privacy.style.color).toContain("--allmi-privacy-text");
+    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 und die
+    // kleinere, gedämpfte Schrift des Mockups): Schriftgröße, Zeilenhöhe und
+    // Textfarbe wie die Begrüßungsblase, nie --allmi-text-muted; die
+    // Überschrift ohne eigene Farbe
+    expect(privacy.style.fontSize).toBe(bubble.style.fontSize);
+    expect(privacy.style.lineHeight).toBe(bubble.style.lineHeight);
+    expect(privacy.style.color).toBe(bubble.style.color);
+    expect(privacy.style.color).toContain("--allmi-assistant-text");
+    expect(privacy.getAttribute("style")).not.toContain("text-muted");
+    expect(title.style.color).toBe("");
     expect(bubble.parentElement.style.maxWidth).toBe("80%");
     expect($("#anything-llm-privacy-notice")).toBe(null);
     expect($("#message-input").disabled).toBe(false);
@@ -1583,21 +1593,30 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
       layout.DEFAULT_INLINE_SEND_TEXT,
     ])
       expect(t).not.toMatch(/[–—]/);
-    expect(PANEL_TEXTS.de.inputPlaceholder).toBe("Ihre Frage eingeben");
+    // Platzhalter des Fensters = Text der eingeklappten Leiste (7.22.2)
+    expect(PANEL_TEXTS.de.inputPlaceholder).toBe(
+      "Stellen Sie hier Ihre Frage …",
+    );
+    expect(PANEL_TEXTS.de.inputPlaceholder).toBe(
+      PANEL_TEXTS.de.inlineBarPlaceholder,
+    );
+    expect(PANEL_TEXTS.en.inputPlaceholder).toBe(
+      PANEL_TEXTS.en.inlineBarPlaceholder,
+    );
     expect(PANEL_TEXTS.de.assistantName).toBe("KI-Berater");
     expect(PANEL_TEXTS.de.assistantSubtitle).toBe(
       "Online-Berater mit künstlicher Intelligenz",
     );
   });
 
-  it("Platzhalter im Eingabefeld: Standard „Ihre Frage eingeben“ (en „Enter your question“), eigener Text gewinnt", () => {
+  it("Platzhalter im Eingabefeld: Standard „Stellen Sie hier Ihre Frage …“ (en „Ask your question here …“) wie die Leiste, eigener Text gewinnt", () => {
     render(<ChatContainer {...props} settings={base} />);
     expect($("#message-input").getAttribute("placeholder")).toBe(
-      "Ihre Frage eingeben",
+      "Stellen Sie hier Ihre Frage …",
     );
     render(<ChatContainer {...props} settings={{ ...base, language: "en" }} />);
     expect($("#message-input").getAttribute("placeholder")).toBe(
-      "Enter your question",
+      "Ask your question here …",
     );
     render(
       <ChatContainer
