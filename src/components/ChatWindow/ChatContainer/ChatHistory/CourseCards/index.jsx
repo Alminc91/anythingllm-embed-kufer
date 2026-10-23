@@ -9,6 +9,7 @@ import {
   selectCourseCards,
   teaserFadeIn,
 } from "@/utils/courseCards";
+import { DEFAULT_ACCENT } from "@/utils/theme";
 
 // Kurskarten zu einer Assistenten-Antwort (Setting courseCards "auto").
 // Optik ausschließlich über die internen Theme-Variablen (--allmi-*, gesetzt
@@ -19,7 +20,12 @@ import {
 // und Fokus über --allmi-hover-bg / --allmi-focus-ring (CSS in main.jsx).
 const TEXT = "var(--allmi-text, #222628)";
 const MUTED = "var(--allmi-text-muted, #5f6368)";
-const ACCENT = "var(--allmi-accent, #01a5a9)";
+const ACCENT = `var(--allmi-accent, ${DEFAULT_ACCENT})`;
+// Akzentfarbe als Schrift (Datum der Kurszeile): dieselbe Farbe wie der
+// Pillen-Text, hell bei Bedarf abgedunkelt, dunkel aufgehellt, damit sie
+// mindestens 4,5:1 erreicht (pillTextColor). Mit dem Standard Petrol stand
+// das Datum im Dunkelmodus sonst bei 3,36:1 (Fixliste 7.22.2).
+const ACCENT_TEXT = `var(--allmi-pill-accent-text, ${ACCENT})`;
 const BORDER = "var(--allmi-border, #e5e7eb)";
 const SURFACE = "var(--allmi-surface, #FFFFFF)";
 // --allm-radius-card (utils/theme.js), Standard 0,75 × --allm-radius
@@ -390,7 +396,7 @@ function CardRow({
               ...sideCell,
               gridColumn: 1,
               minWidth: "4.5em",
-              color: ACCENT,
+              color: ACCENT_TEXT,
               fontWeight: 600,
               fontSize: "13px",
               lineHeight: "19px",

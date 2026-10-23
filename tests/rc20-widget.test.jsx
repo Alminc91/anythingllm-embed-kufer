@@ -108,9 +108,9 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
     "CurrentColor",
   ];
   const DC_KEYS = [
-    ["buttonColor", "accent", "#01a5a9"],
-    ["userBgColor", "user-bg", "#01a5a9"],
-    ["linkColor", "link", "#01a5a9"],
+    ["buttonColor", "accent", theme.DEFAULT_ACCENT],
+    ["userBgColor", "user-bg", theme.DEFAULT_ACCENT],
+    ["linkColor", "link", theme.DEFAULT_ACCENT],
   ];
 
   for (const value of PAGE_VALUES)
@@ -137,17 +137,18 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
         expect(fixedBlock, mode).toMatch(/^:host, :host \* \{/);
         expect(fixedBlock, mode).not.toMatch(/var\(--allm-|env\(|attr\(/);
         expect(fixedBlock.toLowerCase(), mode).not.toContain("currentcolor");
-        // Schrift auf der Kundenfarbe: Empfehlung aus dem Standard
-        expect(fixedBlock, mode).toMatch(
-          /--allmi-user-text: (#FFFFFF|#222628) !important;/,
+        // Schrift auf der Kundenfarbe: Empfehlung aus dem Standard (Petrol:
+        // Weiß, 4,99:1)
+        expect(fixedBlock, mode).toContain(
+          "--allmi-user-text: #FFFFFF !important;",
         );
-        expect(fixedBlock, mode).toMatch(
-          /--allmi-on-accent: (#FFFFFF|#222628) !important;/,
+        expect(fixedBlock, mode).toContain(
+          "--allmi-on-accent: #FFFFFF !important;",
         );
       }
       expect(
         theme.resolveThemeVars({ buttonColor: value })["--allm-accent"],
-      ).toBe("#01a5a9");
+      ).toBe(theme.DEFAULT_ACCENT);
     });
 
   it("über die Antwort des Servers: var(--allm-accent) als Akzentfarbe wirkt nicht, Farbcodes bleiben, Farbnamen und Deckkraft unter 1 ergeben den Standard (E41)", async () => {
@@ -161,9 +162,9 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       },
     );
     const page = theme.buildThemeCss(s, "light");
-    expect(page).toContain("--allmi-accent: #01a5a9 !important;");
-    expect(page).toContain("--allmi-user-bg: #01a5a9 !important;");
-    expect(page).toContain("--allmi-link: #01a5a9 !important;");
+    expect(page).toContain(`--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`);
+    expect(page).toContain(`--allmi-user-bg: ${theme.DEFAULT_ACCENT} !important;`);
+    expect(page).toContain(`--allmi-link: ${theme.DEFAULT_ACCENT} !important;`);
     expect(page).not.toContain("var(--allm-accent)");
     // Farbcodes wie im Design Center bleiben
     for (const value of [
@@ -182,7 +183,9 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
     // sie ab)
     for (const value of ["teal", "RebeccaPurple", "rgba(1, 2, 3, 0.5)"]) {
       const css = theme.buildThemeCss({ buttonColor: value }, "light");
-      expect(css, value).toContain("--allmi-accent: #01a5a9 !important;");
+      expect(css, value).toContain(
+        `--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`,
+      );
     }
     // Schrift auf der Kundenfarbe wie im Design Center gewählt
     const css = theme.buildThemeCss(

@@ -22,7 +22,7 @@
 // Center ein, die Farben des KI-Hinweises und der Datenschutz-Blase sind
 // fest. Die dc-Variablen setzt das Widget direkt und mit !important, ohne
 // Rückgriff auf `--allm-*`, und zwar auf `:host` UND auf jedem Element im
-// Shadow-Root (`:host, :host * { --allmi-accent: #01a5a9 !important; }`).
+// Shadow-Root (`:host, :host * { --allmi-accent: #007c82 !important; }`).
 // Nur am Host reichte nicht: Registriert die Seite die interne Variable per
 // `@property … { inherits: false }`, erben die Elemente den Wert des Hosts
 // nicht und bekämen den `initial-value` der Seite (Fixliste 7.22-rc18 W62).
@@ -128,11 +128,18 @@ export const PRIVACY_TEXT = "var(--allmi-privacy-text, #57534e)";
 export const PRIVACY_TITLE = "var(--allmi-privacy-title, #222628)";
 export const PRIVACY_BG = "var(--allmi-privacy-bg, #FFFFFF)";
 
+// Standard-Akzentfarbe des Widgets (Kufer-Petrol, gleicher Farbton wie der
+// Würfel, nur dunkler): Weiß darauf 4,99:1, die Schrift nach Kontrast wird
+// damit Weiß (Nutzerentscheidung 23.10.2026, vorher Würfel-Türkis mit
+// schwarzer Schrift). Einzige Quelle; Komponenten nehmen sie als
+// Rückfallwert der CSS-Variablen, das Design Center hat denselben Wert.
+export const DEFAULT_ACCENT = "#007c82";
+
 const DEFAULTS = {
-  accent: "#01a5a9",
-  userBg: "#01a5a9",
+  accent: DEFAULT_ACCENT,
+  userBg: DEFAULT_ACCENT,
   assistantBg: "#FFFFFF",
-  link: "#01a5a9",
+  link: DEFAULT_ACCENT,
 };
 
 // Werte aus Settings landen als CSS-Text im Stylesheet -> nur harmlose Zeichen
@@ -439,7 +446,7 @@ function pick(spec, settings, mode) {
 }
 
 // Wirksame Standardwerte je öffentlicher Variable (ohne Seiten-CSS) für
-// Tests/Doku: { "--allm-accent": "#01a5a9", "--allm-text": null, … }.
+// Tests/Doku: { "--allm-accent": "#007c82", "--allm-text": null, … }.
 // Kettenwerte werden aufgelöst (header-text -> text usw.).
 export function resolveThemeVars(settings = {}, mode = "light") {
   const bar = BAR_THEMES[resolveBarTheme(settings, mode)];

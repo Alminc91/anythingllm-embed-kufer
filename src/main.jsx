@@ -8,6 +8,7 @@ import {
   ON_ACCENT_TEXT,
   THEME_STYLE_ID,
   userTextColorFor,
+  DEFAULT_ACCENT,
 } from "./utils/theme.js";
 
 // CSS Strings für Shadow DOM (von Head.jsx übernommen)
@@ -169,11 +170,11 @@ const customCss = `
      Link-Farb-Injektion. */
   .allm-anything-llm-assistant-message a,
   .allm-reply a {
-    color: var(--allmi-link, #01a5a9) !important;
+    color: var(--allmi-link, ${DEFAULT_ACCENT}) !important;
   }
   .allm-anything-llm-assistant-message a:hover,
   .allm-reply a:hover {
-    color: var(--allmi-link, #01a5a9) !important;
+    color: var(--allmi-link, ${DEFAULT_ACCENT}) !important;
     opacity: 0.8;
   }
 
@@ -185,7 +186,7 @@ const customCss = `
   }
 
   .allm-course-card:hover,.allm-course-row:hover{background-color:var(--allmi-hover-bg,#f3f4f6)!important}
-  .allm-course-card:focus-visible,.allm-course-row:focus-visible{outline:var(--allmi-focus-ring,2px solid var(--allmi-accent,#01a5a9))!important;outline-offset:2px}
+  .allm-course-card:focus-visible,.allm-course-row:focus-visible{outline:var(--allmi-focus-ring,2px solid var(--allmi-accent,${DEFAULT_ACCENT}))!important;outline-offset:2px}
   @keyframes allm-course-teaser-in{from{opacity:0}to{opacity:1}}
   .allm-course-teaser-in{animation:allm-course-teaser-in .24s ease-out}
   @media (prefers-reduced-motion: reduce){.allm-course-teaser-in{animation:none}}
@@ -236,14 +237,14 @@ const customCss = `
      Hover nach dem Tippen kleben (Fixliste 7.22-rc7 Nr. 34) */
   @media (hover: hover) {
     .allm-pill-accent:hover {
-      background-color: var(--allmi-accent, #01a5a9) !important;
-      border-color: var(--allmi-accent, #01a5a9) !important;
+      background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important;
+      border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important;
       color: ${ON_ACCENT_TEXT} !important;
     }
   }
   .allm-pill-accent:focus-visible {
-    background-color: var(--allmi-accent, #01a5a9) !important;
-    border-color: var(--allmi-accent, #01a5a9) !important;
+    background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important;
+    border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important;
     color: ${ON_ACCENT_TEXT} !important;
   }
   /* KI-Hinweis unter der Eingabe: eine Zeile, 11 px; in schmalen Fenstern
@@ -267,7 +268,7 @@ const customCss = `
     }
   }
   .allm-pill-accent:focus-visible {
-    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;
+    outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, ${DEFAULT_ACCENT})) !important;
     outline-offset: 2px;
   }
 

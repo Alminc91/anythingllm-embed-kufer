@@ -10,6 +10,7 @@ import {
   PRIVACY_TEXT,
   PRIVACY_TITLE,
   PRIVACY_TITLE_ID,
+  DEFAULT_ACCENT,
 } from "@/utils/theme";
 import {
   greetingText,
@@ -279,7 +280,7 @@ function PrivacyBubble({ settings, texts }) {
           rel="noopener noreferrer"
           style={{
             alignSelf: "flex-start",
-            color: "var(--allmi-link, #01a5a9)",
+            color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
             fontWeight: 500,
             textDecoration: "underline",
           }}

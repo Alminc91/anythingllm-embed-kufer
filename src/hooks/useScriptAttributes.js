@@ -14,7 +14,7 @@ import {
   layoutValidations,
   warnInvalidInlineEnums,
 } from "@/utils/layout";
-import { applyTheme, userTextColorFor } from "@/utils/theme";
+import { applyTheme, userTextColorFor, DEFAULT_ACCENT } from "@/utils/theme";
 import { syncI18nLanguage } from "@/i18n";
 import { widgetLanguage } from "@/utils/language";
 
@@ -157,16 +157,16 @@ export const DEFAULT_SETTINGS = {
   // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
   // Datenschutz-Blase (privacyText).
   greeting: null,
-  buttonColor: "#01a5a9", // must be hex color code
+  buttonColor: DEFAULT_ACCENT, // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
-  userBgColor: "#01a5a9", // user text bubble color
+  userBgColor: DEFAULT_ACCENT, // user text bubble color
   // Schrift auf der Kundenfarbe (Nutzerblasen und alle Flächen in
   // Kundenfarbe): Wahl im Design Center (Weiß oder Schwarz); null = Empfehlung
   // nach WCAG-Kontrast aus der Kundenfarbe (utils/theme.js userTextColorFor,
   // onAccentTextColor; KIE-565 Nachtrag)
   userTextColor: null,
   assistantBgColor: "#FFFFFF", // assistant text bubble color
-  linkColor: "#01a5a9", // color for links in assistant messages (Kufer accent)
+  linkColor: DEFAULT_ACCENT, // color for links in assistant messages (Kufer accent)
   headerBgColor: null, // header background color (default: white)
   headerTextColor: null, // header text color for chatbot name (default: gray-800)
   iconStyle: "rounded", // icon background style: "none", "rounded", or "circle"

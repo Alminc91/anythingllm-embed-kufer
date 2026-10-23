@@ -320,7 +320,7 @@ describe("N17: CSS-weite Schlüsselwörter in cssValue abgelehnt", () => {
     for (const v of ["#0b5f8a", "teal", "transparent", "rgb(1, 2, 3)"])
       expect(theme.cssValue(v), v).toBe(v);
     const css = theme.buildThemeCss({ buttonColor: "inherit" }, "light");
-    expect(css).toContain("--allmi-accent: #01a5a9 !important;");
+    expect(css).toContain(`--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`);
     expect(css).not.toMatch(/:\s*inherit\b/);
   });
 });

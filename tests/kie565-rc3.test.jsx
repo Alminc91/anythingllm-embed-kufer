@@ -56,6 +56,7 @@ import {
 } from "../src/utils/layout.js";
 import {
   DARK,
+  DEFAULT_ACCENT,
   INLINE_RADIUS,
   buildThemeCss,
   resolveThemeVars,
@@ -368,8 +369,14 @@ describe("Dunkel: Pillen im Panelton, Folgefragen lesbar, Logo-Kachel (Nr. 30, B
   it("Theme: dunkel Pillen transparent, Pillen-Text in Kundenfarbe ≥ 4,5:1, Logo gerundet", () => {
     const dark = resolveThemeVars({}, "dark");
     expect(dark["--allm-pill-bg"]).toBe("transparent");
-    // Standard #01a5a9 reicht auf dem dunklen Panel
-    expect(dark["--allm-pill-accent-text"]).toBe("var(--allmi-accent)");
+    // Standard Petrol reicht auf dem dunklen Panel nicht (3,71:1 zum
+    // Fenster, 3,36:1 zur Fläche), aufgehellt auf #2B9297 (5,00:1 bzw.
+    // 4,53:1); bis 23.10.2026 reichte das Türkis #01a5a9 unverändert
+    expect(dark["--allm-pill-accent-text"]).toBe("#2B9297");
+    for (const bg of [DARK.bg, DARK.surface])
+      expect(
+        contrast(dark["--allm-pill-accent-text"], bg),
+      ).toBeGreaterThanOrEqual(4.5);
     const slate = resolveThemeVars({ buttonColor: "#607D8B" }, "dark");
     expect(
       contrast(slate["--allm-pill-accent-text"], DARK.surface),
@@ -377,9 +384,10 @@ describe("Dunkel: Pillen im Panelton, Folgefragen lesbar, Logo-Kachel (Nr. 30, B
     expect(dark["--allm-logo-radius"]).toBe("22%");
     const light = resolveThemeVars({}, "light");
     expect(light["--allm-pill-bg"]).toBe("#FFFFFF");
-    expect(
-      contrast(light["--allm-pill-accent-text"], "#FFFFFF"),
-    ).toBeGreaterThanOrEqual(4.5);
+    // Standard Petrol reicht hell (4,99:1 auf Weiß): Text bleibt die
+    // Akzentfarbe
+    expect(light["--allm-pill-accent-text"]).toBe("var(--allmi-accent)");
+    expect(contrast(DEFAULT_ACCENT, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
     expect(light["--allm-logo-radius"]).toBe(null);
     expect(buildThemeCss({}, "light")).toContain(
       "--allmi-logo-radius: var(--allm-logo-radius);",

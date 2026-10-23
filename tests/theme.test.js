@@ -20,6 +20,7 @@ import {
 import {
   BAR_THEMES,
   DARK,
+  DEFAULT_ACCENT,
   HEADER_STYLE,
   MESSAGE_FONT_SIZE,
   THEME_VARIABLES,
@@ -140,8 +141,28 @@ describe("theme.test.js", () => {
     // ohne Server-Wert der Standard, nicht das Script-Attribut
     expect(
       (await finalVars({ userBgColor: "#111111" })).vars["--allm-user-bg"],
-    ).toBe("#01a5a9");
-    expect((await finalVars({})).vars["--allm-user-bg"]).toBe("#01a5a9");
+    ).toBe(DEFAULT_ACCENT);
+    expect((await finalVars({})).vars["--allm-user-bg"]).toBe(DEFAULT_ACCENT);
+  });
+
+  // Nutzerentscheidung 23.10.2026: Standard-Akzentfarbe Kufer-Petrol statt
+  // Würfel-Türkis #01a5a9. Literal geprüft, damit eine versehentliche
+  // Änderung der Konstante auffällt. Weiß darauf 4,99:1 (≥ 4,5:1), #222628
+  // nur 3,06:1, die Schrift nach Kontrast wird damit Weiß.
+  it("Standard-Akzentfarbe ist Kufer-Petrol #007c82, Schrift darauf Weiß", async () => {
+    expect(DEFAULT_ACCENT).toBe("#007c82");
+    for (const key of ["buttonColor", "userBgColor", "linkColor"])
+      expect(DEFAULT_SETTINGS[key], key).toBe("#007c82");
+    expect(contrast("#007c82", "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#007c82", "#FFFFFF")).toBeGreaterThan(
+      contrast("#007c82", "#222628"),
+    );
+    const { vars } = await finalVars({});
+    expect(vars["--allm-accent"]).toBe("#007c82");
+    expect(vars["--allm-user-bg"]).toBe("#007c82");
+    expect(vars["--allm-link"]).toBe("#007c82");
+    expect(vars["--allm-user-text"]).toBe("#FFFFFF");
+    expect(vars["--allm-on-accent"]).toBe("#FFFFFF");
   });
 
   it("theme-from-server-config: visual_config.theme = dark ohne data-theme", async () => {
@@ -434,7 +455,7 @@ describe("theme.test.js", () => {
       { ...DEFAULT_SETTINGS, buttonColor: "red;}</style><script>" },
       "light",
     );
-    expect(css).toContain("--allmi-accent: #01a5a9 !important;");
+    expect(css).toContain(`--allmi-accent: ${DEFAULT_ACCENT} !important;`);
     expect(css).not.toContain("<script>");
   });
 
@@ -468,7 +489,7 @@ describe("theme.test.js", () => {
     expect(s.noHeader).toBe("true");
     expect(s.inheritFont).toBe(true);
     expect(s.displayMode).toBe("bubble");
-    expect(s.buttonColor).toBe("#01a5a9");
+    expect(s.buttonColor).toBe(DEFAULT_ACCENT);
     expect(s.headerBgColor).toBe("#0b5f8a");
     expect(s.textSize).toBe("16");
     expect(s.theme).toBe("light");

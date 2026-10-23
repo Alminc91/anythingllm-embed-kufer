@@ -269,9 +269,11 @@ def case_bubble(browser, out, dark):
                    bg: getComputedStyle(b).backgroundColor, color: getComputedStyle(b).color };
         }""")
         tag = "dunkel" if dark else "hell"
+        # Standard Kufer-Petrol #007c82 seit 23.10.2026, Schrift darauf nach
+        # Kontrast Weiß (4,99:1); bis dahin Türkis #01a5a9 mit #222628
         record(f"A: Akzent-Standard gegen --allm-accent/--allm-on-accent der Seite ({tag})",
-               state["accent"] == "#01a5a9" and rgb(state["bg"]) == (1, 165, 169)
-               and state["onAccent"] == "#222628" and rgb(state["color"]) == (34, 38, 40), state)
+               state["accent"] == "#007c82" and rgb(state["bg"]) == (0, 124, 130)
+               and state["onAccent"] == "#FFFFFF" and rgb(state["color"]) == (255, 255, 255), state)
         page.evaluate("() => window.__q('#anything-llm-embed-chat-button').click()")
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(600)

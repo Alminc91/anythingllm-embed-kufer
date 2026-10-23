@@ -21,7 +21,12 @@ import { EmbedModeContext } from "@/hooks/useEmbedMode";
 import useMobileKeyboard from "@/hooks/useMobileKeyboard";
 import { embedderSettings } from "@/main";
 import { isCoarsePointer, isTouchDevice } from "@/utils/platform";
-import { BAR_THEMES, INLINE_RADIUS_VARS, ON_ACCENT_TEXT } from "@/utils/theme";
+import {
+  BAR_THEMES,
+  INLINE_RADIUS_VARS,
+  ON_ACCENT_TEXT,
+  DEFAULT_ACCENT,
+} from "@/utils/theme";
 import { PILL_CLASS } from "@/components/ChatWindow/ChatContainer/ChatHistory/Pill";
 import {
   DEFAULT_INLINE_COLLAPSED_TEXT,
@@ -728,7 +733,7 @@ const BAR_STYLE = {
 // Akzent der Leiste (Icon-Kreis, Absende-Knopf): Akzentfarbe aus dem Design
 // Center (--allmi-accent), Fallback buttonColor bzw. der Kufer-Standard.
 function barAccent(settings) {
-  return `var(--allmi-accent, ${settings.buttonColor || "#01a5a9"})`;
+  return `var(--allmi-accent, ${settings.buttonColor || DEFAULT_ACCENT})`;
 }
 
 // Unsichtbares Hilfsfeld fürs erste Öffnen des Overlays: existiert das echte
@@ -1472,7 +1477,11 @@ export default function InlineChat({
   const rootPagePos = () => {
     const r = rootRef.current?.getBoundingClientRect();
     if (!r) return null;
-    return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width };
+    return {
+      x: r.left + window.scrollX,
+      y: r.top + window.scrollY,
+      w: r.width,
+    };
   };
   // Steht die Inline-Fläche noch dort, wo sie am Ende des Aufklappens stand
   // (± 1 px, gleiche Breite)? Ohne Bezug (Zuklappen mitten im Aufklappen):
@@ -1504,7 +1513,13 @@ export default function InlineChat({
       if (pill) Object.assign(g, measureBar(pill));
       else if (root) {
         const r = root.getBoundingClientRect();
-        Object.assign(g, { x: r.left, y: r.top, w: r.width, h: g.barH, r: g.barR });
+        Object.assign(g, {
+          x: r.left,
+          y: r.top,
+          w: r.width,
+          h: g.barH,
+          r: g.barR,
+        });
       }
     } finally {
       if (signal) mountTarget.setAttribute(EXPANDED_ATTR, "true");
@@ -1988,10 +2003,10 @@ const CHIP_STYLE = {
   maxWidth: "100%",
   margin: 0,
   padding: "6px 14px",
-  border: "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
+  border: `1px solid var(--allmi-pill-border, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
   borderRadius: "var(--allmi-bar-radius, 999px)",
   backgroundColor: "var(--allmi-chip-bg, #FFFFFF)",
-  color: "var(--allmi-pill-accent-text, var(--allmi-accent, #01a5a9))",
+  color: `var(--allmi-pill-accent-text, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
   lineHeight: 1.3,
   textAlign: "center",
   overflowWrap: "anywhere",

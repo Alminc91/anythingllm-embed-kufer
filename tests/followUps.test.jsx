@@ -512,10 +512,10 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     );
     // Hover nur mit echtem Zeiger (Fixliste 7.22-rc7 Nr. 34), Fokus immer
     expect(css).toContain(
-      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; } }",
+      "@media (hover: hover) { .allm-pill-accent:hover { background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; color: ${ON_ACCENT_TEXT} !important; } }",
     );
     expect(css).toContain(
-      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, #01a5a9) !important; border-color: var(--allmi-accent, #01a5a9) !important; color: ${ON_ACCENT_TEXT} !important; }",
+      ".allm-pill-accent:focus-visible { background-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; border-color: var(--allmi-accent, ${DEFAULT_ACCENT}) !important; color: ${ON_ACCENT_TEXT} !important; }",
     );
     // Textfarbe aus utils/theme.js (ON_ACCENT_TEXT = --allm-on-accent,
     // ohne Variable weiß), nicht fest
@@ -524,11 +524,17 @@ describe("ChatHistory: Pillen nur unter der letzten, fertigen Antwort (AK-2, NAK
     expect(css).toMatch(
       /import \{ ON_ACCENT_TEXT, THEME_STYLE_ID,[^}]*\} from "\.\/utils\/theme\.js";/,
     );
+    // Rückfall der Akzentfarbe aus der Konstante (Kufer-Petrol, 23.10.2026),
+    // im Quelltext als ${DEFAULT_ACCENT} im Template-String
+    expect(css).toMatch(
+      /import \{[^}]*\bDEFAULT_ACCENT\b[^}]*\} from "(?:@\/utils\/theme|\.\/utils\/theme\.js)";/,
+    );
+    expect(css).not.toContain("#01a5a9");
     expect(css).toMatch(
       /\.allm-inline-chip\.allm-pill-accent \{ transition: background-color var\(--allmi-transition, 200ms\)[^}]*color var\(--allmi-transition, 200ms\)/,
     );
     expect(css).toContain(
-      ".allm-pill-accent:focus-visible { outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, #01a5a9)) !important;",
+      ".allm-pill-accent:focus-visible { outline: var(--allmi-focus-ring, 2px solid var(--allmi-accent, ${DEFAULT_ACCENT})) !important;",
     );
   });
 

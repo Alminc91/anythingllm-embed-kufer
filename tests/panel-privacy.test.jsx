@@ -42,6 +42,7 @@ import {
 import * as layout from "../src/utils/layout.js";
 import { _resetPrivacyMemory, privacyAckKey } from "../src/utils/privacy.js";
 import {
+  DEFAULT_ACCENT,
   THEME_VARIABLES,
   buildThemeCss,
   resolveThemeVars,
@@ -500,9 +501,10 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     const pills = $$("#anything-llm-suggestion-pills button");
     expect(pills.map((b) => b.textContent)).toEqual(MSGS);
     expect($$(".msg-suggestion")).toHaveLength(0);
-    // KIE-565 Nachtrag Punkt 4: Rand in Kundenfarbe wie die Folgefragen
+    // KIE-565 Nachtrag Punkt 4: Rand in Kundenfarbe wie die Folgefragen;
+    // ohne buttonColor der Kufer-Standard
     expect(pills[0].style.border).toBe(
-      "1px solid var(--allmi-pill-border, var(--allmi-accent, #01a5a9))",
+      `1px solid var(--allmi-pill-border, var(--allmi-accent, ${DEFAULT_ACCENT}))`,
     );
     expect(pills[0].style.borderRadius).toBe("var(--allmi-bar-radius, 999px)");
     expect($("#anything-llm-suggestion-pills").style.flexWrap).toBe("wrap");

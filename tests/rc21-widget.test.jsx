@@ -82,7 +82,8 @@ const DC_KEYS = [
   ["userBgColor", "user-bg"],
   ["linkColor", "link"],
 ];
-const STANDARD = "#01a5a9";
+// Kufer-Standard (Petrol seit 23.10.2026, Literal in theme.test.js)
+const STANDARD = theme.DEFAULT_ACCENT;
 // Wert in der dc-Variable (hell), sonst null
 function dcValue(key, name, value) {
   const css = theme.buildThemeCss({ [key]: value }, "light");

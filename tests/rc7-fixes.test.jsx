@@ -158,9 +158,14 @@ describe("E1: Schwarz ist #222628, Empfehlung rechnet mit der gezeigten Farbe", 
     }
     expect(recommendedTextColor("#767676")).toBe("#FFFFFF");
     expect(recommendedTextColor("#01a5a9")).toBe("#222628");
-    // Widget zeigt ohne Wert dieselbe Farbe, die das Design Center speichert
+    // Widget zeigt ohne Wert dieselbe Farbe, die das Design Center speichert:
+    // Empfehlung zum Standard, beim Petrol Weiß (4,99:1 statt 3,06:1 mit
+    // #222628; bis 23.10.2026 beim Türkis #222628)
     expect(theme.resolveThemeVars({}, "light")["--allm-on-accent"]).toBe(
-      "#222628",
+      recommendedTextColor(theme.DEFAULT_ACCENT),
+    );
+    expect(theme.resolveThemeVars({}, "light")["--allm-on-accent"]).toBe(
+      "#FFFFFF",
     );
     // Pillen-Text unverändert (Abdunkeln weiter Richtung reines Schwarz),
     // gemessene Werte aus der Browser-Abnahme rc6 (Sonnet)

@@ -25,7 +25,8 @@ import { pathToFileURL } from "node:url";
 import * as theme from "../src/utils/theme.js";
 import * as contrast from "../src/utils/contrast.js";
 
-const STANDARD = "#01a5a9";
+// Kufer-Standard (Petrol seit 23.10.2026, Literal in theme.test.js)
+const STANDARD = theme.DEFAULT_ACCENT;
 // Werte mit Unicode-Zeichen lesbar in der Meldung (U+00A0 statt Leerzeichen)
 const show = (value) =>
   value.replace(
@@ -139,18 +140,40 @@ describe("E41: dc-Variablen nehmen genau, was parseColor liest", () => {
       expect(colorVars(value, "light")["--allm-accent"]).toBe(STANDARD);
     });
 
-  it("W100: hsl() ohne gewählte Schrift ergibt nicht mehr Weiß auf der Akzentfarbe", () => {
+  it("W100: hsl() ohne gewählte Schrift ergibt die Schrift nach Kontrast zum Standard, nicht mehr Weiß auf der hsl()-Farbe", () => {
     // Beispiel aus dem Bericht: hsl(180, 100%, 33%) ist #00a8a8; rc21 zeigte
-    // Weiß (2,93:1) und die Pillenschrift ungeprüft in der Akzentfarbe
+    // Weiß (2,93:1) und die Pillenschrift ungeprüft in der Akzentfarbe.
+    // Seit E41 gilt der Standard; beim Petrol ist die Empfehlung Weiß
+    // (4,99:1), die Pillenschrift bleibt die Akzentfarbe (4,99:1 auf Weiß).
+    // Bis 23.10.2026 beim Türkis: #222628 und abgedunkelt #018487.
+    const shown = (vars) =>
+      vars["--allm-pill-accent-text"] === "var(--allmi-accent)"
+        ? vars["--allm-accent"]
+        : vars["--allm-pill-accent-text"];
     const v = theme.resolveThemeVars({ buttonColor: "hsl(180, 100%, 33%)" });
     expect(v["--allm-accent"]).toBe(STANDARD);
-    expect(v["--allm-on-accent"]).toBe("#222628");
-    expect(v["--allm-user-text"]).toBe("#222628");
-    expect(v["--allm-pill-accent-text"]).toBe("#018487");
-    // Gelb: rc21 Weiß auf Gelb (1,07:1)
+    expect(v["--allm-on-accent"]).toBe("#FFFFFF");
+    expect(v["--allm-user-text"]).toBe("#FFFFFF");
+    expect(v["--allm-pill-accent-text"]).toBe("var(--allmi-accent)");
+    expect(
+      contrast.contrastRatio(v["--allm-on-accent"], v["--allm-accent"]),
+    ).toBeGreaterThanOrEqual(contrast.MIN_TEXT_CONTRAST);
+    expect(
+      contrast.contrastRatio(shown(v), "#FFFFFF"),
+    ).toBeGreaterThanOrEqual(contrast.MIN_TEXT_CONTRAST);
+    // Gelb: rc21 Weiß auf Gelb (1,07:1) und gelbe Pillenschrift; jetzt der
+    // Standard, Schrift und Pillenschrift lesbar
     const y = theme.resolveThemeVars({ buttonColor: "hsl(60, 100%, 50%)" });
-    expect(y["--allm-on-accent"]).toBe("#222628");
-    expect(y["--allm-pill-accent-text"]).not.toBe("var(--allmi-accent)");
+    expect(y["--allm-accent"]).toBe(STANDARD);
+    expect(y["--allm-on-accent"]).toBe(
+      contrast.recommendedTextColor(STANDARD),
+    );
+    expect(
+      contrast.contrastRatio(y["--allm-on-accent"], y["--allm-accent"]),
+    ).toBeGreaterThanOrEqual(contrast.MIN_TEXT_CONTRAST);
+    expect(
+      contrast.contrastRatio(shown(y), "#FFFFFF"),
+    ).toBeGreaterThanOrEqual(contrast.MIN_TEXT_CONTRAST);
   });
 
   it("Hex und rgb() wirken, Schrift auf der Akzentfarbe nach berechnetem Kontrast", () => {

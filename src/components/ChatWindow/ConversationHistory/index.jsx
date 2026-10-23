@@ -12,6 +12,7 @@ import {
   HEADER_STYLE,
   accentTintFallback,
   headerButtonClass,
+  DEFAULT_ACCENT,
 } from "@/utils/theme";
 import { uiTexts } from "@/utils/layout";
 
@@ -53,7 +54,7 @@ export default function ConversationHistory({
 }) {
   const [conversations, setConversations] = useState(null); // null = lädt
   // aus dem settings-Prop lesen (eine Quelle), nicht aus dem Modul-Singleton.
-  const accent = settings?.buttonColor || "#01a5a9";
+  const accent = settings?.buttonColor || DEFAULT_ACCENT;
 
   useEffect(() => {
     let cancelled = false;
