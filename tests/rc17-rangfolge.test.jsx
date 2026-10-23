@@ -483,8 +483,17 @@ describeFork(
       ]);
       expect(sent.has("buttonColor")).toBe(true);
       expect(sent.has("displayMode")).toBe(true);
+      // Datenschutz-Hinweis (7.23, Vertrag datenschutz-fusszeile Punkt 6):
+      // der Server liefert ihn fest als "link" (EMBED_FIXED_STANDARDS), im
+      // Widget bleibt data-privacy-notice wie bisher ohne Wirkung (Gruppe A,
+      // DC_COVERED, Warnzeile): kein Standard, den ein Skript verfeinert
+      const fixedGroupA = new Set(["privacyNotice"]);
       const { DC_COVERED } = scriptAttrs;
       for (const key of sent) {
+        if (fixedGroupA.has(key)) {
+          expect(DC_COVERED, `fest und Gruppe A ${key}`).toContain(key);
+          continue;
+        }
         if (fixed.has(key)) {
           expect(DC_COVERED, `fester Standard ${key}`).not.toContain(key);
           continue;
