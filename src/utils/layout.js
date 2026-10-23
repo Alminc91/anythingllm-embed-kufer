@@ -141,7 +141,9 @@ export const PANEL_TEXTS = {
     // live der Standard, wenn der Server keinen liefert (assistantSubtitleText)
     assistantName: "KI-Berater",
     assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
-    inputPlaceholder: "Ihre Frage eingeben",
+    // gleich wie die eingeklappte Inline-Leiste (Nutzer 23.10.2026, vorher
+    // „Ihre Frage eingeben“): eingeklappt und aufgeklappt derselbe Text
+    inputPlaceholder: "Stellen Sie hier Ihre Frage …",
     followUps: "Vorschläge für Ihre nächste Frage",
     // Platzhalter an der Teaser-Stelle, solange der KI-Teaser erwartet wird
     teaserPending: "KI-Beschreibung wird erstellt …",
@@ -168,7 +170,7 @@ export const PANEL_TEXTS = {
     aiDisclaimer: "Our AI can make mistakes. Please double-check the answers.",
     assistantName: "AI Advisor",
     assistantSubtitle: "Online advisor powered by artificial intelligence",
-    inputPlaceholder: "Enter your question",
+    inputPlaceholder: "Ask your question here …",
     followUps: "Suggestions for your next question",
     teaserPending: "AI description is being written …",
     inlineBarPlaceholder: "Ask your question here …",

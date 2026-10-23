@@ -280,7 +280,7 @@ export const DEFAULT_SETTINGS = {
   noHeader: null, // If set, hide the header above the chatbox
   language: "de", // language of chat interface
   // Platzhalter im Eingabefeld; null = Standard der Sprache
-  // (PANEL_TEXTS.inputPlaceholder „Ihre Frage eingeben“)
+  // (PANEL_TEXTS.inputPlaceholder „Stellen Sie hier Ihre Frage …“, seit 7.22.2)
   sendMessageText: null,
   resetChatText: "Chat zur&uuml;cksetzen", // override text for reset chat button
   // Menütexte (Burger-Menü): null = Text in der Sprache des Widgets

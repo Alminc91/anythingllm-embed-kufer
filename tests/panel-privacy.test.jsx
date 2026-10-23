@@ -119,7 +119,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.disclaimer).toBe("footer");
     expect(s.disclaimerText).toBe(null);
     expect(s.followUps).toBe("pills");
-    expect(s.sendMessageText).toBe(null); // Standard „Ihre Frage eingeben“
+    expect(s.sendMessageText).toBe(null); // Standard „Stellen Sie hier Ihre Frage …“
     expect(s.assistantName).toBe("KI-Berater");
     expect(s.brandText).toBe("KI-Berater");
   });
@@ -1593,21 +1593,30 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
       layout.DEFAULT_INLINE_SEND_TEXT,
     ])
       expect(t).not.toMatch(/[–—]/);
-    expect(PANEL_TEXTS.de.inputPlaceholder).toBe("Ihre Frage eingeben");
+    // Platzhalter des Fensters = Text der eingeklappten Leiste (7.22.2)
+    expect(PANEL_TEXTS.de.inputPlaceholder).toBe(
+      "Stellen Sie hier Ihre Frage …",
+    );
+    expect(PANEL_TEXTS.de.inputPlaceholder).toBe(
+      PANEL_TEXTS.de.inlineBarPlaceholder,
+    );
+    expect(PANEL_TEXTS.en.inputPlaceholder).toBe(
+      PANEL_TEXTS.en.inlineBarPlaceholder,
+    );
     expect(PANEL_TEXTS.de.assistantName).toBe("KI-Berater");
     expect(PANEL_TEXTS.de.assistantSubtitle).toBe(
       "Online-Berater mit künstlicher Intelligenz",
     );
   });
 
-  it("Platzhalter im Eingabefeld: Standard „Ihre Frage eingeben“ (en „Enter your question“), eigener Text gewinnt", () => {
+  it("Platzhalter im Eingabefeld: Standard „Stellen Sie hier Ihre Frage …“ (en „Ask your question here …“) wie die Leiste, eigener Text gewinnt", () => {
     render(<ChatContainer {...props} settings={base} />);
     expect($("#message-input").getAttribute("placeholder")).toBe(
-      "Ihre Frage eingeben",
+      "Stellen Sie hier Ihre Frage …",
     );
     render(<ChatContainer {...props} settings={{ ...base, language: "en" }} />);
     expect($("#message-input").getAttribute("placeholder")).toBe(
-      "Enter your question",
+      "Ask your question here …",
     );
     render(
       <ChatContainer
