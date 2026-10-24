@@ -113,6 +113,108 @@ const greeting = () => $("#anything-llm-greeting-bubble");
 const warnings = () => console.warn.mock.calls.map((c) => String(c[0]));
 
 // ---------------------------------------------------------------------------
+describe("Vertrag 3: nur der Server-Wert true zählt (Gruppe A)", () => {
+  it("privacyStartBubble gehört zu Gruppe A (DC_COVERED)", () => {
+    expect(scriptAttrs.DC_COVERED).toContain("privacyStartBubble");
+  });
+
+  it("Server liefert true: Blase an; ohne Wert und ohne Antwort: aus", async () => {
+    const on = await load({}, ON);
+    expect(on.privacyStartBubble).toBe(true);
+    render(<ChatHistory settings={on} history={[]} />);
+    expect(bubble()).not.toBe(null);
+    const off = await load({}, {});
+    expect(off.privacyStartBubble).not.toBe(true);
+    rerender(<ChatHistory settings={off} history={[]} />);
+    expect(greeting()).not.toBe(null);
+    expect(bubble()).toBe(null);
+    const offline = await loadEmbedSettings(
+      { ...BASE },
+      vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    );
+    expect(offline.privacyStartBubble).not.toBe(true);
+    rerender(<ChatHistory settings={offline} history={[]} />);
+    expect(bubble()).toBe(null);
+  });
+
+  // je Fall mit Gegenprobe: genau true schaltet die Blase ein
+  it.each([false, "true", "TRUE", 1, "1", "yes", "on", "", null, {}, [true]])(
+    "Server liefert %j (nicht genau true): Blase aus",
+    async (value) => {
+      render(<ChatHistory settings={await load({}, ON)} history={[]} />);
+      expect(bubble(), "Gegenprobe true").not.toBe(null);
+      const s = await load({}, { privacyStartBubble: value });
+      expect(s.privacyStartBubble).not.toBe(true);
+      rerender(<ChatHistory settings={s} history={[]} />);
+      expect(greeting()).not.toBe(null);
+      expect(bubble()).toBe(null);
+    },
+  );
+
+  it("Validator: nur genau true bleibt, alles andere wird verworfen", () => {
+    const v = layout.layoutValidations.privacyStartBubble;
+    expect(typeof v).toBe("function");
+    expect(v(true)).toBe(true);
+    for (const x of [false, "true", 1, "on", "", null, undefined, {}])
+      expect(v(x), JSON.stringify(x)).toBe(undefined);
+  });
+
+  it.each(["bubble", "none", "modal", "link"])(
+    "Altwert privacyNotice %j vom Server schaltet die Blase weder ein noch aus (D2)",
+    async (saved) => {
+      const s = await load({}, { privacyNotice: saved, defaultMessages: MSGS });
+      expect(s.privacyStartBubble).not.toBe(true);
+      expect(s.privacyNotice).toBe("link");
+      render(<ChatHistory settings={s} history={[]} />);
+      expect(bubble()).toBe(null);
+      rerender(<ChatHistory settings={s} history={HISTORY} />);
+      expect(bubble()).toBe(null);
+      // mit dem Schalter gilt die Blase, auch neben einem Altwert „none“
+      const on = await load({}, { ...ON, privacyNotice: saved });
+      rerender(<ChatHistory settings={on} history={[]} />);
+      expect(bubble()).not.toBe(null);
+    },
+  );
+
+  it("data-privacy-start-bubble am Skript wirkt nicht (Warnzeile), weder an noch aus", async () => {
+    for (const value of ["true", "", "on", "1"]) {
+      console.warn.mockClear();
+      const s = await load({ privacyStartBubble: value }, {});
+      expect(s.privacyStartBubble, value).not.toBe(true);
+      expect(
+        warnings().some((m) =>
+          m.includes("Einbau-Angabe data-privacy-start-bubble wirkt nicht"),
+        ),
+        value,
+      ).toBe(true);
+    }
+    // eine Skript-Angabe „aus“ schaltet die gespeicherte Blase nicht ab
+    for (const value of ["false", "off", "0"])
+      expect(
+        (await load({ privacyStartBubble: value }, ON)).privacyStartBubble,
+        value,
+      ).toBe(true);
+    // data-privacy-notice="bubble" am Skript schaltet sie auch nicht ein
+    const s = await load({ privacyNotice: "bubble" }, {});
+    render(<ChatHistory settings={s} history={[]} />);
+    expect(bubble()).toBe(null);
+  });
+
+  it("die Blase selbst prüft genau true (Werte, die nicht über loadEmbedSettings kamen)", () => {
+    for (const value of ["true", 1, "on", {}]) {
+      rerender(
+        <ChatHistory settings={{ privacyStartBubble: value }} history={[]} />,
+      );
+      expect(bubble(), JSON.stringify(value)).toBe(null);
+    }
+    rerender(<ChatHistory settings={ON} history={[]} />);
+    expect(bubble()).not.toBe(null);
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe("Vertrag 4 (D4): Blase wie die Begrüßung, Inhalt wie in 7.22.2 ohne KI-Punkt", () => {
   it("direkt unter der Begrüßungsblase in derselben Spalte, Optik wie die Begrüßung", async () => {
     const s = await load({}, ON);

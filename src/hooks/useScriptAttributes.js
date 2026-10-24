@@ -33,7 +33,9 @@ import { widgetLanguage } from "@/utils/language";
 //   Sponsor-Zeile): wirken immer.
 // - E24: Der KI-Hinweis (disclaimer, disclaimerText) ist auf keinem Weg
 //   abschaltbar oder änderbar (utils/layout.js LOCKED_STANDARDS), ebenso
-//   der Link „Datenschutz“ und die Begrüßung als Blase.
+//   der Link „Datenschutz“ und die Begrüßung als Blase. Die Datenschutz-Blase
+//   beim Start (privacyStartBubble, AK-12) kommt nur zusätzlich zum Link
+//   und nur aus dem Design Center (Gruppe A).
 export const DC_COVERED = [
   "displayMode", // Darstellung
   "theme", // Farbschema
@@ -54,6 +56,7 @@ export const DC_COVERED = [
   "greetingBubbleText",
   "greetingStyle", // Begrüßung (seit 7.23 immer als Blase, ohne Feld)
   "privacyNotice", // Datenschutz-Hinweis (seit 7.23 immer der Link)
+  "privacyStartBubble", // zusätzlich beim Start als Blase (AK-12)
   "privacyTitle",
   "privacyText",
   "privacyUrl",
@@ -260,7 +263,8 @@ export const DEFAULT_SETTINGS = {
   // Vorschläge als Pillen, Folgefragen als Pillen. Fest (utils/layout.js
   // LOCKED_STANDARDS): Begrüßung immer als Blase, KI-Hinweis unter der
   // Eingabe (E24), in derselben Zeile der Link „Datenschutz“ (privacyNotice
-  // immer "link"; keine Datenschutz-Blase beim Start).
+  // immer "link"; eine Datenschutz-Blase beim Start nur zusätzlich mit
+  // privacyStartBubble, unten).
   // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
   // Design Center per Logo gesetzt.
   suggestionStyle: "pills",
@@ -272,9 +276,15 @@ export const DEFAULT_SETTINGS = {
   assistantSubtitle: null,
   onlineDot: false,
   privacyNotice: "link",
-  // Datenschutz-Fenster: Überschrift (null oder "" = Standard der Sprache),
-  // freier Text (Zeilen mit „•“/„-“ = Punkte, sonst Absätze; null = Standard
-  // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
+  // Datenschutz zusätzlich beim Start als Blase unter der Begrüßung (AK-12,
+  // Design Center „Zusätzlich beim Start als Blase zeigen“): nur true vom
+  // Server schaltet sie ein (utils/layout.js layoutValidations), der Link
+  // „Datenschutz“ bleibt immer. data-privacy-start-bubble wirkt nicht.
+  privacyStartBubble: false,
+  // Datenschutz-Fenster und Blase beim Start: Überschrift (null oder "" =
+  // Standard der Sprache), freier Text (Zeilen mit „•“/„-“ = Punkte, sonst
+  // Absätze; null = Standard der Sprache, utils/layout.js PANEL_TEXTS), Link
+  // zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen
   privacyText: null, // max. 12 Zeilen à 500 Zeichen, 1000 Zeichen gesamt
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung

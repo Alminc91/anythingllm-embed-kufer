@@ -798,6 +798,11 @@ export const layoutValidations = {
   },
   onlineDot: bool,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
+  // Datenschutz zusätzlich beim Start als Blase (AK-12, Design Center
+  // „Zusätzlich beim Start als Blase zeigen“): nur genau true zählt, alles
+  // andere wird verworfen (der Server liefert den Schlüssel nur mit true;
+  // kein Wahrheitswert aus Text wie "true" oder "on", Gruppe A)
+  privacyStartBubble: (v) => (v === true ? true : undefined),
   privacyTitle: privacyTitleValue,
   privacyText: privacyTextValue,
   privacyUrl: safeUrl,
