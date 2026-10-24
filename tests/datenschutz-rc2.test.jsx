@@ -441,3 +441,44 @@ describe("W6 (R1-D2): Textbreite im Fenster bei „In der Seite“", () => {
     expect(column(d).style.maxWidth).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+describe("W7 (R1-D3): Begrüßung als Text in der normalen Schriftfarbe", () => {
+  const greetingText = () =>
+    [...container.querySelectorAll("p")].find((p) =>
+      p.textContent.startsWith("Hallo! Ich bin Ihr KI-Berater"),
+    );
+
+  it("data-greeting-style=text: normale Schriftfarbe, nicht die gedämpfte", () => {
+    renderWindow({ ...BASE, greetingStyle: "text" });
+    const p = greetingText();
+    expect(p).toBeDefined();
+    const all = `${p.getAttribute("class") || ""} ${p.getAttribute("style") || ""}`;
+    expect(all).not.toContain("text-muted");
+    expect(all).not.toContain("#94a3b8");
+    expect(p.style.color).toBe("var(--allmi-text, #222628)");
+  });
+
+  it("mindestens 4,5:1 zur Fläche des Fensters, hell und dunkel", () => {
+    // hell: --allmi-text ohne Standard, es gilt der Rückfall #222628 auf
+    // der Fläche #FFFFFF; dunkel: DARK.text auf DARK.surface
+    const surface = (mode) =>
+      theme.THEME_VARIABLES.find((v) => v.name === "surface")[mode];
+    expect(
+      theme.THEME_VARIABLES.find((v) => v.name === "text").light,
+    ).toBeNull();
+    expect(contrastRatio("#222628", surface("light"))).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    expect(
+      contrastRatio(theme.DARK.text, surface("dark")),
+    ).toBeGreaterThanOrEqual(4.5);
+    // zum Vergleich: die bisherige Farbe lag bei 2,56:1
+    expect(contrastRatio("#94a3b8", "#FFFFFF")).toBeLessThan(3);
+  });
+
+  it("Begrüßungsblase (Standard) unverändert", () => {
+    renderWindow({ ...BASE, greetingStyle: "bubble" });
+    expect($("#anything-llm-greeting-bubble")).not.toBeNull();
+  });
+});

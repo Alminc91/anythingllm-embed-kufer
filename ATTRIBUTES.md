@@ -94,7 +94,7 @@ Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite)
 | `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
 | `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
 | `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
-| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`); seit 7.23 wirkt `text` immer (bis 7.22.2 nur bei abgeschaltetem Datenschutz-Hinweis, E26) |
+| `data-greeting-style` | `bubble` | Begrüßung als Blase (`bubble`) oder als zentrierter Text (`text`, normale Schriftfarbe); seit 7.23 wirkt `text` immer (bis 7.22.2 nur bei abgeschaltetem Datenschutz-Hinweis, E26) |
 | `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
 | `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
 | `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |

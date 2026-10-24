@@ -38,6 +38,8 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
     (linksbündig, wie die Vorschau im Design Center; gemessen rund 80 bis
     90 Zeichen je Zeile statt bis 150), Kopfzeile, Button-Zeile und
     Textbereich über die ganze Breite; Chatfenster und mobil ohne Grenze
+  - W7 (R1-D3): Begrüßung als Text (data-greeting-style="text") in der
+    normalen Schriftfarbe, mindestens 4,5:1 zur Fläche, hell und dunkel
 
 Aufruf (aus dem Repo, npm run build vorher):
 
@@ -606,12 +608,54 @@ def check_w6(browser, base_url):
                     ctx.close()
 
 
+GREETING_JS = r"""
+() => {
+  const p = window.__q('#anything-llm-greeting-text')
+    || [...window.__allmShadow.querySelectorAll('p')].find((e) => /^(Hallo|Hello)/.test(e.textContent.trim()));
+  if (!p) return null;
+  // Fläche: erster Vorfahr mit deckender Hintergrundfarbe
+  let e = p, bg = 'rgba(0, 0, 0, 0)';
+  while (e && e.nodeType === 1) {
+    const c = getComputedStyle(e).backgroundColor;
+    if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; }
+    e = e.parentElement || (e.getRootNode() && e.getRootNode().host);
+  }
+  return { text: p.textContent.trim().slice(0, 40), color: getComputedStyle(p).color, bg,
+    size: getComputedStyle(p).fontSize };
+}
+"""
+
+
+def check_w7(browser, base_url):
+    # W7 (R1-D3): Begrüßung als Text (data-greeting-style="text") in der
+    # normalen Schriftfarbe, mindestens 4,5:1 hell und dunkel
+    for display, width, height in (("bubble", 1280, 800), ("bubble", 1440, 900), ("inline", 1440, 900),
+                                   ("inline", 1920, 1080), ("bubble", 390, 800)):
+        for theme in ("light", "dark"):
+            for lang in ("de", "en"):
+                attrs_ctx = tv.BASE_ATTRS
+                tv.BASE_ATTRS = {**attrs_ctx, "greeting-style": "text"}
+                try:
+                    ctx, page = open_view(browser, base_url, display, width, height, theme, lang)
+                finally:
+                    tv.BASE_ATTRS = attrs_ctx
+                try:
+                    g = page.evaluate(GREETING_JS)
+                    page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-w7-{lang}-{display}-{width}-{theme}.png"))
+                    ratio = contrast_of(g["color"], g["bg"]) if g else 0
+                    record(f"W7 Begrüßung als Text mindestens 4,5:1 ({lang} {display} {width}, {theme})",
+                           bool(g) and ratio >= 4.5, {**(g or {}), "kontrast": ratio})
+                finally:
+                    ctx.close()
+
+
 # Prüfungen der Korrekturen nach rc1 (Fixliste), einzeln wählbar mit --only
 RC2_CHECKS = {
     "w2": check_rc2,
     "w4": check_w4,
     "w5": check_w5,
     "w6": check_w6,
+    "w7": check_w7,
 }
 
 

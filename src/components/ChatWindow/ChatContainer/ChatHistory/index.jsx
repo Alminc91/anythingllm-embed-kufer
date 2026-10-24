@@ -262,9 +262,15 @@ export default function ChatHistory({
     return (
       <div className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
         <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
-          <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
-            {/* Begrüßung wie in der Blase: gespeichert (gekürzt) oder
-                Standard der Sprache (Fixliste 7.22-rc18 W61) */}
+          {/* Begrüßung wie in der Blase: gespeichert (gekürzt) oder
+              Standard der Sprache (Fixliste 7.22-rc18 W61), in der normalen
+              Schriftfarbe des Farbschemas (R1-D3: die gedämpfte Farbe hatte
+              hell 2,56:1; normal hell 15,3:1, dunkel wie der Verlauf) */}
+          <p
+            id="anything-llm-greeting-text"
+            className="allm-text-sm allm-font-sans allm-py-4 allm-text-center"
+            style={{ color: "var(--allmi-text, #222628)" }}
+          >
             {greetingText(settings)}
           </p>
           {suggestions}
