@@ -478,3 +478,31 @@ describe("Vertrag 5 (D1): Link „Datenschutz“ in der Fußzeile bleibt, Fenste
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+describe("Vertrag 7: Doku nennt den Schlüssel", () => {
+  const ROOT = resolve(__dirname, "..");
+  const read = (file) => readFileSync(resolve(ROOT, file), "utf8");
+
+  it("ATTRIBUTES.md: data-privacy-start-bubble in der Tabelle der Gruppe A", () => {
+    const lines = read("ATTRIBUTES.md").split("\n");
+    const from = lines.findIndex((l) =>
+      l.startsWith("## Vom Design Center abgedeckt"),
+    );
+    const to = lines.findIndex(
+      (l, i) => i > from && l.startsWith("Ebenfalls ohne Wirkung"),
+    );
+    const rows = lines.slice(from, to).filter((l) => l.startsWith("| `data-"));
+    const row = rows.find((l) => l.includes("`data-privacy-start-bubble`"));
+    expect(row, "Zeile fehlt").toBeTruthy();
+    expect(row).toContain("Zusätzlich beim Start als Blase zeigen");
+  });
+
+  it("README: privacyStartBubble (nur true vom Server) und die Einbau-Angabe ohne Wirkung", () => {
+    const readme = read("README.md");
+    expect(readme).toContain("privacyStartBubble");
+    expect(readme).toMatch(
+      /`data-privacy-start-bubble` - \*\*Ohne Wirkung\*\*/,
+    );
+  });
+});
