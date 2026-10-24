@@ -15,6 +15,10 @@ import { resolve } from "node:path";
 //   --rc2-only), eine Prüfung ohne Ergebnis und eine leere oder kaputte
 //   W6-Messung sind Fehler. Geprüft ohne Browser über python3 (Planung,
 //   Auswertung und Zähler des Skripts).
+// W17 (NW-6, NW-7, NW-8): Kommentare nach dem Stand des Codes: die
+//   Merge-Schleife nennt nur Schlüssel aus EMPTY_MEANS_NONE, BUBBLE_STYLE
+//   nennt das Fenster mit festen Farben (R1-D1), die Mindestbreite verspricht
+//   keine Wirkung über ein älteres Design Center.
 // Neue Exporte über Namensraum-Importe: am alten Stand scheitert der
 // einzelne Test an seiner Prüfung, nicht die Datei am Import.
 
@@ -351,5 +355,56 @@ describe.skipIf(!PY_OK)("W16 (NW-3, NW-4): datenschutz_fenster.py", () => {
 
   it("README: --only nennt, dass es --rc2-only setzt", () => {
     expect(read("README.md")).toMatch(/`--only[^`]*`[^.]*setzt `--rc2-only`/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W17: Kommentare folgen dem Code
+// Kommentarzeilen direkt über der ersten Zeile, die marker enthält
+function commentAbove(src, marker) {
+  const lines = src.split("\n");
+  const at = lines.findIndex((l) => l.includes(marker));
+  expect(at, marker).toBeGreaterThan(0);
+  const out = [];
+  for (let i = at - 1; i >= 0 && lines[i].trim().startsWith("//"); i--)
+    out.unshift(lines[i]);
+  return out.join("\n");
+}
+
+describe("W17: Kommentare nach dem Stand des Codes", () => {
+  it("NW-6: die Merge-Schleife nennt als Ausnahme nur Schlüssel aus EMPTY_MEANS_NONE", () => {
+    const src = read("src/hooks/useScriptAttributes.js");
+    const list = src.match(/const EMPTY_MEANS_NONE = \[([^\]]*)\]/);
+    expect(list).toBeTruthy();
+    const allowed = [...list[1].matchAll(/"(\w+)"/g)].map((m) => m[1]);
+    expect(allowed).toEqual(["assistantSubtitle"]);
+    const comment = commentAbove(src, "const mergedServerConfig = {}");
+    expect(comment).toContain("EMPTY_MEANS_NONE");
+    const named = Object.keys(scriptAttrs.DEFAULT_SETTINGS).filter((k) =>
+      new RegExp(`\\b${k}\\b`).test(comment),
+    );
+    expect(named.filter((k) => !allowed.includes(k))).toEqual([]);
+  });
+
+  it("NW-7: BUBBLE_STYLE koppelt das Datenschutz-Fenster nicht an die Blase (R1-D1)", () => {
+    const src = read(
+      "src/components/ChatWindow/ChatContainer/ChatHistory/PanelWelcome/index.jsx",
+    );
+    const comment = commentAbove(src, "const BUBBLE_STYLE = {");
+    expect(comment).not.toMatch(/Datenschutz-Fenster nutzt dieselbe/);
+    expect(comment).toContain("PRIVACY_DIALOG_COLORS");
+    expect(theme.PRIVACY_DIALOG_COLORS).toBeTruthy();
+  });
+
+  it("NW-8: Mindestbreite ohne Versprechen einer Fenstergröße aus einem älteren Design Center", () => {
+    const comment = commentAbove(
+      read("src/utils/layout.js"),
+      "export const WINDOW_MIN_WIDTH_PX",
+    );
+    expect(comment).not.toMatch(/älteren Design Center/);
+    expect(comment).toContain("IGNORED_HINTS");
+    expect(read("tests/visual/fensterbreite.py")).not.toMatch(
+      /älteren Design Center/,
+    );
   });
 });

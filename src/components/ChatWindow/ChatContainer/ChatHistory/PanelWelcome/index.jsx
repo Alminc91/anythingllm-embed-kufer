@@ -112,8 +112,9 @@ export function PanelGreeting({ settings = {} }) {
 // Optik der Begrüßungsblase wie die Antwortblasen: Fläche und Schrift folgen
 // data-assistant-bg-color und den Variablen der Seite (--allm-assistant-bg,
 // --allm-assistant-text); Innenabstand, Schriftgröße und Zeilenhöhe wie 7.22.2
-// (Nutzerentscheidung 23.10.2026). Das Datenschutz-Fenster nutzt dieselbe
-// Fläche und Schrift (D2).
+// (Nutzerentscheidung 23.10.2026). Das Datenschutz-Fenster folgt der Blase
+// nicht: es hat feste Farben je Farbschema und fest 14 px (R1-D1, ersetzt
+// D2; utils/theme.js PRIVACY_DIALOG_COLORS).
 const BUBBLE_STYLE = {
   boxSizing: "border-box",
   maxWidth: "100%",

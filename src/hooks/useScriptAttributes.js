@@ -182,13 +182,15 @@ export const DEFAULT_SETTINGS = {
   assistantName: null, // Name über den Antworten; null wie brandText
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
-  // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
-  // (Server-Config). null = Standardgröße (40 % / 25 % Breite, mindestens
-  // 360 px, 77 % Höhe per Klassen, utils/layout.js BUBBLE_WINDOW_CLASSES).
-  // Früher standen hier "80%"/"25%", die aber nie ausgewertet
-  // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
-  // Bestandskunden. data-window-width/-height am Script werden verworfen
-  // (IGNORED_HINTS, mit Warnung).
+  // Fenstergröße der Blase (Tablet/Desktop): null = Standardgröße (40 % /
+  // 25 % Breite, mindestens 360 px, 77 % Höhe per Klassen, utils/layout.js
+  // BUBBLE_WINDOW_CLASSES). Ein Wert wirkt nur aus der Konfiguration vom
+  // Server, und die enthält ihn seit dem vereinfachten Design Center nicht
+  // mehr (nur Testseiten mit eigener Konfiguration, utils/layout.js
+  // WINDOW_MIN_WIDTH_PX). data-window-width/-height am Script werden
+  // verworfen (IGNORED_HINTS, mit Warnung). Früher standen hier
+  // "80%"/"25%", die aber nie ausgewertet wurden; NICHT wieder vorbelegen,
+  // sonst ändert sich das Aussehen aller Bestandskunden.
   windowHeight: null, // z. B. "600px" | "80%" | "70vh"
   windowWidth: null, // z. B. "420px" | "25%" | "30vw"
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
@@ -346,8 +348,9 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
     console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
   }
 
-  // Nur nicht leere Server-Werte übernehmen (Ausnahme privacyTitle und
-  // assistantSubtitle: "" = im Design Center bewusst geleert)
+  // Nur nicht leere Server-Werte übernehmen; Ausnahme EMPTY_MEANS_NONE (dort
+  // ist "" eine Angabe, siehe oben). Jeder andere leere Wert gilt als nicht
+  // gesetzt, auch eine leere Überschrift des Datenschutz-Fensters (W10).
   const mergedServerConfig = {};
   for (const [key, value] of Object.entries(serverConfig || {})) {
     if (value === "" && EMPTY_MEANS_NONE.includes(key))

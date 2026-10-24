@@ -12,8 +12,10 @@ scrollHeight == clientHeight), auch mit dem Mikrofon-Button daneben (der
 Server meldet Spracheingabe, wie auf den Kundeninstanzen; ohne ihn ist das
 Feld 24 px breiter), die Fußzeile bleibt eine Zeile
 (disclaimer_measure.verdict, AK-8). Zusätzlich: eine Fenstergröße unter
-360 px aus einem älteren Design Center (visual_config.windowWidth) wird auf
-360 px angehoben (layout.js WINDOW_MIN_WIDTH_PX).
+360 px in der Konfiguration der Testseite (windowWidth; der Server liefert
+sie seit dem vereinfachten Design Center nicht mehr aus, n3_header.py nutzt
+den Weg für schmale Fenster) wird auf 360 px angehoben (layout.js
+WINDOW_MIN_WIDTH_PX).
 
 Gemessen mit gebautem dist und Playwright (lokale Testseite, Server
 gemockt) bei 768, 1024, 1280, 1366, 1440, 1920 und mobil 390 px, hell und
@@ -153,11 +155,12 @@ def main():
                 for theme in args.themes:
                     r = measure(browser, base_url, width, theme, lang, args.tag)
                     rows.append({"case": "standard", "lang": lang, "width": width, "theme": theme, **r})
-        # Fenstergröße aus einem älteren Design Center unter 360 px
+        # Fenstergröße unter 360 px in der Konfiguration der Testseite (nur
+        # Testseiten, der Server liefert windowWidth nicht mehr aus)
         for width in (1024, 1280):
             r = measure(browser, base_url, width, "light", "de", args.tag,
                         config={"windowWidth": "300px"}, design_width=300)
-            rows.append({"case": "windowWidth 300px", "lang": "de", "width": width, "theme": "light", **r})
+            rows.append({"case": "Testseite 300px", "lang": "de", "width": width, "theme": "light", **r})
         browser.close()
     srv.shutdown()
     out = OUT_DIR / f"fensterbreite-{args.tag}.json"

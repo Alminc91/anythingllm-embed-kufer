@@ -23,9 +23,14 @@ export const INLINE_MIN_HEIGHT_PX = 400;
 export const INLINE_MAX_HEIGHT_PX = 1200;
 export const INLINE_MIN_WIDTH_PX = 280;
 // Chatfenster ab 768 px nie schmaler (W12, Nutzer 24.10.2026): der
-// Platzhalter steht so einzeilig neben dem Mikrofon-Button. Gilt für den
-// Standard (BUBBLE_WINDOW_CLASSES) und für eine Fenstergröße aus einem
-// älteren Design Center (bubbleWindowCss); bis 7.23-rc2 320 px.
+// Platzhalter steht so einzeilig neben dem Mikrofon-Button; bis 7.23-rc2
+// 320 px. Wirksam über die Klassen (BUBBLE_WINDOW_CLASSES, dort als Zahl,
+// weil Tailwind nur feste Klassennamen erzeugt; ein Test prüft den
+// Gleichlauf). bubbleWindowCss liest die Konstanten nur für windowWidth und
+// windowHeight in den Settings: data-window-* am Skript wirken nicht
+// (useScriptAttributes IGNORED_HINTS), und der Server liefert beide seit dem
+// vereinfachten Design Center nicht mehr aus. Den Weg nutzen nur Testseiten
+// mit eigener Konfiguration (tests/visual/n3_header.py, fensterbreite.py).
 export const WINDOW_MIN_WIDTH_PX = 360;
 export const WINDOW_MIN_HEIGHT_PX = 400;
 export const OFFSET_MAX_PX = 200;
@@ -947,7 +952,9 @@ export const BUBBLE_WINDOW_CLASSES = [
 // Blase: CSS für Fenstergröße/Randabstand (nur Tablet/Desktop >=768px; mobil
 // bleibt Vollbild). Liefert "" wenn nichts gesetzt ist -> exakt bisheriges
 // Verhalten. Werte kommen validiert aus layoutValidations; hier zusätzlich
-// nochmals gegen die Whitelist geprüft, bevor sie in CSS-Text gehen.
+// nochmals gegen die Whitelist geprüft, bevor sie in CSS-Text gehen. Im
+// Betrieb wirkt nur der Randabstand (offsetX/offsetY, Gruppe B); eine
+// Fenstergröße kommt nur von Testseiten (siehe WINDOW_MIN_WIDTH_PX).
 // ---------------------------------------------------------------------------
 export function bubbleWindowCss(settings = {}, position = "bottom-right") {
   const width = layoutValidations.windowWidth(settings.windowWidth);
