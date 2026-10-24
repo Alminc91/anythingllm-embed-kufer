@@ -8,7 +8,9 @@ import {
   PRIVACY_DIALOG_COLORS,
   PRIVACY_DIALOG_ID,
   PRIVACY_DIALOG_TITLE_ID,
+  PRIVACY_TEXT_MAX_WIDTH,
 } from "@/utils/theme";
+import useEmbedMode from "@/hooks/useEmbedMode";
 import {
   groupPrivacyBlocks,
   panelTexts,
@@ -65,6 +67,12 @@ export default function PrivacyDialog({
   const href = privacyHref(settings.privacyUrl);
   const ownRef = useRef(null);
   const titleRef = useRef(null);
+  // Textbreite (R1-D2): nur In der Seite (aufgeklappt, nicht das mobile
+  // Vollbild) höchstens etwa 70 Zeichen, sonst liefe eine Zeile bei 1440 und
+  // 1920 px über rund 150 Zeichen. Kopfzeile, Button-Zeile und Bildlauf
+  // bleiben über die ganze Breite; im Chatfenster und mobil keine Grenze.
+  const { inline, overlay } = useEmbedMode();
+  const narrowText = inline && !overlay;
 
   const setRef = (el) => {
     ownRef.current = el;
@@ -152,59 +160,66 @@ export default function PrivacyDialog({
           scrollPaddingBlock: "8px",
           boxSizing: "border-box",
           padding: "16px 20px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "14px",
           fontSize: FONT_SIZE,
           lineHeight: 1.55,
           overflowWrap: "anywhere",
         }}
       >
-        {groups.map((g, i) =>
-          g.type === "list" ? (
-            <ul
-              key={i}
+        <div
+          className="allm-privacy-dialog-text"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            maxWidth: narrowText ? PRIVACY_TEXT_MAX_WIDTH : undefined,
+          }}
+        >
+          {groups.map((g, i) =>
+            g.type === "list" ? (
+              <ul
+                key={i}
+                style={{
+                  margin: 0,
+                  paddingLeft: "1.15em",
+                  listStyle: "disc",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                {g.items.map((text, j) => (
+                  <li key={j}>{text}</li>
+                ))}
+              </ul>
+            ) : (
+              <p key={i} style={{ margin: 0 }}>
+                {g.text}
+              </p>
+            ),
+          )}
+          <div>
+            <strong style={{ display: "block", fontWeight: 700 }}>
+              {texts.privacyAiTitle}
+            </strong>
+            <p style={{ margin: "4px 0 0" }}>{texts.privacyAiText}</p>
+          </div>
+          {href && (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
-                margin: 0,
-                paddingLeft: "1.15em",
-                listStyle: "disc",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
+                alignSelf: "flex-start",
+                color: DEFAULT_ACCENT,
+                fontWeight: 500,
+                textDecoration: "underline",
+                textUnderlineOffset: "2px",
               }}
             >
-              {g.items.map((text, j) => (
-                <li key={j}>{text}</li>
-              ))}
-            </ul>
-          ) : (
-            <p key={i} style={{ margin: 0 }}>
-              {g.text}
-            </p>
-          ),
-        )}
-        <div>
-          <strong style={{ display: "block", fontWeight: 700 }}>
-            {texts.privacyAiTitle}
-          </strong>
-          <p style={{ margin: "4px 0 0" }}>{texts.privacyAiText}</p>
+              {texts.privacyBubbleLink}
+            </a>
+          )}
         </div>
-        {href && (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              alignSelf: "flex-start",
-              color: DEFAULT_ACCENT,
-              fontWeight: 500,
-              textDecoration: "underline",
-              textUnderlineOffset: "2px",
-            }}
-          >
-            {texts.privacyBubbleLink}
-          </a>
-        )}
       </div>
       <div
         className="allm-privacy-dialog-line"

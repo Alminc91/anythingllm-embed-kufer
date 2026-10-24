@@ -760,7 +760,11 @@ describe("Datenschutz-Text im Fenster: Absätze und Punkte, Link am Ende", () =>
       privacyUrl: "https://vhs.example/datenschutz",
     });
     click(link());
-    const body = $("#anything-llm-privacy-dialog-body");
+    // Bewusste Änderung (W6, R1-D2): die Blöcke stehen in der Textspalte im
+    // Textbereich (In der Seite höchstens 70 Zeichen breit)
+    const body = $(
+      "#anything-llm-privacy-dialog-body > .allm-privacy-dialog-text",
+    );
     expect([...body.children].map((el) => el.tagName)).toEqual([
       "P",
       "UL",

@@ -34,13 +34,18 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
   - W5: langer Text (12 Punkte), Tab und Umschalt+Tab auf den Link
     „Datenschutzerklärung“: Link samt Fokusrahmen im sichtbaren Textbereich,
     die Seite bewegt sich nicht
+  - W6 (R1-D2): In der Seite 1440 und 1920 Textspalte höchstens 70ch
+    (linksbündig, wie die Vorschau im Design Center; gemessen rund 80 bis
+    90 Zeichen je Zeile statt bis 150), Kopfzeile, Button-Zeile und
+    Textbereich über die ganze Breite; Chatfenster und mobil ohne Grenze
 
 Aufruf (aus dem Repo, npm run build vorher):
 
   python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only [--only w2 w4 ...]]
 
 Ergebnis: .test-storage/datenschutz-fenster-<tag>.json, Bilder
-.test-storage/start-*.png (beim Start) und fenster-*.png (Fenster offen),
+.test-storage/start-*.png (beim Start), fenster-*.png (Fenster offen) und
+rc2-<tag>-*.png (Prüfungen der Korrekturen nach rc1),
 Zeilen auf stdout, Ausstieg 1 bei Fehlern.
 """
 
@@ -56,6 +61,9 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 ROOT = tv.ROOT
 OUT_DIR = ROOT / ".test-storage"
 RESULTS = []
+# Kennung der Bilder der rc2-Prüfungen (--tag), damit Läufe gegen einen
+# alten Stand die Bilder des neuen nicht überschreiben
+SHOT_TAG = "neu"
 
 VIEWS = [
     # (Name, Darstellung, Breite, Höhe)
@@ -421,7 +429,7 @@ def check_rc2(browser, base_url):
                 text, bg, line = FIXED[theme]
                 link_ratio = contrast_of((d.get("link") or {}).get("color", "rgb(0,0,0)"), d.get("bg", "rgb(0,0,0)"))
                 rings = tab_rings(page)
-                page.screenshot(path=str(OUT_DIR / f"rc2-fenster-fallen-modern-{display}-{theme}.png"))
+                page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-fenster-fallen-modern-{display}-{theme}.png"))
                 record(f"W2/W3 Fallen in oklch() und color-mix(): Fenster fest ({display}, {theme})",
                        d.get("color") == text and d.get("bg") == bg and d.get("lines") == [line, line]
                        and d.get("bodyFont") == "14px" and link_ratio >= 4.5
@@ -508,7 +516,7 @@ def check_w5(browser, base_url):
                 page.keyboard.press("Tab")
                 act1 = state(page)["active"]
                 v1 = page.evaluate(LINK_VIEW_JS)
-                page.screenshot(path=str(OUT_DIR / f"rc2-w5-tab-{display}-{width}-{theme}.png"))
+                page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-w5-tab-{display}-{width}-{theme}.png"))
                 # zurück an den Anfang des Textes, dann Umschalt+Tab von „Schließen“
                 page.evaluate("() => { window.__q('#anything-llm-privacy-dialog-body').scrollTop = 0; }")
                 page.keyboard.press("Tab")
@@ -523,11 +531,87 @@ def check_w5(browser, base_url):
                 ctx.close()
 
 
+TEXT_WIDTH_JS = r"""
+() => {
+  const d = window.__q('[role=dialog]');
+  const body = window.__q('#anything-llm-privacy-dialog-body');
+  const col = d.querySelector('.allm-privacy-dialog-text');
+  const lines = [...d.querySelectorAll('.allm-privacy-dialog-line')];
+  const w = (e) => e ? Math.round(e.getBoundingClientRect().width) : null;
+  // Zeichen je Zeile im KI-Punkt (längster Absatz), Zeichen für Zeichen gemessen
+  const p = [...(col || d).querySelectorAll('p')].sort((a, b) => b.textContent.length - a.textContent.length)[0];
+  const node = p.firstChild;
+  const range = document.createRange();
+  const tops = new Map();
+  for (let i = 0; i < node.textContent.length; i++) {
+    range.setStart(node, i); range.setEnd(node, i + 1);
+    const r = range.getClientRects()[0];
+    if (!r) continue;
+    const t = Math.round(r.top);
+    tops.set(t, (tops.get(t) || 0) + 1);
+  }
+  // 70ch in der Schrift des Fensters (Breite der Ziffer 0)
+  const probe = document.createElement('span');
+  probe.textContent = '0'.repeat(70);
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+  (col || d).appendChild(probe);
+  const ch70 = probe.getBoundingClientRect().width;
+  probe.remove();
+  const cs = body ? getComputedStyle(body) : null;
+  const inner = body ? body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : null;
+  const cr = col ? col.getBoundingClientRect() : null, br = body ? body.getBoundingClientRect() : null;
+  return { dialog: w(d), body: w(body), bodyInner: inner ? Math.round(inner) : null, column: w(col),
+    maxWidth: col ? getComputedStyle(col).maxWidth : null, ch70: `${Math.round(ch70 * 1000) / 1000}px`,
+    left: cr && br ? Math.round(cr.left - br.left) : null,
+    lines: lines.map(w), maxChars: Math.max(...tops.values()), rows: tops.size };
+}
+"""
+
+
+def check_w6(browser, base_url):
+    # W6 (R1-D2): In der Seite höchstens etwa 70 Zeichen je Zeile, linksbündig;
+    # Kopfzeile, Button-Zeile und Textbereich über die ganze Breite; im
+    # Chatfenster und mobil keine Grenze
+    # breit: Platzhalter über die ganze Seite (wie auf vielen Kundenseiten,
+    # Browser-Erstabnahme rc1: 1060 px Fenster, rund 150 Zeichen je Zeile);
+    # sonst die Testseite mit 760 px Inhaltsbreite
+    wide = "main { max-width: none !important; }"
+    views = (("inline", 1440, 900, True, wide), ("inline", 1920, 1080, True, wide),
+             ("inline", 1440, 900, True, None), ("bubble", 1280, 800, False, None),
+             ("bubble", 1440, 900, False, None), ("inline", 390, 800, False, None), ("bubble", 390, 800, False, None))
+    for display, width, height, limited, css in views:
+        for theme in ("light", "dark"):
+            for lang in ("de", "en"):
+                ctx, page = open_view(browser, base_url, display, width, height, theme, lang, css=css)
+                name = f"{lang}-{display}-{width}{'-breit' if css else ''}-{theme}"
+                try:
+                    click_link(page)
+                    m = page.evaluate(TEXT_WIDTH_JS)
+                    page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-w6-{name}.png"))
+                    full = all(abs(x - m["dialog"]) <= 1 for x in m["lines"]) and abs(m["body"] - m["dialog"]) <= 1
+                    if m["column"] is None:
+                        ok = False  # keine eigene Textspalte (Stand vor W6)
+                    elif limited:
+                        # 70ch = 70 Breiten der Ziffer 0; Buchstaben sind im
+                        # Mittel schmaler, gemessen werden daher rund 80 bis
+                        # 90 Zeichen je Zeile (vorher bis 150)
+                        px = lambda v: float(v.replace("px", "")) if v.endswith("px") else -1.0  # noqa: E731
+                        ok = (abs(px(m["maxWidth"]) - px(m["ch70"])) <= 0.5 and m["column"] < m["bodyInner"] and m["left"] <= 21
+                              and m["maxChars"] <= 92 and full)
+                    else:
+                        ok = m["maxWidth"] == "none" and abs(m["column"] - m["bodyInner"]) <= 1 and full
+                    record(f"W6 Textspalte {'höchstens 70ch' if limited else 'ohne Grenze'} "
+                           f"({lang} {display} {width}{' breit' if css else ''}, {theme})", ok, m)
+                finally:
+                    ctx.close()
+
+
 # Prüfungen der Korrekturen nach rc1 (Fixliste), einzeln wählbar mit --only
 RC2_CHECKS = {
     "w2": check_rc2,
     "w4": check_w4,
     "w5": check_w5,
+    "w6": check_w6,
 }
 
 
@@ -543,6 +627,8 @@ def main():
     ap.add_argument("--only", nargs="+", choices=sorted(RC2_CHECKS),
                     help="nur diese Prüfungen der Korrekturen nach rc1 (mit --rc2-only)")
     args = ap.parse_args()
+    global SHOT_TAG
+    SHOT_TAG = args.tag
     OUT_DIR.mkdir(exist_ok=True)
     srv, base_url = tv.start_server(args.dist)
     with sync_playwright() as p:

@@ -102,6 +102,11 @@ export const PRIVACY_LINK_ID = "anything-llm-privacy-link";
 export const PRIVACY_DIALOG_ID = "anything-llm-privacy-dialog";
 export const PRIVACY_DIALOG_TITLE_ID = "anything-llm-privacy-dialog-title";
 export const PRIVACY_DIALOG_BODY_ID = "anything-llm-privacy-dialog-body";
+// Textspalte des Datenschutz-Fensters bei „In der Seite“ (R1-D2, Fixliste
+// rc1): höchstens etwa 70 Zeichen, linksbündig; derselbe Wert wie in der
+// Vorschau im Design Center (WidgetPreview PRIVACY_TEXT_MAX_WIDTH).
+// Rückweg: Grenze weglassen.
+export const PRIVACY_TEXT_MAX_WIDTH = "70ch";
 
 // Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
 // Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,

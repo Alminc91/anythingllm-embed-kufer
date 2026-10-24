@@ -39,6 +39,7 @@ import { embedderSettings } from "../src/main.jsx";
 import * as theme from "../src/utils/theme.js";
 import { contrastRatio } from "../src/utils/contrast.js";
 import ChatWindow from "../src/components/ChatWindow/index.jsx";
+import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
 const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
@@ -381,5 +382,62 @@ describe("W5: Tab im langen Text zeigt das fokussierte Element", () => {
     openDialog(LONG);
     const body = $(`#${theme.PRIVACY_DIALOG_BODY_ID}`);
     expect(body.style.scrollPaddingBlock).toBe("8px");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("W6 (R1-D2): Textbreite im Fenster bei „In der Seite“", () => {
+  const mode = (inline, overlay = false) => ({
+    inline,
+    overlay,
+    consumeFocusRequest: () => false,
+  });
+  function openIn(value) {
+    render(
+      <EmbedModeContext.Provider value={value}>
+        <ChatWindow
+          closeChat={() => {}}
+          settings={{ ...OWN, enableStt: false }}
+          sessionId="s-1"
+          conversationId="c-1"
+        />
+      </EmbedModeContext.Provider>,
+    );
+    link().focus();
+    click(link());
+    return dialog();
+  }
+  const column = (d) => d.querySelector(".allm-privacy-dialog-text");
+
+  it("In der Seite: Textspalte höchstens 70 Zeichen (70ch wie die Vorschau im Design Center), linksbündig", () => {
+    const d = openIn(mode(true));
+    const col = column(d);
+    expect(col).not.toBeNull();
+    expect(col.style.maxWidth).toBe("70ch");
+    expect(theme.PRIVACY_TEXT_MAX_WIDTH).toBe("70ch");
+    // linksbündig: keine automatische Zentrierung
+    expect(col.style.marginLeft).not.toBe("auto");
+    expect(col.style.marginRight).not.toBe("auto");
+    // Text, KI-Punkt und Link stehen in der Spalte
+    expect(col.textContent).toContain("Punkt A");
+    expect(col.textContent).toContain("Hinweis zur KI");
+    expect(col.querySelector("a")?.textContent).toBe("Datenschutzerklärung");
+  });
+
+  it("Kopfzeile, Button-Zeile und Bildlauf bleiben über die ganze Breite", () => {
+    const d = openIn(mode(true));
+    const body = $(`#${theme.PRIVACY_DIALOG_BODY_ID}`);
+    expect(body.contains(column(d))).toBe(true);
+    for (const el of [body, ...d.querySelectorAll(".allm-privacy-dialog-line")])
+      expect(el.style.maxWidth).toBe("");
+  });
+
+  it.each([
+    ["Chatfenster", mode(false)],
+    ["mobil (In der Seite als Vollbild)", mode(true, true)],
+  ])("%s: keine Grenze", (_n, value) => {
+    const d = openIn(value);
+    expect(column(d)).not.toBeNull();
+    expect(column(d).style.maxWidth).toBe("");
   });
 });
