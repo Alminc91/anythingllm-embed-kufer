@@ -313,8 +313,8 @@ export function inlineBarTexts(settings = {}) {
 // unverändert (nur die Anzeige ändert sich).
 // Begrüßung: dieselben vier Texte für greeting und greetingBubbleText wie im
 // Fork (server/utils/chats/embedStandards.js LEGACY_DEFAULT_GREETINGS): alter
-// Widget-Standard von greeting (Datenschutzsatz, steht jetzt in der eigenen
-// Datenschutz-Blase), alte Design-Center-Vorbelegung und der bisherige
+// Widget-Standard von greeting (Datenschutzsatz, steht seit 7.23 im
+// Datenschutz-Fenster), alte Design-Center-Vorbelegung und der bisherige
 // Standard der Begrüßungsblase (de/en).
 const LEGACY_DEFAULT_GREETINGS = [
   "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.",

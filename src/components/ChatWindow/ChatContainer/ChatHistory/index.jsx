@@ -243,10 +243,11 @@ export default function ChatHistory({
   );
 
   if (history.length === 0) {
-    // Panel-Optik: Pillen statt Balken, Begrüßung als Blase. Ist der
-    // Datenschutz-Hinweis an, steht greetingStyle immer auf "bubble"
-    // (utils/layout.js applyFixedStandards, E26): nur die Begrüßungsblase
-    // trägt die Datenschutz-Blase. "text" nur bei abgeschaltetem Hinweis.
+    // Panel-Optik: Pillen statt Balken, Begrüßung als Blase (Standard,
+    // utils/layout.js FIXED_STANDARDS) oder mit data-greeting-style="text"
+    // als Text. Seit 7.23 immer wählbar: die Ausnahme E26 (Blase erzwungen,
+    // weil die Datenschutz-Blase an ihr hing) entfällt mit dem Link
+    // „Datenschutz“ in der Fußzeile.
     const bubble = settings?.greetingStyle === "bubble";
     const suggestions =
       settings?.suggestionStyle === "pills" ? (

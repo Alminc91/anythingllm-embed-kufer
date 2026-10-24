@@ -19,10 +19,10 @@
 //   ein Inline-Style auf dem Host sogar das Seiten-CSS.)
 // Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
 // daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
-// Center ein, die Farben des KI-Hinweises sind fest. Die Datenschutz-Blase
-// ist seit 23.10.2026 keine Ausnahme mehr (Nutzerentscheidung, ersetzt E25):
-// sie sieht aus wie die Begrüßungsblase. Die dc-Variablen setzt das Widget
-// direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
+// Center ein, die Farben des KI-Hinweises und des Datenschutz-Fensters (seit
+// 7.23-rc2, R1-D1, PRIVACY_DIALOG_COLORS) sind fest; die frühere
+// Datenschutz-Blase gibt es seit 7.23 nicht mehr. Die dc-Variablen setzt das
+// Widget direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
 // `:host` UND auf jedem Element im Shadow-Root
 // (`:host, :host * { --allmi-accent: #007c82 !important; }`).
 // Nur am Host reichte nicht: Registriert die Seite die interne Variable per
