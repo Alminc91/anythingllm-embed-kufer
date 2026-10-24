@@ -103,7 +103,8 @@ export const PRIVACY_DIALOG_ID = "anything-llm-privacy-dialog";
 export const PRIVACY_DIALOG_TITLE_ID = "anything-llm-privacy-dialog-title";
 export const PRIVACY_DIALOG_BODY_ID = "anything-llm-privacy-dialog-body";
 // Textspalte des Datenschutz-Fensters bei „In der Seite“ (R1-D2, Fixliste
-// rc1): höchstens etwa 70 Zeichen, linksbündig; derselbe Wert wie in der
+// rc1): höchstens 70ch, linksbündig (ch = Breite der Ziffer 0; Text ergibt
+// gemessen rund 80 bis 90 Zeichen je Zeile); derselbe Wert wie in der
 // Vorschau im Design Center (WidgetPreview PRIVACY_TEXT_MAX_WIDTH).
 // Rückweg: Grenze weglassen.
 export const PRIVACY_TEXT_MAX_WIDTH = "70ch";

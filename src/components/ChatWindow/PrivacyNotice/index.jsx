@@ -68,9 +68,10 @@ export default function PrivacyDialog({
   const ownRef = useRef(null);
   const titleRef = useRef(null);
   // Textbreite (R1-D2): nur In der Seite (aufgeklappt, nicht das mobile
-  // Vollbild) höchstens etwa 70 Zeichen, sonst liefe eine Zeile bei 1440 und
-  // 1920 px über rund 150 Zeichen. Kopfzeile, Button-Zeile und Bildlauf
-  // bleiben über die ganze Breite; im Chatfenster und mobil keine Grenze.
+  // Vollbild) höchstens 70ch (70 Breiten der Ziffer 0, gemessen rund 80 bis
+  // 90 Zeichen Text je Zeile), sonst liefe eine Zeile bei 1440 und 1920 px
+  // über 150 Zeichen und mehr. Kopfzeile, Button-Zeile und Bildlauf bleiben
+  // über die ganze Breite; im Chatfenster und mobil keine Grenze.
   const { inline, overlay } = useEmbedMode();
   const narrowText = inline && !overlay;
 
