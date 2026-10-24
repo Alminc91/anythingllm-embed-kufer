@@ -448,44 +448,18 @@ describe("W6 (R1-D2): Textbreite im Fenster bei „In der Seite“", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("W7 (R1-D3): Begrüßung als Text in der normalen Schriftfarbe", () => {
-  const greetingText = () =>
-    [...container.querySelectorAll("p")].find((p) =>
-      p.textContent.startsWith("Hallo! Ich bin Ihr KI-Berater"),
-    );
-
-  it("data-greeting-style=text: normale Schriftfarbe, nicht die gedämpfte", () => {
-    renderWindow({ ...BASE, greetingStyle: "text" });
-    const p = greetingText();
-    expect(p).toBeDefined();
-    const all = `${p.getAttribute("class") || ""} ${p.getAttribute("style") || ""}`;
-    expect(all).not.toContain("text-muted");
-    expect(all).not.toContain("#94a3b8");
-    expect(p.style.color).toBe("var(--allmi-text, #222628)");
-  });
-
-  it("mindestens 4,5:1 zur Fläche des Fensters, hell und dunkel", () => {
-    // hell: --allmi-text ohne Standard, es gilt der Rückfall #222628 auf
-    // der Fläche #FFFFFF; dunkel: DARK.text auf DARK.surface
-    const surface = (mode) =>
-      theme.THEME_VARIABLES.find((v) => v.name === "surface")[mode];
-    expect(
-      theme.THEME_VARIABLES.find((v) => v.name === "text").light,
-    ).toBeNull();
-    expect(contrastRatio("#222628", surface("light"))).toBeGreaterThanOrEqual(
-      4.5,
-    );
-    expect(
-      contrastRatio(theme.DARK.text, surface("dark")),
-    ).toBeGreaterThanOrEqual(4.5);
-    // zum Vergleich: die bisherige Farbe lag bei 2,56:1
-    expect(contrastRatio("#94a3b8", "#FFFFFF")).toBeLessThan(3);
-  });
-
-  it("Begrüßungsblase (Standard) unverändert", () => {
-    renderWindow({ ...BASE, greetingStyle: "bubble" });
-    expect($("#anything-llm-greeting-bubble")).not.toBeNull();
-  });
+// Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): den Textzweig der
+// Begrüßung (W7, R1-D3: normale Schriftfarbe statt gedämpft) gibt es nicht
+// mehr; die Begrüßung ist immer eine Blase (tests/datenschutz-rc3.test.jsx).
+describe("W7 entfällt mit W13: Begrüßung immer als Blase", () => {
+  it.each(["text", "bubble"])(
+    "greetingStyle %s: Begrüßungsblase, kein Text mittig",
+    (value) => {
+      renderWindow({ ...BASE, greetingStyle: value });
+      expect($("#anything-llm-greeting-bubble")).not.toBeNull();
+      expect($("#anything-llm-greeting-text")).toBeNull();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -511,11 +485,14 @@ describe("W8: Reste des Einmal-Hinweises entfernt", () => {
     expect(DEFAULT_SETTINGS).not.toHaveProperty("privacyButtonText");
   });
 
-  it("ein Weg für feste Werte: privacyNotice „link“ steht in AI_NOTICE", () => {
-    expect(layout.AI_NOTICE).toEqual({
+  // seit rc3 (W13) heißt die Tabelle LOCKED_STANDARDS und enthält auch die
+  // Begrüßung als Blase
+  it("ein Weg für feste Werte: privacyNotice „link“ steht in LOCKED_STANDARDS", () => {
+    expect(layout.LOCKED_STANDARDS).toEqual({
       disclaimer: "footer",
       disclaimerText: null,
       privacyNotice: "link",
+      greetingStyle: "bubble",
     });
     for (const value of ["none", "bubble", "modal", undefined])
       expect(

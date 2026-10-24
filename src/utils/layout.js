@@ -61,17 +61,19 @@ export const DEFAULT_OVERLAY_EFFECT = "expand";
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
 
-// Panel-Optik (Mockup „Wunschfragen im Panel“), alles opt-in; Standard =
-// bisherige Darstellung. Vorschläge im leeren Chat als Balken ("bars") oder
-// kleine Pillen ("pills"); Begrüßung als zentrierter Text ("text") oder als
-// Assistenten-Blase ("bubble", der greeting-Text steht dann klein darunter).
+// Panel-Optik (Mockup „Wunschfragen im Panel“). Vorschläge im leeren Chat
+// als Balken ("bars") oder kleine Pillen ("pills", Standard). Die Begrüßung
+// ist seit 7.23 immer eine Assistenten-Blase ("bubble", LOCKED_STANDARDS,
+// Nutzer 24.10.2026); der frühere Wert "text" (zentrierter Text) gilt als
+// gültig (gespeicherter Altwert, keine Warnung), wirkt aber nicht.
 export const SUGGESTION_STYLE_VALUES = ["bars", "pills"];
 export const GREETING_STYLE_VALUES = ["text", "bubble"];
 // Datenschutz-Hinweis: seit 7.23 immer als Link „Datenschutz“ in der Zeile
 // des KI-Hinweises ("link", Nutzerentscheidung 23.10.2026, keine Auswahl im
 // Design Center). Die früheren Werte "none" (aus), "bubble" (Blase unter der
 // Begrüßung) und "modal" (Einmal-Hinweis mit Bestätigung) gelten als gültig
-// (gespeicherte Altwerte, keine Warnung), wirken aber nicht (AI_NOTICE).
+// (gespeicherte Altwerte, keine Warnung), wirken aber nicht
+// (LOCKED_STANDARDS).
 export const PRIVACY_NOTICE_VALUES = ["link", "none", "bubble", "modal"];
 // Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
@@ -95,7 +97,7 @@ export const PRIVACY_LINE_MAX_LEN = 500;
 export const PRIVACY_TEXT_MAX_LEN = 1000;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
 // erzeugt; Text fest PANEL_TEXTS.aiDisclaimer (disclaimerText wird seit dem
-// vereinfachten Design Center ignoriert, AI_NOTICE).
+// vereinfachten Design Center ignoriert, LOCKED_STANDARDS).
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
@@ -490,15 +492,12 @@ export function privacyHref(value) {
 // verfeinert sie; ohne Skript-Angabe gilt der feste Wert, auch gegen einen
 // Altwert vom Server (der Server liefert dieselben Werte). Dieselbe Regel
 // gilt für INLINE_STANDARDS (applyFixedStandards, Fixliste 7.22-rc18 C18).
-// Bis 7.22.2 galt bei angeschaltetem Datenschutz-Hinweis greetingStyle
-// "bubble" auch gegen eine Skript-Angabe (E26): die Datenschutz-Blase stand
-// unter der Begrüßungsblase. Seit 7.23 gibt es die Blase nicht mehr (Link in
-// der Fußzeile), die Ausnahme entfällt.
+// Der Begrüßungsstil steht seit 7.23 nicht mehr hier: die Begrüßung ist
+// immer eine Blase (LOCKED_STANDARDS).
 // Randabstände der Chatblase (offsetX/offsetY, Standard 16 px), Max. Breite
 // der Inline-Box (inlineMaxWidth, Standard volle Breite des Platzhalters) und
 // Stil der Inline-Leiste (inlineTheme, Standard: folgt dem Farbschema).
 export const FIXED_STANDARDS = {
-  greetingStyle: "bubble",
   suggestionStyle: "pills",
   followUps: "pills",
   onlineDot: false,
@@ -507,20 +506,27 @@ export const FIXED_STANDARDS = {
   inlineMaxWidth: null,
   inlineTheme: null,
 };
-// KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
-// fest (PANEL_TEXTS.aiDisclaimer). Auf keinem Weg abschalt- oder änderbar,
-// weder per Skript-Angabe noch vom Server noch per CSS-Variable
-// (utils/theme.js AI_NOTICE_COLORS). In derselben Zeile steht immer der Link
-// „Datenschutz“ (Nutzerentscheidung 23.10.2026, 7.23): privacyNotice fest
-// "link", ohne Auswahl im Design Center. Der Server liefert fest "link";
-// gespeicherte Altwerte ("bubble", "none", "modal"), ein fehlender Wert und
-// ein Script-Attribut (data-privacy-notice, Gruppe A) ändern nichts. Keine
-// Datenschutz-Blase beim Start und kein Einmal-Hinweis mit Bestätigung (Hard
-// Constraint 2).
-export const AI_NOTICE = {
+// Gesperrte Standards: gelten immer, auf keinem Weg änderbar, weder per
+// Skript-Angabe noch vom Server (anders als FIXED_STANDARDS). Ein Weg für
+// alle festen Werte (applyFixedStandards).
+// - KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
+//   fest (PANEL_TEXTS.aiDisclaimer), auch nicht per CSS-Variable
+//   (utils/theme.js AI_NOTICE_COLORS).
+// - In derselben Zeile immer der Link „Datenschutz“ (Nutzerentscheidung
+//   23.10.2026, 7.23): privacyNotice fest "link", ohne Auswahl im Design
+//   Center. Der Server liefert fest "link"; gespeicherte Altwerte ("bubble",
+//   "none", "modal"), ein fehlender Wert und ein Script-Attribut
+//   (data-privacy-notice, Gruppe A) ändern nichts. Keine Datenschutz-Blase
+//   beim Start und kein Einmal-Hinweis mit Bestätigung (Hard Constraint 2).
+// - Begrüßung immer als Blase (Nutzer 24.10.2026: die Form der Begrüßung
+//   ist keine Einbau-Angabe): greetingStyle fest "bubble", der Server
+//   liefert fest "bubble"; data-greeting-style (Gruppe A) und ein
+//   gespeicherter Altwert "text" ändern nichts.
+export const LOCKED_STANDARDS = {
   disclaimer: "footer",
   disclaimerText: null,
   privacyNotice: "link",
+  greetingStyle: "bubble",
 };
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
@@ -562,9 +568,10 @@ export function welcomeBubblesMode(settings = {}, phone = false) {
 
 // Einmal beim Laden (loadEmbedSettings): feste Standards und im Inline-Modus
 // die Inline-Standards setzen, außer das Skript gibt den Wert vor
-// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis und Link
-// „Datenschutz“ fest, Willkommensblasen aus dem Server-Wert (server =
-// geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
+// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis, Link
+// „Datenschutz“ und Begrüßungsblase fest (LOCKED_STANDARDS),
+// Willkommensblasen aus dem Server-Wert (server = geprüfte
+// Server-Konfiguration), ohne eigenen Namen den Standardnamen der
 // Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
 // bzw. „AI Advisor“).
 export function applyFixedStandards(
@@ -572,7 +579,7 @@ export function applyFixedStandards(
   server = {},
   scriptKeys = new Set(),
 ) {
-  const out = { ...settings, ...AI_NOTICE };
+  const out = { ...settings, ...LOCKED_STANDARDS };
   for (const [key, value] of Object.entries(FIXED_STANDARDS))
     if (!scriptKeys.has(key)) out[key] = value;
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
@@ -804,7 +811,7 @@ export const layoutValidations = {
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
 // zusammengeführte Settings. Herkunft bei festen Standards (FIXED_STANDARDS,
-// INLINE_STANDARDS, KI-Hinweis AI_NOTICE und SERVER_FIXED_KEYS): ein
+// INLINE_STANDARDS, LOCKED_STANDARDS und SERVER_FIXED_KEYS): ein
 // Server-Wert ist dort kein Wert aus dem Design Center, es gilt das
 // Script-Attribut, wenn sein Wert wirkt, sonst der „Standard“
 // (applyFixedStandards; Fixliste 7.22-rc20 W82). Die Inline-Schlüssel
@@ -821,7 +828,7 @@ const ENUM_SOURCES = [
 const SERVER_FIXED_KEYS = ["courseCardsLayout"];
 function isFixedStandard(key) {
   return (
-    key in AI_NOTICE ||
+    key in LOCKED_STANDARDS ||
     key in FIXED_STANDARDS ||
     key in INLINE_STANDARDS ||
     SERVER_FIXED_KEYS.includes(key)
@@ -850,7 +857,7 @@ export function warnInvalidInlineEnums(
       if (value === undefined || value === null || value === "" || valid(src))
         continue;
       const scriptWins =
-        !(key in AI_NOTICE) &&
+        !(key in LOCKED_STANDARDS) &&
         valid("script") &&
         settings[key] === oneOf(raw.script[key], allowed);
       const origin = isFixedStandard(key)

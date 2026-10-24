@@ -9,8 +9,10 @@ import tailwindConfig from "../tailwind.config.js";
 //   data-greeting-style="text", die Datenschutz-Blase ist sichtbar (leerer
 //   Chat und Verlauf); Hinweis aus: "text" wirkt. Bewusste Änderung (7.23):
 //   die Datenschutz-Blase entfällt (Link „Datenschutz“ in der Fußzeile),
-//   damit auch E26; "text" wirkt immer.
-// W61 Textzweig mit dem Begrüßungsstandard der Sprache.
+//   damit auch E26. Bewusste Änderung (7.23-rc3, W13, Nutzer 24.10.2026):
+//   die Begrüßung ist immer eine Blase, "text" wirkt nicht.
+// W61 Textzweig mit dem Begrüßungsstandard der Sprache; der Textzweig
+//   entfällt mit W13, der Standard der Sprache steht in der Blase.
 // W62 feste Farben des KI-Hinweises direkt am Element, Gruppe A auf jedem
 //   Element (gegen @property der Seite; der Browser-Beleg steht in
 //   tests/visual/rc18_farben.py).
@@ -124,8 +126,9 @@ function rerender(el) {
 const $ = (sel) => container.querySelector(sel);
 
 // ---------------------------------------------------------------------------
-// Bewusste Änderung (7.23): die Datenschutz-Blase entfällt, damit E26
-describe("W60/E26 entfällt: keine Datenschutz-Blase, data-greeting-style=text wirkt", () => {
+// Bewusste Änderung (7.23): die Datenschutz-Blase entfällt, damit E26.
+// Bewusste Änderung (rc3, W13): data-greeting-style=text wirkt nicht mehr.
+describe("W60/E26 entfällt: keine Datenschutz-Blase, Begrüßung immer als Blase (W13)", () => {
   it("leerer Chat und Verlauf: keine Datenschutz-Blase, Begrüßungsblase ohne Skript-Angabe", async () => {
     const s = await load({});
     expect(s.privacyNotice).toBe("link");
@@ -149,7 +152,7 @@ describe("W60/E26 entfällt: keine Datenschutz-Blase, data-greeting-style=text w
       }),
     );
     expect(offline.privacyNotice).toBe("link");
-    expect(offline.greetingStyle).toBe("text");
+    expect(offline.greetingStyle).toBe("bubble");
     render(
       <ChatContainer
         sessionId="s-1"
@@ -162,12 +165,12 @@ describe("W60/E26 entfällt: keine Datenschutz-Blase, data-greeting-style=text w
     expect($("#anything-llm-privacy-link")).not.toBeNull();
   });
 
-  it("data-greeting-style=text wirkt mit jeder Server-Antwort (auch Altwert none oder bubble)", async () => {
+  it("data-greeting-style=text wirkt mit keiner Server-Antwort (auch Altwert none oder bubble)", async () => {
     for (const server of [SERVER_STANDARDS, PRIVACY_OFF]) {
       const s = await load({ greetingStyle: "text" }, server);
-      expect(s.greetingStyle).toBe("text");
+      expect(s.greetingStyle).toBe("bubble");
       rerender(<ChatHistory settings={s} history={[]} />);
-      expect($("#anything-llm-greeting-bubble")).toBeNull();
+      expect($("#anything-llm-greeting-bubble")).not.toBeNull();
       expect($("#anything-llm-privacy-bubble")).toBeNull();
     }
     const t = await load({}, PRIVACY_OFF);
@@ -176,8 +179,10 @@ describe("W60/E26 entfällt: keine Datenschutz-Blase, data-greeting-style=text w
 });
 
 // ---------------------------------------------------------------------------
-describe("W61: Textzweig mit dem Begrüßungsstandard der Sprache", () => {
-  const textOf = () => $("p.allm-text-center")?.textContent;
+// Bewusste Änderung (rc3, W13): den Textzweig gibt es nicht mehr; derselbe
+// Text (Standard der Sprache bzw. gespeichert und gekürzt) steht in der Blase
+describe("W61: Begrüßungsstandard der Sprache (seit W13 in der Blase)", () => {
+  const textOf = () => $("#anything-llm-greeting-bubble")?.textContent;
 
   it("ohne gespeicherte Begrüßung: Standard der Sprache statt „Send a chat to get started.“", async () => {
     const de = await load({ greetingStyle: "text" }, PRIVACY_OFF);

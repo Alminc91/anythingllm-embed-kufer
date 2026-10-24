@@ -191,11 +191,13 @@ describe("AK-10, AK-7: privacyNotice ist immer „link“", () => {
     }
   });
 
-  // Die Datenschutz-Blase brauchte die Begrüßungsblase (E26); ohne Blase gilt
-  // wieder die Regel der festen Standards (Gruppe B): eine Skript-Angabe
-  // verfeinert greetingStyle
-  it("E26 entfällt: data-greeting-style=text wirkt wieder (Gruppe B), ohne Angabe Blase", async () => {
-    expect((await load({ greetingStyle: "text" })).greetingStyle).toBe("text");
+  // Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): bis rc2 wirkte
+  // data-greeting-style=text wieder (Gruppe B, E26 entfallen); seit rc3 ist
+  // die Begrüßung immer eine Blase (Gruppe A, tests/datenschutz-rc3.test.jsx)
+  it("W13: data-greeting-style=text wirkt nicht, die Begrüßung bleibt eine Blase", async () => {
+    expect((await load({ greetingStyle: "text" })).greetingStyle).toBe(
+      "bubble",
+    );
     expect((await load({})).greetingStyle).toBe("bubble");
   });
 });

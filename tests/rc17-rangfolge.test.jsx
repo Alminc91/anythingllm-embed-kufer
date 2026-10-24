@@ -287,15 +287,17 @@ describe("W50: Gruppe B (feste Standards ohne Feld) per Skript-Angabe verfeinerb
 
   // Fixliste 7.22-rc18 E26 (data-greeting-style="text" nur bei
   // abgeschaltetem Datenschutz-Hinweis) entfällt seit 7.23 mit der
-  // Datenschutz-Blase: "text" wirkt mit jeder Server-Antwort
-  it("Optik ohne Feld (Kopffarbe, Begrüßungsstil) wirkt, ein Altwert vom Server bei festen Standards nicht", async () => {
+  // Datenschutz-Blase. Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): der
+  // Begrüßungsstil ist kein Standard ohne Feld mehr, die Begrüßung ist
+  // immer eine Blase (Gruppe A, tests/datenschutz-rc3.test.jsx)
+  it("Optik ohne Feld (Kopffarbe) wirkt, ein Altwert vom Server bei festen Standards nicht; Begrüßungsstil fest", async () => {
     const off = { ...SERVER_STANDARDS, privacyNotice: "none" };
     const s = await load(
       { headerBgColor: "#0b5f8a", greetingStyle: "text" },
       off,
     );
     expect(s.headerBgColor).toBe("#0b5f8a");
-    expect(s.greetingStyle).toBe("text");
+    expect(s.greetingStyle).toBe("bubble");
     const t = await load({}, { ...off, greetingStyle: "text" });
     expect(t.greetingStyle).toBe("bubble");
   });
@@ -486,8 +488,9 @@ describeFork(
       // Datenschutz-Hinweis (7.23, Vertrag datenschutz-fusszeile Punkt 6):
       // der Server liefert ihn fest als "link" (EMBED_FIXED_STANDARDS), im
       // Widget bleibt data-privacy-notice wie bisher ohne Wirkung (Gruppe A,
-      // DC_COVERED, Warnzeile): kein Standard, den ein Skript verfeinert
-      const fixedGroupA = new Set(["privacyNotice"]);
+      // DC_COVERED, Warnzeile): kein Standard, den ein Skript verfeinert.
+      // Ebenso seit rc3 (W13) die Begrüßung, fest "bubble"
+      const fixedGroupA = new Set(["privacyNotice", "greetingStyle"]);
       const { DC_COVERED } = scriptAttrs;
       for (const key of sent) {
         if (fixedGroupA.has(key)) {

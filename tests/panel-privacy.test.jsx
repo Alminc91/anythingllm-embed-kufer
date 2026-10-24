@@ -135,7 +135,8 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
   // KI-Hinweis bleibt fest, den Online-Punkt gibt es nicht mehr.
   // Bewusste Änderung (7.23): E26 (greetingStyle "bubble" gegen "text", weil
   // die Datenschutz-Blase die Begrüßungsblase brauchte) entfällt mit der
-  // Blase; data-greeting-style verfeinert wieder wie jeder feste Standard.
+  // Blase. Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): die Begrüßung
+  // ist immer eine Blase, data-greeting-style wirkt nicht (Gruppe A).
   it("Script-Attribute (data-*): Design-Center-Texte wirken nicht, feste Standards verfeinerbar, KI-Hinweis fest", async () => {
     const s = await loadEmbedSettings(
       {
@@ -158,7 +159,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     );
     expect(s).toMatchObject({
       suggestionStyle: "bars",
-      greetingStyle: "text",
+      greetingStyle: "bubble",
       greetingBubbleText: null,
       assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
       onlineDot: false,
@@ -309,15 +310,21 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.privacyNotice).toBe("link");
     expect(s.disclaimer).toBe("footer");
     const lines = warn.mock.calls.map((c) => String(c[0]));
-    for (const key of ["suggestionStyle", "greetingStyle"]) {
-      const mine = lines.filter((l) => l.includes(`Ungültiger ${key}-Wert`));
-      expect(mine).toHaveLength(1);
-    }
-    for (const attr of ["data-privacy-notice", "data-disclaimer "]) {
+    const mine = lines.filter((l) =>
+      l.includes("Ungültiger suggestionStyle-Wert"),
+    );
+    expect(mine).toHaveLength(1);
+    // greetingStyle seit rc3 (W13) wie privacyNotice: „wirkt nicht“ statt
+    // ungültiger Wert
+    for (const attr of [
+      "data-privacy-notice",
+      "data-disclaimer ",
+      "data-greeting-style",
+    ]) {
       expect(lines.filter((l) => l.includes(attr))).toHaveLength(1);
       expect(lines.find((l) => l.includes(attr))).toContain("wirkt nicht");
     }
-    expect(lines.filter((l) => l.includes("Ungültiger"))).toHaveLength(2);
+    expect(lines.filter((l) => l.includes("Ungültiger"))).toHaveLength(1);
     expect(lines.find((l) => l.includes("suggestionStyle"))).toContain(
       'es gilt "pills"',
     );
@@ -485,7 +492,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
 
 // ---------------------------------------------------------------------------
 describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => {
-  it("Standard: Balken wie bisher, keine Pillen/Blase", () => {
+  // Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): ohne Angaben ist die
+  // Begrüßung eine Blase (den Textzweig gibt es nicht mehr); ohne
+  // suggestionStyle bleiben die Vorschläge Balken
+  it("ohne Angaben: Balken wie bisher, keine Pillen, Begrüßung als Blase", () => {
     render(
       <ChatHistory
         settings={{ defaultMessages: MSGS, greeting: GREETING }}
@@ -494,8 +504,7 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     );
     expect($$(".msg-suggestion")).toHaveLength(4);
     expect($("#anything-llm-suggestion-pills")).toBe(null);
-    expect($("#anything-llm-greeting-bubble")).toBe(null);
-    expect(container.textContent).toContain(GREETING);
+    expect($("#anything-llm-greeting-bubble").textContent).toBe(GREETING);
   });
 
   it("pills: 4 Pillen (Rand, Rundung 999 px), Klick sendet wie bisher", () => {
@@ -859,17 +868,20 @@ describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
     expect(welcome.querySelector("#anything-llm-privacy-bubble")).toBe(null);
   });
 
-  it("NAK-1: greetingStyle text (Bestandskunden) -> Verlauf unverändert, keine Blase, kein greeting", () => {
+  // Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): auch ohne greetingStyle
+  // (früher Textzweig) steht die Begrüßungsblase über dem Verlauf, ohne
+  // Vorschläge
+  it("W13: ohne greetingStyle (früher Text) bleibt die Begrüßungsblase erste Nachricht", () => {
     render(
       <ChatHistory
         settings={{ greeting: GREETING, defaultMessages: MSGS }}
         history={HIST}
       />,
     );
-    expect($("#anything-llm-greeting-bubble")).toBe(null);
-    expect($("#anything-llm-panel-welcome")).toBe(null);
-    expect(container.textContent).not.toContain(GREETING);
-    expect(list().children).toHaveLength(2);
+    expect($("#anything-llm-greeting-bubble").textContent).toBe(GREETING);
+    expect(list().firstElementChild.id).toBe("anything-llm-panel-welcome");
+    expect($$(".msg-suggestion")).toHaveLength(0);
+    expect(list().children).toHaveLength(3);
   });
 });
 

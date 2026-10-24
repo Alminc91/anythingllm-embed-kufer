@@ -38,8 +38,9 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
     (linksbündig, wie die Vorschau im Design Center; gemessen rund 80 bis
     90 Zeichen je Zeile statt bis 150), Kopfzeile, Button-Zeile und
     Textbereich über die ganze Breite; Chatfenster und mobil ohne Grenze
-  - W7 (R1-D3): Begrüßung als Text (data-greeting-style="text") in der
-    normalen Schriftfarbe, mindestens 4,5:1 zur Fläche, hell und dunkel
+  - W13 (rc3, ersetzt W7/R1-D3): Begrüßung immer als Blase, auch mit dem
+    Altwert greetingStyle "text" vom Server (kein Text mittig), Text der
+    Blase mindestens 4,5:1 zur Fläche, hell und dunkel
 
 Aufruf (aus dem Repo, npm run build vorher):
 
@@ -615,41 +616,35 @@ def check_w6(browser, base_url):
 
 GREETING_JS = r"""
 () => {
-  const p = window.__q('#anything-llm-greeting-text')
-    || [...window.__allmShadow.querySelectorAll('p')].find((e) => /^(Hallo|Hello)/.test(e.textContent.trim()));
-  if (!p) return null;
-  // Fläche: erster Vorfahr mit deckender Hintergrundfarbe
-  let e = p, bg = 'rgba(0, 0, 0, 0)';
-  while (e && e.nodeType === 1) {
-    const c = getComputedStyle(e).backgroundColor;
-    if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; }
-    e = e.parentElement || (e.getRootNode() && e.getRootNode().host);
-  }
-  return { text: p.textContent.trim().slice(0, 40), color: getComputedStyle(p).color, bg,
-    size: getComputedStyle(p).fontSize };
+  const b = window.__q('#anything-llm-greeting-bubble');
+  const centered = window.__q('#anything-llm-greeting-text') || window.__q('p.allm-text-center');
+  if (!b) return { bubble: null, centered: centered ? centered.textContent.trim().slice(0, 40) : null };
+  const cs = getComputedStyle(b);
+  return { bubble: { text: b.textContent.trim().slice(0, 40), color: cs.color, bg: cs.backgroundColor,
+    size: cs.fontSize }, centered: centered ? centered.textContent.trim().slice(0, 40) : null };
 }
 """
+GREETING_START = {"de": "Hallo! Ich bin Ihr KI-Berater", "en": "Hello! I am your AI advisor"}
 
 
-def check_w7(browser, base_url):
-    # W7 (R1-D3): Begrüßung als Text (data-greeting-style="text") in der
-    # normalen Schriftfarbe, mindestens 4,5:1 hell und dunkel
+def check_w13(browser, base_url):
+    # W13 (rc3, ersetzt W7/R1-D3): Begrüßung immer als Blase, auch mit dem
+    # Altwert greetingStyle "text" vom Server; Text der Blase mindestens
+    # 4,5:1 hell und dunkel (data-greeting-style am Skript: rc18_farben.py)
     for display, width, height in (("bubble", 1280, 800), ("bubble", 1440, 900), ("inline", 1440, 900),
                                    ("inline", 1920, 1080), ("bubble", 390, 800)):
         for theme in ("light", "dark"):
             for lang in ("de", "en"):
-                attrs_ctx = tv.BASE_ATTRS
-                tv.BASE_ATTRS = {**attrs_ctx, "greeting-style": "text"}
-                try:
-                    ctx, page = open_view(browser, base_url, display, width, height, theme, lang)
-                finally:
-                    tv.BASE_ATTRS = attrs_ctx
+                ctx, page = open_view(browser, base_url, display, width, height, theme, lang,
+                                      config={"greetingStyle": "text"})
                 try:
                     g = page.evaluate(GREETING_JS)
-                    page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-w7-{lang}-{display}-{width}-{theme}.png"))
-                    ratio = contrast_of(g["color"], g["bg"]) if g else 0
-                    record(f"W7 Begrüßung als Text mindestens 4,5:1 ({lang} {display} {width}, {theme})",
-                           bool(g) and ratio >= 4.5, {**(g or {}), "kontrast": ratio})
+                    page.screenshot(path=str(OUT_DIR / f"rc3-{SHOT_TAG}-w13-{lang}-{display}-{width}-{theme}.png"))
+                    b = g["bubble"]
+                    ratio = contrast_of(b["color"], b["bg"]) if b else 0
+                    record(f"W13 Begrüßung als Blase trotz Altwert text, mindestens 4,5:1 ({lang} {display} {width}, {theme})",
+                           bool(b) and b["text"].startswith(GREETING_START[lang]) and g["centered"] is None
+                           and ratio >= 4.5, {**g, "kontrast": ratio})
                 finally:
                     ctx.close()
 
@@ -660,7 +655,7 @@ RC2_CHECKS = {
     "w4": check_w4,
     "w5": check_w5,
     "w6": check_w6,
-    "w7": check_w7,
+    "w13": check_w13,
 }
 
 

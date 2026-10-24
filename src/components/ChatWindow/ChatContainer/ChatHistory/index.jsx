@@ -26,7 +26,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
-import { greetingText, panelTexts, uiTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
 import debounce from "lodash.debounce";
 import { sendSuggestion } from "..";
 
@@ -243,41 +243,16 @@ export default function ChatHistory({
   );
 
   if (history.length === 0) {
-    // Panel-Optik: Pillen statt Balken, Begrüßung als Blase (Standard,
-    // utils/layout.js FIXED_STANDARDS) oder mit data-greeting-style="text"
-    // als Text. Seit 7.23 immer wählbar: die Ausnahme E26 (Blase erzwungen,
-    // weil die Datenschutz-Blase an ihr hing) entfällt mit dem Link
-    // „Datenschutz“ in der Fußzeile.
-    const bubble = settings?.greetingStyle === "bubble";
+    // Panel-Optik: Begrüßung immer als Blase (utils/layout.js
+    // LOCKED_STANDARDS, Nutzer 24.10.2026), darunter Pillen (Standard) oder
+    // mit data-suggestion-style="bars" Balken.
     const suggestions =
       settings?.suggestionStyle === "pills" ? (
-        <SuggestedPills
-          settings={settings}
-          align={bubble ? "start" : "center"}
-        />
+        <SuggestedPills settings={settings} align="start" />
       ) : (
         <SuggestedMessages settings={settings} />
       );
-    if (bubble)
-      return <PanelWelcome settings={settings} suggestions={suggestions} />;
-    return (
-      <div className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
-        <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
-          {/* Begrüßung wie in der Blase: gespeichert (gekürzt) oder
-              Standard der Sprache (Fixliste 7.22-rc18 W61), in der normalen
-              Schriftfarbe des Farbschemas (R1-D3: die gedämpfte Farbe hatte
-              hell 2,56:1; normal hell 15,3:1, dunkel wie der Verlauf) */}
-          <p
-            id="anything-llm-greeting-text"
-            className="allm-text-sm allm-font-sans allm-py-4 allm-text-center"
-            style={{ color: "var(--allmi-text, #222628)" }}
-          >
-            {greetingText(settings)}
-          </p>
-          {suggestions}
-        </div>
-      </div>
-    );
+    return <PanelWelcome settings={settings} suggestions={suggestions} />;
   }
 
   // allm-box-border: Höhe inklusive Polsterung (im Shadow DOM gilt kein
@@ -298,13 +273,10 @@ export default function ChatHistory({
       })}
     >
       <div ref={contentRef} className="allm-flex allm-flex-col allm-gap-y-4">
-        {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
-            Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
-            darunter gibt es nur im leeren Chat. Mit greetingStyle "text"
-            unverändert. */}
-        {settings?.greetingStyle === "bubble" && (
-          <PanelGreeting settings={settings} />
-        )}
+        {/* Begrüßungsblase bleibt als festes erstes Element über dem
+            Verlauf, kein Chat-Eintrag; die Vorschläge darunter gibt es nur
+            im leeren Chat. */}
+        <PanelGreeting settings={settings} />
         {history.map((props, index) => {
           const isLastMessage = index === history.length - 1;
           const live =

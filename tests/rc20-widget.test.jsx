@@ -10,7 +10,9 @@ import tailwindConfig from "../tailwind.config.js";
 //   Seit Fixliste 7.22-rc22 E41 auch Farbnamen (Bewusste Änderung E41).
 // W81 eine Warnzeile, wenn data-greeting-style="text" wegen des
 //   Datenschutz-Hinweises nicht wirkt (E26). Bewusste Änderung (7.23): mit
-//   der Datenschutz-Blase entfallen E26 und die Warnzeile, "text" wirkt.
+//   der Datenschutz-Blase entfallen E26 und die Warnzeile. Bewusste
+//   Änderung (7.23-rc3, W13): "text" wirkt nie, eine Warnzeile „wirkt nicht“
+//   wie bei jeder Angabe der Gruppe A.
 // W82 Herkunft in der Warnzeile bei festen Standards: „Standard“ statt
 //   „Design Center“.
 // W84/E34 border-box am Logo-Rahmen nur im kompakten Kopf, im normalen Kopf
@@ -205,24 +207,25 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
 // ---------------------------------------------------------------------------
 const GREETING_HINT = 'data-greeting-style="text" wirkt nur bei abgeschaltetem';
 // Bewusste Änderung (7.23): keine Datenschutz-Blase mehr, also keine
-// Ausnahme E26 und keine Warnzeile; data-greeting-style="text" wirkt
-describe("W81 entfällt: data-greeting-style=text wirkt, keine Warnzeile", () => {
-  it("mit Server-Antwort, ohne Antwort und mit Altwert none: text, keine Warnzeile", async () => {
+// Ausnahme E26 und nicht mehr die Warnzeile W81. Bewusste Änderung (rc3,
+// W13): data-greeting-style wirkt nie, je Angabe eine Warnzeile der Gruppe A
+describe("W81 entfällt: data-greeting-style wirkt nicht, Warnzeile der Gruppe A (W13)", () => {
+  it("mit Server-Antwort, ohne Antwort und mit Altwert none: bubble, je Angabe eine Warnzeile „wirkt nicht“", async () => {
     const s = await load({ greetingStyle: "text" });
-    expect(s.greetingStyle).toBe("text");
+    expect(s.greetingStyle).toBe("bubble");
     const t = await loadEmbedSettings(
       { ...BASE, greetingStyle: "text" },
       vi.fn(async () => ({ ok: false })),
     );
-    expect(t.greetingStyle).toBe("text");
+    expect(t.greetingStyle).toBe("bubble");
     const off = await load({ greetingStyle: "text" }, PRIVACY_OFF);
-    expect(off.greetingStyle).toBe("text");
+    expect(off.greetingStyle).toBe("bubble");
     await load({});
     await load({ greetingStyle: "bubble" });
     expect(warnings().filter((w) => w.includes(GREETING_HINT))).toHaveLength(0);
-    expect(
-      warnings().filter((w) => w.includes("data-greeting-style")),
-    ).toHaveLength(0);
+    const mine = warnings().filter((w) => w.includes("data-greeting-style"));
+    expect(mine).toHaveLength(4);
+    for (const w of mine) expect(w).toContain("wirkt nicht");
   });
 });
 
@@ -279,14 +282,15 @@ describe("W82: Herkunft in der Warnzeile bei festen Standards", () => {
     );
   });
 
-  // Bewusste Änderung (7.23, E26 entfällt): das gültige Skript gewinnt
-  it("gültiges text am Skript, ungültiger Server-Wert: es gilt text (Script-Attribut)", async () => {
+  // Bewusste Änderung (rc3, W13): das Skript gewinnt nicht mehr (Gruppe A,
+  // verworfen), es gilt der feste Wert "bubble"
+  it("text am Skript, ungültiger Server-Wert: es gilt bubble (Standard)", async () => {
     await load(
       { greetingStyle: "text" },
       { ...SERVER_STANDARDS, greetingStyle: "foo" },
     );
     expect(lineFor("greetingStyle", "Design Center")).toContain(
-      'es gilt "text" (Script-Attribut).',
+      'es gilt "bubble" (Standard).',
     );
   });
 });

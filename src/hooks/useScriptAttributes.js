@@ -28,13 +28,12 @@ import { widgetLanguage } from "@/utils/language";
 //   (utils/theme.js, Variablen mit dc).
 // - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
 //   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
-//   (Die Ausnahme E26 für greetingStyle entfällt seit 7.23: es gibt keine
-//   Datenschutz-Blase mehr, die eine Begrüßungsblase bräuchte.)
 // - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
 //   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
 //   Sponsor-Zeile): wirken immer.
 // - E24: Der KI-Hinweis (disclaimer, disclaimerText) ist auf keinem Weg
-//   abschaltbar oder änderbar (utils/layout.js AI_NOTICE).
+//   abschaltbar oder änderbar (utils/layout.js LOCKED_STANDARDS), ebenso
+//   der Link „Datenschutz“ und die Begrüßung als Blase.
 export const DC_COVERED = [
   "displayMode", // Darstellung
   "theme", // Farbschema
@@ -53,6 +52,7 @@ export const DC_COVERED = [
   "assistantSubtitle", // Untertitel
   "greeting", // Begrüßungstext
   "greetingBubbleText",
+  "greetingStyle", // Begrüßung (seit 7.23 immer als Blase, ohne Feld)
   "privacyNotice", // Datenschutz-Hinweis (seit 7.23 immer der Link)
   "privacyTitle",
   "privacyText",
@@ -82,6 +82,7 @@ const DC_HINTS = {
     "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
   privacyNotice:
     "Der Datenschutz-Hinweis erscheint immer als Link „Datenschutz“ unter der Eingabe.",
+  greetingStyle: "Die Begrüßung erscheint immer als Blase.",
 };
 // Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
 // „Frühere Chats“, KIE-503; kein Feld des Design Centers)
@@ -251,10 +252,10 @@ export const DEFAULT_SETTINGS = {
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
   // Panel-Optik, Standard seit Design Center vereinfacht (utils/layout.js
   // FIXED_STANDARDS, Gruppe B: eine Skript-Angabe verfeinert ihn, E23):
-  // Vorschläge als Pillen, Begrüßung als Blase, Folgefragen als Pillen.
-  // KI-Hinweis fest unter der Eingabe (AI_NOTICE, E24), in derselben Zeile
-  // der Link „Datenschutz“ (privacyNotice immer "link", utils/layout.js
-  // AI_NOTICE; keine Datenschutz-Blase beim Start).
+  // Vorschläge als Pillen, Folgefragen als Pillen. Fest (utils/layout.js
+  // LOCKED_STANDARDS): Begrüßung immer als Blase, KI-Hinweis unter der
+  // Eingabe (E24), in derselben Zeile der Link „Datenschutz“ (privacyNotice
+  // immer "link"; keine Datenschutz-Blase beim Start).
   // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
   // Design Center per Logo gesetzt.
   suggestionStyle: "pills",

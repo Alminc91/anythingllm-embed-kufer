@@ -7,9 +7,10 @@ import { sendSuggestion } from "../..";
 import Pill from "../Pill";
 
 // Panel-Optik (Mockup „Wunschfragen im Panel“, Variante B; seit Design Center
-// vereinfacht fester Standard: suggestionStyle "pills", greetingStyle
-// "bubble"); Vorschläge nur im leeren Chat, die Begrüßungsblase bleibt auch
-// im Verlauf (PanelGreeting). Seit 7.23 keine Datenschutz-Blase mehr: der
+// vereinfacht fester Standard suggestionStyle "pills", die Begrüßung ist
+// seit 7.23 immer eine Blase, utils/layout.js LOCKED_STANDARDS); Vorschläge
+// nur im leeren Chat, die Begrüßungsblase bleibt auch im Verlauf
+// (PanelGreeting). Seit 7.23 keine Datenschutz-Blase mehr: der
 // Datenschutz-Hinweis steht als Link „Datenschutz“ neben dem KI-Hinweis unter
 // der Eingabe und öffnet ein Fenster über dem Chat (Nutzerentscheidung
 // 23.10.2026, ChatContainer AiDisclaimer, PrivacyNotice). Farben/Rundung
@@ -50,9 +51,9 @@ export function SuggestedPills({ settings, align = "center" }) {
   );
 }
 
-// greetingStyle "bubble": Begrüßung als Assistenten-Blase mit Avatar, darunter
-// die Vorschläge (Pillen links eingerückt, Balken wie bisher mittig). Die
-// Spalte enthält nur die Begrüßungsblase (bis 7.22.2 darunter die
+// Begrüßung als Assistenten-Blase mit Avatar (immer, LOCKED_STANDARDS),
+// darunter die Vorschläge (Pillen links eingerückt, Balken wie bisher
+// mittig). Die Spalte enthält nur die Begrüßungsblase (bis 7.22.2 darunter die
 // Datenschutz-Blase; ein gespeicherter privacyNotice-Wert wirkt nicht mehr).
 // Beim Öffnen (ohne Animation): Die Begrüßungsblase muss sichtbar sein
 // (KIE-565, Browser-Fund B-02: bei 700 px Fensterhöhe stand sie über dem
@@ -100,7 +101,7 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
   );
 }
 
-// Begrüßung bleibt im Verlauf (greetingStyle "bubble"): nach der ersten
+// Begrüßung bleibt im Verlauf: nach der ersten
 // Frage und nach dem Laden eines Verlaufs steht die Begrüßungsblase als
 // festes erstes Element über den Nachrichten (kein Chat-Eintrag, wird nie
 // gesendet oder gespeichert; ChatHistory), ohne die Vorschläge.

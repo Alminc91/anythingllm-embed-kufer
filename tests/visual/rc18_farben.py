@@ -4,9 +4,11 @@ KI-Hinweises und der Gruppe A direkt am Element gegen Seiten-CSS und
 @property der Seite; Datenschutz-Blase wie die Begrüßungsblase
 (Nutzerentscheidung 23.10.2026, ersetzt E25: keine festen Farben mehr).
 Bewusste Änderung 7.23 (Datenschutz in der Fußzeile): keine Datenschutz-
-Blase mehr, E26 entfällt (data-greeting-style="text" wirkt); geprüft werden
-statt der Blase der Link „Datenschutz“ neben dem KI-Hinweis (feste Farben
-am Element, auch gegen @property --allmi-link) und die Begrüßungsblase.
+Blase mehr, E26 entfällt; geprüft werden statt der Blase der Link
+„Datenschutz“ neben dem KI-Hinweis (feste Farben am Element, auch gegen
+@property --allmi-link) und die Begrüßungsblase. Seit 7.23-rc3 (W13,
+Nutzer 24.10.2026) ist die Begrüßung immer eine Blase: data-greeting-style
+="text" wirkt nicht (Warnzeile), auch nicht bei Altwert privacyNotice none.
 
 Testseite per page.set_content (wie tests/visual/rc17_rangfolge.py), alle
 Aufrufe an den Server gemockt (/config wie ein Server ab 7.22). Seiten-CSS:
@@ -305,10 +307,14 @@ def case_bubble(browser, dist, out, label, dark, assert_on):
         page.wait_for_timeout(700)
         # --allm-assistant-bg der Seite gilt vor data-assistant-bg-color
         st = check(page, label, scheme, assert_on, PAGE_BG_WANT[scheme], " mit --allm-assistant-bg der Seite")
-        # Bewusste Änderung 7.23: E26 entfällt, data-greeting-style=text wirkt
-        record(f"{label} 7.23 (E26 entfällt): data-greeting-style=text wirkt, Begrüßung mittig ({scheme})",
-               st["greeting"] is None and st["privacy"] is None and st["centered"] == GREETING_DE,
-               {"begrüßung": st["greeting"], "mittig": st["centered"]}, assert_on)
+        # W13 (7.23-rc3): data-greeting-style=text wirkt nicht, Begrüßung als
+        # Blase, eine Warnzeile
+        hint = [t for (k, t) in page.console_log
+                if "data-greeting-style wirkt nicht" in t]
+        record(f"{label} W13: data-greeting-style=text wirkt nicht, Begrüßung als Blase ({scheme})",
+               st["greeting"] is not None and st["greeting"]["text"] == GREETING_DE
+               and st["privacy"] is None and st["centered"] is None and len(hint) == 1,
+               {"begrüßung": st["greeting"], "mittig": st["centered"], "warnzeile": hint}, assert_on)
         page.screenshot(path=str(out / f"{label}-chatfenster-{scheme}.png"))
         # Gruppe A: Akzent des Chat-Buttons (nach dem Schließen sichtbar)
         page.evaluate("() => { const b = [...window.__allmShadow.querySelectorAll('button')].find((x) => /schließen|close/i.test(x.getAttribute('aria-label') || '')); if (b) b.click(); }")
@@ -346,8 +352,9 @@ def case_inline(browser, dist, out, label, assert_on):
 
 
 def case_text(browser, dist, out, label, assert_on):
-    # Gegenprobe: Datenschutz aus -> data-greeting-style=text wirkt, Text mit
-    # dem Begrüßungsstandard der Sprache (W61)
+    # Gegenprobe: Altwert Datenschutz aus und data-greeting-style=text ->
+    # trotzdem die Begrüßungsblase mit dem Standard der Sprache (W13; bis
+    # 7.23-rc2 Text mittig, W61)
     config = {**SERVER, "privacyNotice": "none"}
     ctx, page = open_page(browser, dist, config, {"greeting-style": "text", "open-on-load": "on"},
                           page_css(TRAP["hell"]))
@@ -355,10 +362,11 @@ def case_text(browser, dist, out, label, assert_on):
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(600)
         st = page.evaluate(PROBE)
-        record(f"{label} W61 (Altwert privacyNotice none): Text mittig mit Begrüßungsstandard",
-               st["privacy"] is None and st["greeting"] is None and st["centered"] == GREETING_DE,
-               {"mittig": st["centered"], "datenschutz": st["privacy"]}, assert_on)
-        page.screenshot(path=str(out / f"{label}-text-ohne-datenschutz.png"))
+        record(f"{label} W13 (Altwert privacyNotice none, data-greeting-style=text): Blase mit Begrüßungsstandard",
+               st["privacy"] is None and st["centered"] is None and st["greeting"] is not None
+               and st["greeting"]["text"] == GREETING_DE,
+               {"mittig": st["centered"], "begrüßung": st["greeting"], "datenschutz": st["privacy"]}, assert_on)
+        page.screenshot(path=str(out / f"{label}-blase-ohne-datenschutz.png"))
     finally:
         ctx.close()
 
