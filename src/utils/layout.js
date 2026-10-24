@@ -22,7 +22,11 @@ export const INLINE_CHIPS_MAX = 6;
 export const INLINE_MIN_HEIGHT_PX = 400;
 export const INLINE_MAX_HEIGHT_PX = 1200;
 export const INLINE_MIN_WIDTH_PX = 280;
-export const WINDOW_MIN_WIDTH_PX = 320;
+// Chatfenster ab 768 px nie schmaler (W12, Nutzer 24.10.2026): der
+// Platzhalter steht so einzeilig neben dem Mikrofon-Button. Gilt für den
+// Standard (BUBBLE_WINDOW_CLASSES) und für eine Fenstergröße aus einem
+// älteren Design Center (bubbleWindowCss); bis 7.23-rc2 320 px.
+export const WINDOW_MIN_WIDTH_PX = 360;
 export const WINDOW_MIN_HEIGHT_PX = 400;
 export const OFFSET_MAX_PX = 200;
 export const INLINE_TEXT_MAX_LEN = 120;
@@ -921,6 +925,23 @@ export function panelPills(settings = {}) {
         : text,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Blase: Größe des Chatfensters (Klassen am #anything-llm-chat, App.jsx).
+// Mobil (unter 768 px) Vollbild ohne Rundung; ab 768 px 40 %, ab 1280 px
+// 25 % der Breite, nie schmaler als WINDOW_MIN_WIDTH_PX (W12: 768 px ergibt
+// 360 statt 307 px, 1280 px 360 statt 320 px, 1366 px 360 statt 342 px;
+// ab 1440 px wie bisher, 1920 px 480 px), Höhe 77 %. Die 360 steht als
+// Zahl in den Klassen, weil Tailwind nur feste Klassennamen erzeugt
+// (tests/datenschutz-rc3.test.jsx prüft den Gleichlauf). Breiter als die
+// Seite minus Randabstand wird das Fenster damit nicht: 360 px plus 2 × 16
+// px (mit data-offset-x höchstens 200 px) passen ab 768 px immer.
+export const BUBBLE_WINDOW_CLASSES = [
+  "allm-inset-0 allm-w-full allm-h-full allm-rounded-none",
+  "md:allm-inset-auto md:allm-max-w-[max(40%,360px)] md:allm-max-h-[77%]",
+  "md:allm-rounded-[var(--allmi-radius,16px)] md:allm-mb-4",
+  "xl:allm-max-w-[max(25%,360px)]",
+].join(" ");
 
 // ---------------------------------------------------------------------------
 // Blase: CSS für Fenstergröße/Randabstand (nur Tablet/Desktop >=768px; mobil

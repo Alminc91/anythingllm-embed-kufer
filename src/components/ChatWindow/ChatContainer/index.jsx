@@ -350,7 +350,8 @@ export function appendDraft(current, draft) {
 // ausfüllt. Gemessen (tests/visual/disclaimer_measure.py, 23.10.2026): die
 // Zeile braucht bei 11 px deutsch 251,5 px (DejaVu Sans) bzw. 258 px
 // (geerbte Serifenschrift In der Seite), englisch 198 bzw. 203 px; das
-// Chatfenster bei 1280 px hat 320 px.
+// Chatfenster ist ab 768 px mindestens 360 px breit (W12, bis 7.23-rc2 bei
+// 1280 px 320 px).
 function AiDisclaimer({
   settings,
   onOpenPrivacy = null,

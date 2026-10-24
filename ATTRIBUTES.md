@@ -71,7 +71,7 @@ Ebenfalls ohne Wirkung (mit Warnzeile), aber nicht aus dem Design Center:
 | Attribut | Grund |
 |----------|-------|
 | `data-disclaimer`, `data-disclaimer-text` | KI-Hinweis fest (E24): immer unter dem Eingabefeld, genau eine Zeile (11 px, in schmalen Fenstern bis 10 px, sonst mit „…“ gekürzt, voller Text im Tooltip), Text „Unsere KI kann Fehler machen“ (`en`: „Our AI can make mistakes“), daneben der Link „Datenschutz“ („Privacy“); gekürzt wird nur der Satz, nie der Link |
-| `data-window-width`, `data-window-height` | Fenstergröße fest (Tablet 40 %, Desktop ab 1280 px 25 % Breite, 77 % Höhe; mobil Vollbild) |
+| `data-window-width`, `data-window-height` | Fenstergröße fest (Tablet 40 %, Desktop ab 1280 px 25 % Breite, jeweils mindestens 360 px, 77 % Höhe; mobil Vollbild) |
 | `data-online-dot` | Den Online-Punkt gibt es nicht mehr |
 
 ---
@@ -189,8 +189,8 @@ Nur Pflicht- und Entwickler-Attribute; Aussehen und Texte kommen aus dem Design 
 ### Responsive Verhalten (eingebaut)
 Das Widget passt sich automatisch an:
 - **Mobile** (<768px): Fullscreen, 100% Breite/Höhe
-- **Tablet** (768-1279px): 40% Breite, 77% Höhe
-- **Desktop** (≥1280px): 25% Breite, 77% Höhe
+- **Tablet** (768-1279px): 40% Breite, mindestens 360 px, 77% Höhe
+- **Desktop** (≥1280px): 25% Breite, mindestens 360 px (seit 7.23; 1280 px ergibt 360 px, 1920 px 480 px), 77% Höhe
 
 ### Shadow DOM
 Das Widget verwendet Shadow DOM für CSS-Isolation. Styles der Host-Seite beeinflussen das Widget nicht, nur die CSS-Variablen `--allm-*` (README).

@@ -16,6 +16,7 @@ import { embedderSettings, inlineTailwindStyles } from "@/main";
 import {
   applyDisplayed,
   bubbleButtonStyle,
+  BUBBLE_WINDOW_CLASSES,
   bubbleWindowCss,
   findMountTarget,
   warnIfInlineInputIgnored,
@@ -234,17 +235,9 @@ export default function App() {
     "top-right": "allm-right-0 allm-mr-4",
   };
 
-  // Responsive layout:
-  // Mobile (<768px): 100% width/height, no rounded corners, fullscreen
-  // Tablet (768-1279px): 40% width, 77% height, rounded corners (inkl. iPad Pro 1024px)
-  // Desktop (>=1280px): 25% width, 77% height, rounded corners
-  const responsiveClasses = `
-    allm-inset-0
-    allm-w-full allm-h-full
-    allm-rounded-none
-    md:allm-inset-auto md:allm-max-w-[40%] md:allm-max-h-[77%] md:allm-rounded-[var(--allmi-radius,16px)] md:allm-mb-4
-    xl:allm-max-w-[25%]
-  `;
+  // Größe des Chatfensters: mobil Vollbild, ab 768 px 40 %, ab 1280 px 25 %
+  // der Breite, nie schmaler als 360 px, Höhe 77 % (utils/layout.js
+  // BUBBLE_WINDOW_CLASSES, W12)
 
   // Optionale Fenstergröße/Randabstand (Design Center). Leer -> "" -> exakt
   // bisherige Klassen-Größen. Werte sind whitelist-validiert (utils/layout).
@@ -259,7 +252,7 @@ export default function App() {
       >
         <div
           ref={chatWindowRef}
-          className={`allm-bubble-window allm-fixed allm-border allm-flex allm-flex-col allm-overflow-hidden ${responsiveClasses} ${positionClasses[position]}`}
+          className={`allm-bubble-window allm-fixed allm-border allm-flex allm-flex-col allm-overflow-hidden ${BUBBLE_WINDOW_CLASSES} ${positionClasses[position]}`}
           style={BUBBLE_WINDOW_STYLE}
           id="anything-llm-chat"
         >

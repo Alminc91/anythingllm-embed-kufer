@@ -190,3 +190,64 @@ describe("W13: Begrüßung immer als Blase, data-greeting-style wirkt nicht", ()
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// W12 Chatfenster ab 768 px nie schmaler als 360 px (Nutzer 24.10.2026:
+// „Ja, machen wir gerne 360px“): bis 7.23-rc2 40 % bzw. ab 1280 px 25 %,
+// also 307 px bei 768, 320 px bei 1280, 342 px bei 1366; der Platzhalter
+// brach um (mit Mikrofon-Button). Die Messung im Browser steht in
+// tests/visual/fensterbreite.py.
+describe("W12: Chatfenster mindestens 360 px", () => {
+  const classes = () => String(layout.BUBBLE_WINDOW_CLASSES || "").split(/\s+/);
+
+  it("eine Mindestbreite für Standard und Fenstergröße aus dem Design Center", () => {
+    expect(layout.WINDOW_MIN_WIDTH_PX).toBe(360);
+    expect(layout.bubbleWindowCss({ windowWidth: "300px" })).toContain(
+      "width: min(max(360px, 300px), calc(100vw - 32px)) !important;",
+    );
+  });
+
+  it("Klassen: max(40 %, 360 px) ab 768 px, max(25 %, 360 px) ab 1280 px, mobil Vollbild", () => {
+    const min = layout.WINDOW_MIN_WIDTH_PX;
+    expect(classes()).toEqual(
+      expect.arrayContaining([
+        "allm-w-full",
+        "allm-h-full",
+        "allm-inset-0",
+        `md:allm-max-w-[max(40%,${min}px)]`,
+        `xl:allm-max-w-[max(25%,${min}px)]`,
+        "md:allm-max-h-[77%]",
+      ]),
+    );
+    expect(classes()).not.toContain("md:allm-max-w-[40%]");
+    expect(classes()).not.toContain("xl:allm-max-w-[25%]");
+  });
+
+  it("App.jsx nutzt die Klassen aus layout.js (eine Quelle), keine eigene Fensterbreite", () => {
+    const src = read("src/App.jsx");
+    expect(src).toContain("BUBBLE_WINDOW_CLASSES");
+    expect(src).not.toMatch(/allm-max-w-\[/);
+  });
+
+  // Rechnung wie im Browser: Breite = min(100 %, max(Anteil, 360 px)); der
+  // Randabstand (16 px je Seite, mit data-offset-x höchstens 200 px) bleibt
+  // ab 768 px immer frei
+  it.each([
+    [768, 360],
+    [1024, 409.6],
+    [1279, 511.6],
+    [1280, 360],
+    [1366, 360],
+    [1440, 360],
+    [1920, 480],
+  ])("bei %i px Breite %f px", (vw, want) => {
+    const share = vw >= 1280 ? 0.25 : 0.4;
+    const width = Math.min(
+      vw,
+      Math.max(share * vw, layout.WINDOW_MIN_WIDTH_PX),
+    );
+    expect(width).toBeCloseTo(want, 1);
+    expect(width + 2 * 16).toBeLessThanOrEqual(vw);
+    expect(width + 200).toBeLessThanOrEqual(vw);
+  });
+});

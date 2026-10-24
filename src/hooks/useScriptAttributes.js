@@ -181,8 +181,9 @@ export const DEFAULT_SETTINGS = {
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
   // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
-  // (Server-Config). null = bisherige Standardgröße (40 % / 25 % Breite, 77 %
-  // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
+  // (Server-Config). null = Standardgröße (40 % / 25 % Breite, mindestens
+  // 360 px, 77 % Höhe per Klassen, utils/layout.js BUBBLE_WINDOW_CLASSES).
+  // Früher standen hier "80%"/"25%", die aber nie ausgewertet
   // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
   // Bestandskunden. data-window-width/-height am Script werden verworfen
   // (IGNORED_HINTS, mit Warnung).
