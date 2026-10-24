@@ -90,6 +90,7 @@ export default function PrivacyDialog({
       : items[(i + 1) % items.length];
     e.preventDefault();
     next.focus({ preventScroll: true });
+    revealFocused(next);
   };
 
   return (
@@ -146,6 +147,9 @@ export default function PrivacyDialog({
           minHeight: 0,
           overflowY: "auto",
           overscrollBehavior: "contain",
+          // Abstand beim Sichtbarmachen (W5), damit der Fokusrahmen (2 px
+          // mit 2 px Abstand) am Rand des Textbereichs nicht abgeschnitten wird
+          scrollPaddingBlock: "8px",
           boxSizing: "border-box",
           padding: "16px 20px",
           display: "flex",
@@ -257,6 +261,15 @@ export default function PrivacyDialog({
       </button>
     </div>
   );
+}
+
+// Tab im Fenster (W5): das neue Ziel sichtbar machen. Der Fokus selbst
+// bleibt ohne Bildlauf (preventScroll), weil der Browser dabei auch die Seite
+// verschiebt und das Ziel mittig setzt; „nearest“ scrollt den Textbereich
+// und die Seite nur so weit wie nötig (die Seite im Chatfenster und mobil,
+// fest positioniert, gar nicht).
+function revealFocused(el) {
+  el.scrollIntoView?.({ block: "nearest", inline: "nearest" });
 }
 
 // Bedienbare Elemente im Fenster in Dokumentreihenfolge (Tab-Falle)

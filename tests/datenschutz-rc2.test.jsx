@@ -310,3 +310,76 @@ describe("W4: Fokusfalle gibt den Fokus an das Element im Fenster zurück", () =
     expect(chatService.streamChat).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+describe("W5: Tab im langen Text zeigt das fokussierte Element", () => {
+  const LONG = {
+    ...OWN,
+    privacyText: Array.from(
+      { length: 12 },
+      (_, i) =>
+        `• Punkt ${i + 1}: Ihre Anfragen werden nur für die Antwort genutzt.`,
+    ).join("\n"),
+  };
+  const tab = (shiftKey = false) => {
+    const e = new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => document.activeElement.dispatchEvent(e));
+    return e;
+  };
+  let scrolled;
+  beforeEach(() => {
+    scrolled = [];
+    // jsdom kennt scrollIntoView nicht; aufgezeichnet wird, welches Element
+    // mit welcher Ausrichtung sichtbar gemacht wird
+    Element.prototype.scrollIntoView = function (opts) {
+      scrolled.push({ el: this, opts });
+    };
+  });
+  afterEach(() => {
+    delete Element.prototype.scrollIntoView;
+  });
+
+  it("Tab auf den Link „Datenschutzerklärung“: der Link wird im Textbereich sichtbar, nur so weit wie nötig", () => {
+    const d = openDialog(LONG);
+    const a = d.querySelector("a");
+    tab();
+    tab();
+    expect(document.activeElement).toBe(a);
+    const last = scrolled.at(-1);
+    expect(last?.el).toBe(a);
+    expect(last?.opts).toEqual({ block: "nearest", inline: "nearest" });
+  });
+
+  it("Umschalt+Tab von „Schließen“ zurück auf den Link: ebenso", () => {
+    const d = openDialog(LONG);
+    const a = d.querySelector("a");
+    act(() => closeButton(d).focus());
+    scrolled = [];
+    tab(true);
+    expect(document.activeElement).toBe(a);
+    expect(scrolled.map((s) => s.el)).toEqual([a]);
+    expect(scrolled[0].opts).toEqual({ block: "nearest", inline: "nearest" });
+  });
+
+  it("jeder Tab-Schritt macht sein Ziel sichtbar (Text, Link, Schließen, Symbol)", () => {
+    const d = openDialog(LONG);
+    const targets = [];
+    for (let i = 0; i < 5; i++) {
+      tab();
+      targets.push(document.activeElement);
+    }
+    expect(scrolled.map((s) => s.el)).toEqual(targets);
+    expect(d.contains(targets.at(-1))).toBe(true);
+  });
+
+  it("Textbereich mit Abstand zum Rand für den Fokusrahmen (scroll-padding)", () => {
+    openDialog(LONG);
+    const body = $(`#${theme.PRIVACY_DIALOG_BODY_ID}`);
+    expect(body.style.scrollPaddingBlock).toBe("8px");
+  });
+});

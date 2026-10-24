@@ -31,6 +31,9 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
     hell und dunkel
   - W4: Fokus auf „Schließen“ im Fenster, die Antwort endet (Eingabefeld
     holt den Fokus): der Fokus bleibt auf „Schließen“, nichts wird gesendet
+  - W5: langer Text (12 Punkte), Tab und Umschalt+Tab auf den Link
+    „Datenschutzerklärung“: Link samt Fokusrahmen im sichtbaren Textbereich,
+    die Seite bewegt sich nicht
 
 Aufruf (aus dem Repo, npm run build vorher):
 
@@ -476,10 +479,55 @@ def check_w4(browser, base_url):
             ctx.close()
 
 
+LINK_VIEW_JS = r"""
+() => {
+  const a = window.__q('[role=dialog] a');
+  const b = window.__q('#anything-llm-privacy-dialog-body');
+  const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+  return { link: [Math.round(ra.top), Math.round(ra.bottom)], body: [Math.round(rb.top), Math.round(rb.bottom)],
+    scrollTop: Math.round(b.scrollTop), pageY: window.scrollY,
+    // Link samt Fokusrahmen (2 px mit 2 px Abstand) im sichtbaren Textbereich
+    ring: ra.top - 4 >= rb.top - 0.5 && ra.bottom + 4 <= rb.bottom + 0.5,
+    viewport: ra.top >= 0 && ra.bottom <= innerHeight };
+}
+"""
+
+
+def check_w5(browser, base_url):
+    # W5: Tab und Umschalt+Tab im langen Text machen den Link sichtbar, die
+    # Seite bewegt sich nicht (Fenster passt in den Bildschirm)
+    for display, width, height in (("bubble", 1280, 800), ("inline", 1440, 900), ("inline", 1920, 1080),
+                                   ("bubble", 390, 800)):
+        for theme in ("light", "dark"):
+            ctx, page = open_view(browser, base_url, display, width, height, theme, "de",
+                                  config={"privacyText": LONG_TEXT})
+            try:
+                y0 = page.evaluate("() => window.scrollY")
+                click_link(page)
+                page.keyboard.press("Tab")
+                page.keyboard.press("Tab")
+                act1 = state(page)["active"]
+                v1 = page.evaluate(LINK_VIEW_JS)
+                page.screenshot(path=str(OUT_DIR / f"rc2-w5-tab-{display}-{width}-{theme}.png"))
+                # zurück an den Anfang des Textes, dann Umschalt+Tab von „Schließen“
+                page.evaluate("() => { window.__q('#anything-llm-privacy-dialog-body').scrollTop = 0; }")
+                page.keyboard.press("Tab")
+                page.keyboard.press("Shift+Tab")
+                act2 = state(page)["active"]
+                v2 = page.evaluate(LINK_VIEW_JS)
+                ok = (act1 == act2 == "Datenschutzerklärung" and v1["ring"] and v2["ring"] and v1["viewport"]
+                      and v1["scrollTop"] > 0 and v1["pageY"] == y0 and v2["pageY"] == y0)
+                record(f"W5 Tab und Umschalt+Tab im langen Text: Link sichtbar, Seite bleibt ({display} {width}, {theme})",
+                       ok, {"tab": v1, "umschalt_tab": v2, "seite_vorher": y0, "aktiv": [act1, act2]})
+            finally:
+                ctx.close()
+
+
 # Prüfungen der Korrekturen nach rc1 (Fixliste), einzeln wählbar mit --only
 RC2_CHECKS = {
     "w2": check_rc2,
     "w4": check_w4,
+    "w5": check_w5,
 }
 
 
