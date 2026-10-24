@@ -22,7 +22,8 @@
 // Center ein, die Farben des KI-Hinweises und des Datenschutz-Fensters (seit
 // 7.23-rc2, R1-D1, PRIVACY_DIALOG_COLORS) sind fest; die Datenschutz-Blase
 // beim Start (nur mit privacyStartBubble, AK-12) hat keine festen Farben, sie
-// folgt der Begrüßungsblase (PanelWelcome). Die dc-Variablen setzt das
+// folgt der Begrüßungsblase (PanelWelcome); nur ihr Link hat wie alle
+// Datenschutz-Links die feste Farbe privacyLinkColor (L1). Die dc-Variablen setzt das
 // Widget direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
 // `:host` UND auf jedem Element im Shadow-Root
 // (`:host, :host * { --allmi-accent: #007c82 !important; }`).
@@ -103,6 +104,9 @@ export const PRIVACY_LINK_ID = "anything-llm-privacy-link";
 export const PRIVACY_DIALOG_ID = "anything-llm-privacy-dialog";
 export const PRIVACY_DIALOG_TITLE_ID = "anything-llm-privacy-dialog-title";
 export const PRIVACY_DIALOG_BODY_ID = "anything-llm-privacy-dialog-body";
+// Datenschutz-Blase beim Start (AK-12, PanelWelcome PrivacyBubble): Kennung
+// wie 7.22.2; hier, weil das Theme-Stylesheet ihren Link färbt (L1)
+export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
 // Textspalte des Datenschutz-Fensters bei „In der Seite“ (R1-D2, Fixliste
 // rc1): höchstens 70ch, linksbündig (ch = Breite der Ziffer 0; Text ergibt
 // gemessen rund 80 bis 90 Zeichen je Zeile); derselbe Wert wie in der
@@ -172,6 +176,17 @@ const DEFAULTS = {
   userBg: DEFAULT_ACCENT,
   assistantBg: "#FFFFFF",
   link: DEFAULT_ACCENT,
+};
+
+// Fläche der Datenschutz-Blase beim Start, gegen die ihr Link gerechnet wird
+// (L1): die Standardfläche der Begrüßungsblase (assistant-bg), hell Weiß,
+// dunkel DARK.assistantBg. data-assistant-bg-color und --allm-assistant-bg
+// der Seite (Gruppe B) zählen nicht: Die Farbe der Datenschutz-Links ist
+// eine feste Regel, und Werte der Seite kann das Widget nicht verlässlich
+// lesen.
+export const PRIVACY_BUBBLE_BG = {
+  light: DEFAULTS.assistantBg,
+  dark: DARK.assistantBg,
 };
 
 // Werte aus Settings landen als CSS-Text im Stylesheet -> nur harmlose Zeichen
@@ -288,16 +303,21 @@ export function pillTextColor(settings = {}, mode = "light") {
   return same ? "var(--allmi-accent)" : text;
 }
 
-// Farbe des Links „Datenschutz“ neben dem KI-Hinweis (7.23), des Links
-// „Datenschutzerklärung“ und aller Fokusrahmen im Datenschutz-Fenster
-// (R1-D1): die Linkfarbe des Widgets (hell aus dem Design Center, Gruppe A;
-// dunkel DARK.link) mit mindestens 4,5:1 zu beiden festen Flächen, der des
-// KI-Hinweises (AI_NOTICE_COLORS) und der des Fensters
-// (PRIVACY_DIALOG_COLORS); hell abgedunkelt, dunkel aufgehellt, wenn nötig.
-// Reicht die Linkfarbe, bleibt sie unverändert. Gilt als Regel direkt am
-// Element (buildThemeCss), damit weder Seiten-CSS noch eine zu helle
-// Kundenfarbe Link oder Fokusrahmen unlesbar machen (Fokusrahmen brauchen
-// 3:1, die Linkfarbe hat immer 4,5:1).
+// Farbe aller Datenschutz-Links, eine Quelle (L1, Hinweis O1 zu AK-12): der
+// Link „Datenschutz“ neben dem KI-Hinweis (7.23), der Link
+// „Datenschutzerklärung“ und alle Fokusrahmen im Datenschutz-Fenster
+// (R1-D1) und der Link „Datenschutzerklärung“ in der Datenschutz-Blase beim
+// Start (AK-12; bis 7.23-rc5 dort die rohe Linkfarbe var(--allmi-link),
+// etwa #FFA102 auf Weiß 2,0:1). Die Linkfarbe des Widgets (hell aus dem
+// Design Center, Gruppe A; dunkel DARK.link) mit mindestens 4,5:1 zu allen
+// drei Flächen, der des KI-Hinweises (AI_NOTICE_COLORS), der des Fensters
+// (PRIVACY_DIALOG_COLORS) und der der Blase (PRIVACY_BUBBLE_BG); hell
+// abgedunkelt, dunkel aufgehellt, wenn nötig. Reicht die Linkfarbe, bleibt
+// sie unverändert. Gilt als Regel direkt am Element (buildThemeCss), damit
+// weder Seiten-CSS noch eine zu helle Kundenfarbe Link oder Fokusrahmen
+// unlesbar machen (Fokusrahmen brauchen 3:1, die Linkfarbe hat immer
+// 4,5:1). Die Vorschau im Design Center rechnet gleich
+// (WidgetPreview previewPrivacyLinkColor, Gegenprobe mit KUFER_EMBED_DIR).
 export function privacyLinkColor(settings = {}, mode = "light") {
   const scheme = mode === "dark" ? "dark" : "light";
   const link =
@@ -305,6 +325,7 @@ export function privacyLinkColor(settings = {}, mode = "light") {
   const text = accessibleTextColor(link, [
     AI_NOTICE_COLORS[scheme].bg,
     PRIVACY_DIALOG_COLORS[scheme].bg,
+    PRIVACY_BUBBLE_BG[scheme],
   ]);
   if (!text) return link;
   const same = parseColor(text).every((v, i) => v === parseColor(link)[i]);
@@ -574,8 +595,9 @@ export function buildThemeCss(settings = {}, mode = "light") {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // KI-Hinweis (E24), daneben der Link „Datenschutz“ (7.23) und das
-  // Datenschutz-Fenster (R1-D1) fest
+  // KI-Hinweis (E24), daneben der Link „Datenschutz“ (7.23), das
+  // Datenschutz-Fenster (R1-D1) und der Link in der Datenschutz-Blase (L1)
+  // fest
   const scheme = mode === "dark" ? "dark" : "light";
   const notice = AI_NOTICE_COLORS[scheme];
   const dialog = PRIVACY_DIALOG_COLORS[scheme];
@@ -613,6 +635,10 @@ export function buildThemeCss(settings = {}, mode = "light") {
     `#${AI_NOTICE_ID} { color: ${notice.text} !important; }\n` +
     `#${AI_NOTICE_ID} > span { background-color: ${notice.bg} !important; }\n` +
     `#${PRIVACY_LINK_ID} { color: ${link} !important; background-color: ${notice.bg} !important; }\n` +
+    // Link zur Datenschutzerklärung in der Datenschutz-Blase beim Start
+    // (AK-12, L1): dieselbe Farbe wie die übrigen Datenschutz-Links; die
+    // Fläche der Blase bleibt die der Begrüßung (keine Regel)
+    `#${PRIVACY_BUBBLE_ID} a { color: ${link} !important; }\n` +
     // Datenschutz-Fenster (R1-D1): Fläche, Schrift, Trennlinien, Link und
     // Fokusrahmen fest, ohne Variable; Fokusrahmen mit Abstand, damit er nur
     // an die Fensterfläche grenzt (auch beim Button in der Akzentfarbe).

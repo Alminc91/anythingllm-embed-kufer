@@ -313,6 +313,10 @@ function resolveCss(value, decls, page = {}) {
 // 7.23-rc2): feste Farben je Farbschema als Regel am Element wie der
 // KI-Hinweis, keine Variable der Seite wirkt darauf; die Begrüßungsblase
 // folgt weiter data-assistant-bg-color und den Variablen der Seite.
+// Bewusste Änderung (AK-12, L1, 24.10.2026): Die Datenschutz-Blase beim
+// Start gibt es wieder (privacyStartBubble); ihre Kennung PRIVACY_BUBBLE_ID
+// steht in theme.js, und genau eine Regel nennt sie: die Farbe ihres Links
+// (privacyLinkColor). Ihre Fläche folgt wie die Begrüßung den Variablen.
 describe("Datenschutz-Fenster mit festen Farben, Begrüßungsblase wie bisher (R1-D1, ersetzt D2 und E25)", () => {
   const settings = { buttonColor: "#0b5f8a", userTextColor: "#FFFFFF" };
   const dialogParts = () => ({
@@ -326,7 +330,6 @@ describe("Datenschutz-Fenster mit festen Farben, Begrüßungsblase wie bisher (R
       "PRIVACY_TEXT",
       "PRIVACY_TITLE",
       "PRIVACY_BG",
-      "PRIVACY_BUBBLE_ID",
       "PRIVACY_TITLE_ID",
     ])
       expect(theme[name], name).toBeUndefined();
@@ -339,7 +342,12 @@ describe("Datenschutz-Fenster mit festen Farben, Begrüßungsblase wie bisher (R
       expect(ruleFor(css, "#anything-llm-privacy-dialog"), mode).toBe(
         `#anything-llm-privacy-dialog { color: ${c.text} !important; background-color: ${c.bg} !important; }`,
       );
-      expect(css, mode).not.toContain("privacy-bubble");
+      expect(
+        css.split("\n").filter((l) => l.includes("privacy-bubble")),
+        mode,
+      ).toEqual([
+        `#anything-llm-privacy-bubble a { color: ${theme.privacyLinkColor(settings, mode)} !important; }`,
+      ]);
       expect(ruleFor(css, "#anything-llm-ai-disclaimer"), mode).toBe(
         `#anything-llm-ai-disclaimer { color: ${theme.AI_NOTICE_COLORS[mode].text} !important; }`,
       );

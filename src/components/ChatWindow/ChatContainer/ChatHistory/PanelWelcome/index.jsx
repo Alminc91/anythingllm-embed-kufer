@@ -6,6 +6,7 @@ import {
   BUBBLE_SHADOW,
   DEFAULT_ACCENT,
   LOGO_RADIUS,
+  PRIVACY_BUBBLE_ID,
 } from "@/utils/theme";
 import {
   greetingText,
@@ -33,8 +34,9 @@ import Pill from "../Pill";
 // Theme). Texte immer als Text, nie als HTML.
 
 // Kennungen der Datenschutz-Blase und ihrer Überschrift (wie 7.22.2; Tests
-// und Messungen, tests/visual/datenschutz_blase.py)
-export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
+// und Messungen, tests/visual/datenschutz_blase.py). Die Kennung der Blase
+// steht in utils/theme.js, weil das Theme-Stylesheet ihren Link färbt (L1).
+export { PRIVACY_BUBBLE_ID };
 export const PRIVACY_BUBBLE_TITLE_ID = "anything-llm-bubble-privacy-title";
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
@@ -221,7 +223,11 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
 // „Datenschutz“ bzw. „Privacy“), darunter der Text (privacyText: Zeilen mit
 // „•“/„-“ als Aufzählung, andere als Absätze; sonst die Standardpunkte), am
 // Ende der Link „Datenschutzerklärung“ in eigener Zeile, nur mit gültiger
-// privacyUrl (https oder Pfad der Seite, privacyHref; neuer Tab). Ohne den
+// privacyUrl (https oder Pfad der Seite, privacyHref; neuer Tab), in der
+// Farbe aller Datenschutz-Links (L1: utils/theme.js privacyLinkColor,
+// mindestens 4,5:1 zur Fläche der Blase; die Regel steht direkt am Element
+// im Theme-Stylesheet, buildThemeCss; der Wert im style gilt nur ohne dieses
+// Stylesheet, wie beim Link „Datenschutz“ in der Fußzeile). Ohne den
 // Punkt „Hinweis zur KI“: der steht im Datenschutz-Fenster, die KI-Zeile
 // unter der Eingabe. Gleiche Fläche, Schrift, Schriftgröße, Zeilenhöhe und
 // Innenabstand wie die Begrüßungsblase (BUBBLE_STYLE). Alles Text, nie HTML.

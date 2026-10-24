@@ -28,10 +28,14 @@ Blase mit der Begrüßung oben stehen, die Vorschläge sind weg, der Link
 Skript und ein Altwert privacyNotice „bubble“ vom Server schalten keine
 Blase ein; HTML in Überschrift und Text erscheint als Text (NAK-1); ein
 javascript:-Link wird nicht verlinkt (NAK-3).
+L1 Linkfarbe (Hinweis O1, 24.10.2026; Chatfenster und In der Seite 1440,
+hell und dunkel, Linkfarbe Standard, #FFA102 und #63b4e3): der Link in der
+Blase hat mindestens 4,5:1 zur Fläche der Blase und dieselbe Farbe wie der
+Link „Datenschutz“ in der Fußzeile und der Link im Datenschutz-Fenster.
 
 Aufruf (aus dem Repo, npm run build vorher):
 
-  python3 tests/visual/datenschutz_blase.py [--dist dist] [--tag neu] [--lang de en] [--themes light dark] [--views …]
+  python3 tests/visual/datenschutz_blase.py [--dist dist] [--tag neu] [--lang de en] [--themes light dark] [--views …] [--skip-once] [--skip-links]
 
 Ergebnis: .test-storage/datenschutz-blase-<tag>.json, Bilder
 .test-storage/blase-<tag>-<lang>-<ansicht>-<theme>-<an|aus>.png und
@@ -281,6 +285,38 @@ def check_once(browser, base_url):
         ctx.close()
 
 
+# L1 (Hinweis O1 zu AK-12): eine Farbe für alle Datenschutz-Links
+# (utils/theme.js privacyLinkColor), mindestens 4,5:1 zur jeweiligen Fläche
+LINK_COLORS = [None, "#FFA102", "#63b4e3"]
+
+
+def check_link_colors(browser, base_url, themes):
+    for name, display in (("fenster-1440", "bubble"), ("seite-1440", "inline")):
+        for theme in themes:
+            for link_color in LINK_COLORS:
+                tag = f"{name} {theme} {link_color or 'Standard'}"
+                config = {**ON, **({"linkColor": link_color} if link_color else {})}
+                ctx, page = df.open_view(browser, base_url, display, 1440, 900, theme, "de", config=config)
+                try:
+                    tv.wait_shadow(page, "#anything-llm-privacy-bubble a")
+                    tv.settle(page, 300)
+                    st = page.evaluate(BUBBLE_JS, STYLE_PROPS)
+                    b = st["bubble"] or {}
+                    link = (b.get("link") or {}).get("color")
+                    bg = (b.get("style") or {}).get("backgroundColor")
+                    foot = df.state(page)["link"]["color"]
+                    df.click_link(page)
+                    d = df.state(page).get("dialog") or {}
+                    dialog_link = (d.get("link") or {}).get("color")
+                    ratio = contrast_of(link or "rgb(0,0,0)", bg or "rgb(0,0,0)")
+                    record(f"L1 Linkfarbe: Link in der Blase ≥ 4,5:1 und gleich Fußzeile und Fenster ({tag})",
+                           link is not None and ratio >= 4.5 and link == foot == dialog_link,
+                           {"blase": link, "flaeche": bg, "kontrast": ratio, "fusszeile": foot,
+                            "fenster": dialog_link})
+                finally:
+                    ctx.close()
+
+
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", default=str(ROOT / "dist"))
@@ -289,6 +325,7 @@ def parse_args():
     ap.add_argument("--themes", nargs="+", default=["light", "dark"])
     ap.add_argument("--views", nargs="+", default=[v[0] for v in VIEWS])
     ap.add_argument("--skip-once", action="store_true")
+    ap.add_argument("--skip-links", action="store_true")
     return ap.parse_args()
 
 
@@ -316,6 +353,11 @@ def main():
                 check_once(browser, base_url)
             except Exception as e:
                 record("Ablauf einmalige Prüfungen", False, str(e).splitlines()[0])
+        if not args.skip_links:
+            try:
+                check_link_colors(browser, base_url, args.themes)
+            except Exception as e:
+                record("Ablauf L1 Linkfarbe", False, str(e).splitlines()[0])
         browser.close()
     srv.shutdown()
     out = OUT_DIR / f"datenschutz-blase-{args.tag}.json"

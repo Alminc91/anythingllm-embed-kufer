@@ -21,6 +21,9 @@ import { resolve } from "node:path";
 //  - Vertrag 5 (D1): der Link „Datenschutz“ in der Fußzeile bleibt immer,
 //    das Fenster unverändert.
 //  - Vertrag 7: ATTRIBUTES.md und README nennen den Schlüssel.
+//  - L1 (Hinweis O1, 24.10.2026): Der Link in der Blase hat dieselbe
+//    kontrastgeprüfte Farbe wie die übrigen Datenschutz-Links (Fußzeile,
+//    Fenster): privacyLinkColor, mindestens 4,5:1 zur Fläche der Blase.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,6 +62,9 @@ import ChatContainer, {
 } from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import ChatWindow from "../src/components/ChatWindow/index.jsx";
+import { PRIVACY_BUBBLE_ID } from "../src/components/ChatWindow/ChatContainer/ChatHistory/PanelWelcome/index.jsx";
+import * as theme from "../src/utils/theme.js";
+import { contrastRatio } from "../src/utils/contrast.js";
 
 const { loadEmbedSettings } = scriptAttrs;
 const { PANEL_TEXTS } = layout;
@@ -418,6 +424,79 @@ describe("Vertrag 4 (D4): Blase wie die Begrüßung, Inhalt wie in 7.22.2 ohne K
     expect($$("#anything-llm-privacy-bubble")).toHaveLength(1);
     expect(list().children).toHaveLength(3);
     expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L1 (Hinweis O1 zu AK-12, 24.10.2026): eine Farbquelle für alle
+// Datenschutz-Links. Fußzeile, Fenster und Blase haben dieselbe
+// kontrastgeprüfte Farbe (theme.js privacyLinkColor), mindestens 4,5:1 zu
+// ihrer Fläche, hell und dunkel; die Fläche der Blase ist die der
+// Begrüßungsblase (Standard: hell Weiß, dunkel DARK.assistantBg). Bis rc5
+// nahm der Link in der Blase die rohe Linkfarbe var(--allmi-link), etwa
+// #FFA102 auf Weiß rund 2,0:1. Dieselbe Regel im Browser:
+// tests/visual/datenschutz_blase.py („L1 Linkfarbe“).
+describe("L1: Link in der Blase in der Farbe der Datenschutz-Links, mindestens 4,5:1", () => {
+  const BUBBLE_LINK = `#${PRIVACY_BUBBLE_ID} a`;
+  const BUBBLE_BG = { light: "#FFFFFF", dark: theme.DARK.assistantBg };
+  const ruleFor = (css, sel) =>
+    css.split("\n").find((l) => l.startsWith(`${sel} {`)) || "";
+  const colorOf = (decl) =>
+    /(?:^|[{;]\s*)color: ([^;!]+) !important/.exec(decl)?.[1]?.trim();
+
+  it("Kennung und Fläche der Blase: eine Kennung für Blase und Theme, Fläche wie die Begrüßung", async () => {
+    expect(theme.PRIVACY_BUBBLE_ID).toBe("anything-llm-privacy-bubble");
+    expect(PRIVACY_BUBBLE_ID).toBe(theme.PRIVACY_BUBBLE_ID);
+    expect(theme.PRIVACY_BUBBLE_BG).toEqual(BUBBLE_BG);
+    for (const mode of ["light", "dark"])
+      expect(
+        theme.resolveThemeVars({}, mode)["--allm-assistant-bg"],
+        mode,
+      ).toBe(BUBBLE_BG[mode]);
+    const s = await load({}, { ...ON, privacyUrl: "/datenschutz" });
+    render(<ChatHistory settings={s} history={[]} />);
+    expect(bubble().id).toBe(theme.PRIVACY_BUBBLE_ID);
+    expect(bubble().querySelector("a")).not.toBe(null);
+  });
+
+  it.each([
+    ["Standard", {}],
+    ["helle Linkfarbe #FFA102", { linkColor: "#FFA102" }],
+    ["helle Linkfarbe #63b4e3", { linkColor: "#63b4e3" }],
+    ["Linkfarbe wie die Fläche", { linkColor: "#FFFFFF" }],
+    ["ausreichende Linkfarbe", { linkColor: "#0b5f8a" }],
+  ])(
+    "%s: Regel am Link der Blase, hell und dunkel mindestens 4,5:1, dieselbe Farbe wie Fußzeile und Fenster",
+    (_n, settings) => {
+      for (const mode of ["light", "dark"]) {
+        const css = theme.buildThemeCss(settings, mode);
+        const decl = ruleFor(css, BUBBLE_LINK);
+        expect(decl, `${mode}: Regel fehlt`).not.toBe("");
+        expect(decl, mode).not.toContain("var(");
+        const color = colorOf(decl);
+        expect(color, mode).toBe(theme.privacyLinkColor(settings, mode));
+        expect(
+          contrastRatio(color, BUBBLE_BG[mode]),
+          `${mode} ${color} auf ${BUBBLE_BG[mode]}`,
+        ).toBeGreaterThanOrEqual(4.5);
+        expect(colorOf(ruleFor(css, `#${theme.PRIVACY_LINK_ID}`)), mode).toBe(
+          color,
+        );
+        expect(
+          colorOf(ruleFor(css, `#${theme.PRIVACY_DIALOG_ID} a`)),
+          mode,
+        ).toBe(color);
+      }
+    },
+  );
+
+  it("ausreichende Linkfarbe bleibt unverändert, dunkel gilt DARK.link", () => {
+    expect(theme.privacyLinkColor({ linkColor: "#0b5f8a" }, "light")).toBe(
+      "#0b5f8a",
+    );
+    expect(theme.privacyLinkColor({ linkColor: "#FFA102" }, "dark")).toBe(
+      theme.DARK.link,
+    );
   });
 });
 
