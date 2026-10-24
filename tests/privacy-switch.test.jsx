@@ -92,7 +92,7 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
     [null, "link"],
     ["", "link"],
     [false, "link"],
-  ])("gespeichert %j -> %s (AI_NOTICE, W8)", (value, expected) => {
+  ])("gespeichert %j -> %s (LOCKED_STANDARDS, W8)", (value, expected) => {
     expect(applyFixedStandards({ privacyNotice: value }).privacyNotice).toBe(
       expected,
     );

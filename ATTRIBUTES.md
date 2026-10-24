@@ -6,13 +6,13 @@ Alle `data-*` Attribute für das Embed-Script und ihre Wirkung ab Widget 7.22 (F
 
 | Gruppe | Was | Wirkung |
 |---|---|---|
-| **A · Design Center** | Alles, was der Kunde im Design Center 2.0 einstellen kann (je ein Feld im Reiter Aussehen oder Inhalt) | Es gilt nur das Design Center: der gespeicherte Wert, sonst sein Standard. Einbau-Angaben **und** CSS-Variablen der Seite für diese Eigenschaften wirken nicht, auch wenn im Design Center nichts gespeichert ist. Das Widget meldet jede solche Einbau-Angabe einmal in der Browser-Konsole. |
-| **B · Feste Standards** | Was es im Design Center nicht zum Einstellen gibt: Inline-Design (Layout, Effekt, Höhe, Startzustand, Öffnen, Eingabeleiste, Texte der Leiste, Schrift der Seite), Begrüßungs- und Vorschlagsstil, Folgefragen, Kartenlayout, Randabstände, Kopffarben, Icon-Stil, Textgröße, Radien, Schatten, Flächen- und Textfarben | Es gilt der feste Standard (der Server liefert ihn mit). Entwickler dürfen ihn per Einbau-Angabe oder CSS-Variable verfeinern; die Einbau-Angabe schlägt den vom Server gelieferten Standard. |
+| **A · Design Center** | Alles, was der Kunde im Design Center 2.0 einstellen kann (je ein Feld im Reiter Aussehen oder Inhalt); dazu ohne Feld: Datenschutz-Hinweis (immer als Link), Begrüßungsstil (immer als Blase) | Es gilt nur das Design Center: der gespeicherte Wert, sonst sein Standard. Einbau-Angaben **und** CSS-Variablen der Seite für diese Eigenschaften wirken nicht, auch wenn im Design Center nichts gespeichert ist. Das Widget meldet jede solche Einbau-Angabe einmal in der Browser-Konsole. |
+| **B · Feste Standards** | Was es im Design Center nicht zum Einstellen gibt: Inline-Design (Layout, Effekt, Höhe, Startzustand, Öffnen, Eingabeleiste, Texte der Leiste, Schrift der Seite), Vorschlagsstil, Folgefragen, Kartenlayout, Randabstände, Kopffarben, Icon-Stil, Textgröße, Radien, Schatten, Flächen- und Textfarben | Es gilt der feste Standard (der Server liefert ihn mit). Entwickler dürfen ihn per Einbau-Angabe oder CSS-Variable verfeinern; die Einbau-Angabe schlägt den vom Server gelieferten Standard. |
 | **C · Technik** | Widget-ID, Adresse, Sprache, Einhängepunkt, Besuchername, KI-Overrides, Audio, Öffnen beim Laden, Menütexte, Sponsor-Zeile | Wirken immer. |
 
 **KI-Hinweis (E24):** Der KI-Hinweis unter dem Eingabefeld lässt sich auf keinem Weg abschalten oder ändern, weder im Design Center noch per Einbau-Angabe oder CSS-Variable (Schrift und Fläche hinter dem Satz sind je Farbschema fest). Seit 7.23 steht in derselben Zeile immer der Link „Datenschutz“ (en „Privacy“, feste Farben wie der KI-Hinweis, Kontrast mindestens 4,5:1); er öffnet das Datenschutz-Fenster über dem ganzen Chat. Den Datenschutz-Hinweis gibt es nur noch so: keine Datenschutz-Blase beim Start, kein Pop-up mit Bestätigung, keine Auswahl im Design Center. Die Begrüßung ist immer eine Blase (seit 7.23, Nutzer 24.10.2026); `data-greeting-style` wirkt nicht. Das Datenschutz-Fenster hat wie der KI-Hinweis feste Farben je Farbschema (seit 7.23-rc2); `data-assistant-bg-color` und die Variablen der Seite wirken darauf nicht. Link und Fokusrahmen im Fenster haben die Farbe des Links „Datenschutz“ (mindestens 4,5:1).
 
-Umsetzung: `src/hooks/useScriptAttributes.js` (`DC_COVERED`, `dropIneffectiveAttributes`, `loadEmbedSettings`), `src/utils/layout.js` (`FIXED_STANDARDS`, `INLINE_STANDARDS`, `AI_NOTICE`), `src/utils/theme.js` (Variablen mit `dc`, `AI_NOTICE_COLORS`).
+Umsetzung: `src/hooks/useScriptAttributes.js` (`DC_COVERED`, `IGNORED_HINTS`, `dropIneffectiveAttributes`, `loadEmbedSettings`), `src/utils/layout.js` (`FIXED_STANDARDS`, `INLINE_STANDARDS`, `LOCKED_STANDARDS`), `src/utils/theme.js` (`THEME_VARIABLES`, Einträge mit dc; `AI_NOTICE_COLORS`, `PRIVACY_DIALOG_COLORS`). Die Tabellen unten prüft `tests/datenschutz-rc4.test.jsx` gegen diese Listen.
 
 ---
 
@@ -60,6 +60,7 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-assistant-subtitle` | Inhalt: Untertitel | `Online-Berater mit künstlicher Intelligenz` (`en`: `Online advisor powered by artificial intelligence`) |
 | `data-greeting`, `data-greeting-bubble-text` | Inhalt: Begrüßungstext | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` |
 | `data-privacy-notice` | keine Auswahl mehr (seit 7.23) | immer der Link „Datenschutz“ unter der Eingabe; gespeicherte Altwerte wirken nicht |
+| `data-greeting-style` | keine Auswahl (seit 7.23) | immer eine Blase (Nutzer 24.10.2026); `data-greeting-style` wirkt nicht, auch ein gespeicherter Altwert `text` nicht; bis 7.22.2 wählte `text` einen zentrierten Text, wirkte wegen E26 aber nur bei abgeschaltetem Datenschutz-Hinweis |
 | `data-privacy-title`, `data-privacy-text`, `data-privacy-url` | Inhalt: Datenschutz-Hinweis (Überschrift, Text, Link zur Datenschutzerklärung im Datenschutz-Fenster) | `Datenschutz` (auch bei leerer Überschrift), Standardtext der Sprache, kein Link |
 | `data-default-messages` | Inhalt: Startvorschläge | keine: der Standard vom Server ist leer (E42, 7.22-rc23); es gilt nur eine im Design Center gespeicherte Liste (E10 neu: gespeichert, auch leer, vor Standard) |
 | `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
@@ -94,7 +95,6 @@ Gruppe B. Ohne Angabe gilt der feste Standard (Inline-Design wie die Demo-Seite)
 | `data-inline-max-width` | volle Breite | Maximalbreite der Inline-Darstellung in px (zentriert) |
 | `data-inline-theme` | folgt dem Farbschema | Stil der Leiste `light` oder `dark` |
 | `data-inherit-font` | `true` (In der Seite) | Schrift der Webseite übernehmen |
-| `data-greeting-style` | `bubble` | wirkt nicht (Warnzeile): die Begrüßung ist seit 7.23 immer eine Blase, ohne Feld im Design Center (Nutzer 24.10.2026); bis 7.22.2 wählte `text` einen zentrierten Text, wirkte wegen E26 aber nur bei abgeschaltetem Datenschutz-Hinweis |
 | `data-suggestion-style` | `pills` | Startvorschläge als Pillen (`pills`) oder Balken (`bars`) |
 | `data-follow-ups` | `pills` | Folgefragen als Pillen (`pills`) oder keine (`none`) |
 | `data-course-cards-layout` | `rows` | Kurskarten als Zeilen (`rows`) oder Raster (`grid`) |

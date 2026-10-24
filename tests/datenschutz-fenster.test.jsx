@@ -149,7 +149,7 @@ describe("AK-10, AK-7: privacyNotice ist immer „link“", () => {
     "link",
     "popup",
     false,
-  ])("gespeichert %j -> link (AI_NOTICE, W8)", (value) => {
+  ])("gespeichert %j -> link (LOCKED_STANDARDS, W8)", (value) => {
     expect(
       layout.applyFixedStandards({ privacyNotice: value }).privacyNotice,
     ).toBe("link");

@@ -399,7 +399,7 @@ Technisch setzt das Widget die Standardwerte der Gruppe B nicht unter dem öffen
 | `--allm-bar-shadow` * | Schatten der Leiste | `0 18px 40px -22px rgba(23,24,27,.45)` (dark: `0 18px 40px -20px rgba(0,0,0,.8)`, seit 7.22.2) | `0 4px 16px rgba(0,0,0,.18)` |
 | `--allm-bar-radius` * | Rundung der Leiste, der Chips und der Pillen, Absende-Button 6px kleiner; folgt `--allm-radius` (Inline nicht: fest `999px`) | `16px` (Inline: `999px`) | `16px` (Inline: `999px`) |
 
-Nicht über Variablen gesteuert (bewusst): Fehler-/Hinweisboxen (rot/amber), das Feedback-Kommentarfeld, Code-Blöcke (eigenes dunkles Schema), die Icon-Kachel im Marken-Header (`iconStyle`). Die Tönung der Icons in „Frühere Chats“ folgt der Akzentfarbe (10 %, per `color-mix()`; ältere Browser ohne `color-mix()`: wie bisher aus `buttonColor`). Der KI-Hinweis unter dem Eingabefeld und der Link „Datenschutz“ daneben folgen keiner Variable (E24, Farben fest je Farbschema); das Datenschutz-Fenster folgt wie die Begrüßungsblase den Variablen der Antwortblasen (unlesbare Werte der Seite ersetzt es durch die Standardfarben).
+Nicht über Variablen gesteuert (bewusst): Fehler-/Hinweisboxen (rot/amber), das Feedback-Kommentarfeld, Code-Blöcke (eigenes dunkles Schema), die Icon-Kachel im Marken-Header (`iconStyle`). Die Tönung der Icons in „Frühere Chats“ folgt der Akzentfarbe (10 %, per `color-mix()`; ältere Browser ohne `color-mix()`: wie bisher aus `buttonColor`). Der KI-Hinweis unter dem Eingabefeld und der Link „Datenschutz“ daneben folgen keiner Variable (E24, Farben fest je Farbschema); das Datenschutz-Fenster hat wie der KI-Hinweis feste Farben je Farbschema (seit 7.23-rc2, R1-D1).
 
 ### Beispiel hell/dunkel (Mockup „vhs Rhein Suchfeld“)
 

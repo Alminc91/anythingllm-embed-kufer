@@ -70,7 +70,9 @@ export const DC_COVERED = [
 // Altangaben, die schon früher nichts bewirkten (Fenstergröße: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height
 // "77%" und data-window-width "25%"; Online-Punkt: im Kopf entfallen).
-const IGNORED_HINTS = {
+// Exportiert für den Doku-Test (ATTRIBUTES.md, Tabelle „Ebenfalls ohne
+// Wirkung“, tests/datenschutz-rc4.test.jsx).
+export const IGNORED_HINTS = {
   disclaimer: "Der KI-Hinweis ist fest und lässt sich nicht abschalten.",
   disclaimerText: "Der Text des KI-Hinweises ist fest.",
   windowWidth: "Die Fenstergröße ist fest.",
