@@ -40,6 +40,11 @@ import * as theme from "../src/utils/theme.js";
 import { contrastRatio } from "../src/utils/contrast.js";
 import ChatWindow from "../src/components/ChatWindow/index.jsx";
 import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
+import * as layout from "../src/utils/layout.js";
+import {
+  DEFAULT_SETTINGS,
+  loadEmbedSettings,
+} from "../src/hooks/useScriptAttributes.js";
 
 const BASE = {
   embedId: "78eda2c6-5bd0-44b5-b097-30d694a56677",
@@ -480,5 +485,56 @@ describe("W7 (R1-D3): Begrüßung als Text in der normalen Schriftfarbe", () => 
   it("Begrüßungsblase (Standard) unverändert", () => {
     renderWindow({ ...BASE, greetingStyle: "bubble" });
     expect($("#anything-llm-greeting-bubble")).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("W8: Reste des Einmal-Hinweises entfernt", () => {
+  it("keine Texte des Einmal-Hinweises mehr (de und en)", () => {
+    for (const lang of ["de", "en"])
+      for (const key of ["privacyButton", "privacyMoreLead", "privacyMoreLink"])
+        expect(layout.PANEL_TEXTS[lang], `${lang}.${key}`).not.toHaveProperty(
+          key,
+        );
+  });
+
+  it("keine Konstanten, Helfer und Prüfregel des Einmal-Hinweises", () => {
+    for (const name of [
+      "PRIVACY_BUTTON_TEXT_MAX_LEN",
+      "DEFAULT_PRIVACY_BUTTON_TEXT",
+      "splitPrivacyPoints",
+      "privacyPoints",
+      "privacyNoticeSetting",
+    ])
+      expect(layout, name).not.toHaveProperty(name);
+    expect(layout.layoutValidations).not.toHaveProperty("privacyButtonText");
+    expect(DEFAULT_SETTINGS).not.toHaveProperty("privacyButtonText");
+  });
+
+  it("ein Weg für feste Werte: privacyNotice „link“ steht in AI_NOTICE", () => {
+    expect(layout.AI_NOTICE).toEqual({
+      disclaimer: "footer",
+      disclaimerText: null,
+      privacyNotice: "link",
+    });
+    for (const value of ["none", "bubble", "modal", undefined])
+      expect(
+        layout.applyFixedStandards({ privacyNotice: value }).privacyNotice,
+      ).toBe("link");
+  });
+
+  it("data-privacy-button-text bleibt ohne Wirkung und ohne Warnung", async () => {
+    const s = await loadEmbedSettings(
+      { ...BASE, privacyButtonText: "Los" },
+      vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+    );
+    expect(s.privacyNotice).toBe("link");
+    expect(
+      console.warn.mock.calls.flat().join("\n").toLowerCase(),
+    ).not.toContain("privacy-button-text");
+    renderWindow(s);
+    click(link());
+    expect(dialog().textContent).not.toContain("Los");
+    expect(closeButton().textContent).toBe("Schließen");
   });
 });

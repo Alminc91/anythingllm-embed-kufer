@@ -149,8 +149,10 @@ describe("AK-10, AK-7: privacyNotice ist immer „link“", () => {
     "link",
     "popup",
     false,
-  ])("privacyNoticeSetting(%j) -> link", (value) => {
-    expect(layout.privacyNoticeSetting(value)).toBe("link");
+  ])("gespeichert %j -> link (AI_NOTICE, W8)", (value) => {
+    expect(
+      layout.applyFixedStandards({ privacyNotice: value }).privacyNotice,
+    ).toBe("link");
   });
 
   it("Standard des Widgets ohne Server-Antwort: link", () => {

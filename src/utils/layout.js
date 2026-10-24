@@ -71,8 +71,7 @@ export const GREETING_STYLE_VALUES = ["text", "bubble"];
 // des KI-Hinweises ("link", Nutzerentscheidung 23.10.2026, keine Auswahl im
 // Design Center). Die früheren Werte "none" (aus), "bubble" (Blase unter der
 // Begrüßung) und "modal" (Einmal-Hinweis mit Bestätigung) gelten als gültig
-// (gespeicherte Altwerte, keine Warnung), wirken aber nicht
-// (privacyNoticeSetting).
+// (gespeicherte Altwerte, keine Warnung), wirken aber nicht (AI_NOTICE).
 export const PRIVACY_NOTICE_VALUES = ["link", "none", "bubble", "modal"];
 // Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
@@ -94,7 +93,6 @@ export const PRIVACY_TITLE_MAX_LEN = 120;
 export const PRIVACY_LINES_MAX = 12;
 export const PRIVACY_LINE_MAX_LEN = 500;
 export const PRIVACY_TEXT_MAX_LEN = 1000;
-export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
 // erzeugt; Text fest PANEL_TEXTS.aiDisclaimer (disclaimerText wird seit dem
 // vereinfachten Design Center ignoriert, AI_NOTICE).
@@ -126,9 +124,6 @@ export const PANEL_TEXTS = {
       "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
-    privacyButton: "Start",
-    privacyMoreLead: "Weitere Informationen in der ",
-    privacyMoreLink: "Erklärung zum Datenschutz",
     // Link zur Datenschutzerklärung im Datenschutz-Fenster (nur mit privacyUrl)
     privacyBubbleLink: "Datenschutzerklärung",
     // KI-Hinweis unter der Eingabe: fest, nicht änderbar (disclaimerText wird
@@ -177,9 +172,6 @@ export const PANEL_TEXTS = {
       "Staff of the institution may view conversations for quality assurance.",
       "Please only share information that is necessary for your request.",
     ],
-    privacyButton: "Start",
-    privacyMoreLead: "More information in our ",
-    privacyMoreLink: "privacy statement",
     privacyBubbleLink: "Privacy statement",
     aiDisclaimer: "Our AI can make mistakes",
     privacyLinkText: "Privacy",
@@ -297,7 +289,6 @@ export function uiTexts(settings = {}) {
 export const DEFAULT_GREETING_BUBBLE_TEXT = PANEL_TEXTS.de.greetingBubble;
 export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
 export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
-export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 
 // Eingeklappte Inline-Leiste (inlineInput): Platzhalter und Knopftext. Ein
 // eigener Text (inlineInputPlaceholder bzw. inlineSendText, z. B. früher im
@@ -468,17 +459,6 @@ export function privacyBlocks(settings = {}) {
       }));
 }
 
-// privacyText -> Stichpunkte (Text ohne Aufzählungszeichen), leere verworfen
-// (für den früheren Einmal-Hinweis „modal“, der nicht mehr ausgeliefert wird).
-export function splitPrivacyPoints(text) {
-  return parsePrivacyText(text).map((b) => b.text);
-}
-
-// Wirksame Datenschutz-Punkte: privacyText bzw. Standard der Sprache.
-export function privacyPoints(settings = {}) {
-  return privacyBlocks(settings).map((b) => b.text);
-}
-
 // Aufeinanderfolgende Aufzählungspunkte -> eine Liste; Absätze einzeln
 // (Darstellung im Datenschutz-Fenster).
 export function groupPrivacyBlocks(blocks) {
@@ -535,8 +515,18 @@ export const FIXED_STANDARDS = {
 // KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
 // fest (PANEL_TEXTS.aiDisclaimer). Auf keinem Weg abschalt- oder änderbar,
 // weder per Skript-Angabe noch vom Server noch per CSS-Variable
-// (utils/theme.js AI_NOTICE_COLORS).
-export const AI_NOTICE = { disclaimer: "footer", disclaimerText: null };
+// (utils/theme.js AI_NOTICE_COLORS). In derselben Zeile steht immer der Link
+// „Datenschutz“ (Nutzerentscheidung 23.10.2026, 7.23): privacyNotice fest
+// "link", ohne Auswahl im Design Center. Der Server liefert fest "link";
+// gespeicherte Altwerte ("bubble", "none", "modal"), ein fehlender Wert und
+// ein Script-Attribut (data-privacy-notice, Gruppe A) ändern nichts. Keine
+// Datenschutz-Blase beim Start und kein Einmal-Hinweis mit Bestätigung (Hard
+// Constraint 2).
+export const AI_NOTICE = {
+  disclaimer: "footer",
+  disclaimerText: null,
+  privacyNotice: "link",
+};
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
 // loadWidgetScript: data-inline-input "true", data-inline-open-on "focus",
@@ -556,16 +546,6 @@ export const INLINE_STANDARDS = {
   inlineStartState: "collapsed",
   inheritFont: true,
 };
-
-// Datenschutz-Hinweis (Nutzerentscheidung 23.10.2026, 7.23): immer der Link
-// „Datenschutz“ in der Zeile des KI-Hinweises, ohne Auswahl im Design
-// Center. Der Server liefert fest "link"; gespeicherte Altwerte ("bubble",
-// "none", "modal"), ein fehlender Wert und ein Script-Attribut
-// (data-privacy-notice, Gruppe A) ändern nichts. Keine Datenschutz-Blase beim
-// Start und kein Einmal-Hinweis mit Bestätigung (Hard Constraint 2).
-export function privacyNoticeSetting() {
-  return "link";
-}
 
 // Willkommensblasen je Gerät (KIE-568, Nutzer 15.10.2026): wie der
 // Datenschutz-Hinweis zählt allein der Wert vom Server (Design Center
@@ -597,11 +577,7 @@ export function applyFixedStandards(
   server = {},
   scriptKeys = new Set(),
 ) {
-  const out = {
-    ...settings,
-    ...AI_NOTICE,
-    privacyNotice: privacyNoticeSetting(),
-  };
+  const out = { ...settings, ...AI_NOTICE };
   for (const [key, value] of Object.entries(FIXED_STANDARDS))
     if (!scriptKeys.has(key)) out[key] = value;
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
@@ -805,7 +781,6 @@ export const layoutValidations = {
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
   privacyTitle: privacyTitleValue,
   privacyText: privacyTextValue,
-  privacyButtonText: (v) => shortText(v, PRIVACY_BUTTON_TEXT_MAX_LEN),
   privacyUrl: safeUrl,
   disclaimer: (v) => oneOf(v, DISCLAIMER_VALUES),
   // Folgefragen-Pillen: ungültig -> verworfen (Standard "none"), Warnung wie

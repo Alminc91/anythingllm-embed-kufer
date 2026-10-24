@@ -252,7 +252,7 @@ export const DEFAULT_SETTINGS = {
   // Vorschläge als Pillen, Begrüßung als Blase, Folgefragen als Pillen.
   // KI-Hinweis fest unter der Eingabe (AI_NOTICE, E24), in derselben Zeile
   // der Link „Datenschutz“ (privacyNotice immer "link", utils/layout.js
-  // privacyNoticeSetting; keine Datenschutz-Blase beim Start).
+  // AI_NOTICE; keine Datenschutz-Blase beim Start).
   // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
   // Design Center per Logo gesetzt.
   suggestionStyle: "pills",
@@ -269,7 +269,6 @@ export const DEFAULT_SETTINGS = {
   // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen
   privacyText: null, // max. 12 Zeilen à 500 Zeichen, 1000 Zeichen gesamt
-  privacyButtonText: null, // nur früherer Einmal-Hinweis („modal“)
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
   disclaimer: "footer",
   disclaimerText: null, // ignoriert: Text fest (PANEL_TEXTS.aiDisclaimer)

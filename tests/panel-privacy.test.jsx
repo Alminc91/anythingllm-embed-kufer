@@ -117,7 +117,9 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.greeting).toBe(null); // früher der Datenschutzsatz
     expect(s.privacyTitle).toBe(null);
     expect(s.privacyText).toBe(null);
-    expect(s.privacyButtonText).toBe(null);
+    // Bewusste Änderung (W8, Fixliste datenschutz-fusszeile rc1): kein
+    // Standard mehr für den Button des früheren Einmal-Hinweises
+    expect(s).not.toHaveProperty("privacyButtonText");
     expect(s.disclaimer).toBe("footer");
     expect(s.disclaimerText).toBe(null);
     expect(s.followUps).toBe("pills");
@@ -163,6 +165,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       privacyNotice: "link",
       privacyTitle: null,
       privacyText: null,
+      // ohne Wirkung (früherer Einmal-Hinweis), ungeprüft durchgereicht (W8)
       privacyButtonText: "Los",
       privacyUrl: null,
       disclaimer: "footer",
@@ -322,7 +325,8 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       60,
     );
     expect(layoutValidations.assistantSubtitle("x".repeat(61))).toBe(undefined);
-    expect(layoutValidations.privacyButtonText("x".repeat(41))).toBe(undefined);
+    // Bewusste Änderung (W8): keine Prüfregel mehr für privacyButtonText
+    expect(layoutValidations).not.toHaveProperty("privacyButtonText");
     expect(layoutValidations.disclaimerText("x".repeat(160))).toHaveLength(160);
     expect(layoutValidations.disclaimerText("x".repeat(161))).toBe(undefined);
     // leer = bewusst keine Überschrift (früher verworfen)
@@ -960,7 +964,11 @@ describe("Datenschutz-Texte (AK-5, E30)", () => {
     ]);
     // Datenschutz-Satz spricht für die Einrichtung des Kunden, nicht „Unser Team“
     expect(JSON.stringify(PANEL_TEXTS)).not.toMatch(/Unser Team|Our team/);
-    expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
+    // Bewusste Änderung (W8): die Texte des früheren Einmal-Hinweises
+    // („Start“, „Weitere Informationen in der …“) sind entfernt
+    for (const lang of ["de", "en"])
+      for (const key of ["privacyButton", "privacyMoreLead", "privacyMoreLink"])
+        expect(PANEL_TEXTS[lang]).not.toHaveProperty(key);
     // Alle Texte neutral, auch der Punkt „Hinweis zur KI“ im
     // Datenschutz-Fenster (ein Wortlaut für alle Kunden ohne Kurs-Wörter,
     // Nutzerentscheidung F8 vom 23.10.2026). „Wichtig:“ als Vorspann (bis

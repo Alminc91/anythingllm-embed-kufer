@@ -34,11 +34,7 @@ vi.mock("react-i18next", () => ({
 
 import { embedderSettings } from "../src/main.jsx";
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
-import {
-  FIXED_STANDARDS,
-  applyFixedStandards,
-  privacyNoticeSetting,
-} from "../src/utils/layout.js";
+import { FIXED_STANDARDS, applyFixedStandards } from "../src/utils/layout.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
@@ -96,8 +92,10 @@ describe("Einstellungen: privacyNotice aus dem Design Center", () => {
     [null, "link"],
     ["", "link"],
     [false, "link"],
-  ])("privacyNoticeSetting(%j) -> %s", (value, expected) => {
-    expect(privacyNoticeSetting(value)).toBe(expected);
+  ])("gespeichert %j -> %s (AI_NOTICE, W8)", (value, expected) => {
+    expect(applyFixedStandards({ privacyNotice: value }).privacyNotice).toBe(
+      expected,
+    );
   });
 
   it("Server none -> link (kein Abschalten mehr)", async () => {
