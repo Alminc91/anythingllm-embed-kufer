@@ -44,7 +44,12 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
 
 Aufruf (aus dem Repo, npm run build vorher):
 
-  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only [--only w2 w4 ...]]
+  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only] [--only w2 w4 ...]
+
+--only wählt Prüfungen der Korrekturen und setzt --rc2-only (ohne die
+Ansichten und die einmaligen Prüfungen). Eine gewählte Prüfung ohne
+Ergebnis zählt als Fehler („nichts gemessen“), ebenso ein Lauf ohne ein
+einziges Ergebnis (W16, NW-3 und NW-4).
 
 Ergebnis: .test-storage/datenschutz-fenster-<tag>.json, Bilder
 .test-storage/start-*.png (beim Start), fenster-*.png (Fenster offen) und
@@ -54,6 +59,7 @@ Zeilen auf stdout, Ausstieg 1 bei Fehlern.
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -568,12 +574,61 @@ TEXT_WIDTH_JS = r"""
   const cs = body ? getComputedStyle(body) : null;
   const inner = body ? body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : null;
   const cr = col ? col.getBoundingClientRect() : null, br = body ? body.getBoundingClientRect() : null;
-  return { dialog: w(d), body: w(body), bodyInner: inner ? Math.round(inner) : null, column: w(col),
+  return { dialog: w(d), body: w(body), bodyInner: Number.isFinite(inner) && inner > 0 ? Math.round(inner) : null, column: w(col),
     maxWidth: col ? getComputedStyle(col).maxWidth : null, ch70: `${Math.round(ch70 * 1000) / 1000}px`,
     left: cr && br ? Math.round(cr.left - br.left) : null,
-    lines: lines.map(w), maxChars: Math.max(...tops.values()), rows: tops.size };
+    lines: lines.map(w), maxChars: tops.size ? Math.max(...tops.values()) : null, rows: tops.size };
 }
 """
+
+
+def _finite(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _px(v):
+    return float(v[:-2]) if isinstance(v, str) and v.endswith("px") else None
+
+
+def w6_problems(m, limited):
+    """Befunde einer W6-Messung (leer = in Ordnung). Eine leere oder kaputte
+    Messung ist ein Befund, kein stilles „ok“ (W16, NW-4): keine Zeichen
+    gemessen (rows 0, maxChars fehlt oder nicht endlich), keine Innenbreite,
+    keine Textspalte, keine Linien."""
+    why = []
+    for key in ("dialog", "body", "bodyInner", "column"):
+        if not _finite(m.get(key)) or m.get(key) <= 0:
+            why.append(f"{key} nicht gemessen ({m.get(key)!r})")
+    if not _finite(m.get("rows")) or m.get("rows") <= 0:
+        why.append(f"keine Zeile gemessen (rows {m.get('rows')!r})")
+    if not _finite(m.get("maxChars")) or m.get("maxChars") <= 0:
+        why.append(f"keine Zeichen gemessen (maxChars {m.get('maxChars')!r})")
+    lines = m.get("lines") or []
+    if not lines or not all(_finite(x) for x in lines):
+        why.append(f"keine Linien gemessen ({lines!r})")
+    if why:
+        return why
+    if not all(abs(x - m["dialog"]) <= 1 for x in lines) or abs(m["body"] - m["dialog"]) > 1:
+        why.append("Kopfzeile, Button-Zeile oder Textbereich nicht über die ganze Breite")
+    if limited:
+        # 70ch = 70 Breiten der Ziffer 0; Buchstaben sind im Mittel
+        # schmaler, gemessen werden daher rund 80 bis 90 Zeichen je Zeile
+        # (vorher bis 150)
+        mw, ch = _px(m.get("maxWidth")), _px(m.get("ch70"))
+        if mw is None or ch is None or abs(mw - ch) > 0.5:
+            why.append(f"max-width {m.get('maxWidth')} statt 70ch ({m.get('ch70')})")
+        if not m["column"] < m["bodyInner"]:
+            why.append(f"Textspalte {m['column']} nicht schmaler als der Textbereich {m['bodyInner']}")
+        if not _finite(m.get("left")) or m["left"] > 21:
+            why.append(f"Textspalte nicht linksbündig (left {m.get('left')!r})")
+        if m["maxChars"] > 92:
+            why.append(f"{m['maxChars']} Zeichen je Zeile (höchstens 92)")
+    else:
+        if m.get("maxWidth") != "none":
+            why.append(f"max-width {m.get('maxWidth')} statt none")
+        if abs(m["column"] - m["bodyInner"]) > 1:
+            why.append(f"Textspalte {m['column']} statt {m['bodyInner']}")
+    return why
 
 
 def check_w6(browser, base_url):
@@ -596,20 +651,10 @@ def check_w6(browser, base_url):
                     click_link(page)
                     m = page.evaluate(TEXT_WIDTH_JS)
                     page.screenshot(path=str(OUT_DIR / f"rc2-{SHOT_TAG}-w6-{name}.png"))
-                    full = all(abs(x - m["dialog"]) <= 1 for x in m["lines"]) and abs(m["body"] - m["dialog"]) <= 1
-                    if m["column"] is None:
-                        ok = False  # keine eigene Textspalte (Stand vor W6)
-                    elif limited:
-                        # 70ch = 70 Breiten der Ziffer 0; Buchstaben sind im
-                        # Mittel schmaler, gemessen werden daher rund 80 bis
-                        # 90 Zeichen je Zeile (vorher bis 150)
-                        px = lambda v: float(v.replace("px", "")) if v.endswith("px") else -1.0  # noqa: E731
-                        ok = (abs(px(m["maxWidth"]) - px(m["ch70"])) <= 0.5 and m["column"] < m["bodyInner"] and m["left"] <= 21
-                              and m["maxChars"] <= 92 and full)
-                    else:
-                        ok = m["maxWidth"] == "none" and abs(m["column"] - m["bodyInner"]) <= 1 and full
+                    why = w6_problems(m, limited)
                     record(f"W6 Textspalte {'höchstens 70ch' if limited else 'ohne Grenze'} "
-                           f"({lang} {display} {width}{' breit' if css else ''}, {theme})", ok, m)
+                           f"({lang} {display} {width}{' breit' if css else ''}, {theme})",
+                           not why, {**m, "why": why} if why else m)
                 finally:
                     ctx.close()
 
@@ -659,7 +704,7 @@ RC2_CHECKS = {
 }
 
 
-def main():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", default=str(ROOT / "dist"))
     ap.add_argument("--tag", default="neu")
@@ -669,8 +714,40 @@ def main():
     ap.add_argument("--skip-once", action="store_true")
     ap.add_argument("--rc2-only", action="store_true", help="nur die Prüfungen der Korrekturen nach rc1")
     ap.add_argument("--only", nargs="+", choices=sorted(RC2_CHECKS),
-                    help="nur diese Prüfungen der Korrekturen nach rc1 (mit --rc2-only)")
-    args = ap.parse_args()
+                    help="nur diese Prüfungen der Korrekturen nach rc1 (setzt --rc2-only)")
+    args = ap.parse_args(argv)
+    # --only allein wählt die Prüfungen (W16, NW-3): bis rc3 liefen ohne
+    # --rc2-only die Ansichten, und mit --skip-once lief die gewählte
+    # Prüfung gar nicht (Lauf grün ohne Nachweis)
+    if args.only:
+        args.rc2_only = True
+    return args
+
+
+def plan(args):
+    """Was ein Lauf prüft: Ansichten (Namen), einmalige Prüfungen,
+    Prüfungen der Korrekturen (Schlüssel aus RC2_CHECKS)."""
+    views = [] if args.rc2_only else [v[0] for v in VIEWS if v[0] in args.views]
+    once = not args.rc2_only and not args.skip_once
+    rc2 = []
+    if args.rc2_only or not args.skip_once:
+        rc2 = [k for k in RC2_CHECKS if not args.only or k in args.only]
+    return {"views": views, "once": once, "rc2": rc2}
+
+
+def run_rc2(browser, base_url, keys):
+    """Gewählte Prüfungen der Korrekturen; eine Prüfung ohne Ergebnis ist
+    ein Fehler (W16, NW-4: „nichts gemessen“ darf nicht grün sein)."""
+    for key in keys:
+        before = len(RESULTS)
+        RC2_CHECKS[key](browser, base_url)
+        if len(RESULTS) == before:
+            record(f"{key}: nichts gemessen", False, "die Prüfung hat kein Ergebnis festgehalten")
+
+
+def main():
+    args = parse_args()
+    todo = plan(args)
     global SHOT_TAG
     SHOT_TAG = args.tag
     OUT_DIR.mkdir(exist_ok=True)
@@ -679,26 +756,25 @@ def main():
         browser = p.chromium.launch()
         for lang in args.lang:
             for name, display, width, height in VIEWS:
-                if args.rc2_only or name not in args.views:
+                if name not in todo["views"]:
                     continue
                 for theme in args.themes:
                     try:
                         check_view(browser, base_url, name, display, width, height, theme, lang)
                     except Exception as e:  # weiter prüfen, Fehler festhalten
                         record(f"Ablauf {lang} {name} {theme}", False, str(e).splitlines()[0])
-        if not args.rc2_only and not args.skip_once:
+        if todo["once"]:
             check_once(browser, base_url)
-        if args.rc2_only or not args.skip_once:
-            for key, check in RC2_CHECKS.items():
-                if not args.only or key in args.only:
-                    check(browser, base_url)
+        run_rc2(browser, base_url, todo["rc2"])
         browser.close()
     srv.shutdown()
     out = OUT_DIR / f"datenschutz-fenster-{args.tag}.json"
     out.write_text(json.dumps(RESULTS, ensure_ascii=False, indent=1), encoding="utf-8")
     bad = [r for r in RESULTS if not r["ok"]]
     print(f"{len(RESULTS) - len(bad)}/{len(RESULTS)} ok -> {out}")
-    sys.exit(1 if bad else 0)
+    if not RESULTS:
+        print("nichts gemessen (keine Ansicht und keine Prüfung gewählt)")
+    sys.exit(1 if bad or not RESULTS else 0)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 // Datenschutz in der Fußzeile, Korrekturen nach dem Nachreview rc3
@@ -9,6 +10,11 @@ import { resolve } from "node:path";
 //   FIXED_STANDARDS, INLINE_STANDARDS und LOCKED_STANDARDS, die Rangfolge
 //   gegen dieselbe Zuordnung, die Symbolnamen der Zeile „Umsetzung“ gegen
 //   die Exporte der Module.
+// W16 (NW-3, NW-4): Das Messskript tests/visual/datenschutz_fenster.py kann
+//   am Fehler scheitern: --only allein wählt die Prüfungen (setzt
+//   --rc2-only), eine Prüfung ohne Ergebnis und eine leere oder kaputte
+//   W6-Messung sind Fehler. Geprüft ohne Browser über python3 (Planung,
+//   Auswertung und Zähler des Skripts).
 // Neue Exporte über Namensraum-Importe: am alten Stand scheitert der
 // einzelne Test an seiner Prüfung, nicht die Datei am Import.
 
@@ -212,5 +218,138 @@ describe("W15 (NW-2): README zum Datenschutz-Fenster", () => {
       .split("\n")
       .find((l) => l.startsWith("Nicht über Variablen gesteuert"));
     expect(para).toMatch(/Datenschutz-Fenster hat[^.]*feste Farben/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W16: Messskript ohne Browser prüfen (python3 mit Playwright wie für die
+// Browser-Prüfungen; ohne python3 übersprungen)
+const PY_OK =
+  spawnSync("python3", ["-c", "import playwright, numpy, PIL"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).status === 0;
+function py(code) {
+  const r = spawnSync(
+    "python3",
+    [
+      "-c",
+      [
+        "import sys, json, math",
+        "sys.path.insert(0, 'tests/visual')",
+        "import datenschutz_fenster as d",
+        code,
+      ].join("\n"),
+    ],
+    { cwd: ROOT, encoding: "utf8", timeout: 60000 },
+  );
+  expect(r.status, r.stderr).toBe(0);
+  return JSON.parse(r.stdout.trim().split("\n").pop());
+}
+
+describe.skipIf(!PY_OK)("W16 (NW-3, NW-4): datenschutz_fenster.py", () => {
+  const ALL = ["w13", "w2", "w4", "w5", "w6"];
+  const VIEWS = [
+    "fenster-1280",
+    "fenster-1440",
+    "seite-1024",
+    "seite-1440",
+    "seite-1920",
+    "mobil-fenster-390",
+    "mobil-seite-390",
+  ];
+  const plan = (argv) =>
+    py(
+      `p = d.plan(d.parse_args(${JSON.stringify(argv)}))\n` +
+        "print(json.dumps({**p, 'rc2': sorted(p['rc2'])}))",
+    );
+
+  it.each([
+    [
+      ["--only", "w13", "--skip-once"],
+      { views: [], once: false, rc2: ["w13"] },
+    ],
+    [["--only", "w13"], { views: [], once: false, rc2: ["w13"] }],
+    [
+      ["--rc2-only", "--only", "w6", "w2"],
+      { views: [], once: false, rc2: ["w2", "w6"] },
+    ],
+    [["--rc2-only"], { views: [], once: false, rc2: ALL }],
+    [[], { views: VIEWS, once: true, rc2: ALL }],
+    [["--skip-once"], { views: VIEWS, once: false, rc2: [] }],
+  ])("Plan für %j", (argv, want) => {
+    expect(plan(argv)).toEqual(want);
+  });
+
+  it("eine Prüfung ohne Ergebnis ist ein Fehler („nichts gemessen“)", () => {
+    const out = py(
+      [
+        "d.RC2_CHECKS['leer'] = lambda browser, base_url: None",
+        "d.RC2_CHECKS['voll'] = lambda browser, base_url: d.record('voll', True, {})",
+        "d.run_rc2(None, None, ['leer', 'voll'])",
+        "print(json.dumps([[r['key'], r['ok']] for r in d.RESULTS]))",
+      ].join("\n"),
+    );
+    expect(out).toEqual([
+      ["leer: nichts gemessen", false],
+      ["voll", true],
+    ]);
+  });
+
+  // gültige W6-Messung (In der Seite 1440, breit) und Abwandlungen ohne
+  // Messwert: keine Zeichen gemessen (rows 0, maxChars -inf oder null),
+  // Innenbreite 0 oder NaN (null), keine Textspalte, keine Linien
+  const GOOD = {
+    dialog: 1060,
+    body: 1060,
+    bodyInner: 1020,
+    column: 640,
+    maxWidth: "640.3px",
+    ch70: "640.3px",
+    left: 20,
+    lines: [1060, 1060],
+    maxChars: 86,
+    rows: 4,
+  };
+  const problems = (m, limited) =>
+    py(
+      `m = json.loads(${JSON.stringify(JSON.stringify(m))})\n` +
+        "m = {k: (float('-inf') if v == '-inf' else v) for k, v in m.items()}\n" +
+        `print(json.dumps(d.w6_problems(m, ${limited ? "True" : "False"})))`,
+    );
+
+  it("gültige Messung ohne Befund, mit und ohne Grenze", () => {
+    expect(problems(GOOD, true)).toEqual([]);
+    expect(
+      problems(
+        { ...GOOD, column: 1020, maxWidth: "none", maxChars: 140 },
+        false,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["rows 0", { rows: 0 }],
+    ["maxChars -inf", { maxChars: "-inf", rows: 0 }],
+    ["maxChars null", { maxChars: null }],
+    ["bodyInner null", { bodyInner: null }],
+    ["column null", { column: null }],
+    ["keine Linien", { lines: [] }],
+    ["zu viele Zeichen", { maxChars: 150 }],
+  ])("%s ist ein Befund (mit Grenze), ohne Absturz", (_, change) => {
+    expect(problems({ ...GOOD, ...change }, true).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["rows 0", { rows: 0 }],
+    ["bodyInner null", { bodyInner: null }],
+    ["column null", { column: null }],
+  ])("%s ist ein Befund (ohne Grenze), ohne Absturz", (_, change) => {
+    const m = { ...GOOD, column: 1020, maxWidth: "none", ...change };
+    expect(problems(m, false).length).toBeGreaterThan(0);
+  });
+
+  it("README: --only nennt, dass es --rc2-only setzt", () => {
+    expect(read("README.md")).toMatch(/`--only[^`]*`[^.]*setzt `--rc2-only`/);
   });
 });
