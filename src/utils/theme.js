@@ -20,8 +20,9 @@
 // Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
 // daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
 // Center ein, die Farben des KI-Hinweises und des Datenschutz-Fensters (seit
-// 7.23-rc2, R1-D1, PRIVACY_DIALOG_COLORS) sind fest; die frühere
-// Datenschutz-Blase gibt es seit 7.23 nicht mehr. Die dc-Variablen setzt das
+// 7.23-rc2, R1-D1, PRIVACY_DIALOG_COLORS) sind fest; die Datenschutz-Blase
+// beim Start (nur mit privacyStartBubble, AK-12) hat keine festen Farben, sie
+// folgt der Begrüßungsblase (PanelWelcome). Die dc-Variablen setzt das
 // Widget direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
 // `:host` UND auf jedem Element im Shadow-Root
 // (`:host, :host * { --allmi-accent: #007c82 !important; }`).

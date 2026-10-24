@@ -82,7 +82,8 @@ export const GREETING_STYLE_VALUES = ["text", "bubble"];
 // Design Center). Die früheren Werte "none" (aus), "bubble" (Blase unter der
 // Begrüßung) und "modal" (Einmal-Hinweis mit Bestätigung) gelten als gültig
 // (gespeicherte Altwerte, keine Warnung), wirken aber nicht
-// (LOCKED_STANDARDS).
+// (LOCKED_STANDARDS). Die Blase beim Start schaltet seit AK-12 allein
+// privacyStartBubble (zusätzlich zum Link, Nutzer 24.10.2026).
 export const PRIVACY_NOTICE_VALUES = ["link", "none", "bubble", "modal"];
 // Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
@@ -128,14 +129,16 @@ export const URL_MAX_LEN = 512;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble: "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
-    // Überschrift des Datenschutz-Fensters (ohne eigenen privacyTitle)
+    // Überschrift des Datenschutz-Fensters und der Blase beim Start (ohne
+    // eigenen privacyTitle)
     privacyTitle: "Datenschutz",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
       "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
-    // Link zur Datenschutzerklärung im Datenschutz-Fenster (nur mit privacyUrl)
+    // Link zur Datenschutzerklärung im Datenschutz-Fenster und in der Blase
+    // beim Start (nur mit privacyUrl)
     privacyBubbleLink: "Datenschutzerklärung",
     // KI-Hinweis unter der Eingabe: fest, nicht änderbar (disclaimerText wird
     // ignoriert, E24). Seit dem Link in der Fußzeile (Nutzerentscheidung
@@ -442,10 +445,11 @@ export function parsePrivacyText(text) {
     .filter((b) => b.text.length > 0);
 }
 
-// Überschrift des Datenschutz-Fensters: gespeicherter Titel, sonst der
-// Standard der Sprache („Datenschutz“ bzw. „Privacy“). Das Fenster braucht
-// immer eine Überschrift (aria-labelledby); eine leere kommt gar nicht erst
-// in die Einstellungen (privacyTitleValue, W10).
+// Überschrift des Datenschutz-Fensters und der Blase beim Start (AK-12):
+// gespeicherter Titel, sonst der Standard der Sprache („Datenschutz“ bzw.
+// „Privacy“). Das Fenster braucht immer eine Überschrift (aria-labelledby);
+// eine leere kommt gar nicht erst in die Einstellungen (privacyTitleValue,
+// W10).
 export function privacyDialogTitle(settings = {}) {
   const own =
     typeof settings.privacyTitle === "string"
@@ -466,7 +470,7 @@ export function privacyBlocks(settings = {}) {
 }
 
 // Aufeinanderfolgende Aufzählungspunkte -> eine Liste; Absätze einzeln
-// (Darstellung im Datenschutz-Fenster).
+// (Darstellung im Datenschutz-Fenster und in der Blase beim Start).
 export function groupPrivacyBlocks(blocks) {
   const out = [];
   for (const b of blocks) {
@@ -479,11 +483,12 @@ export function groupPrivacyBlocks(blocks) {
   return out;
 }
 
-// Link zur Datenschutzerklärung (privacyUrl) im Datenschutz-Fenster: nur ein
-// Wert, den safeUrl annimmt (absolute https-URL oder Pfad der eigenen
-// Seite), und nur, wenn er gegen die Adresse der Seite aufgelöst http: oder
-// https: ergibt (ein Pfad auf einer file:-Seite wird nicht verlinkt). Prüft
-// auch Werte, die nicht über loadEmbedSettings kamen. Sonst null (kein Link).
+// Link zur Datenschutzerklärung (privacyUrl) im Datenschutz-Fenster und in
+// der Blase beim Start (AK-12): nur ein Wert, den safeUrl annimmt (absolute
+// https-URL oder Pfad der eigenen Seite), und nur, wenn er gegen die Adresse
+// der Seite aufgelöst http: oder https: ergibt (ein Pfad auf einer
+// file:-Seite wird nicht verlinkt). Prüft auch Werte, die nicht über
+// loadEmbedSettings kamen. Sonst null (kein Link).
 export function privacyHref(value) {
   const url = safeUrl(value);
   if (!url) return null;
@@ -525,8 +530,10 @@ export const FIXED_STANDARDS = {
 //   23.10.2026, 7.23): privacyNotice fest "link", ohne Auswahl im Design
 //   Center. Der Server liefert fest "link"; gespeicherte Altwerte ("bubble",
 //   "none", "modal"), ein fehlender Wert und ein Script-Attribut
-//   (data-privacy-notice, Gruppe A) ändern nichts. Keine Datenschutz-Blase
-//   beim Start und kein Einmal-Hinweis mit Bestätigung (Hard Constraint 2).
+//   (data-privacy-notice, Gruppe A) ändern nichts. Eine Datenschutz-Blase
+//   beim Start gibt es nur zusätzlich zum Link, mit privacyStartBubble aus
+//   dem Design Center (AK-12, Gruppe A); kein Einmal-Hinweis mit
+//   Bestätigung (Hard Constraint 2).
 // - Begrüßung immer als Blase (Nutzer 24.10.2026: die Form der Begrüßung
 //   ist keine Einbau-Angabe): greetingStyle fest "bubble", der Server
 //   liefert fest "bubble"; data-greeting-style (Gruppe A) und ein

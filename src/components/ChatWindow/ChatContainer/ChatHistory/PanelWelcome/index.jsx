@@ -1,8 +1,21 @@
 import { useLayoutEffect, useRef } from "react";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { embedderSettings } from "@/main";
-import { BUBBLE_RADIUS, BUBBLE_SHADOW, LOGO_RADIUS } from "@/utils/theme";
-import { greetingText, panelPills } from "@/utils/layout";
+import {
+  BUBBLE_RADIUS,
+  BUBBLE_SHADOW,
+  DEFAULT_ACCENT,
+  LOGO_RADIUS,
+} from "@/utils/theme";
+import {
+  greetingText,
+  groupPrivacyBlocks,
+  panelPills,
+  panelTexts,
+  privacyBlocks,
+  privacyDialogTitle,
+  privacyHref,
+} from "@/utils/layout";
 import { sendSuggestion } from "../..";
 import Pill from "../Pill";
 
@@ -10,12 +23,19 @@ import Pill from "../Pill";
 // vereinfacht fester Standard suggestionStyle "pills", die Begrüßung ist
 // seit 7.23 immer eine Blase, utils/layout.js LOCKED_STANDARDS); Vorschläge
 // nur im leeren Chat, die Begrüßungsblase bleibt auch im Verlauf
-// (PanelGreeting). Seit 7.23 keine Datenschutz-Blase mehr: der
-// Datenschutz-Hinweis steht als Link „Datenschutz“ neben dem KI-Hinweis unter
-// der Eingabe und öffnet ein Fenster über dem Chat (Nutzerentscheidung
-// 23.10.2026, ChatContainer AiDisclaimer, PrivacyNotice). Farben/Rundung
-// ausschließlich über --allmi-* (hell/dunkel folgen dem Theme). Texte immer
-// als Text, nie als HTML.
+// (PanelGreeting). Seit 7.23 steht der Datenschutz-Hinweis immer als Link
+// „Datenschutz“ neben dem KI-Hinweis unter der Eingabe und öffnet ein
+// Fenster über dem Chat (Nutzerentscheidung 23.10.2026, ChatContainer
+// AiDisclaimer, PrivacyNotice). Zusätzlich, nur mit dem Schalter im Design
+// Center (privacyStartBubble true, AK-12, Nutzer 24.10.2026), steht er
+// beim Start als Datenschutz-Blase unter der Begrüßung (PrivacyBubble).
+// Farben/Rundung ausschließlich über --allmi-* (hell/dunkel folgen dem
+// Theme). Texte immer als Text, nie als HTML.
+
+// Kennungen der Datenschutz-Blase und ihrer Überschrift (wie 7.22.2; Tests
+// und Messungen, tests/visual/datenschutz_blase.py)
+export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
+export const PRIVACY_BUBBLE_TITLE_ID = "anything-llm-bubble-privacy-title";
 
 // Abstand Blasen-Text zur linken Kante: Avatar 28px + Lücke 10px + Rand 8px
 const BUBBLE_INSET = "46px";
@@ -53,8 +73,9 @@ export function SuggestedPills({ settings, align = "center" }) {
 
 // Begrüßung als Assistenten-Blase mit Avatar (immer, LOCKED_STANDARDS),
 // darunter die Vorschläge (Pillen links eingerückt, Balken wie bisher
-// mittig). Die Spalte enthält nur die Begrüßungsblase (bis 7.22.2 darunter die
-// Datenschutz-Blase; ein gespeicherter privacyNotice-Wert wirkt nicht mehr).
+// mittig). Die Spalte enthält die Begrüßungsblase und, nur mit
+// privacyStartBubble true (AK-12), darunter die Datenschutz-Blase; ein
+// gespeicherter privacyNotice-Wert wirkt nicht (D2).
 // Beim Öffnen (ohne Animation): Die Begrüßungsblase muss sichtbar sein
 // (KIE-565, Browser-Fund B-02: bei 700 px Fensterhöhe stand sie über dem
 // sichtbaren Bereich). Bei Überlauf wird deshalb höchstens so weit Richtung
@@ -101,15 +122,17 @@ export default function PanelWelcome({ settings = {}, suggestions = null }) {
   );
 }
 
-// Begrüßung bleibt im Verlauf: nach der ersten
-// Frage und nach dem Laden eines Verlaufs steht die Begrüßungsblase als
-// festes erstes Element über den Nachrichten (kein Chat-Eintrag, wird nie
-// gesendet oder gespeichert; ChatHistory), ohne die Vorschläge.
+// Begrüßung bleibt im Verlauf: nach der ersten Frage und nach dem Laden
+// eines Verlaufs steht die Begrüßungsblase (mit privacyStartBubble samt
+// Datenschutz-Blase, wie 7.22.2) als festes erstes Element über den
+// Nachrichten (kein Chat-Eintrag, wird nie gesendet oder gespeichert;
+// ChatHistory), ohne die Vorschläge.
 export function PanelGreeting({ settings = {} }) {
   return <WelcomeBlock settings={settings} persistent />;
 }
 
-// Optik der Begrüßungsblase wie die Antwortblasen: Fläche und Schrift folgen
+// Optik der Begrüßungs- und der Datenschutz-Blase wie die Antwortblasen
+// (AK-12, D4: die Datenschutz-Blase wie die Begrüßung): Fläche und Schrift folgen
 // data-assistant-bg-color und den Variablen der Seite (--allm-assistant-bg,
 // --allm-assistant-text); Innenabstand, Schriftgröße und Zeilenhöhe wie 7.22.2
 // (Nutzerentscheidung 23.10.2026). Das Datenschutz-Fenster folgt der Blase
@@ -128,8 +151,8 @@ const BUBBLE_STYLE = {
   lineHeight: 1.5,
 };
 
-// Avatar + Begrüßungsblase; children = Vorschläge darunter (nur im leeren
-// Chat). Der Avatar steht neben der Blase.
+// Avatar + Begrüßungsblase (+ Datenschutz-Blase); children = Vorschläge
+// darunter (nur im leeren Chat). Der Avatar steht neben der letzten Blase.
 function WelcomeBlock({ settings, persistent = false, children = null }) {
   const avatar =
     embedderSettings.settings.assistantIcon ||
@@ -183,9 +206,86 @@ function WelcomeBlock({ settings, persistent = false, children = null }) {
           >
             {greetingText(settings)}
           </div>
+          {settings.privacyStartBubble === true && (
+            <PrivacyBubble settings={settings} />
+          )}
         </div>
       </div>
       {children}
+    </div>
+  );
+}
+
+// Datenschutz-Blase beim Start (AK-12, D4; Aufbau und Optik wie die Blase
+// in 7.22.2, Embed 3b35449): fette Überschrift (privacyTitle, sonst Standard
+// „Datenschutz“ bzw. „Privacy“), darunter der Text (privacyText: Zeilen mit
+// „•“/„-“ als Aufzählung, andere als Absätze; sonst die Standardpunkte), am
+// Ende der Link „Datenschutzerklärung“ in eigener Zeile, nur mit gültiger
+// privacyUrl (https oder Pfad der Seite, privacyHref; neuer Tab). Ohne den
+// Punkt „Hinweis zur KI“: der steht im Datenschutz-Fenster, die KI-Zeile
+// unter der Eingabe. Gleiche Fläche, Schrift, Schriftgröße, Zeilenhöhe und
+// Innenabstand wie die Begrüßungsblase (BUBBLE_STYLE). Alles Text, nie HTML.
+// Nur genau true schaltet sie ein (WelcomeBlock), auch für Werte, die nicht
+// über loadEmbedSettings kamen.
+function PrivacyBubble({ settings }) {
+  const texts = panelTexts(settings);
+  const groups = groupPrivacyBlocks(privacyBlocks(settings));
+  const href = privacyHref(settings.privacyUrl);
+  return (
+    <div
+      id={PRIVACY_BUBBLE_ID}
+      className="allm-font-sans"
+      style={{
+        ...BUBBLE_STYLE,
+        display: "flex",
+        flexDirection: "column",
+        gap: "5px",
+      }}
+    >
+      <strong
+        id={PRIVACY_BUBBLE_TITLE_ID}
+        style={{ display: "block", fontWeight: 700 }}
+      >
+        {privacyDialogTitle(settings)}
+      </strong>
+      {groups.map((g, i) =>
+        g.type === "list" ? (
+          <ul
+            key={i}
+            style={{
+              margin: 0,
+              paddingLeft: "1.15em",
+              listStyle: "disc",
+              display: "flex",
+              flexDirection: "column",
+              gap: "3px",
+            }}
+          >
+            {g.items.map((text, j) => (
+              <li key={j}>{text}</li>
+            ))}
+          </ul>
+        ) : (
+          <p key={i} style={{ margin: 0 }}>
+            {g.text}
+          </p>
+        ),
+      )}
+      {href && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            alignSelf: "flex-start",
+            color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
+            fontWeight: 500,
+            textDecoration: "underline",
+          }}
+        >
+          {texts.privacyBubbleLink}
+        </a>
+      )}
     </div>
   );
 }

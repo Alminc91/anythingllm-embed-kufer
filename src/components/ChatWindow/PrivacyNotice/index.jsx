@@ -23,9 +23,11 @@ import {
 // über den Link „Datenschutz“ neben dem KI-Hinweis unter der Eingabe und
 // deckt den ganzen Chat ab (Chatfenster, aufgeklapptes „In der Seite“,
 // mobiles Vollbild; ChatWindow legt es über Kopf, Verlauf und Eingabe, wie
-// „Frühere Chats“). Ersetzt die Datenschutz-Blase unter der Begrüßung und den
-// früheren Einmal-Hinweis mit Bestätigung („modal“), aus dem Aufbau und
-// Tab-Falle stammen. Kein Pop-up vor dem Chat (Hard Constraint 2).
+// „Frühere Chats“). Ersetzt den früheren Einmal-Hinweis mit Bestätigung
+// („modal“), aus dem Aufbau und Tab-Falle stammen, und als Standard die
+// Datenschutz-Blase unter der Begrüßung (die gibt es seit AK-12 nur
+// zusätzlich mit privacyStartBubble, PanelWelcome PrivacyBubble). Kein
+// Pop-up vor dem Chat (Hard Constraint 2).
 //
 // Aufbau: Überschrift (privacyTitle, sonst Standard), Text (privacyText,
 // Zeilen mit „•“/„-“ als Aufzählung, andere als Absätze; sonst die
