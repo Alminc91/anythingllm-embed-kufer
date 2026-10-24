@@ -319,14 +319,19 @@ def check_once(browser, base_url):
         page.screenshot(path=str(OUT_DIR / "fenster-de-lang-light.png"))
         record("AK-4 langer Text scrollt im Fenster, die Seite nicht",
                sc["sh"] > sc["ch"] and after["top"] > 0 and page_y == 0, {"vorher": sc, "nachher": after, "seite": page_y})
-        # NAK-4: Fokus bleibt im Fenster, kein Senden, Klick geht nicht durch
+        # NAK-4: Fokus bleibt im Fenster, kein Senden, Klick geht nicht durch.
+        # 13 Tabs enden auf dem Textbereich; seit W4 geht ein Fokus von außen
+        # an das Element zurück, das ihn hatte (vorher die Überschrift). Enter
+        # auf dem Textbereich bewirkt nichts (auf einem Button würde er dessen
+        # Aktion auslösen, etwa Schließen)
         inside = []
-        for _ in range(12):
+        for _ in range(13):
             page.keyboard.press("Tab")
             inside.append(page.evaluate("() => !!window.__q('[role=dialog]').contains(window.__allmShadow.activeElement)"))
         page.evaluate("() => window.__q('#message-input').focus()")
         page.wait_for_timeout(100)
-        forced = page.evaluate("() => !!window.__q('[role=dialog]').contains(window.__allmShadow.activeElement)")
+        forced = page.evaluate("() => !!window.__q('[role=dialog]').contains(window.__allmShadow.activeElement)"
+                               " && window.__allmShadow.activeElement.id === 'anything-llm-privacy-dialog-body'")
         page.keyboard.press("Enter")
         page.wait_for_timeout(300)
         hit = page.evaluate("""() => { const d = window.__q('[role=dialog]').getBoundingClientRect();
