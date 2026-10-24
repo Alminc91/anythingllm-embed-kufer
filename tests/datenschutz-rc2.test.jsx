@@ -263,3 +263,50 @@ describe("W2, W3 (R1-D1): Datenschutz-Fenster mit festen Farben je Farbschema", 
       );
   });
 });
+
+// ---------------------------------------------------------------------------
+describe("W4: Fokusfalle gibt den Fokus an das Element im Fenster zurück", () => {
+  it("Fokus auf „Schließen“, die Antwort endet (Eingabefeld holt den Fokus): Fokus bleibt auf „Schließen“", () => {
+    const d = openDialog();
+    const close = closeButton(d);
+    act(() => close.focus());
+    expect(document.activeElement).toBe(close);
+    // PromptInput fokussiert nach dem Ende einer Antwort das Textfeld
+    act(() => $("#message-input").focus());
+    expect(document.activeElement).toBe(close);
+  });
+
+  it("ebenso Link und Schließen-Symbol", () => {
+    const d = openDialog();
+    for (const el of [
+      d.querySelector("a"),
+      d.querySelector("button[aria-label='Datenschutz schließen']"),
+    ]) {
+      act(() => el.focus());
+      act(() => $("#message-input").focus());
+      expect(document.activeElement, el.tagName).toBe(el);
+    }
+  });
+
+  it("Fokus von außerhalb des Widgets (Seite, Tab zurück): auf die Überschrift", () => {
+    openDialog();
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    try {
+      act(() => field.focus());
+      act(() => $("#message-input").focus());
+      expect(document.activeElement).toBe(dialog().querySelector("h2"));
+    } finally {
+      field.remove();
+    }
+  });
+
+  it("nichts wird im Hintergrund gesendet (NAK-4 bleibt)", () => {
+    const d = openDialog();
+    act(() => closeButton(d).focus());
+    const input = $("#message-input");
+    act(() => input.focus());
+    expect(d.contains(document.activeElement)).toBe(true);
+    expect(chatService.streamChat).not.toHaveBeenCalled();
+  });
+});

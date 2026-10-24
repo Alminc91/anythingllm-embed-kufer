@@ -100,12 +100,19 @@ export default function ChatWindow({
   }, [collapsed]);
   // Fokusfalle (NAK-4): landet der Fokus hinter dem Fenster (Klick auf die
   // Seite und Tab zurück, ein Fokus nach dem Ende einer Antwort), geht er
-  // zurück auf die Überschrift des Fensters. Kein Absenden im Hintergrund
-  // per Tastatur.
+  // zurück ins Fenster: auf das Element im Fenster, das ihn gerade verloren
+  // hat (W4: Fokus auf „Schließen“, die Antwort endet und das Eingabefeld
+  // holt den Fokus, er bleibt auf „Schließen“), sonst auf die Überschrift.
+  // Kein Absenden im Hintergrund per Tastatur.
   const keepFocusInPrivacy = (e) => {
     const dialog = privacyDialogRef.current;
     if (!privacyOpenRef.current || !dialog || dialog.contains(e.target)) return;
-    dialog.querySelector("h2")?.focus({ preventScroll: true });
+    const from = e.relatedTarget;
+    const back =
+      from && from !== dialog && dialog.contains(from)
+        ? from
+        : dialog.querySelector("h2");
+    back?.focus({ preventScroll: true });
   };
   const privacyOverlay = privacyOpen ? (
     <PrivacyDialog

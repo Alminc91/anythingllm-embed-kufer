@@ -29,10 +29,12 @@ Korrekturen nach rc1 (issues/datenschutz-fusszeile/fixliste-rc1.md):
     (genau die festen Werte des Farbschemas); helle Linkfarben #FFA102 und
     #63b4e3: Link im Fenster mindestens 4,5:1, Fokusrahmen mindestens 3:1,
     hell und dunkel
+  - W4: Fokus auf „Schließen“ im Fenster, die Antwort endet (Eingabefeld
+    holt den Fokus): der Fokus bleibt auf „Schließen“, nichts wird gesendet
 
 Aufruf (aus dem Repo, npm run build vorher):
 
-  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only]
+  python3 tests/visual/datenschutz_fenster.py [--dist dist] [--tag runde1] [--rc2-only [--only w2 w4 ...]]
 
 Ergebnis: .test-storage/datenschutz-fenster-<tag>.json, Bilder
 .test-storage/start-*.png (beim Start) und fenster-*.png (Fenster offen),
@@ -443,6 +445,44 @@ def check_rc2(browser, base_url):
                 ctx.close()
 
 
+def check_w4(browser, base_url):
+    # W4: Antwort endet, während der Fokus auf „Schließen“ im Fenster liegt
+    for display, width, height in (("bubble", 1280, 800), ("inline", 1440, 900)):
+        mock = tv.Mock(config=dict(CONFIG), stream="hang")
+        ctx, page = open_view(browser, base_url, display, width, height, "light", "de", mock=mock)
+        try:
+            type_draft(page, "Gibt es Yoga?")
+            page.keyboard.press("Enter")
+            page.wait_for_timeout(500)
+            sent = len(page.stream_requests)
+            click_link(page)
+            for _ in range(3):
+                page.keyboard.press("Tab")
+            before = state(page)["active"]
+            body = "".join(f"data: {json.dumps(ev)}\n\n" for ev in [
+                {"uuid": "u-1", "type": "textResponseChunk", "close": False, "sources": [], "textResponse": "Ja, montags."},
+                {"uuid": "u-1", "type": "textResponseChunk", "close": True, "sources": [], "textResponse": ""}])
+            while mock.pending:
+                mock.pending.pop().fulfill(status=200, body=body, headers={"Content-Type": "text/event-stream"})
+            page.wait_for_timeout(1200)
+            st = state(page)
+            record(f"W4 Antwort endet: Fokus bleibt auf „Schließen“ im Fenster ({display})",
+                   sent == 1 and before == "Schließen" and st["open"] and st["active"] == "Schließen"
+                   and len(page.stream_requests) == 1,
+                   {"gesendet": sent, "vorher": before, "nachher": st["active"], "offen": st["open"],
+                    "anfragen": len(page.stream_requests)})
+        finally:
+            mock.release()
+            ctx.close()
+
+
+# Prüfungen der Korrekturen nach rc1 (Fixliste), einzeln wählbar mit --only
+RC2_CHECKS = {
+    "w2": check_rc2,
+    "w4": check_w4,
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", default=str(ROOT / "dist"))
@@ -452,6 +492,8 @@ def main():
     ap.add_argument("--views", nargs="+", default=[v[0] for v in VIEWS])
     ap.add_argument("--skip-once", action="store_true")
     ap.add_argument("--rc2-only", action="store_true", help="nur die Prüfungen der Korrekturen nach rc1")
+    ap.add_argument("--only", nargs="+", choices=sorted(RC2_CHECKS),
+                    help="nur diese Prüfungen der Korrekturen nach rc1 (mit --rc2-only)")
     args = ap.parse_args()
     OUT_DIR.mkdir(exist_ok=True)
     srv, base_url = tv.start_server(args.dist)
@@ -466,11 +508,12 @@ def main():
                         check_view(browser, base_url, name, display, width, height, theme, lang)
                     except Exception as e:  # weiter prüfen, Fehler festhalten
                         record(f"Ablauf {lang} {name} {theme}", False, str(e).splitlines()[0])
-        if args.rc2_only:
-            check_rc2(browser, base_url)
-        elif not args.skip_once:
+        if not args.rc2_only and not args.skip_once:
             check_once(browser, base_url)
-            check_rc2(browser, base_url)
+        if args.rc2_only or not args.skip_once:
+            for key, check in RC2_CHECKS.items():
+                if not args.only or key in args.only:
+                    check(browser, base_url)
         browser.close()
     srv.shutdown()
     out = OUT_DIR / f"datenschutz-fenster-{args.tag}.json"
