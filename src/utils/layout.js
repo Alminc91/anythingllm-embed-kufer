@@ -397,17 +397,6 @@ export function assistantSubtitleText(settings = {}) {
   return panelTexts(settings).assistantSubtitle;
 }
 
-// Gespeicherte Überschrift des Datenschutz-Hinweises: "" = im Design Center
-// geleert, null/undefined = Standard der Sprache. Das Datenschutz-Fenster
-// braucht immer eine Überschrift (aria-labelledby): dort gilt "" als
-// Standard (privacyDialogTitle).
-export function privacyTitleText(settings = {}) {
-  if (settings.privacyTitle === "") return "";
-  if (typeof settings.privacyTitle === "string" && settings.privacyTitle.trim())
-    return settings.privacyTitle.trim();
-  return panelTexts(settings).privacyTitle;
-}
-
 // Datenschutz-Text (privacyText), Regel seit Design Center vereinfacht:
 //  - Zeilen, die mit „•“, „-“ oder „–“ beginnen, werden Aufzählungspunkte
 //    (Zeichen entfernt), alle anderen Zeilen Absätze.
@@ -442,10 +431,16 @@ export function parsePrivacyText(text) {
     .filter((b) => b.text.length > 0);
 }
 
-// Überschrift des Datenschutz-Fensters: gespeicherter Titel, sonst (auch bei
-// "") der Standard der Sprache („Datenschutz“ bzw. „Privacy“).
+// Überschrift des Datenschutz-Fensters: gespeicherter Titel, sonst der
+// Standard der Sprache („Datenschutz“ bzw. „Privacy“). Das Fenster braucht
+// immer eine Überschrift (aria-labelledby); eine leere kommt gar nicht erst
+// in die Einstellungen (privacyTitleValue, W10).
 export function privacyDialogTitle(settings = {}) {
-  return privacyTitleText(settings) || panelTexts(settings).privacyTitle;
+  const own =
+    typeof settings.privacyTitle === "string"
+      ? settings.privacyTitle.trim()
+      : "";
+  return own || panelTexts(settings).privacyTitle;
 }
 
 // Wirksame Blöcke des Datenschutz-Texts: privacyText bzw. Standard der Sprache.
@@ -694,10 +689,11 @@ function privacyTextValue(value) {
   return lines.join("\n");
 }
 
-// Überschrift der Datenschutz-Blase: leer (nur Leerraum) = bewusst keine
-// Überschrift ("" bleibt erhalten), sonst Text bis 120 Zeichen.
+// Überschrift des Datenschutz-Fensters: Text bis 120 Zeichen; leer (nur
+// Leerraum) gilt wie nicht gesetzt, es greift der Standard der Sprache (seit
+// 7.23 dasselbe wie der Standard, kein eigener Zustand; W10, wie
+// privacyText). Bis 7.22.2 hieß "" „keine Überschrift“ in der Blase.
 function privacyTitleValue(value) {
-  if (typeof value === "string" && value.trim() === "") return "";
   return shortText(value, PRIVACY_TITLE_MAX_LEN);
 }
 

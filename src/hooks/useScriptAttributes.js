@@ -113,9 +113,11 @@ export function dropIneffectiveAttributes(dataset = {}) {
 }
 
 // Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“):
-// privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
-// (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
-const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
+// assistantSubtitle "" = kein Untertitel (Fixliste 7.22-rc8 R5; fehlt der
+// Wert, gilt der Standard der Sprache). Eine leere Überschrift des
+// Datenschutz-Fensters gilt seit 7.23 wie der Standard (W10), wie jeder
+// andere leere Wert.
+const EMPTY_MEANS_NONE = ["assistantSubtitle"];
 // Kennzeichen der Startvorschläge vom Server (Vertrag mit dem Fork, GET
 // /embed/:id/config, Fixliste 7.22-rc13 F02): defaultMessagesSaved = im
 // Design Center gespeichert, auch als leere Liste; defaultMessagesStandard =

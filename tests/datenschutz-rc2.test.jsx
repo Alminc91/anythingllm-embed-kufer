@@ -538,3 +538,50 @@ describe("W8: Reste des Einmal-Hinweises entfernt", () => {
     expect(closeButton().textContent).toBe("Schließen");
   });
 });
+
+// ---------------------------------------------------------------------------
+describe("W10: leere Überschrift gilt wie der Standard", () => {
+  const server = (config) =>
+    vi.fn(async () => ({ ok: true, json: async () => config }));
+
+  it.each(["", "   "])(
+    "Server liefert privacyTitle %j: kein eigener Zustand, Standard der Sprache",
+    async (value) => {
+      const s = await loadEmbedSettings(BASE, server({ privacyTitle: value }));
+      expect(s.privacyTitle).toBe(null);
+      expect(layout.privacyDialogTitle(s)).toBe("Datenschutz");
+      expect(layout.privacyDialogTitle({ ...s, language: "en" })).toBe(
+        "Privacy",
+      );
+    },
+  );
+
+  it("Prüfregel verwirft leeren Text wie beim Datenschutz-Text", () => {
+    expect(layout.layoutValidations.privacyTitle("")).toBe(undefined);
+    expect(layout.layoutValidations.privacyTitle("   ")).toBe(undefined);
+    expect(layout.layoutValidations.privacyText("   ")).toBe(undefined);
+    expect(layout.layoutValidations.privacyTitle(" Hinweise ")).toBe(
+      "Hinweise",
+    );
+  });
+
+  it("ein Weg zur Überschrift: privacyDialogTitle, kein Sonderfall für leer", () => {
+    expect(layout).not.toHaveProperty("privacyTitleText");
+    expect(layout.privacyDialogTitle({ privacyTitle: "" })).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle({ privacyTitle: " Eigene " })).toBe(
+      "Eigene",
+    );
+  });
+
+  it("Fenster zeigt bei leerer Überschrift vom Server „Datenschutz“", async () => {
+    const s = await loadEmbedSettings(BASE, server({ privacyTitle: "" }));
+    renderWindow(s);
+    click(link());
+    expect(dialog().querySelector("h2").textContent).toBe("Datenschutz");
+  });
+
+  it("Untertitel bleibt: leer vom Server = bewusst keiner (R5 unverändert)", async () => {
+    const s = await loadEmbedSettings(BASE, server({ assistantSubtitle: "" }));
+    expect(s.assistantSubtitle).toBe("");
+  });
+});

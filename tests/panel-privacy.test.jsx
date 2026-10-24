@@ -215,10 +215,13 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layout.greetingAsBubble).toBeUndefined();
   });
 
-  it('privacyTitle: leer im Design Center = keine Überschrift ("" bleibt erhalten)', async () => {
+  // Bewusste Änderung (W10, Fixliste datenschutz-fusszeile rc1): seit 7.23
+  // ist eine leere Überschrift dasselbe wie der Standard (das Fenster braucht
+  // eine Überschrift); bis 7.22.2 hieß "" „keine Überschrift“ in der Blase
+  it("privacyTitle: leer im Design Center = Standard der Sprache (kein eigener Zustand)", async () => {
     const s = await loadEmbedSettings(BASE, fetchConfig({ privacyTitle: "" }));
-    expect(s.privacyTitle).toBe("");
-    expect(layout.privacyTitleText(s)).toBe("");
+    expect(s.privacyTitle).toBe(null);
+    expect(layout.privacyDialogTitle(s)).toBe("Datenschutz");
     // Bewusste Änderung (Fixliste 7.22-rc17 E23): ein Script-Attribut wirkt
     // nicht (Gruppe A); fehlend = Standard „Datenschutz“
     const t = await loadEmbedSettings(
@@ -226,10 +229,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       fetchConfig({}),
     );
     expect(t.privacyTitle).toBe(null);
-    expect(layout.privacyTitleText(t)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle(t)).toBe("Datenschutz");
     const u = await loadEmbedSettings(BASE, fetchConfig({}));
-    expect(layout.privacyTitleText(u)).toBe("Datenschutz");
-    expect(layout.privacyTitleText({ ...u, language: "en" })).toBe("Privacy");
+    expect(layout.privacyDialogTitle(u)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle({ ...u, language: "en" })).toBe("Privacy");
   });
 
   it("frühere Standardtexte gelten als nicht gesetzt (neuer Standard greift), eigene Texte bleiben", async () => {
@@ -251,7 +254,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layout.greetingText(s)).toBe(
       "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
     );
-    expect(layout.privacyTitleText(s)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle(s)).toBe("Datenschutz");
     // alter Server-Standard + eigenes Script-Attribut: Bewusste Änderung
     // (Fixliste 7.22-rc17 E23), das Script-Attribut wirkt nicht (Gruppe A),
     // es gilt der neue Standard
@@ -329,8 +332,8 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layoutValidations).not.toHaveProperty("privacyButtonText");
     expect(layoutValidations.disclaimerText("x".repeat(160))).toHaveLength(160);
     expect(layoutValidations.disclaimerText("x".repeat(161))).toBe(undefined);
-    // leer = bewusst keine Überschrift (früher verworfen)
-    expect(layoutValidations.privacyTitle("   ")).toBe("");
+    // leer = Standard (W10, bewusste Änderung; bis 7.23-rc1 blieb "")
+    expect(layoutValidations.privacyTitle("   ")).toBe(undefined);
     expect(layoutValidations.privacyTitle("x".repeat(121))).toBe(undefined);
     expect(layoutValidations.greetingBubbleText(42)).toBe(undefined);
   });
