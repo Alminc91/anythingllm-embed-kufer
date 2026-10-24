@@ -51,6 +51,9 @@ export const DC_COVERED = [
   "brandText", // Name (Kopfzeile und über den Antworten)
   "assistantName",
   "assistantSubtitle", // Untertitel
+  // Kursanzahl im Untertitel (KIE-576): Schalter und Bezeichnung im Design
+  // Center, die Zahl selbst berechnet nur der Server (kein Skript-Attribut)
+  "courseCount",
   "greeting", // Begrüßungstext
   "greetingBubbleText",
   "privacyNotice", // Schalter Datenschutz-Hinweis
@@ -82,6 +85,8 @@ const DC_HINTS = {
     "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
   privacyNotice:
     "Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.",
+  courseCount:
+    "Die Kursanzahl berechnet der Server aus dem Kursprogramm, im Design Center lässt sie sich nur ein- oder ausschalten.",
 };
 // Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
 // „Frühere Chats“, KIE-503; kein Feld des Design Centers)
@@ -262,6 +267,11 @@ export const DEFAULT_SETTINGS = {
   // Sprache („Online-Berater mit künstlicher Intelligenz“, Fixliste 7.22-rc8
   // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
   assistantSubtitle: null,
+  // Kursanzahl statt des Untertitels (KIE-576 Paket 3): nur vom Server
+  // (GET /embed/:id/config, {count, offered, stand, word}, geprüft mit
+  // utils/layout.js courseCountValue), null = keine. Älter als 24 h: der
+  // Kopf zeigt wieder den Untertitel (utils/courseCount.js).
+  courseCount: null,
   onlineDot: false,
   privacyNotice: "bubble",
   // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),

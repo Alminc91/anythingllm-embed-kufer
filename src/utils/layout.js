@@ -98,6 +98,10 @@ export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
+// Kursanzahl im Untertitel (KIE-576 Paket 3): Bezeichnung im Plural aus dem
+// Design Center (courseCountWord), höchstens 20 Zeichen, nur Buchstaben,
+// Leerzeichen und Bindestrich (Vertrag, issues/KIE-576/KIE-576-kursanzahl.md)
+export const COURSE_COUNT_WORD_MAX_LEN = 20;
 
 // Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises:
 // EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
@@ -237,6 +241,26 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Nicht hilfreich",
     courses: "Genannte Kurse",
     moreCourses: "Weitere genannte Kurse",
+    // Kursanzahl im Untertitel und Info-Element (KIE-576 Paket 3, Mockup
+    // „Entscheidung“): n und b als formatierte Zahl, w die Bezeichnung,
+    // wDat die Bezeichnung im Dativ Plural (utils/courseCount.js).
+    // courseCountWord: Bezeichnung, wenn der Server keine (gültige) liefert,
+    // wie der Standard des Design Centers (courseCountWord). Nicht in
+    // PANEL_TEXTS: die Panel-Texte bleiben neutral für alle Kundenarten.
+    courseCountWord: "Kurse",
+    courseCountLead: "aktuell",
+    courseCountInfo: "Was bedeutet die Zahl?",
+    courseCountDialog: "Info zur Kursanzahl",
+    courseCountHead: (n, w) => `${n} ${w} im KI-Berater`,
+    courseCountAll: (b, w) => `Alle ${b} angebotenen ${w} sind enthalten.`,
+    courseCountPart: (a, b, wDat) =>
+      `${a} von ${b} angebotenen ${wDat} sind enthalten.`,
+    courseCountGap:
+      "Für eine vollständige Suche nutzen Sie bitte die Kurssuche auf unserer Webseite.",
+    courseCountStand: (when, w) =>
+      `Stand: ${when}. Die ${w} werden stündlich aus dem Kursprogramm aktualisiert.`,
+    today: "heute",
+    yesterday: "gestern",
   },
   en: {
     menuReset: "Reset chat",
@@ -269,6 +293,19 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Not helpful",
     courses: "Courses mentioned",
     moreCourses: "More courses mentioned",
+    courseCountWord: "courses",
+    courseCountLead: "currently",
+    courseCountInfo: "What does this number mean?",
+    courseCountDialog: "About the number of courses",
+    courseCountHead: (n, w) => `${n} ${w} in the AI advisor`,
+    courseCountAll: (b, w) => `All ${b} ${w} on offer are included.`,
+    courseCountPart: (a, b, w) => `${a} of ${b} ${w} on offer are included.`,
+    courseCountGap:
+      "For a complete search, please use the course search on our website.",
+    courseCountStand: (when, w) =>
+      `As of: ${when}. The ${w} are updated hourly from the course program.`,
+    today: "today",
+    yesterday: "yesterday",
   },
 };
 export function uiTexts(settings = {}) {
@@ -697,6 +734,48 @@ function safeUrl(value) {
   }
 }
 
+// Bezeichnung der Kursanzahl (courseCountWord): getrimmt, 1 bis 20 Zeichen,
+// nur Buchstaben (auch Umlaute), Leerzeichen und Bindestrich, mindestens ein
+// Buchstabe; sonst undefined (es gilt der Standard der Sprache).
+export function courseCountWordValue(value) {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  if (v.length === 0 || v.length > COURSE_COUNT_WORD_MAX_LEN) return undefined;
+  if (!/^[\p{L} -]+$/u.test(v) || !/\p{L}/u.test(v)) return undefined;
+  return v;
+}
+
+// Zeitpunkt der Kursliste (stand = created des SystemSettings): ISO 8601 mit
+// Zeitzone (Z oder ±hh:mm), Sekunden und Bruchteile optional. Bruchteile
+// werden für Date.parse auf Millisekunden gekürzt (Python schreibt
+// Mikrosekunden). Rückgabe Millisekunden seit 1970 oder NaN.
+const ISO_STAND_RE =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
+export function courseStandTime(value) {
+  if (typeof value !== "string" || value.length > 40) return NaN;
+  const m = ISO_STAND_RE.exec(value.trim());
+  if (!m) return NaN;
+  const fraction = m[2] ? `.${m[2].slice(0, 3).padEnd(3, "0")}` : "";
+  return Date.parse(`${m[1]}${fraction}${m[3]}`);
+}
+
+// Kursanzahl vom Server (GET /embed/:id/config, Feld courseCount, Vertrag
+// KIE-576): {count, offered, stand, word}. count = Kurse im KI-Berater
+// (ganze Zahl ab 1), offered = Kurse im Kursprogramm (ab count), stand =
+// Zeitpunkt der Kursliste, word = Bezeichnung (ungültig oder fehlend: null,
+// dann der Standard der Sprache). Alles andere verwirft das Feld: kein
+// Untertitel mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl.
+// Weitere Schlüssel des Objekts fallen weg.
+export function courseCountValue(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const { count, offered, stand, word } = value;
+  if (!Number.isSafeInteger(count) || count < 1) return undefined;
+  if (!Number.isSafeInteger(offered) || offered < count) return undefined;
+  if (!Number.isFinite(courseStandTime(stand))) return undefined;
+  return { count, offered, stand, word: courseCountWordValue(word) ?? null };
+}
+
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
 // genutzt). Rückgabe undefined = verwerfen.
 export const layoutValidations = {
@@ -757,6 +836,9 @@ export const layoutValidations = {
     return shortText(v, ASSISTANT_SUBTITLE_MAX_LEN);
   },
   onlineDot: bool,
+  // Kursanzahl im Untertitel (nur vom Server, KIE-576; ein Skript-Attribut
+  // verwirft useScriptAttributes vorher, DC_COVERED)
+  courseCount: courseCountValue,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
   privacyTitle: privacyTitleValue,
   privacyText: privacyTextValue,

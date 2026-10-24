@@ -19,6 +19,8 @@ import {
   LOGO_RADIUS,
 } from "@/utils/theme";
 import { panelTexts, uiTexts } from "@/utils/layout";
+import { courseCountTexts } from "@/utils/courseCount";
+import CourseCountSubtitle from "./CourseCount";
 
 // Name und Untertitel immer ausgeschrieben, Standard wie eigener Text des
 // Kunden: umbrechen statt kürzen (keine Ellipse, kein title-Ersatz nötig).
@@ -102,6 +104,10 @@ export default function ChatWindowHeader({
   // headerBgColor/headerTextColor; Unterlinie --allmi-header-border), gemeinsam
   // mit "Frühere Chats" — siehe utils/theme.js.
   const iconButtonClass = headerButtonClass(settings);
+  // Kursanzahl statt des Untertitels (KIE-576): nur im normalen Kopf, nicht
+  // kompakt; ohne gültige oder mit veralteter Kursanzahl (älter als 24 h)
+  // null, dann gilt der Untertitel wie bisher
+  const courseCount = compact ? null : courseCountTexts(settings);
 
   // Icon container style based on iconStyle setting
   const getIconContainerStyle = () => {
@@ -242,8 +248,12 @@ export default function ChatWindowHeader({
             }}
           />
         </div>
-        {settings.assistantSubtitle ? (
-          <BrandWithSubtitle settings={settings} compact={compact} />
+        {settings.assistantSubtitle || courseCount ? (
+          <BrandWithSubtitle
+            settings={settings}
+            compact={compact}
+            courseCount={courseCount}
+          />
         ) : (
           settings.brandText && (
             <span
@@ -303,10 +313,13 @@ export default function ChatWindowHeader({
 // wie ein menschlicher Live-Chat; onlineDot aus Script/Konfiguration wird
 // ignoriert (utils/layout.js FIXED_STANDARDS).
 
-// Name mit Untertitel (assistantSubtitle, z. B. „durchsucht 1.243 Kurse“);
-// ohne Untertitel steht nur der Name. Beide brechen bei Platzmangel um.
-// Kompakt (mobil bei offener Tastatur) steht nur der Name (E21).
-function BrandWithSubtitle({ settings, compact }) {
+// Name mit Untertitel (assistantSubtitle); ohne Untertitel steht nur der
+// Name. Beide brechen bei Platzmangel um. Kompakt (mobil bei offener
+// Tastatur) steht nur der Name (E21). Mit Kursanzahl (courseCount, Texte aus
+// utils/courseCount.js) steht statt des Untertitels „aktuell 837 Kurse“ mit
+// Info-Knopf, immer in einer Zeile (KIE-576, keine Kombination mit dem
+// Untertitel).
+function BrandWithSubtitle({ settings, compact, courseCount = null }) {
   return (
     <div
       className="allm-ml-3 allm-flex allm-flex-col allm-font-sans"
@@ -320,7 +333,10 @@ function BrandWithSubtitle({ settings, compact }) {
           {settings.brandText}
         </span>
       )}
-      {!compact && (
+      {!compact && courseCount && (
+        <CourseCountSubtitle settings={settings} texts={courseCount} />
+      )}
+      {!compact && !courseCount && (
         <span
           id="anything-llm-header-subtitle"
           style={{

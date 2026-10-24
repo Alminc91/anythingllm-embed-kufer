@@ -87,6 +87,60 @@ describe("Vertrag /config: Antwort des Servers -> Startvorschläge und Willkomme
   });
 });
 
+// KIE-576 Paket 3: courseCount nach dem Vertrag (issues/KIE-576/
+// KIE-576-kursanzahl.md, „Vertrag (wörtlich)“). Der Server liefert das Feld
+// nur mit gültiger Kursliste und Anzeige an, sonst fehlt es ganz; das
+// Widget übernimmt es geprüft (utils/layout.js courseCountValue), sonst null.
+describe("Vertrag /config: courseCount (KIE-576)", () => {
+  const EXAMPLE = {
+    count: 812,
+    offered: 837,
+    stand: "2026-10-24T08:00:00.000Z",
+    word: "Kurse",
+  };
+  const withCount = contract.cases.filter((c) => c.config?.courseCount);
+  const without = contract.cases.filter((c) =>
+    (c.configAbsent || []).includes("courseCount"),
+  );
+
+  it("Fixture: ein Fall mit courseCount (Beispielwerte des Vertrags) und einer ohne", () => {
+    expect(withCount.length).toBeGreaterThanOrEqual(1);
+    expect(without.length).toBeGreaterThanOrEqual(1);
+    for (const c of withCount) {
+      expect(c.config.courseCount, c.name).toEqual(EXAMPLE);
+      expect(Object.keys(c.config.courseCount).sort(), c.name).toEqual([
+        "count",
+        "offered",
+        "stand",
+        "word",
+      ]);
+      expect(c.widget.courseCount, c.name).toEqual(EXAMPLE);
+    }
+    for (const c of without) {
+      expect(c.config, c.name).not.toHaveProperty("courseCount");
+      expect(c.widget.courseCount, c.name).toBeNull();
+    }
+  });
+
+  it("weitere Schlüssel im Feld fallen weg, ein Skript-Attribut wirkt nicht", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const s = await loadEmbedSettings(
+      { ...BASE, courseCount: '{"count":5000}' },
+      fetchJson({ courseCount: { ...EXAMPLE, extra: "<b>x</b>" } }),
+    );
+    expect(s.courseCount).toEqual(EXAMPLE);
+    const none = await loadEmbedSettings(
+      { ...BASE, courseCount: '{"count":5000}' },
+      fetchJson({}),
+    );
+    expect(none.courseCount).toBeNull();
+    expect(warn.mock.calls.some(([m]) => /data-course-count/.test(m))).toBe(
+      true,
+    );
+    warn.mockRestore();
+  });
+});
+
 // Gegenprobe gegen den Fork (KUFER_FORK_DIR)
 const forkDir = process.env.KUFER_FORK_DIR;
 const describeFork = forkDir ? describe : describe.skip;
