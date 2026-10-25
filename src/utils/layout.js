@@ -99,9 +99,11 @@ export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
 // Kursanzahl im Untertitel (KIE-576 Paket 3): Bezeichnung im Plural aus dem
-// Design Center (courseCountWord), höchstens 20 Zeichen, nur Buchstaben,
-// Leerzeichen und Bindestrich (Vertrag, issues/KIE-576/KIE-576-kursanzahl.md)
+// Design Center (courseCountWord), ein Wort aus Buchstaben, Teile mit
+// Bindestrich verbunden, höchstens 20 Zeichen (Vertrag,
+// issues/KIE-576/KIE-576-kursanzahl.md; Fixliste r2b Nr. 2)
 export const COURSE_COUNT_WORD_MAX_LEN = 20;
+export const COURSE_COUNT_WORD_RE = /^\p{L}+(?:-\p{L}+)*$/u;
 
 // Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises:
 // EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
@@ -735,13 +737,14 @@ function safeUrl(value) {
 }
 
 // Bezeichnung der Kursanzahl (courseCountWord): getrimmt, 1 bis 20 Zeichen,
-// nur Buchstaben (auch Umlaute), Leerzeichen und Bindestrich, mindestens ein
-// Buchstabe; sonst undefined (es gilt der Standard der Sprache).
+// ein Wort aus Buchstaben (auch Umlaute), Teile nur mit Bindestrich
+// verbunden („Seminare“, „Online-Kurse“), kein Leerzeichen: so bleibt der
+// Dativ im Info-Element richtig („von 837 angebotenen Online-Kursen“).
+// Sonst undefined (es gilt der Standard der Sprache). Dieselbe Regel prüfen
+// Design Center und Server beim Speichern.
 export function courseCountWordValue(value) {
-  if (typeof value !== "string") return undefined;
-  const v = value.trim();
-  if (v.length === 0 || v.length > COURSE_COUNT_WORD_MAX_LEN) return undefined;
-  if (!/^[\p{L} -]+$/u.test(v) || !/\p{L}/u.test(v)) return undefined;
+  const v = shortText(value, COURSE_COUNT_WORD_MAX_LEN);
+  if (v === undefined || !COURSE_COUNT_WORD_RE.test(v)) return undefined;
   return v;
 }
 

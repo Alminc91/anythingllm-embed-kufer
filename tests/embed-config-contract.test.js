@@ -29,7 +29,7 @@ vi.mock("../src/main.jsx", () => ({
 }));
 
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
-import { PANEL_TEXTS } from "../src/utils/layout.js";
+import { courseCountWordValue, PANEL_TEXTS } from "../src/utils/layout.js";
 
 const FIXTURE = join(__dirname, "fixtures", "embedConfigContract.json");
 const contract = JSON.parse(readFileSync(FIXTURE, "utf8"));
@@ -119,6 +119,33 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
     for (const c of without) {
       expect(c.config, c.name).not.toHaveProperty("courseCount");
       expect(c.widget.courseCount, c.name).toBeNull();
+    }
+  });
+
+  // Fixliste r2b Nr. 2: Bezeichnung ein Wort, dieselbe Liste prüft der
+  // Server (Fixture wortgleich); ungültig = Standard der Sprache (word null)
+  it("Bezeichnung: gültige und ungültige Eingaben der Fixture", async () => {
+    const { valid, invalid } = contract.courseCountWords;
+    expect(valid.length).toBeGreaterThan(0);
+    expect(invalid.length).toBeGreaterThan(0);
+    for (const [input, output] of valid) {
+      expect(courseCountWordValue(input), JSON.stringify(input)).toBe(output);
+      const s = await loadEmbedSettings(
+        BASE,
+        fetchJson({ courseCount: { ...EXAMPLE, word: input } }),
+      );
+      expect(s.courseCount.word, JSON.stringify(input)).toBe(output);
+    }
+    for (const input of invalid) {
+      expect(
+        courseCountWordValue(input),
+        JSON.stringify(input),
+      ).toBeUndefined();
+      const s = await loadEmbedSettings(
+        BASE,
+        fetchJson({ courseCount: { ...EXAMPLE, word: input } }),
+      );
+      expect(s.courseCount.word, JSON.stringify(input)).toBeNull();
     }
   });
 

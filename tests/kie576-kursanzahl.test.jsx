@@ -141,15 +141,20 @@ describe("Feld courseCount: nur vom Server, geprüft", () => {
     expect(activeCourseCount({ courseCount: v }, NOW)).not.toBeNull();
   });
 
-  it("Bezeichnung: nur Buchstaben, Leerzeichen, Bindestrich, höchstens 20 Zeichen; sonst der Standard der Sprache", () => {
+  it("Bezeichnung: ein Wort aus Buchstaben, Bindestrich nur zwischen Buchstaben, höchstens 20 Zeichen; sonst der Standard der Sprache", () => {
     expect(courseCountWordValue("Kurse")).toBe("Kurse");
     expect(courseCountWordValue("Kurs-Angebote")).toBe("Kurs-Angebote");
     expect(courseCountWordValue("Veranstaltungen")).toBe("Veranstaltungen");
-    expect(courseCountWordValue("Übungen und Kurse")).toBe("Übungen und Kurse");
+    expect(courseCountWordValue("Übungen")).toBe("Übungen");
     for (const bad of [
       "",
       "  ",
       "-",
+      "Übungen und Kurse",
+      "Online Kurse",
+      "-Kurse",
+      "Kurse-",
+      "Online--Kurse",
       "Kurse!",
       "Kurse<b>",
       "Kurse2",
@@ -163,6 +168,13 @@ describe("Feld courseCount: nur vom Server, geprüft", () => {
     expect(courseCountTexts({ courseCount: v }, NOW).word).toBe("Kurse");
     expect(courseCountTexts({ courseCount: v, language: "en" }, NOW).word).toBe(
       "courses",
+    );
+  });
+
+  it("gespeicherte Bezeichnung mit Leerzeichen (Altbestand): der Kopf zeigt den Standard", async () => {
+    await header({ courseCount: { ...CC, word: "Online Kurse" } });
+    expect($("#anything-llm-header-course-count").textContent).toBe(
+      "aktuell 812 Kurse",
     );
   });
 
@@ -513,6 +525,32 @@ describe("Info-Element: Bedienung (Klick, Escape, Klick daneben, Tab)", () => {
       ),
     );
     expect(card()).toBeNull();
+  });
+
+  it("Tab vom Knopf auf ⋮ schließt die Karte, Wechsel zwischen Knopf und Karte nicht", async () => {
+    await header({ courseCount: CC });
+    click(button());
+    act(() =>
+      button().dispatchEvent(
+        new FocusEvent("focusout", { bubbles: true, relatedTarget: card() }),
+      ),
+    );
+    expect(card()).not.toBeNull();
+    act(() =>
+      button().dispatchEvent(
+        new FocusEvent("focusout", {
+          bubbles: true,
+          relatedTarget: $('[aria-label="Optionen"]'),
+        }),
+      ),
+    );
+    expect(card()).toBeNull();
+  });
+
+  it("Karte liegt über der Datenschutz-Sperre (z-index über 60)", async () => {
+    await header({ courseCount: CC });
+    click(button());
+    expect(Number(card().style.zIndex)).toBeGreaterThan(60);
   });
 });
 

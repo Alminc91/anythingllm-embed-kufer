@@ -13,7 +13,8 @@ import { HEADER_ICON_STYLE } from "@/utils/theme";
 // KI-Berater, Abdeckung, ab 5 % Lücke der Hinweis auf die Kurssuche, Stand.
 // Schließen per Escape (Ebene in utils/escape.js, Fokus zurück auf den
 // Knopf), Klick daneben (im Widget und auf der Webseite), erneuten Klick
-// oder wenn der Fokus per Tab ein anderes Element erreicht.
+// oder wenn der Fokus von Knopf oder Karte per Tab ein anderes Element
+// erreicht (focusout am umgebenden Element, Fixliste r2b Nr. 8).
 // texts = utils/courseCount.js courseCountTexts (nie null hier).
 export default function CourseCountSubtitle({ settings, texts }) {
   const [open, setOpen] = useState(false);
@@ -63,10 +64,12 @@ export default function CourseCountSubtitle({ settings, texts }) {
     if (open) cardRef.current?.focus({ preventScroll: true });
   }, [open]);
 
-  // Fokus wandert per Tab auf ein anderes Element: Karte zu. Ohne neues
-  // Ziel (Fensterwechsel, Klick auf Text) bleibt sie offen; ein Klick
-  // daneben schließt sie über den Listener oben.
+  // Fokus wandert per Tab von Knopf oder Karte auf ein anderes Element:
+  // Karte zu (sonst bliebe sie offen, und Escape schlösse das Fenster).
+  // Ohne neues Ziel (Fensterwechsel, Klick auf Text) bleibt sie offen; ein
+  // Klick daneben schließt sie über den Listener oben.
   const onBlur = (e) => {
+    if (!open) return;
     const next = e.relatedTarget;
     if (!next) return;
     if (cardRef.current?.contains(next) || buttonRef.current?.contains(next))
@@ -77,6 +80,7 @@ export default function CourseCountSubtitle({ settings, texts }) {
   return (
     <div
       id="anything-llm-header-course-count"
+      onBlur={onBlur}
       style={{
         display: "flex",
         alignItems: "center",
@@ -137,7 +141,6 @@ export default function CourseCountSubtitle({ settings, texts }) {
           role="dialog"
           aria-label={ui.courseCountDialog}
           tabIndex={-1}
-          onBlur={onBlur}
           className="allm-font-sans"
           style={{
             position: "absolute",
@@ -145,7 +148,9 @@ export default function CourseCountSubtitle({ settings, texts }) {
             left: "72px",
             right: "12px",
             maxWidth: "360px",
-            zIndex: 55,
+            // über der Datenschutz-Sperre (PrivacyNotice, 60) im selben
+            // Stapelkontext: die Karte bleibt lesbar (Fixliste r2b Nr. 8)
+            zIndex: 61,
             boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
