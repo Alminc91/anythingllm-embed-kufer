@@ -30,6 +30,7 @@ vi.mock("../src/main.jsx", () => ({
 
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import { courseCountWordValue, PANEL_TEXTS } from "../src/utils/layout.js";
+import { courseCountTexts } from "../src/utils/courseCount.js";
 
 const FIXTURE = join(__dirname, "fixtures", "embedConfigContract.json");
 const contract = JSON.parse(readFileSync(FIXTURE, "utf8"));
@@ -95,10 +96,17 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
   const EXAMPLE = {
     count: 812,
     offered: 837,
+    hidden: 14,
     stand: "2026-10-24T08:00:00.000Z",
     word: "Kurse",
   };
-  const withCount = contract.cases.filter((c) => c.config?.courseCount);
+  const withCount = contract.cases.filter(
+    (c) => c.config?.courseCount && c.fork !== false,
+  );
+  // D-K5: älterer Server ohne hidden, das Widget nimmt 0
+  const olderServer = contract.cases.filter(
+    (c) => c.config?.courseCount && c.fork === false,
+  );
   const without = contract.cases.filter((c) =>
     (c.configAbsent || []).includes("courseCount"),
   );
@@ -110,11 +118,17 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
       expect(c.config.courseCount, c.name).toEqual(EXAMPLE);
       expect(Object.keys(c.config.courseCount).sort(), c.name).toEqual([
         "count",
+        "hidden",
         "offered",
         "stand",
         "word",
       ]);
       expect(c.widget.courseCount, c.name).toEqual(EXAMPLE);
+    }
+    expect(olderServer.length).toBeGreaterThanOrEqual(1);
+    for (const c of olderServer) {
+      expect(c.config.courseCount, c.name).not.toHaveProperty("hidden");
+      expect(c.widget.courseCount, c.name).toEqual({ ...EXAMPLE, hidden: 0 });
     }
     for (const c of without) {
       expect(c.config, c.name).not.toHaveProperty("courseCount");
@@ -148,6 +162,30 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
       expect(s.courseCount.word, JSON.stringify(input)).toBeNull();
     }
   });
+
+  // D-K5: Zeilen der Info-Karte wortgleich mit der Fixture (dieselben Texte
+  // zeigt die Vorschau im Design Center)
+  it.each(contract.courseCountTexts.cases.map((c) => [c.name, c]))(
+    "Info-Karte: %s",
+    async (_name, c) => {
+      const s = await loadEmbedSettings(
+        { ...BASE, language: c.language },
+        fetchJson({ courseCount: c.courseCount }),
+      );
+      expect(s.courseCount).toEqual(c.courseCount);
+      const t = courseCountTexts(s, Date.parse(contract.courseCountTexts.now));
+      expect(
+        [
+          t.head,
+          t.scope,
+          t.hiddenLine,
+          t.missingLine,
+          t.gapHint,
+          t.stand,
+        ].filter(Boolean),
+      ).toEqual(c.lines);
+    },
+  );
 
   it("weitere Schlüssel im Feld fallen weg, ein Skript-Attribut wirkt nicht", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

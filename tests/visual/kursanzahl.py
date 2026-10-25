@@ -154,7 +154,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     from playwright.sync_api import sync_playwright
 
-    fresh = {"count": 812, "offered": 837, "stand": iso(2), "word": "Kurse"}
+    fresh = {"count": 812, "offered": 837, "hidden": 14, "stand": iso(2), "word": "Kurse"}
     stale = {**fresh, "stand": iso(25)}
     gap = {**fresh, "count": 612}
     desktop = {"width": 1440, "height": 900}

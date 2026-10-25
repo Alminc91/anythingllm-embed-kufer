@@ -5,7 +5,8 @@ import { createRoot } from "react-dom/client";
 // KIE-576 Paket 3, Teil Widget (issues/KIE-576/KIE-576-kursanzahl.md,
 // Abschnitt „Widget“, AK-K5, NAK-K3, NAK-K5): Mit courseCount vom Server
 // steht im Kopf statt des Untertitels „aktuell 837 Kurse“ mit Info-Knopf,
-// das Info-Element nennt Abdeckung und Stand (Europe/Berlin). Kompakter
+// das Info-Element nennt Umfang, ausgeblendete und fehlende Kurse und den
+// Stand (Europe/Berlin), Wortlaut nach D-K5. Kompakter
 // Kopf und eingeklappte Inline-Leiste ohne Zahl, veraltet (älter als 24 h)
 // wieder der Untertitel. Maße und Optik im Browser (browser_guide der
 // Rückgabe), hier Inhalt, Sprache, Tastatur und Rückfälle.
@@ -39,7 +40,6 @@ import {
   activeCourseCount,
   courseCountTexts,
   courseStandText,
-  germanDativePlural,
 } from "../src/utils/courseCount.js";
 import {
   courseCountValue,
@@ -56,7 +56,13 @@ const BASE = {
 // (MESZ), stand = 10:00 Uhr in Berlin
 const NOW = Date.parse("2026-10-24T10:30:00.000Z");
 const STAND = "2026-10-24T08:00:00.000Z";
-const CC = { count: 812, offered: 837, stand: STAND, word: "Kurse" };
+const CC = {
+  count: 812,
+  offered: 837,
+  hidden: 14,
+  stand: STAND,
+  word: "Kurse",
+};
 const fetchConfig = (config) =>
   vi.fn(async () => ({ ok: true, json: async () => structuredClone(config) }));
 const load = (script, server = {}) =>
@@ -129,6 +135,19 @@ describe("Feld courseCount: nur vom Server, geprüft", () => {
     ]) {
       const s = await load({}, { courseCount: bad });
       expect(s.courseCount, JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("hidden (D-K5): fehlend (älterer Server) 0; negativ oder keine ganze Zahl 0, das Feld bleibt", async () => {
+    const { hidden, ...older } = CC;
+    expect(hidden).toBe(14);
+    expect((await load({}, { courseCount: older })).courseCount).toEqual({
+      ...CC,
+      hidden: 0,
+    });
+    for (const bad of [-1, 1.5, "14", null, NaN, Infinity, 2 ** 53]) {
+      const s = await load({}, { courseCount: { ...CC, hidden: bad } });
+      expect(s.courseCount, String(bad)).toEqual({ ...CC, hidden: 0 });
     }
   });
 
@@ -286,73 +305,143 @@ describe("Kopf: „aktuell <n> <Bezeichnung>“ statt des Untertitels", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("Info-Element: Inhalt", () => {
-  it("alle enthalten: Kopfzeile, „Alle … sind enthalten.“, Stand heute 10:00 Uhr", async () => {
-    await header({ courseCount: { ...CC, count: 837 } });
+describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
+  const SCOPE = "Enthalten sind die aktuellen Kurse aus unserem Kursprogramm.";
+  const STAND_LINE =
+    "Stand: heute, 10:00 Uhr, stündlich aktualisiert. Verbindlich ist das Kursprogramm auf unserer Webseite.";
+  const GAP =
+    "Für eine vollständige Suche nutzen Sie bitte die Kurssuche auf unserer Webseite.";
+
+  it("nichts ausgeblendet, nichts fehlt: Kopfzeile, Umfang, Stand", async () => {
+    await header({ courseCount: { ...CC, count: 837, hidden: 0 } });
     click(button());
     expect(button().getAttribute("aria-expanded")).toBe("true");
     expect(card().getAttribute("aria-label")).toBe("Info zur Kursanzahl");
     expect(button().getAttribute("aria-controls")).toBe(card().id);
-    expect(cardLines()).toEqual([
-      "837 Kurse im KI-Berater",
-      "Alle 837 angebotenen Kurse sind enthalten.",
-      "Stand: heute, 10:00 Uhr. Die Kurse werden stündlich aus dem Kursprogramm aktualisiert.",
-    ]);
+    expect(cardLines()).toEqual(["837 Kurse im KI-Berater", SCOPE, STAND_LINE]);
     // nur Text, keine Links oder Knöpfe in der Karte
     expect(card().querySelector("a, button")).toBeNull();
+    // die Sätze zur Abdeckung von früher entfallen
+    expect(card().textContent).not.toMatch(/angebotenen|sind enthalten/);
   });
 
-  it("kleine Lücke (unter 5 %): genaue Zahlen im Dativ, kein Hinweis auf die Kurssuche", async () => {
+  it("ausgeblendete und fehlende Kurse (Lücke unter 5 %): beide Zahlen, kein Hinweis auf die Kurssuche", async () => {
     await header({ courseCount: CC });
     click(button());
     expect(cardLines()).toEqual([
       "812 Kurse im KI-Berater",
-      "812 von 837 angebotenen Kursen sind enthalten.",
-      "Stand: heute, 10:00 Uhr. Die Kurse werden stündlich aus dem Kursprogramm aktualisiert.",
+      SCOPE,
+      "14 beendete Kurse sind ausgeblendet.",
+      "Zurzeit fehlen 25 Kurse.",
+      STAND_LINE,
     ]);
   });
 
-  it("Lücke ab 5 %: zusätzlich der Hinweis auf die Kurssuche (ohne Link)", async () => {
-    await header({ courseCount: { ...CC, count: 612 } });
+  it("Lücke ab 5 %: zusätzlich der Hinweis auf die Kurssuche (ohne Link), Zahlen im deutschen Format", async () => {
+    await header({
+      courseCount: { ...CC, count: 1243, offered: 1310, hidden: 1050 },
+    });
     click(button());
     expect(cardLines()).toEqual([
-      "612 Kurse im KI-Berater",
-      "612 von 837 angebotenen Kursen sind enthalten.",
-      "Für eine vollständige Suche nutzen Sie bitte die Kurssuche auf unserer Webseite.",
-      "Stand: heute, 10:00 Uhr. Die Kurse werden stündlich aus dem Kursprogramm aktualisiert.",
+      "1.243 Kurse im KI-Berater",
+      SCOPE,
+      "1.050 beendete Kurse sind ausgeblendet.",
+      "Zurzeit fehlen 67 Kurse.",
+      GAP,
+      STAND_LINE,
     ]);
     expect(card().querySelector("a")).toBeNull();
   });
 
-  it("Grenze 5 %: 95 von 100 mit Hinweis, 96 von 100 ohne", () => {
-    const t = (count) =>
-      courseCountTexts({ courseCount: { ...CC, count, offered: 100 } }, NOW)
-        .gapHint;
-    expect(t(95)).not.toBeNull();
-    expect(t(96)).toBeNull();
-    expect(t(100)).toBeNull();
+  it("nur ausgeblendete, nichts fehlt: keine Zeile zu fehlenden Kursen", async () => {
+    await header({ courseCount: { ...CC, count: 837 } });
+    click(button());
+    expect(cardLines()).toEqual([
+      "837 Kurse im KI-Berater",
+      SCOPE,
+      "14 beendete Kurse sind ausgeblendet.",
+      STAND_LINE,
+    ]);
   });
 
-  it("eigene Bezeichnung: im Dativ angepasst, als Text", async () => {
+  it("Grenze 5 %: 95 von 100 mit Hinweis, 96 von 100 ohne, ohne Lücke nie", () => {
+    const t = (count) =>
+      courseCountTexts({ courseCount: { ...CC, count, offered: 100 } }, NOW);
+    expect(t(95).gapHint).toBe(GAP);
+    expect(t(95).missingLine).toBe("Zurzeit fehlen 5 Kurse.");
+    expect(t(96).gapHint).toBeNull();
+    expect(t(96).missingLine).toBe("Zurzeit fehlen 4 Kurse.");
+    expect(t(100).gapHint).toBeNull();
+    expect(t(100).missingLine).toBeNull();
+  });
+
+  it("Einzahl mit der Standardbezeichnung", async () => {
+    await header({ courseCount: { ...CC, count: 836, hidden: 1 } });
+    click(button());
+    expect(cardLines()).toEqual([
+      "836 Kurse im KI-Berater",
+      SCOPE,
+      "1 beendeter Kurs ist ausgeblendet.",
+      "Zurzeit fehlt 1 Kurs.",
+      STAND_LINE,
+    ]);
+  });
+
+  it("Einzahl auch ohne Bezeichnung vom Server (Standard der Sprache)", () => {
+    const t = courseCountTexts(
+      { courseCount: { ...CC, count: 836, hidden: 1, word: null } },
+      NOW,
+    );
+    expect(t.hiddenLine).toBe("1 beendeter Kurs ist ausgeblendet.");
+    expect(t.missingLine).toBe("Zurzeit fehlt 1 Kurs.");
+  });
+
+  it("eigene Bezeichnung: als Text, auch bei 1 in der Mehrzahl", async () => {
     await header({
-      courseCount: { ...CC, count: 1200, offered: 1243, word: "Angebote" },
+      courseCount: {
+        ...CC,
+        count: 1242,
+        offered: 1243,
+        hidden: 1,
+        word: "Angebote",
+      },
     });
     expect($("#anything-llm-header-course-count").textContent).toBe(
-      "aktuell 1.200 Angebote",
+      "aktuell 1.242 Angebote",
     );
     click(button());
-    expect(cardLines().slice(0, 2)).toEqual([
-      "1.200 Angebote im KI-Berater",
-      "1.200 von 1.243 angebotenen Angeboten sind enthalten.",
+    expect(cardLines()).toEqual([
+      "1.242 Angebote im KI-Berater",
+      "Enthalten sind die aktuellen Angebote aus unserem Kursprogramm.",
+      "1 beendete Angebote sind ausgeblendet.",
+      "Zurzeit fehlen 1 Angebote.",
+      STAND_LINE,
     ]);
-    expect(cardLines()[2]).toBe(
-      "Stand: heute, 10:00 Uhr. Die Angebote werden stündlich aus dem Kursprogramm aktualisiert.",
-    );
   });
 
-  it("englisch sinngemäß", async () => {
+  it("älterer Server ohne hidden: keine Zeile zu ausgeblendeten Kursen", async () => {
+    const { hidden: _h, ...older } = CC;
+    await header({ courseCount: older });
+    click(button());
+    expect(cardLines()).toEqual([
+      "812 Kurse im KI-Berater",
+      SCOPE,
+      "Zurzeit fehlen 25 Kurse.",
+      STAND_LINE,
+    ]);
+  });
+
+  it("englisch", async () => {
     await header(
-      { courseCount: { ...CC, count: 612, offered: 1243, word: "courses" } },
+      {
+        courseCount: {
+          ...CC,
+          count: 1243,
+          offered: 1310,
+          hidden: 14,
+          word: "courses",
+        },
+      },
       { language: "en" },
     );
     click(button());
@@ -360,19 +449,48 @@ describe("Info-Element: Inhalt", () => {
       "About the number of courses",
     );
     expect(cardLines()).toEqual([
-      "612 courses in the AI advisor",
-      "612 of 1,243 courses on offer are included.",
+      "1,243 courses in the AI advisor",
+      "This includes the current courses from our course program.",
+      "14 ended courses are hidden.",
+      "67 courses are currently missing.",
       "For a complete search, please use the course search on our website.",
-      "As of: today, 10:00 AM. The courses are updated hourly from the course program.",
+      "Status: today, 10:00 AM, updated hourly. The course program on our website is binding.",
     ]);
   });
 
-  it("Dativ Plural der Bezeichnung", () => {
-    expect(germanDativePlural("Kurse")).toBe("Kursen");
-    expect(germanDativePlural("Angebote")).toBe("Angeboten");
-    expect(germanDativePlural("Seminare")).toBe("Seminaren");
-    expect(germanDativePlural("Veranstaltungen")).toBe("Veranstaltungen");
-    expect(germanDativePlural("Workshops")).toBe("Workshops");
+  it("englisch: Einzahl mit der Standardbezeichnung, eigene bleibt in der Mehrzahl", () => {
+    const en = (word) =>
+      courseCountTexts(
+        {
+          language: "en",
+          courseCount: { ...CC, count: 836, hidden: 1, word },
+        },
+        NOW,
+      );
+    expect(en("courses").hiddenLine).toBe("1 ended course is hidden.");
+    expect(en("courses").missingLine).toBe("1 course is currently missing.");
+    expect(en("workshops").hiddenLine).toBe("1 ended workshops are hidden.");
+    expect(en("workshops").missingLine).toBe(
+      "1 workshops are currently missing.",
+    );
+  });
+
+  it("keine Gedankenstriche in den Zeilen", () => {
+    for (const language of ["de", "en"]) {
+      const t = courseCountTexts(
+        { language, courseCount: { ...CC, count: 612 } },
+        NOW,
+      );
+      for (const line of [
+        t.head,
+        t.scope,
+        t.hiddenLine,
+        t.missingLine,
+        t.gapHint,
+        t.stand,
+      ])
+        expect(line, language).not.toMatch(/[–—]/);
+    }
   });
 });
 

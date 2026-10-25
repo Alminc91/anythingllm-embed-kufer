@@ -10,7 +10,8 @@ import { HEADER_ICON_STYLE } from "@/utils/theme";
 // (Trefferfläche 24 px, ohne die Zeile zu erhöhen: der Kopf bleibt 76 px).
 // Der Knopf öffnet eine kleine Dialogkarte unter dem Kopf (Muster
 // PrivacyNotice: role dialog, nur Text, Farben über --allmi-*): Kurse im
-// KI-Berater, Abdeckung, ab 5 % Lücke der Hinweis auf die Kurssuche, Stand.
+// KI-Berater, Umfang, ausgeblendete beendete und fehlende Kurse (nur wenn
+// es welche gibt), ab 5 % Lücke der Hinweis auf die Kurssuche, Stand (D-K5).
 // Schließen per Escape (Ebene in utils/escape.js, Fokus zurück auf den
 // Knopf), Klick daneben (im Widget und auf der Webseite), erneuten Klick
 // oder wenn der Fokus von Knopf oder Karte per Tab ein anderes Element
@@ -170,7 +171,9 @@ export default function CourseCountSubtitle({ settings, texts }) {
           }}
         >
           <span style={{ fontWeight: 600 }}>{texts.head}</span>
-          <span>{texts.cover}</span>
+          <span>{texts.scope}</span>
+          {texts.hiddenLine && <span>{texts.hiddenLine}</span>}
+          {texts.missingLine && <span>{texts.missingLine}</span>}
           {texts.gapHint && <span>{texts.gapHint}</span>}
           <span style={{ opacity: 0.82 }}>{texts.stand}</span>
         </div>

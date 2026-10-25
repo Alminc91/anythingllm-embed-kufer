@@ -32,14 +32,6 @@ export function formatCourseNumber(n, settings = {}) {
   return new Intl.NumberFormat(LOCALES[panelLanguage(settings)]).format(n);
 }
 
-// Dativ Plural der Bezeichnung für „von … angebotenen Kursen“: ein n dazu,
-// außer sie endet schon auf n oder s (Kurse -> Kursen, Angebote ->
-// Angeboten, Veranstaltungen und Workshops bleiben). Bei mehreren Wörtern
-// nur das letzte.
-export function germanDativePlural(word) {
-  return /[ns]$/i.test(word) ? word : `${word}n`;
-}
-
 // Kalendertag in Europe/Berlin als Zahl der Tage seit 1970 (für heute,
 // gestern), dazu Tag und Monat
 function berlinDay(ms) {
@@ -95,36 +87,45 @@ export function courseStandText(stand, settings = {}, now = Date.now()) {
 }
 
 // Alle Texte für Kopf und Info-Element; null ohne gültige, aktuelle
-// Kursanzahl
+// Kursanzahl. Info-Karte nach D-K5 (Spezifikation, „Entscheidungen und
+// Nachträge“): head, scope, hiddenLine nur bei s > 0, missingLine nur bei
+// m = b − n > 0, ab 5 % Lücke gapHint, stand. Einzahl (s = 1, m = 1) nur mit
+// der Standardbezeichnung der Sprache, eine eigene bleibt in der Mehrzahl.
 export function courseCountTexts(settings = {}, now = Date.now()) {
   const value = activeCourseCount(settings, now);
   if (!value) return null;
-  const lang = panelLanguage(settings);
   const ui = uiTexts(settings);
   const word = value.word || ui.courseCountWord;
+  const standardWord = word === ui.courseCountWord;
   const n = formatCourseNumber(value.count, settings);
-  const b = formatCourseNumber(value.offered, settings);
-  const complete = value.count === value.offered;
-  const gap = (value.offered - value.count) / value.offered;
+  const hidden = value.hidden > 0 ? value.hidden : 0;
+  const missing = Math.max(0, value.offered - value.count);
+  const gap = missing / value.offered;
   return {
     count: value.count,
     offered: value.offered,
+    hidden,
+    missing,
     number: n,
     word,
     lead: ui.courseCountLead,
     subtitle: `${ui.courseCountLead} ${n} ${word}`,
     head: ui.courseCountHead(n, word),
-    cover: complete
-      ? ui.courseCountAll(b, word)
-      : ui.courseCountPart(
-          n,
-          b,
-          lang === "de" ? germanDativePlural(word) : word,
-        ),
-    gapHint: gap >= COURSE_COUNT_GAP_HINT ? ui.courseCountGap : null,
-    stand: ui.courseCountStand(
-      courseStandText(value.stand, settings, now),
-      word,
-    ),
+    scope: ui.courseCountScope(word),
+    hiddenLine:
+      hidden === 0
+        ? null
+        : hidden === 1 && standardWord
+          ? ui.courseCountHiddenOne
+          : ui.courseCountHidden(formatCourseNumber(hidden, settings), word),
+    missingLine:
+      missing === 0
+        ? null
+        : missing === 1 && standardWord
+          ? ui.courseCountMissingOne
+          : ui.courseCountMissing(formatCourseNumber(missing, settings), word),
+    gapHint:
+      missing > 0 && gap >= COURSE_COUNT_GAP_HINT ? ui.courseCountGap : null,
+    stand: ui.courseCountStand(courseStandText(value.stand, settings, now)),
   };
 }

@@ -243,24 +243,27 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Nicht hilfreich",
     courses: "Genannte Kurse",
     moreCourses: "Weitere genannte Kurse",
-    // Kursanzahl im Untertitel und Info-Element (KIE-576 Paket 3, Mockup
-    // „Entscheidung“): n und b als formatierte Zahl, w die Bezeichnung,
-    // wDat die Bezeichnung im Dativ Plural (utils/courseCount.js).
-    // courseCountWord: Bezeichnung, wenn der Server keine (gültige) liefert,
-    // wie der Standard des Design Centers (courseCountWord). Nicht in
+    // Kursanzahl im Untertitel und Info-Element (KIE-576 Paket 3, Wortlaut
+    // nach D-K5): n, s und m als formatierte Zahl, w die Bezeichnung
+    // (utils/courseCount.js). courseCountWord: Bezeichnung, wenn der Server
+    // keine (gültige) liefert, wie der Standard des Design Centers
+    // (courseCountWord); nur mit ihr gibt es die Einzahl (…One). Nicht in
     // PANEL_TEXTS: die Panel-Texte bleiben neutral für alle Kundenarten.
     courseCountWord: "Kurse",
     courseCountLead: "aktuell",
     courseCountInfo: "Was bedeutet die Zahl?",
     courseCountDialog: "Info zur Kursanzahl",
     courseCountHead: (n, w) => `${n} ${w} im KI-Berater`,
-    courseCountAll: (b, w) => `Alle ${b} angebotenen ${w} sind enthalten.`,
-    courseCountPart: (a, b, wDat) =>
-      `${a} von ${b} angebotenen ${wDat} sind enthalten.`,
+    courseCountScope: (w) =>
+      `Enthalten sind die aktuellen ${w} aus unserem Kursprogramm.`,
+    courseCountHidden: (s, w) => `${s} beendete ${w} sind ausgeblendet.`,
+    courseCountHiddenOne: "1 beendeter Kurs ist ausgeblendet.",
+    courseCountMissing: (m, w) => `Zurzeit fehlen ${m} ${w}.`,
+    courseCountMissingOne: "Zurzeit fehlt 1 Kurs.",
     courseCountGap:
       "Für eine vollständige Suche nutzen Sie bitte die Kurssuche auf unserer Webseite.",
-    courseCountStand: (when, w) =>
-      `Stand: ${when}. Die ${w} werden stündlich aus dem Kursprogramm aktualisiert.`,
+    courseCountStand: (when) =>
+      `Stand: ${when}, stündlich aktualisiert. Verbindlich ist das Kursprogramm auf unserer Webseite.`,
     today: "heute",
     yesterday: "gestern",
   },
@@ -300,12 +303,16 @@ export const UI_TEXTS = {
     courseCountInfo: "What does this number mean?",
     courseCountDialog: "About the number of courses",
     courseCountHead: (n, w) => `${n} ${w} in the AI advisor`,
-    courseCountAll: (b, w) => `All ${b} ${w} on offer are included.`,
-    courseCountPart: (a, b, w) => `${a} of ${b} ${w} on offer are included.`,
+    courseCountScope: (w) =>
+      `This includes the current ${w} from our course program.`,
+    courseCountHidden: (s, w) => `${s} ended ${w} are hidden.`,
+    courseCountHiddenOne: "1 ended course is hidden.",
+    courseCountMissing: (m, w) => `${m} ${w} are currently missing.`,
+    courseCountMissingOne: "1 course is currently missing.",
     courseCountGap:
       "For a complete search, please use the course search on our website.",
-    courseCountStand: (when, w) =>
-      `As of: ${when}. The ${w} are updated hourly from the course program.`,
+    courseCountStand: (when) =>
+      `Status: ${when}, updated hourly. The course program on our website is binding.`,
     today: "today",
     yesterday: "yesterday",
   },
@@ -763,20 +770,29 @@ export function courseStandTime(value) {
 }
 
 // Kursanzahl vom Server (GET /embed/:id/config, Feld courseCount, Vertrag
-// KIE-576): {count, offered, stand, word}. count = Kurse im KI-Berater
-// (ganze Zahl ab 1), offered = Kurse im Kursprogramm (ab count), stand =
-// Zeitpunkt der Kursliste, word = Bezeichnung (ungültig oder fehlend: null,
-// dann der Standard der Sprache). Alles andere verwirft das Feld: kein
-// Untertitel mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl.
-// Weitere Schlüssel des Objekts fallen weg.
+// KIE-576): {count, offered, hidden, stand, word}. count = Kurse im
+// KI-Berater (ganze Zahl ab 1), offered = Kurse im Kursprogramm (ab count),
+// hidden = veraltete Kursdokumente, die der Server in der Suche ausblendet
+// (D-K5; fehlend wie beim älteren Server, negativ oder keine ganze Zahl: 0,
+// die Karte nennt dann keine), stand = Zeitpunkt der Kursliste, word =
+// Bezeichnung (ungültig oder fehlend: null, dann der Standard der Sprache).
+// Ungültige count, offered oder stand verwerfen das Feld: kein Untertitel
+// mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl. Weitere
+// Schlüssel des Objekts fallen weg.
 export function courseCountValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return undefined;
-  const { count, offered, stand, word } = value;
+  const { count, offered, hidden, stand, word } = value;
   if (!Number.isSafeInteger(count) || count < 1) return undefined;
   if (!Number.isSafeInteger(offered) || offered < count) return undefined;
   if (!Number.isFinite(courseStandTime(stand))) return undefined;
-  return { count, offered, stand, word: courseCountWordValue(word) ?? null };
+  return {
+    count,
+    offered,
+    hidden: Number.isSafeInteger(hidden) && hidden > 0 ? hidden : 0,
+    stand,
+    word: courseCountWordValue(word) ?? null,
+  };
 }
 
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
