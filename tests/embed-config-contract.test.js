@@ -6,9 +6,11 @@ import { join } from "node:path";
 // Vertrag Fork und Widget für GET /embed/:id/config (Fixliste 7.22-rc13,
 // F01 bis F03 mit E10 bis E12): tests/fixtures/embedConfigContract.json.
 // Hier die Widget-Seite: Abruf mit ?language= und Auflösung der Antwort des
-// Servers samt Skript-Attributen. Mit KUFER_FORK_DIR (Checkout des Forks
-// anythingllm-kufer, Branch feat/design-center-standard) zusätzlich die
-// Gegenprobe gegen den Fork selbst: Standard-Startvorschläge und Sprachwahl
+// Servers samt Skript-Attributen (Startvorschläge, Willkommensblasen, seit
+// Fixliste AK-12 A4 auch privacyNotice und privacyStartBubble). Mit
+// KUFER_FORK_DIR (Checkout des Forks anythingllm-kufer, Branch
+// feat/design-center-standard) zusätzlich die Gegenprobe gegen den Fork
+// selbst: Standard-Startvorschläge und Sprachwahl
 // aus server/utils/chats/embedDefaults.js und die Fixture-Kopie im Fork
 // (wortgleich; fehlt sie, scheitert der Test, Fixliste 7.22-rc16 W45), dazu
 // die Standardtexte der Panel-Optik (PANEL_TEXTS) gegen embedDefaultTexts()
@@ -59,7 +61,7 @@ describe("Vertrag /config: Sprache im Abruf (F01, E12)", () => {
   );
 });
 
-describe("Vertrag /config: Antwort des Servers -> Startvorschläge und Willkommensblasen (F02, F03, E10, E11)", () => {
+describe("Vertrag /config: Antwort des Servers -> Startvorschläge, Willkommensblasen und Datenschutz (F02, F03, E10, E11, AF-6)", () => {
   it.each(contract.cases.map((c) => [c.name, c]))("%s", async (_name, c) => {
     const s = await loadEmbedSettings(
       { ...BASE, ...c.script },
@@ -84,6 +86,55 @@ describe("Vertrag /config: Antwort des Servers -> Startvorschläge und Willkomme
       expect(c.config.defaultMessages, c.name).toEqual(standards[q.standards]);
     }
     expect(JSON.stringify(contract)).not.toMatch(/[–—]/);
+  });
+
+  // A4 (Fixliste AK-12, Review AF-6): Der Vertrag deckt auch den Schalter
+  // privacyStartBubble (AK-12) und den festen Datenschutz-Hinweis
+  // privacyNotice "link" (AK-10) ab, nicht nur die Tests je Seite. Gespeichert
+  // genau true, als Text "true", false und nicht gespeichert (mit
+  // Skript-Attribut); ein Altwert von privacyNotice schaltet nichts ein.
+  it("Fixture: Fälle für privacyStartBubble (true, Text, false, fehlt) und privacyNotice link (AF-6)", () => {
+    const forkCases = contract.cases.filter((c) => c.fork !== false);
+    const bubbleCases = forkCases.filter(
+      (c) => "privacyStartBubble" in c.widget,
+    );
+    const stored = bubbleCases.map((c) =>
+      "privacyStartBubble" in c.visualConfig
+        ? c.visualConfig.privacyStartBubble
+        : "fehlt",
+    );
+    for (const value of [true, "true", false, "fehlt"])
+      expect(stored, String(value)).toContainEqual(value);
+    for (const c of bubbleCases) {
+      const on = c.visualConfig.privacyStartBubble === true;
+      expect([c.name, c.config.privacyStartBubble]).toEqual([
+        c.name,
+        on ? true : undefined,
+      ]);
+      if (!on) expect(c.configAbsent, c.name).toContain("privacyStartBubble");
+      expect([c.name, c.widget.privacyStartBubble]).toEqual([c.name, on]);
+      // der Link „Datenschutz“ bleibt in jedem Fall (D1)
+      expect([c.name, c.config.privacyNotice, c.widget.privacyNotice]).toEqual([
+        c.name,
+        "link",
+        "link",
+      ]);
+    }
+    // Skript-Attribut ohne Wirkung (Gruppe A) und Altwert privacyNotice (D2)
+    expect(
+      bubbleCases.some(
+        (c) =>
+          c.script.privacyStartBubble === "true" &&
+          !("privacyStartBubble" in c.visualConfig),
+      ),
+    ).toBe(true);
+    expect(
+      bubbleCases.some(
+        (c) =>
+          c.visualConfig.privacyNotice === "bubble" &&
+          c.widget.privacyStartBubble === false,
+      ),
+    ).toBe(true);
   });
 });
 
