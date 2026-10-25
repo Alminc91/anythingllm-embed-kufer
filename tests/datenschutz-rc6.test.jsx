@@ -152,3 +152,39 @@ describe.skipIf(!PY_OK)(
     });
   },
 );
+
+describe.skipIf(!PY_OK)(
+  "A6 (AW-3, C1): Laufangabe der README zu datenschutz_blase.py",
+  () => {
+    const para = () =>
+      read("README.md")
+        .split("\n")
+        .find((l) => l.startsWith("Datenschutz-Blase beim Start (7.23-rc5"));
+
+    it("die Zahl des Laufs ist die geplante Zahl eines vollständigen Laufs", () => {
+      const planned = py(
+        "print(json.dumps(b.planned_count(b.parse_args([]))))",
+      );
+      const m = para().match(
+        /Lauf am \d\d\.\d\d\.\d{4} gegen den Build von [0-9a-f]{7}\b[^:]*: `datenschutz_blase\.py` (\d+) von (\d+)/,
+      );
+      expect(m, "Laufangabe mit Build fehlt").toBeTruthy();
+      expect([Number(m[1]), Number(m[2])]).toEqual([planned, planned]);
+    });
+
+    it("je Prüfskript der Laufangabe ist der Build genannt", () => {
+      const run = para().slice(para().indexOf("Lauf am "));
+      for (const script of [
+        "datenschutz_blase.py",
+        "datenschutz_fenster.py",
+        "rc18_farben.py",
+        "fensterbreite.py",
+      ])
+        expect(run, script).toMatch(
+          new RegExp(`\`${script.replace(".", "\\.")}\` \\d+ von \\d+`),
+        );
+      // eine Angabe „mit demselben Build“ ohne den Build selbst reicht nicht
+      expect(run).not.toMatch(/mit demselben Build\./);
+    });
+  },
+);
