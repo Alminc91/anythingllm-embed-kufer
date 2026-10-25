@@ -81,10 +81,13 @@ const load = (script, server = {}) =>
   loadEmbedSettings({ ...BASE, ...script }, fetchConfig(server));
 const DE_SUBTITLE = "Online-Berater mit künstlicher Intelligenz";
 const EN_SUBTITLE = "Online advisor powered by artificial intelligence";
-const DE_DISCLAIMER =
-  "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.";
-const EN_DISCLAIMER =
-  "Our AI can make mistakes. Please double-check the answers.";
+// Bewusste Änderung (Datenschutz in der Fußzeile, Nutzerentscheidung
+// 23.10.2026): Kurzfassung ohne Bitte um Prüfung, daneben der Link
+// „Datenschutz“ (tests/datenschutz-fusszeile.test.jsx); vorher „Unsere KI
+// kann Fehler machen. Bitte prüfen Sie die Antworten.“ bzw. „Our AI can make
+// mistakes. Please double-check the answers.“
+const DE_DISCLAIMER = "Unsere KI kann Fehler machen";
+const EN_DISCLAIMER = "Our AI can make mistakes";
 
 let container;
 let root;
@@ -363,14 +366,17 @@ describe("R1: KI-Hinweis unter der Eingabe", () => {
     );
   });
 
-  it("gerenderte Zeile: neuer Text, eine Zeile, 2 px Seitenrand, Schrift 11 px bis 10 px (Teiler 34)", async () => {
+  // Bewusste Änderung (7.23): Zeile mit Link „Datenschutz“, Teiler 25
+  it("gerenderte Zeile: neuer Text mit Link, eine Zeile, 2 px Seitenrand, Schrift 11 px bis 10 px (Teiler 25)", async () => {
     render(<ChatContainer sessionId="s-1" settings={{ ...BASE }} />);
     const note = $("#anything-llm-ai-disclaimer");
     expect(note).not.toBeNull();
-    expect(note.textContent).toBe(DE_DISCLAIMER);
-    expect(note.getAttribute("title")).toBe(DE_DISCLAIMER);
+    expect(note.textContent).toBe(`${DE_DISCLAIMER} · Datenschutz`);
+    const text = $("#anything-llm-ai-disclaimer-text");
+    expect(text.textContent).toBe(DE_DISCLAIMER);
+    expect(text.getAttribute("title")).toBe(DE_DISCLAIMER);
     expect(note.style.whiteSpace).toBe("nowrap");
-    expect(note.style.textOverflow).toBe("ellipsis");
+    expect(text.style.textOverflow).toBe("ellipsis");
     expect(note.style.marginLeft).toBe("2px");
     expect(note.style.marginRight).toBe("2px");
     const { readFileSync } = await import("node:fs");
@@ -379,7 +385,7 @@ describe("R1: KI-Hinweis unter der Eingabe", () => {
       " ",
     );
     expect(css).toContain(
-      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px); }",
+      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 4px) / 25), 11px); }",
     );
   });
 });

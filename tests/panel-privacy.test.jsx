@@ -3,8 +3,12 @@ import { StrictMode, act } from "react";
 import { createRoot } from "react-dom/client";
 
 // Panel-Optik (Pillen, Begrüßungsblase, Kopfzeile mit Untertitel/Online-
-// Punkt) und einmaliger Datenschutz-Hinweis (privacyNotice "modal"):
-// Settings/Validierung, Rendering, Sperre + wartendes Ticket, localStorage.
+// Punkt), Datenschutz-Texte und KI-Hinweis: Settings/Validierung, Rendering.
+// Bewusste Änderung (7.23, Datenschutz in der Fußzeile, Nutzerentscheidungen
+// 23.10.2026): die Datenschutz-Blase unter der Begrüßung und der
+// Einmal-Hinweis mit Bestätigung („modal“, Knopf „Start“, Sperre,
+// localStorage) entfallen; ihre Tests sind entfernt. Link und
+// Datenschutz-Fenster prüft tests/datenschutz-fenster.test.jsx.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +44,6 @@ import {
   panelPills,
 } from "../src/utils/layout.js";
 import * as layout from "../src/utils/layout.js";
-import { _resetPrivacyMemory, privacyAckKey } from "../src/utils/privacy.js";
 import {
   DEFAULT_ACCENT,
   THEME_VARIABLES,
@@ -52,7 +55,6 @@ import ChatContainer, {
   sendSuggestion,
 } from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
-import { privacyParagraph } from "../src/components/ChatWindow/ChatContainer/ChatHistory/PanelWelcome/index.jsx";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
 import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
@@ -78,7 +80,6 @@ beforeEach(() => {
   root = createRoot(container);
   chatService.streamChat.mockClear();
   window.localStorage.clear();
-  _resetPrivacyMemory();
   embedderSettings.settings = {};
 });
 afterEach(() => {
@@ -109,13 +110,16 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(s.assistantSubtitle).toBe(
       "Online-Berater mit künstlicher Intelligenz",
     );
-    expect(s.privacyNotice).toBe("bubble");
+    // Bewusste Änderung (7.23): immer der Link „Datenschutz“
+    expect(s.privacyNotice).toBe("link");
     expect(s.privacyUrl).toBe(null);
     expect(s.greetingBubbleText).toBe(null); // Standard der Sprache
     expect(s.greeting).toBe(null); // früher der Datenschutzsatz
     expect(s.privacyTitle).toBe(null);
     expect(s.privacyText).toBe(null);
-    expect(s.privacyButtonText).toBe(null);
+    // Bewusste Änderung (W8, Fixliste datenschutz-fusszeile rc1): kein
+    // Standard mehr für den Button des früheren Einmal-Hinweises
+    expect(s).not.toHaveProperty("privacyButtonText");
     expect(s.disclaimer).toBe("footer");
     expect(s.disclaimerText).toBe(null);
     expect(s.followUps).toBe("pills");
@@ -129,8 +133,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
   // Skript-Attribut nicht mehr; feste Standards ohne Feld (Vorschlags- und
   // Begrüßungsstil, Folgefragen) verfeinert ein Skript-Attribut; der
   // KI-Hinweis bleibt fest, den Online-Punkt gibt es nicht mehr.
-  // Bewusste Änderung (Fixliste 7.22-rc18 E26): Der Datenschutz-Hinweis ist
-  // an (kein Server-Wert), also gilt greetingStyle "bubble" gegen "text".
+  // Bewusste Änderung (7.23): E26 (greetingStyle "bubble" gegen "text", weil
+  // die Datenschutz-Blase die Begrüßungsblase brauchte) entfällt mit der
+  // Blase. Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): die Begrüßung
+  // ist immer eine Blase, data-greeting-style wirkt nicht (Gruppe A).
   it("Script-Attribute (data-*): Design-Center-Texte wirken nicht, feste Standards verfeinerbar, KI-Hinweis fest", async () => {
     const s = await loadEmbedSettings(
       {
@@ -157,9 +163,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       greetingBubbleText: null,
       assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
       onlineDot: false,
-      privacyNotice: "bubble",
+      privacyNotice: "link",
       privacyTitle: null,
       privacyText: null,
+      // ohne Wirkung (früherer Einmal-Hinweis), ungeprüft durchgereicht (W8)
       privacyButtonText: "Los",
       privacyUrl: null,
       disclaimer: "footer",
@@ -196,7 +203,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       greetingBubbleText: "Server-Begrüßung",
       assistantSubtitle: "Server-Untertitel",
       onlineDot: false,
-      privacyNotice: "bubble",
+      privacyNotice: "link",
       privacyTitle: "Server-Titel",
       privacyText: "Server-Text",
       privacyButtonText: "Weiter",
@@ -209,10 +216,13 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layout.greetingAsBubble).toBeUndefined();
   });
 
-  it('privacyTitle: leer im Design Center = keine Überschrift ("" bleibt erhalten)', async () => {
+  // Bewusste Änderung (W10, Fixliste datenschutz-fusszeile rc1): seit 7.23
+  // ist eine leere Überschrift dasselbe wie der Standard (das Fenster braucht
+  // eine Überschrift); bis 7.22.2 hieß "" „keine Überschrift“ in der Blase
+  it("privacyTitle: leer im Design Center = Standard der Sprache (kein eigener Zustand)", async () => {
     const s = await loadEmbedSettings(BASE, fetchConfig({ privacyTitle: "" }));
-    expect(s.privacyTitle).toBe("");
-    expect(layout.privacyTitleText(s)).toBe("");
+    expect(s.privacyTitle).toBe(null);
+    expect(layout.privacyDialogTitle(s)).toBe("Datenschutz");
     // Bewusste Änderung (Fixliste 7.22-rc17 E23): ein Script-Attribut wirkt
     // nicht (Gruppe A); fehlend = Standard „Datenschutz“
     const t = await loadEmbedSettings(
@@ -220,10 +230,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       fetchConfig({}),
     );
     expect(t.privacyTitle).toBe(null);
-    expect(layout.privacyTitleText(t)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle(t)).toBe("Datenschutz");
     const u = await loadEmbedSettings(BASE, fetchConfig({}));
-    expect(layout.privacyTitleText(u)).toBe("Datenschutz");
-    expect(layout.privacyTitleText({ ...u, language: "en" })).toBe("Privacy");
+    expect(layout.privacyDialogTitle(u)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle({ ...u, language: "en" })).toBe("Privacy");
   });
 
   it("frühere Standardtexte gelten als nicht gesetzt (neuer Standard greift), eigene Texte bleiben", async () => {
@@ -245,7 +255,7 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     expect(layout.greetingText(s)).toBe(
       "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
     );
-    expect(layout.privacyTitleText(s)).toBe("Datenschutz");
+    expect(layout.privacyDialogTitle(s)).toBe("Datenschutz");
     // alter Server-Standard + eigenes Script-Attribut: Bewusste Änderung
     // (Fixliste 7.22-rc17 E23), das Script-Attribut wirkt nicht (Gruppe A),
     // es gilt der neue Standard
@@ -297,18 +307,24 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
     );
     expect(s.suggestionStyle).toBe("pills");
     expect(s.greetingStyle).toBe("bubble");
-    expect(s.privacyNotice).toBe("bubble");
+    expect(s.privacyNotice).toBe("link");
     expect(s.disclaimer).toBe("footer");
     const lines = warn.mock.calls.map((c) => String(c[0]));
-    for (const key of ["suggestionStyle", "greetingStyle"]) {
-      const mine = lines.filter((l) => l.includes(`Ungültiger ${key}-Wert`));
-      expect(mine).toHaveLength(1);
-    }
-    for (const attr of ["data-privacy-notice", "data-disclaimer "]) {
+    const mine = lines.filter((l) =>
+      l.includes("Ungültiger suggestionStyle-Wert"),
+    );
+    expect(mine).toHaveLength(1);
+    // greetingStyle seit rc3 (W13) wie privacyNotice: „wirkt nicht“ statt
+    // ungültiger Wert
+    for (const attr of [
+      "data-privacy-notice",
+      "data-disclaimer ",
+      "data-greeting-style",
+    ]) {
       expect(lines.filter((l) => l.includes(attr))).toHaveLength(1);
       expect(lines.find((l) => l.includes(attr))).toContain("wirkt nicht");
     }
-    expect(lines.filter((l) => l.includes("Ungültiger"))).toHaveLength(2);
+    expect(lines.filter((l) => l.includes("Ungültiger"))).toHaveLength(1);
     expect(lines.find((l) => l.includes("suggestionStyle"))).toContain(
       'es gilt "pills"',
     );
@@ -319,11 +335,12 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
       60,
     );
     expect(layoutValidations.assistantSubtitle("x".repeat(61))).toBe(undefined);
-    expect(layoutValidations.privacyButtonText("x".repeat(41))).toBe(undefined);
+    // Bewusste Änderung (W8): keine Prüfregel mehr für privacyButtonText
+    expect(layoutValidations).not.toHaveProperty("privacyButtonText");
     expect(layoutValidations.disclaimerText("x".repeat(160))).toHaveLength(160);
     expect(layoutValidations.disclaimerText("x".repeat(161))).toBe(undefined);
-    // leer = bewusst keine Überschrift (früher verworfen)
-    expect(layoutValidations.privacyTitle("   ")).toBe("");
+    // leer = Standard (W10, bewusste Änderung; bis 7.23-rc1 blieb "")
+    expect(layoutValidations.privacyTitle("   ")).toBe(undefined);
     expect(layoutValidations.privacyTitle("x".repeat(121))).toBe(undefined);
     expect(layoutValidations.greetingBubbleText(42)).toBe(undefined);
   });
@@ -475,7 +492,10 @@ describe("Settings: Script-Attribute + visual_config (AK-7, NAK-4)", () => {
 
 // ---------------------------------------------------------------------------
 describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => {
-  it("Standard: Balken wie bisher, keine Pillen/Blase", () => {
+  // Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): ohne Angaben ist die
+  // Begrüßung eine Blase (den Textzweig gibt es nicht mehr); ohne
+  // suggestionStyle bleiben die Vorschläge Balken
+  it("ohne Angaben: Balken wie bisher, keine Pillen, Begrüßung als Blase", () => {
     render(
       <ChatHistory
         settings={{ defaultMessages: MSGS, greeting: GREETING }}
@@ -484,8 +504,7 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     );
     expect($$(".msg-suggestion")).toHaveLength(4);
     expect($("#anything-llm-suggestion-pills")).toBe(null);
-    expect($("#anything-llm-greeting-bubble")).toBe(null);
-    expect(container.textContent).toContain(GREETING);
+    expect($("#anything-llm-greeting-bubble").textContent).toBe(GREETING);
   });
 
   it("pills: 4 Pillen (Rand, Rundung 999 px), Klick sendet wie bisher", () => {
@@ -686,7 +705,10 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
 
   // Bewusste Änderung: neue Standardtexte (Design Center vereinfacht,
   // 15.10.2026), Datenschutz in einer eigenen zweiten Blase.
-  it("AK-5: neue Standardtexte in Begrüßungs- und Datenschutz-Blase (de/en) und Popup", () => {
+  // Bewusste Änderung (7.23): keine Datenschutz-Blase und kein Popup mehr,
+  // die Standardpunkte stehen im Datenschutz-Fenster
+  // (tests/datenschutz-fenster.test.jsx); hier nur Begrüßung und Texte
+  it("AK-5: neue Standardtexte der Begrüßungsblase (de/en), Datenschutz-Standard in PANEL_TEXTS, keine Datenschutz-Blase", () => {
     render(
       <ChatHistory
         settings={{ greetingStyle: "bubble", privacyNotice: "bubble" }}
@@ -697,7 +719,11 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect(bubble.textContent).toBe(
       "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
     );
-    expect($("#anything-llm-privacy-bubble").textContent).toContain(
+    expect($("#anything-llm-privacy-bubble")).toBe(null);
+    expect(container.textContent).not.toContain(
+      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
+    );
+    expect(PANEL_TEXTS.de.privacyPoints[1]).toBe(
       "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
     );
     render(
@@ -713,85 +739,36 @@ describe("Leerer Chat: Pillen und Begrüßungsblase (AK-2, AK-3, NAK-1)", () => 
     expect($("#anything-llm-greeting-bubble").textContent).toBe(
       "Hello! I am your AI advisor. How can I help you?",
     );
-    expect($("#anything-llm-privacy-bubble").textContent).toContain(
+    expect($("#anything-llm-privacy-bubble")).toBe(null);
+    expect(PANEL_TEXTS.en.privacyPoints[1]).toBe(
       "Staff of the institution may view conversations for quality assurance.",
-    );
-    render(
-      <ChatContainer
-        sessionId="s-1"
-        conversationId="c-1"
-        knownHistory={[]}
-        settings={{ ...BASE, enableStt: false, privacyNotice: "modal" }}
-      />,
-    );
-    expect($$("[role=dialog] li")[1].textContent).toBe(
-      "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
     );
   });
 
-  // Bewusste Änderung (Nutzer 15.10.2026): Datenschutz als eigene zweite
-  // Blase direkt unter der Begrüßungsblase statt Absatz in derselben Blase.
-  it("AK-6: Datenschutz = eigene zweite Blase unter der Begrüßung, gemeinsam ≤ 80 % breit", () => {
+  // Bewusste Änderung (7.23): die Datenschutz-Blase (zweite Blase unter der
+  // Begrüßung, Absätze und Punkte, Link in eigener Zeile) entfällt; die
+  // Spalte enthält nur die Begrüßungsblase. Absätze, Punkte und Link stehen
+  // im Datenschutz-Fenster (tests/datenschutz-fenster.test.jsx).
+  it("AK-6 (neu): Spalte nur mit der Begrüßungsblase, ≤ 80 % breit, auch mit gespeichertem Datenschutz-Text", () => {
     render(
       <ChatHistory
         settings={{
           greetingStyle: "bubble",
           privacyNotice: "bubble",
           privacyText: "Erstens. | Zweitens! | Drittens",
-        }}
-        history={[]}
-      />,
-    );
-    const bubble = $("#anything-llm-greeting-bubble");
-    const privacy = $("#anything-llm-privacy-bubble");
-    expect(bubble.textContent).toBe(DEFAULT_GREETING_BUBBLE_TEXT);
-    expect(bubble.childNodes).toHaveLength(1);
-    expect(bubble.contains(privacy)).toBe(false);
-    // direkt darunter, gleiche Spalte (max. 80 %), beide border-box
-    expect(bubble.nextElementSibling).toBe(privacy);
-    expect(bubble.parentElement.style.maxWidth).toBe("80%");
-    expect(bubble.style.boxSizing).toBe("border-box");
-    expect(privacy.style.boxSizing).toBe("border-box");
-    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 aus
-    // Fixliste 7.22-rc18): Fläche wie die Begrüßungsblase, keine eigene
-    // feste Fläche mehr
-    expect(privacy.style.backgroundColor).toBe(bubble.style.backgroundColor);
-    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
-    expect(privacy.style.borderRadius).toBe(bubble.style.borderRadius);
-    // altes Format (|) -> Aufzählung, Überschrift „Datenschutz“ ohne Doppelpunkt
-    expect(privacy.querySelector("strong").textContent).toBe("Datenschutz");
-    expect(
-      [...privacy.querySelectorAll("li")].map((l) => l.textContent),
-    ).toEqual(["Erstens.", "Zweitens!", "Drittens"]);
-    expect(privacyParagraph(["a?", "b…", "c"])).toBe("a? b… c.");
-  });
-
-  it('Datenschutz-Blase: Absätze und Punkte gemischt, Link in eigener Zeile, ohne Überschrift bei ""', () => {
-    render(
-      <ChatHistory
-        settings={{
-          greetingStyle: "bubble",
-          privacyNotice: "bubble",
-          privacyTitle: "",
-          privacyText:
-            "Wir nehmen Datenschutz ernst.\n• Server in Deutschland\n- Keine Weitergabe\nFragen? Schreiben Sie uns.",
           privacyUrl: "https://vhs.example/datenschutz",
         }}
         history={[]}
       />,
     );
-    const privacy = $("#anything-llm-privacy-bubble");
-    expect(privacy.querySelector("strong")).toBe(null);
-    const kids = [...privacy.children].map((el) => el.tagName);
-    expect(kids).toEqual(["P", "UL", "P", "A"]);
-    expect(
-      [...privacy.querySelectorAll("li")].map((l) => l.textContent),
-    ).toEqual(["Server in Deutschland", "Keine Weitergabe"]);
-    const link = privacy.querySelector("a");
-    expect(link.textContent).toBe("Datenschutzerklärung");
-    expect(link.getAttribute("href")).toBe("https://vhs.example/datenschutz");
-    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(container.textContent).not.toMatch(/[–—]/);
+    const bubble = $("#anything-llm-greeting-bubble");
+    expect(bubble.textContent).toBe(DEFAULT_GREETING_BUBBLE_TEXT);
+    expect(bubble.nextElementSibling).toBe(null);
+    expect(bubble.parentElement.children).toHaveLength(1);
+    expect(bubble.parentElement.style.maxWidth).toBe("80%");
+    expect(bubble.style.boxSizing).toBe("border-box");
+    expect(container.textContent).not.toContain("Erstens.");
+    expect(container.querySelector("a")).toBe(null);
   });
 
   it("NAK-1: HTML in greetingBubbleText erscheint als Text", () => {
@@ -827,7 +804,8 @@ describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
   };
   const list = () => $("#chat-history").firstElementChild;
 
-  it("AK-2: nach der ersten Frage bleibt die Blase (mit Datenschutz) erste Nachricht, Pillen weg", () => {
+  // Bewusste Änderung (7.23): ohne Datenschutz-Blase
+  it("AK-2: nach der ersten Frage bleibt die Begrüßungsblase erste Nachricht (ohne Datenschutz-Blase), Pillen weg", () => {
     render(
       <ChatContainer
         sessionId="s-1"
@@ -844,9 +822,8 @@ describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
     const first = list().firstElementChild;
     expect(first.id).toBe("anything-llm-panel-welcome");
     expect(first.hasAttribute("data-persistent")).toBe(true);
-    expect(first.querySelector("#anything-llm-privacy-bubble a")).not.toBe(
-      null,
-    );
+    expect(first.querySelector("#anything-llm-privacy-bubble")).toBe(null);
+    expect(first.querySelector("a")).toBe(null);
     // danach die Frage
     expect(first.nextElementSibling.textContent).toContain("Yoga");
   });
@@ -871,7 +848,8 @@ describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
 
   // Bewusste Änderung: der Begrüßungstext steht in der Blase selbst (kein
   // kleiner greeting-Text mehr), auch im Verlauf.
-  it("im Verlauf: Begrüßungstext in der Blase, Datenschutz-Blase darunter", () => {
+  // Bewusste Änderung (7.23): keine Datenschutz-Blase mehr darunter
+  it("im Verlauf: Begrüßungstext in der Blase, keine Datenschutz-Blase", () => {
     render(
       <ChatHistory
         settings={{
@@ -887,22 +865,23 @@ describe("Begrüßung bleibt im Verlauf (greetingStyle bubble)", () => {
       welcome.querySelector("#anything-llm-greeting-bubble").textContent,
     ).toBe(GREETING);
     expect(welcome.querySelector("#anything-llm-greeting-small")).toBe(null);
-    expect(welcome.querySelector("#anything-llm-privacy-bubble")).not.toBe(
-      null,
-    );
+    expect(welcome.querySelector("#anything-llm-privacy-bubble")).toBe(null);
   });
 
-  it("NAK-1: greetingStyle text (Bestandskunden) -> Verlauf unverändert, keine Blase, kein greeting", () => {
+  // Bewusste Änderung (rc3, W13, Nutzer 24.10.2026): auch ohne greetingStyle
+  // (früher Textzweig) steht die Begrüßungsblase über dem Verlauf, ohne
+  // Vorschläge
+  it("W13: ohne greetingStyle (früher Text) bleibt die Begrüßungsblase erste Nachricht", () => {
     render(
       <ChatHistory
         settings={{ greeting: GREETING, defaultMessages: MSGS }}
         history={HIST}
       />,
     );
-    expect($("#anything-llm-greeting-bubble")).toBe(null);
-    expect($("#anything-llm-panel-welcome")).toBe(null);
-    expect(container.textContent).not.toContain(GREETING);
-    expect(list().children).toHaveLength(2);
+    expect($("#anything-llm-greeting-bubble").textContent).toBe(GREETING);
+    expect(list().firstElementChild.id).toBe("anything-llm-panel-welcome");
+    expect($$(".msg-suggestion")).toHaveLength(0);
+    expect(list().children).toHaveLength(3);
   });
 });
 
@@ -975,23 +954,11 @@ describe("Kopfzeile: Untertitel, Online-Punkt, Icon (AK-4)", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
-  const settings = {
-    ...BASE,
-    enableStt: false,
-    privacyNotice: "modal",
-    privacyUrl: "https://vhs.example/datenschutz",
-  };
-  const props = {
-    sessionId: "s-1",
-    conversationId: "c-1",
-    knownHistory: [],
-  };
-  const ackButton = () =>
-    $$("#anything-llm-privacy-notice button").find(
-      (b) => b.textContent === "Start",
-    );
-
+// Bewusste Änderung (7.23): Der Einmal-Hinweis mit Bestätigung („modal“,
+// Karte mit Knopf „Start“, Sperre der Eingabe, Bestätigung in localStorage)
+// entfällt (Hard Constraint 2: kein Pop-up mit Bestätigung vor dem Chat, auch
+// nicht als Option); seine Tests sind entfernt. Es bleiben die Standardtexte.
+describe("Datenschutz-Texte (AK-5, E30)", () => {
   // Begrüßung neu (Nutzer 15.10.2026, bewusste Änderung)
   it("Standardtexte neutral (alle Kundenarten), ohne Speicherdauer, Standard ohne Link", async () => {
     expect(PANEL_TEXTS.de.greetingBubble).toBe(
@@ -1012,26 +979,31 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     ]);
     // Datenschutz-Satz spricht für die Einrichtung des Kunden, nicht „Unser Team“
     expect(JSON.stringify(PANEL_TEXTS)).not.toMatch(/Unser Team|Our team/);
-    expect(PANEL_TEXTS.de.privacyButton).toBe("Start");
+    // Bewusste Änderung (W8): die Texte des früheren Einmal-Hinweises
+    // („Start“, „Weitere Informationen in der …“) sind entfernt
+    for (const lang of ["de", "en"])
+      for (const key of ["privacyButton", "privacyMoreLead", "privacyMoreLink"])
+        expect(PANEL_TEXTS[lang]).not.toHaveProperty(key);
+    // Alle Texte neutral, auch der Punkt „Hinweis zur KI“ im
+    // Datenschutz-Fenster (ein Wortlaut für alle Kunden ohne Kurs-Wörter,
+    // Nutzerentscheidung F8 vom 23.10.2026). „Wichtig:“ als Vorspann (bis
+    // 10/2026 in der Blase) bleibt verboten; „Wichtige Angaben“ im KI-Punkt
+    // ist freigegebener Wortlaut.
     const all = JSON.stringify(PANEL_TEXTS);
     for (const word of [
       "Volkshochschule",
       "Kursberater",
       "Kurs",
-      "Wichtig",
+      "Wichtig:",
       "adult education",
       "course",
     ])
       expect(all).not.toContain(word);
     const s = await loadEmbedSettings(BASE, fetchConfig({}));
     expect(s.privacyUrl).toBe(null);
-    render(
-      <ChatContainer
-        {...props}
-        settings={{ ...BASE, enableStt: false, privacyNotice: "modal" }}
-      />,
-    );
-    expect($("#anything-llm-privacy-notice a")).toBe(null);
+    // ohne privacyUrl kein Link zur Datenschutzerklärung (Fenster:
+    // tests/datenschutz-fenster.test.jsx)
+    expect(layout.privacyHref(s.privacyUrl)).toBe(null);
   });
 
   // E30 (Fixliste 7.22-rc19): Standardtext ohne Gendersprache, wortgleich
@@ -1051,456 +1023,32 @@ describe("Datenschutz-Hinweis (AK-5, AK-6, NAK-1, NAK-3)", () => {
     expect(de).not.toMatch(/Mitarbeitende|Teilnehmende|Lehrende/);
     expect(de).not.toMatch(/\p{L}[*:_/]innen\b|\p{Ll}Innen\b/u);
   });
-
-  it("Standard (none): kein Hinweis, Eingabe frei", () => {
-    render(
-      <ChatContainer {...props} settings={{ ...BASE, enableStt: false }} />,
-    );
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-    expect($("#message-input").disabled).toBe(false);
-  });
-
-  it("erstes Öffnen: „Datenschutz:“, Stichpunkte, Link, Knopf „Start“; Eingabe gesperrt; Fokus auf „Start“", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    const dlg = $("[role=dialog]");
-    expect(dlg.getAttribute("aria-modal")).toBe("true");
-    expect(dlg.querySelector("h2").textContent).toBe(DEFAULT_PRIVACY_TITLE);
-    // ohne Doppelpunkt seit Design Center vereinfacht (bewusste Änderung)
-    expect(DEFAULT_PRIVACY_TITLE).toBe("Datenschutz");
-    expect([...dlg.querySelectorAll("li")].map((li) => li.textContent)).toEqual(
-      DEFAULT_PRIVACY_POINTS,
-    );
-    expect(dlg.textContent).toContain("auf Servern in Deutschland");
-    const link = dlg.querySelector("a");
-    expect(link.textContent).toBe("Erklärung zum Datenschutz");
-    expect(link.parentElement.textContent).toBe(
-      "Weitere Informationen in der Erklärung zum Datenschutz",
-    );
-    expect(link.getAttribute("href")).toBe("https://vhs.example/datenschutz");
-    expect(link.getAttribute("rel")).toContain("noopener");
-    expect(ackButton()).toBeTruthy();
-    expect(document.activeElement).toBe(ackButton());
-    expect($("#message-input").disabled).toBe(true);
-    expect($("#send-message-button").disabled).toBe(true);
-  });
-
-  it("Fokus liegt auf der Seite: Hinweis zieht ihn nicht weg (auch nicht später)", () => {
-    vi.useFakeTimers();
-    const field = document.createElement("input");
-    document.body.appendChild(field);
-    try {
-      field.focus();
-      render(<ChatContainer {...props} settings={settings} />);
-      expect($("#anything-llm-privacy-notice")).toBeTruthy();
-      expect(document.activeElement).toBe(field);
-      // keine Wiederholungen mehr (früher 60/250/600 ms)
-      act(() => vi.advanceTimersByTime(1000));
-      expect(document.activeElement).toBe(field);
-    } finally {
-      vi.useRealTimers();
-      field.remove();
-    }
-  });
-
-  it("Fokus im Widget (Shadow-Host): „Start“ wird fokussiert", () => {
-    const host = document.createElement("div");
-    host.tabIndex = -1;
-    document.body.appendChild(host);
-    embedderSettings.hostElement = host;
-    try {
-      host.focus();
-      expect(document.activeElement).toBe(host);
-      render(<ChatContainer {...props} settings={settings} />);
-      expect(document.activeElement).toBe(ackButton());
-    } finally {
-      embedderSettings.hostElement = null;
-      host.remove();
-    }
-  });
-
-  it("kein Auto-Fokus bei suppressAutoFocus (Frage per Touch aus der Leiste)", () => {
-    render(
-      <ChatContainer
-        {...props}
-        settings={settings}
-        pendingFirstMessage={{
-          ticket: 9,
-          text: "Yoga",
-          send: true,
-          suppressAutoFocus: true,
-        }}
-        onPendingFirstMessageConsumed={() => {}}
-      />,
-    );
-    expect($("#anything-llm-privacy-notice")).toBeTruthy();
-    expect(document.activeElement).not.toBe(ackButton());
-  });
-
-  it("Inline im Seitenfluss auf Touch: kein Auto-Fokus; Vollbild-Overlay: Fokus", () => {
-    const width = window.innerWidth;
-    window.innerWidth = 390; // isTouchDevice: schmaler Viewport
-    try {
-      render(
-        <EmbedModeContext.Provider
-          value={{
-            inline: true,
-            overlay: false,
-            consumeFocusRequest: () => false,
-          }}
-        >
-          <ChatContainer {...props} settings={settings} />
-        </EmbedModeContext.Provider>,
-      );
-      expect($("#anything-llm-privacy-notice")).toBeTruthy();
-      expect(document.activeElement).not.toBe(ackButton());
-      act(() => root.unmount());
-      root = createRoot(container);
-      render(
-        <EmbedModeContext.Provider
-          value={{
-            inline: true,
-            overlay: true,
-            consumeFocusRequest: () => false,
-          }}
-        >
-          <ChatContainer {...props} settings={settings} />
-        </EmbedModeContext.Provider>,
-      );
-      expect(document.activeElement).toBe(ackButton());
-    } finally {
-      window.innerWidth = width;
-    }
-  });
-
-  it("liegt über dem Scroll-Pfeil (z-index 60 > z-50, wie „Frühere Chats“)", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    expect($("#anything-llm-privacy-notice").style.zIndex).toBe("60");
-  });
-
-  it("Knopftext, Titel und Punkte aus den Settings; englisch mit language en", () => {
-    render(
-      <ChatContainer
-        {...props}
-        settings={{
-          ...settings,
-          privacyTitle: "Hinweis",
-          privacyText: "A\nB",
-          privacyButtonText: "Los geht's",
-        }}
-      />,
-    );
-    expect($("[role=dialog] h2").textContent).toBe("Hinweis");
-    expect($$("[role=dialog] li").map((li) => li.textContent)).toEqual([
-      "A",
-      "B",
-    ]);
-    expect($("[role=dialog] button").textContent).toBe("Los geht's");
-    act(() => root.unmount());
-    root = createRoot(container);
-    render(
-      <ChatContainer {...props} settings={{ ...settings, language: "en" }} />,
-    );
-    expect($("[role=dialog] h2").textContent).toBe(PANEL_TEXTS.en.privacyTitle);
-    expect($$("[role=dialog] li")).toHaveLength(3);
-  });
-
-  it("Tab bleibt im Hinweis (Link <-> Start)", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    const link = $("#anything-llm-privacy-notice a");
-    const btn = ackButton();
-    btn.focus();
-    act(() => {
-      btn.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
-      );
-    });
-    expect(document.activeElement).toBe(link);
-    act(() => {
-      link.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
-      );
-    });
-    expect(document.activeElement).toBe(btn);
-    act(() => {
-      btn.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Tab",
-          shiftKey: true,
-          bubbles: true,
-        }),
-      );
-    });
-    expect(document.activeElement).toBe(link);
-  });
-
-  it("Escape bestätigt nicht", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    act(() => {
-      ackButton().dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
-    });
-    expect($("#anything-llm-privacy-notice")).toBeTruthy();
-    expect(window.localStorage.getItem(privacyAckKey(BASE.embedId))).toBe(null);
-  });
-
-  it("„Start“: frei, localStorage-Eintrag (Zeitstempel); erneutes Öffnen ohne Hinweis", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    act(() => ackButton().click());
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-    expect($("#message-input").disabled).toBe(false);
-    const stored = window.localStorage.getItem(
-      `allm-privacy-ack-${BASE.embedId}`,
-    );
-    expect(Number.isNaN(Date.parse(stored))).toBe(false);
-    // neues Laden (Speicher leer, nur localStorage): kein Hinweis
-    _resetPrivacyMemory();
-    act(() => root.unmount());
-    root = createRoot(container);
-    render(<ChatContainer {...props} settings={settings} />);
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-  });
-
-  it("anderes Embed: eigener Schlüssel, Hinweis erscheint", () => {
-    window.localStorage.setItem(privacyAckKey(BASE.embedId), "x");
-    render(
-      <ChatContainer
-        {...props}
-        settings={{ ...settings, embedId: "anderes-embed" }}
-      />,
-    );
-    expect($("#anything-llm-privacy-notice")).toBeTruthy();
-  });
-
-  it("Vorschlag (SEND_TEXT_EVENT) wird während der Sperre nicht gesendet", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent(SEND_TEXT_EVENT, { detail: { command: "Yoga" } }),
-      );
-    });
-    expect(chatService.streamChat).not.toHaveBeenCalled();
-  });
-
-  it("AK-6: Frage aus der Leiste wartet auf „Start“ und wird danach genau einmal gesendet", () => {
-    const consumed = vi.fn();
-    const pending = {
-      ticket: 1,
-      text: "Gibt es Yogakurse am Abend?",
-      send: true,
-      suppressAutoFocus: false,
-    };
-    render(
-      <StrictMode>
-        <ChatContainer
-          {...props}
-          settings={settings}
-          pendingFirstMessage={pending}
-          onPendingFirstMessageConsumed={consumed}
-        />
-      </StrictMode>,
-    );
-    expect(chatService.streamChat).not.toHaveBeenCalled();
-    expect(consumed).not.toHaveBeenCalled();
-    act(() => ackButton().click());
-    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
-    expect(chatService.streamChat.mock.calls[0][2]).toBe(
-      "Gibt es Yogakurse am Abend?",
-    );
-    expect(consumed).toHaveBeenCalledTimes(1);
-    // erneutes Rendern mit demselben Ticket: keine zweite Sendung
-    render(
-      <StrictMode>
-        <ChatContainer
-          {...props}
-          settings={settings}
-          pendingFirstMessage={{ ...pending }}
-          onPendingFirstMessageConsumed={consumed}
-        />
-      </StrictMode>,
-    );
-    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
-  });
-
-  it("Entwurf (send false) landet nach „Start“ im Eingabefeld", () => {
-    const consumed = vi.fn();
-    render(
-      <ChatContainer
-        {...props}
-        settings={settings}
-        pendingFirstMessage={{ ticket: 3, text: "Töpfern", send: false }}
-        onPendingFirstMessageConsumed={consumed}
-      />,
-    );
-    expect($("#message-input").value).toBe("");
-    act(() => ackButton().click());
-    expect($("#message-input").value).toBe("Töpfern");
-    expect(chatService.streamChat).not.toHaveBeenCalled();
-    expect(consumed).toHaveBeenCalledTimes(1);
-  });
-
-  it("NAK-1: HTML in privacyTitle/privacyText erscheint als Text", () => {
-    render(
-      <ChatContainer
-        {...props}
-        settings={{
-          ...settings,
-          privacyTitle: "<i>Titel</i>",
-          privacyText: "<b>fett</b><script>x()</script>",
-        }}
-      />,
-    );
-    const dlg = $("[role=dialog]");
-    expect(dlg.querySelector("b, i, script, strong")).toBe(null);
-    expect(dlg.textContent).toContain("<b>fett</b><script>x()</script>");
-    expect(dlg.textContent).toContain("<i>Titel</i>");
-  });
-
-  it("ohne privacyUrl: kein Link", () => {
-    render(
-      <ChatContainer {...props} settings={{ ...settings, privacyUrl: null }} />,
-    );
-    expect($("#anything-llm-privacy-notice a")).toBe(null);
-  });
-
-  it("NAK-3: localStorage wirft -> kein Fehler, Hinweis einmal pro Sitzung", () => {
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("SecurityError");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("SecurityError");
-    });
-    render(<ChatContainer {...props} settings={settings} />);
-    expect($("#anything-llm-privacy-notice")).toBeTruthy();
-    act(() => ackButton().click());
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-    expect($("#message-input").disabled).toBe(false);
-    // gleiche Sitzung, neuer Mount (z. B. Reset/anderer Chat): kein Hinweis
-    act(() => root.unmount());
-    root = createRoot(container);
-    render(<ChatContainer {...props} settings={settings} />);
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-    expect(err).not.toHaveBeenCalled();
-  });
 });
 
 // ---------------------------------------------------------------------------
-describe("Datenschutz in der Begrüßungsblase (privacyNotice bubble)", () => {
+describe("Vorschläge ohne Datenschutz-Sperre", () => {
   const props = { sessionId: "s-1", conversationId: "c-1", knownHistory: [] };
-  const settings = {
-    ...BASE,
-    enableStt: false,
-    privacyNotice: "bubble",
-    greetingStyle: "bubble", // wie von loadEmbedSettings normalisiert
-    privacyUrl: "/datenschutz",
-    greeting: GREETING,
-  };
-
-  // Bewusste Änderung (Nutzer 15.10.2026): Datenschutz als eigene zweite
-  // Blase unter der Begrüßungsblase, Punkte als Aufzählung (nicht mehr als
-  // Fließtext in der Begrüßungsblase), Überschrift ohne Doppelpunkt, Link
-  // „Datenschutzerklärung“ in eigener Zeile; der Begrüßungstext (greeting)
-  // steht in der Begrüßungsblase.
-  it("eigene Datenschutz-Blase: Überschrift, Punkte, Link; kein Popup, Eingabe frei, kein localStorage", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    const bubble = $("#anything-llm-greeting-bubble");
-    expect(bubble.textContent).toBe(GREETING);
-    const privacy = $("#anything-llm-privacy-bubble");
-    expect(bubble.nextElementSibling).toBe(privacy);
-    const title = $("#anything-llm-bubble-privacy-title");
-    expect(title.textContent).toBe("Datenschutz");
-    expect(title.style.display).toBe("block");
-    expect(Number(title.style.fontWeight)).toBeGreaterThanOrEqual(600);
-    expect(privacy.firstElementChild).toBe(title);
-    expect(
-      [...privacy.querySelectorAll("li")].map((l) => l.textContent),
-    ).toEqual(DEFAULT_PRIVACY_POINTS);
-    const link = privacy.querySelector("a");
-    expect(link.getAttribute("href")).toBe("/datenschutz");
-    expect(link.textContent).toBe("Datenschutzerklärung");
-    expect(privacy.lastElementChild).toBe(link);
-    // Bewusste Änderung (Nutzerentscheidung 23.10.2026, ersetzt E25 und die
-    // kleinere, gedämpfte Schrift des Mockups): Schriftgröße, Zeilenhöhe und
-    // Textfarbe wie die Begrüßungsblase, nie --allmi-text-muted; die
-    // Überschrift ohne eigene Farbe
-    expect(privacy.style.fontSize).toBe(bubble.style.fontSize);
-    expect(privacy.style.lineHeight).toBe(bubble.style.lineHeight);
-    expect(privacy.style.color).toBe(bubble.style.color);
-    expect(privacy.style.color).toContain("--allmi-assistant-text");
-    expect(privacy.getAttribute("style")).not.toContain("text-muted");
-    expect(title.style.color).toBe("");
-    expect(bubble.parentElement.style.maxWidth).toBe("80%");
-    expect($("#anything-llm-privacy-notice")).toBe(null);
-    expect($("#message-input").disabled).toBe(false);
-    expect(window.localStorage.length).toBe(0);
-    expect($("#anything-llm-greeting-small")).toBe(null);
-  });
-
-  it("eigene Punkte (|, altes Format), ohne privacyUrl kein Link; HTML nur als Text", () => {
-    render(
-      <ChatContainer
-        {...props}
-        settings={{
-          ...settings,
-          privacyUrl: null,
-          privacyText: "<b>Eins</b> | Zwei",
-        }}
-      />,
-    );
-    const privacy = $("#anything-llm-privacy-bubble");
-    expect(
-      [...privacy.querySelectorAll("li")].map((l) => l.textContent),
-    ).toEqual(["<b>Eins</b>", "Zwei"]);
-    expect(privacy.querySelector("a")).toBe(null);
-    expect(privacy.querySelector("b")).toBe(null);
-  });
-
-  it("::bubble-privacy-title — Überschrift aus privacyTitle, englisch „Privacy“, nur Text (AK-11, NAK-7)", () => {
-    render(
-      <ChatContainer
-        {...props}
-        settings={{
-          ...settings,
-          privacyTitle: "<b>Ihre Daten</b> [x](https://evil.test)",
-        }}
-      />,
-    );
-    const title = $("#anything-llm-privacy-bubble strong");
-    expect(title.textContent).toBe("<b>Ihre Daten</b> [x](https://evil.test)");
-    expect(title.querySelector("b, a")).toBe(null);
-    expect($("#anything-llm-privacy-bubble a").textContent).toBe(
-      "Datenschutzerklärung",
-    );
-    render(
-      <ChatContainer {...props} settings={{ ...settings, language: "en" }} />,
-    );
-    expect($("#anything-llm-privacy-bubble strong").textContent).toBe(
-      "Privacy",
-    );
-    expect($("#anything-llm-privacy-bubble a").textContent).toBe(
-      "Privacy statement",
-    );
-    // ohne Datenschutz in der Blase (nur noch direkt gerendert, loadEmbedSettings
-    // setzt immer "bubble"): keine Datenschutz-Blase
-    render(
-      <ChatContainer
-        {...props}
-        settings={{ ...settings, privacyNotice: "none" }}
-      />,
-    );
-    expect($("#anything-llm-privacy-bubble")).toBe(null);
-  });
-
-  it("Vorschlag wird ohne Sperre gesendet", () => {
-    render(<ChatContainer {...props} settings={settings} />);
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent(SEND_TEXT_EVENT, { detail: { command: "Yoga" } }),
+  // auch mit gespeichertem Altwert „modal“ oder „bubble“: keine Sperre
+  it.each(["modal", "bubble", "link"])(
+    "privacyNotice %s: Vorschlag wird sofort gesendet, Eingabe frei",
+    (privacyNotice) => {
+      render(
+        <ChatContainer
+          {...props}
+          settings={{ ...BASE, enableStt: false, privacyNotice }}
+        />,
       );
-    });
-    expect(chatService.streamChat).toHaveBeenCalledTimes(1);
-  });
+      expect($("#message-input").disabled).toBe(false);
+      expect($("#anything-llm-privacy-notice")).toBe(null);
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent(SEND_TEXT_EVENT, { detail: { command: "Yoga" } }),
+        );
+      });
+      expect(chatService.streamChat).toHaveBeenCalledTimes(1);
+      expect(window.localStorage.length).toBe(0);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1512,7 +1060,7 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
   // da, auch ohne bzw. mit disclaimer "none" (nicht abschaltbar, AK-3).
   it("immer: Zeile auch ohne disclaimer und mit disclaimer none", () => {
     render(<ChatContainer {...props} settings={base} />);
-    expect($("#anything-llm-ai-disclaimer").textContent).toBe(
+    expect($("#anything-llm-ai-disclaimer-text").textContent).toBe(
       PANEL_TEXTS.de.aiDisclaimer,
     );
     render(
@@ -1527,14 +1075,21 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     );
     const note = $("#anything-llm-ai-disclaimer");
     expect(note.getAttribute("role")).toBe("note");
-    expect(note.textContent).toBe(PANEL_TEXTS.de.aiDisclaimer);
+    // Bewusste Änderung (7.23): in derselben Zeile der Link „Datenschutz“
+    expect(note.textContent).toBe(
+      `${PANEL_TEXTS.de.aiDisclaimer} · ${PANEL_TEXTS.de.privacyLinkText}`,
+    );
     // dezent wie im Mockup (11 px, eine Zeile); Größe per Klasse, in
     // schmalen Fenstern bis 10 px (Fixliste 7.22-rc7 Nr. 22, main.jsx)
     expect(note.classList.contains("allm-ai-disclaimer")).toBe(true);
     expect(note.style.textAlign).toBe("center");
     // Farbe fest je Farbschema (Fixliste 7.22-rc17 E24), keine --allm-*
     expect(note.style.color).toContain("--allmi-ai-notice-text");
-    expect(note.querySelector("a, button")).toBe(null);
+    // Bewusste Änderung (7.23): genau ein Button, der Link „Datenschutz“;
+    // der KI-Satz selbst bleibt nicht anklickbar
+    expect([...note.querySelectorAll("a, button")].map((b) => b.id)).toEqual([
+      "anything-llm-privacy-link",
+    ]);
     const form = $("#message-input").closest("form") || $("#message-input");
     expect(
       form.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1553,21 +1108,18 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
         }}
       />,
     );
-    const note = $("#anything-llm-ai-disclaimer");
+    const note = $("#anything-llm-ai-disclaimer-text");
     expect(note.textContent).toBe(PANEL_TEXTS.de.aiDisclaimer);
-    expect(note.querySelector("b")).toBe(null);
+    expect($("#anything-llm-ai-disclaimer").querySelector("b")).toBe(null);
   });
 
   it("Standardtexte de/en in PANEL_TEXTS (ein Mechanismus, kein i18n-Schlüssel)", async () => {
     // neuer Text (Nutzer 15.10.2026), ein Text für beide Stile; Wortlaut
-    // seit Fixliste 7.22-rc8 R1 („Unsere KI …“, Kurzfassung „prüfen“ nach
-    // Messung, tests/rc8-fixes.test.jsx)
-    expect(PANEL_TEXTS.de.aiDisclaimer).toBe(
-      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
-    );
-    expect(PANEL_TEXTS.en.aiDisclaimer).toBe(
-      "Our AI can make mistakes. Please double-check the answers.",
-    );
+    // seit Fixliste 7.22-rc8 R1 („Unsere KI …“). Bewusste Änderung
+    // (Datenschutz in der Fußzeile, 23.10.2026): Kurzfassung ohne „Bitte
+    // prüfen Sie die Antworten.“ (tests/datenschutz-fusszeile.test.jsx)
+    expect(PANEL_TEXTS.de.aiDisclaimer).toBe("Unsere KI kann Fehler machen");
+    expect(PANEL_TEXTS.en.aiDisclaimer).toBe("Our AI can make mistakes");
     const de = (await import("../src/locales/de/common.js")).default;
     const en = (await import("../src/locales/en/common.js")).default;
     expect(de.chat["ai-disclaimer"]).toBeUndefined();
@@ -1578,7 +1130,7 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
         settings={{ ...base, disclaimer: "footer", language: "en" }}
       />,
     );
-    expect($("#anything-llm-ai-disclaimer").textContent).toBe(
+    expect($("#anything-llm-ai-disclaimer-text").textContent).toBe(
       PANEL_TEXTS.en.aiDisclaimer,
     );
   });
@@ -1629,7 +1181,10 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     );
   });
 
-  it("language fr: Blase, Datenschutz-Hinweis und KI-Hinweis einheitlich deutsch", () => {
+  // Bewusste Änderung (7.23): statt des Einmal-Hinweises der Link
+  // „Datenschutz“ in der Zeile des KI-Hinweises (Fenster auf Deutsch:
+  // tests/datenschutz-fenster.test.jsx); kein Fenster beim Start
+  it("language fr: Blase, KI-Hinweis und Link einheitlich deutsch, kein Fenster beim Start", () => {
     render(
       <ChatContainer
         {...props}
@@ -1646,11 +1201,12 @@ describe("Fester KI-Hinweis unter dem Eingabefeld (disclaimer)", () => {
     expect($("#anything-llm-greeting-bubble").textContent).toBe(
       de.greetingBubble,
     );
-    expect($("[role=dialog] h2").textContent).toBe(de.privacyTitle);
-    expect($$("[role=dialog] li").map((li) => li.textContent)).toEqual(
-      de.privacyPoints,
+    expect($("[role=dialog]")).toBe(null);
+    expect($("#anything-llm-ai-disclaimer-text").textContent).toBe(
+      de.aiDisclaimer,
     );
-    expect($("[role=dialog] button").textContent).toBe(de.privacyButton);
-    expect($("#anything-llm-ai-disclaimer").textContent).toBe(de.aiDisclaimer);
+    expect($("#anything-llm-privacy-link").textContent).toBe(
+      de.privacyLinkText,
+    );
   });
 });

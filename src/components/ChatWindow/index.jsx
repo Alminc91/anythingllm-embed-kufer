@@ -8,6 +8,7 @@ import {
   ScrollArrowSlotContext,
 } from "./ChatContainer/ChatHistory";
 import ConversationHistory from "./ConversationHistory";
+import PrivacyDialog from "./PrivacyNotice";
 import ResetChat from "../ResetChat";
 import { embedderSettings } from "@/main";
 import { panelTexts } from "@/utils/layout";
@@ -30,6 +31,10 @@ export default function ChatWindow({
   // über onPendingFirstMessageConsumed zurück.
   pendingFirstMessage = null,
   onPendingFirstMessageConsumed = null,
+  // In der Seite: Box eingeklappt (InlineChat view "bar"); das Fenster bleibt
+  // dann gemountet, nur ausgeblendet -> ein offenes Datenschutz-Fenster
+  // schließt
+  collapsed = false,
 }) {
   const { inline } = useEmbedMode();
   // Anker für den Scroll-nach-unten-Pfeil (siehe ChatHistory)
@@ -61,6 +66,61 @@ export default function ChatWindow({
   useEscapeLayer(showHistory, () => setShowHistory(false), {
     returnFocus: () => resolveOpener(historyOpenerRef.current),
   });
+
+  // Datenschutz-Fenster (7.23): der Link „Datenschutz“ neben dem KI-Hinweis
+  // (ChatContainer) öffnet es über dem ganzen Chat, wie „Frühere Chats“ als
+  // Overlay über dem gemounteten Chat: Verlauf, laufende Antwort und eine
+  // angefangene Eingabe bleiben. Schließen mit „Schließen“, dem Symbol oder
+  // Escape (Escape-Ebene, nimmt jedes Escape wie „Frühere Chats“), danach
+  // Fokus zurück auf den Link (nicht bei einem Escape der Webseite). Der
+  // offene Zustand steht zusätzlich in einer Ref: Fokusfalle und
+  // Fokusrückgabe sehen das Schließen sofort, vor dem nächsten Render.
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const privacyOpenRef = useRef(false);
+  const privacyLinkRef = useRef(null);
+  const privacyDialogRef = useRef(null);
+  const openPrivacy = () => {
+    privacyOpenRef.current = true;
+    setPrivacyOpen(true);
+  };
+  const closePrivacy = (restoreFocus = true) => {
+    if (!privacyOpenRef.current) return;
+    privacyOpenRef.current = false;
+    setPrivacyOpen(false);
+    const link = privacyLinkRef.current;
+    if (restoreFocus && link?.isConnected) link.focus({ preventScroll: true });
+  };
+  useEscapeLayer(privacyOpen, () => closePrivacy(false), {
+    returnFocus: () => privacyLinkRef.current,
+  });
+  // Einklappen der Box (In der Seite) schließt ein offenes Fenster, ohne den
+  // Fokus zu verschieben (InlineChat setzt ihn auf die Leiste)
+  useEffect(() => {
+    if (collapsed) closePrivacy(false);
+  }, [collapsed]);
+  // Fokusfalle (NAK-4): landet der Fokus hinter dem Fenster (Klick auf die
+  // Seite und Tab zurück, ein Fokus nach dem Ende einer Antwort), geht er
+  // zurück ins Fenster: auf das Element im Fenster, das ihn gerade verloren
+  // hat (W4: Fokus auf „Schließen“, die Antwort endet und das Eingabefeld
+  // holt den Fokus, er bleibt auf „Schließen“), sonst auf die Überschrift.
+  // Kein Absenden im Hintergrund per Tastatur.
+  const keepFocusInPrivacy = (e) => {
+    const dialog = privacyDialogRef.current;
+    if (!privacyOpenRef.current || !dialog || dialog.contains(e.target)) return;
+    const from = e.relatedTarget;
+    const back =
+      from && from !== dialog && dialog.contains(from)
+        ? from
+        : dialog.querySelector("h2");
+    back?.focus({ preventScroll: true });
+  };
+  const privacyOverlay = privacyOpen ? (
+    <PrivacyDialog
+      settings={settings}
+      onClose={() => closePrivacy(true)}
+      dialogRef={privacyDialogRef}
+    />
+  ) : null;
   const { chatHistory, setChatHistory, loading } = useChatHistory(
     settings,
     sessionId,
@@ -107,8 +167,12 @@ export default function ChatWindow({
     return (
       // allm-relative + historyOverlay auch hier: sonst verpufft ein Klick auf
       // "Frühere Chats" während des Ladens (showHistory=true, aber unsichtbar).
-      <div className="allm-flex allm-flex-col allm-h-full allm-relative">
+      <div
+        className="allm-flex allm-flex-col allm-h-full allm-relative"
+        onFocus={keepFocusInPrivacy}
+      >
         {historyOverlay}
+        {privacyOverlay}
         <ChatWindowHeader
           sessionId={sessionId}
           conversationId={conversationId}
@@ -131,8 +195,12 @@ export default function ChatWindow({
 
   return (
     <ScrollArrowSlotContext.Provider value={arrowSlot}>
-      <div className="allm-flex allm-flex-col allm-h-full allm-relative">
+      <div
+        className="allm-flex allm-flex-col allm-h-full allm-relative"
+        onFocus={keepFocusInPrivacy}
+      >
         {historyOverlay}
+        {privacyOverlay}
         {/* Inline: Header immer (einziger Weg zum Einklappen/Schließen) */}
         {(!settings.noHeader || inline) && (
           <ChatWindowHeader
@@ -157,7 +225,8 @@ export default function ChatWindow({
             knownHistory={chatHistory}
             pendingFirstMessage={pendingFirstMessage}
             onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
-            onClose={inline ? null : closeChat}
+            onOpenPrivacy={openPrivacy}
+            privacyLinkRef={privacyLinkRef}
           />
         </div>
         <div className="allm-pt-2 allm-pb-3 allm-h-fit allm-z-10">
