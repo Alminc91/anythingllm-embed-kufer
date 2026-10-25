@@ -6,9 +6,11 @@ Vertrag 3 bis 5).
 
 Gebautes dist, lokale Testseite (tests/visual/fixtures/widget.html), Server
 gemockt (theme_visual.Mock, Aufbau wie datenschutz_fenster.py). Je Ansicht
-(Chatfenster 1280 und 1440, In der Seite aufgeklappt 1440, mobil 390 als
-Chatfenster und als Vollbild In der Seite), hell und dunkel, deutsch und
-englisch, Blase an (Server liefert privacyStartBubble true) und aus:
+aus Abschnitt 8 der Spezifikation (Chatfenster 768, 1280 und 1440, In der
+Seite aufgeklappt 1024, 1440 und 1920, mobil 390 als Chatfenster und als
+Vollbild In der Seite; 768, 1024 und 1920 seit Fixliste AK-12 A7), hell und
+dunkel, deutsch und englisch, Blase an (Server liefert privacyStartBubble
+true) und aus:
 
   - an: Datenschutz-Blase direkt unter der Begrüßungsblase, gleiche Fläche,
     Schrift, Schriftgröße, Zeilenhöhe, Innenabstand, Rundung und Schatten
@@ -39,8 +41,9 @@ Aufruf (aus dem Repo, npm run build vorher):
 
 Ergebnis: .test-storage/datenschutz-blase-<tag>.json, Bilder
 .test-storage/blase-<tag>-<lang>-<ansicht>-<theme>-<an|aus>.png und
-blase-<tag>-verlauf.png, Zeilen auf stdout, Ausstieg 1 bei Fehlern oder
-ohne ein einziges Ergebnis.
+blase-<tag>-verlauf.png, Zeilen auf stdout, Ausstieg 1 bei Fehlern, ohne ein
+einziges Ergebnis oder wenn die Zahl der Ergebnisse nicht zum Plan passt
+(planned_count; seit Fixliste AK-12 A6, die README nennt diese Zahl).
 """
 
 import argparse
@@ -60,13 +63,25 @@ OUT_DIR = ROOT / ".test-storage"
 RESULTS = []
 TAG = "neu"
 
+# (Name, Darstellung, Breite, Höhe): Ansichten aus Abschnitt 8; Höhen wie
+# fensterbreite.py (768 hoch wie ein Tablet) und datenschutz_fenster.py
 VIEWS = [
+    ("fenster-768", "bubble", 768, 1024),
     ("fenster-1280", "bubble", 1280, 800),
     ("fenster-1440", "bubble", 1440, 900),
+    ("seite-1024", "inline", 1024, 800),
     ("seite-1440", "inline", 1440, 900),
+    ("seite-1920", "inline", 1920, 1080),
     ("mobil-fenster-390", "bubble", 390, 800),
     ("mobil-seite-390", "inline", 390, 800),
 ]
+# Zahl der Ergebnisse je Teil (planned_count): check_view mit Schalter 9,
+# ohne 4, check_once 6, check_link_colors je Ansicht, Farbschema und
+# Linkfarbe 1. Wer eine Prüfung ergänzt, passt die Zahl hier an, sonst
+# scheitert der Lauf (exit_code).
+CHECKS_ON = 9
+CHECKS_OFF = 4
+CHECKS_ONCE = 6
 ON = {"privacyStartBubble": True}
 TEXTS = {
     "de": {
@@ -288,10 +303,11 @@ def check_once(browser, base_url):
 # L1 (Hinweis O1 zu AK-12): eine Farbe für alle Datenschutz-Links
 # (utils/theme.js privacyLinkColor), mindestens 4,5:1 zur jeweiligen Fläche
 LINK_COLORS = [None, "#FFA102", "#63b4e3"]
+LINK_VIEWS = (("fenster-1440", "bubble"), ("seite-1440", "inline"))
 
 
 def check_link_colors(browser, base_url, themes):
-    for name, display in (("fenster-1440", "bubble"), ("seite-1440", "inline")):
+    for name, display in LINK_VIEWS:
         for theme in themes:
             for link_color in LINK_COLORS:
                 tag = f"{name} {theme} {link_color or 'Standard'}"
@@ -317,7 +333,7 @@ def check_link_colors(browser, base_url, themes):
                     ctx.close()
 
 
-def parse_args():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", default=str(ROOT / "dist"))
     ap.add_argument("--tag", default="neu")
@@ -326,7 +342,26 @@ def parse_args():
     ap.add_argument("--views", nargs="+", default=[v[0] for v in VIEWS])
     ap.add_argument("--skip-once", action="store_true")
     ap.add_argument("--skip-links", action="store_true")
-    return ap.parse_args()
+    return ap.parse_args(argv)
+
+
+def planned_count(args):
+    """Zahl der Ergebnisse, die ein vollständiger Lauf mit dieser Auswahl hat."""
+    views = [v for v in VIEWS if v[0] in args.views]
+    count = len(args.lang) * len(views) * len(args.themes) * (CHECKS_ON + CHECKS_OFF)
+    if not args.skip_once:
+        count += CHECKS_ONCE
+    if not args.skip_links:
+        count += len(LINK_VIEWS) * len(args.themes) * len(LINK_COLORS)
+    return count
+
+
+def exit_code(results, planned):
+    """1 bei einem Fehler, ohne Ergebnis oder wenn die Zahl der Ergebnisse
+    nicht zum Plan passt (abgebrochene Ansicht, Prüfung ohne Plan), sonst 0."""
+    if not results or len(results) != planned:
+        return 1
+    return 1 if any(not r["ok"] for r in results) else 0
 
 
 def main():
@@ -363,10 +398,13 @@ def main():
     out = OUT_DIR / f"datenschutz-blase-{args.tag}.json"
     out.write_text(json.dumps(RESULTS, ensure_ascii=False, indent=1), encoding="utf-8")
     bad = [r for r in RESULTS if not r["ok"]]
-    print(f"{len(RESULTS) - len(bad)}/{len(RESULTS)} ok -> {out}")
+    planned = planned_count(args)
+    print(f"{len(RESULTS) - len(bad)}/{len(RESULTS)} ok, geplant {planned} -> {out}")
     if not RESULTS:
         print("nichts gemessen (keine Ansicht gewählt)")
-    sys.exit(1 if bad or not RESULTS else 0)
+    elif len(RESULTS) != planned:
+        print(f"Zahl der Ergebnisse {len(RESULTS)} passt nicht zum Plan {planned}")
+    sys.exit(exit_code(RESULTS, planned))
 
 
 if __name__ == "__main__":

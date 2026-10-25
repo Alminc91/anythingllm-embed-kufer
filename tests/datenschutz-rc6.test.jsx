@@ -56,3 +56,99 @@ describe("A5 (AW-1): Kontrast des Links in der Blase zur Standardfläche", () =>
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// A7 und A6: Prüfskript ohne Browser über python3 (Playwright wie für die
+// Browser-Prüfungen; ohne python3 übersprungen, wie W16 in
+// datenschutz-rc4.test.jsx)
+const PY_OK =
+  spawnSync("python3", ["-c", "import playwright, numpy, PIL"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).status === 0;
+function py(code) {
+  const r = spawnSync(
+    "python3",
+    [
+      "-c",
+      [
+        "import sys, json",
+        "sys.path.insert(0, 'tests/visual')",
+        "import datenschutz_blase as b",
+        code,
+      ].join("\n"),
+    ],
+    { cwd: ROOT, encoding: "utf8", timeout: 60000 },
+  );
+  expect(r.status, r.stderr).toBe(0);
+  return JSON.parse(r.stdout.trim().split("\n").pop());
+}
+
+describe.skipIf(!PY_OK)(
+  "A7 (AW-5): datenschutz_blase.py prüft die Ansichten aus Abschnitt 8",
+  () => {
+    // Abschnitt 8: Chatfenster 768, 1280 und 1440; In der Seite aufgeklappt
+    // 1024, 1440 und 1920; mobil 390 als Chatfenster und als Vollbild In der
+    // Seite
+    const SECTION_8 = [
+      ["fenster-768", "bubble", 768],
+      ["fenster-1280", "bubble", 1280],
+      ["fenster-1440", "bubble", 1440],
+      ["seite-1024", "inline", 1024],
+      ["seite-1440", "inline", 1440],
+      ["seite-1920", "inline", 1920],
+      ["mobil-fenster-390", "bubble", 390],
+      ["mobil-seite-390", "inline", 390],
+    ];
+
+    it("VIEWS und die Standardauswahl von --views", () => {
+      const out = py(
+        "print(json.dumps({'views': [list(v[:3]) for v in b.VIEWS], 'args': b.parse_args([]).views}))",
+      );
+      expect(out.views).toEqual(SECTION_8);
+      expect(out.args).toEqual(SECTION_8.map((v) => v[0]));
+    });
+
+    it("geplante Zahl der Prüfungen je Auswahl", () => {
+      const plan = (argv) =>
+        py(
+          `print(json.dumps(b.planned_count(b.parse_args(${JSON.stringify(argv)}))))`,
+        );
+      // je Ansicht, Sprache und Farbschema 9 Prüfungen mit und 4 ohne
+      // Schalter, einmalig 6, L1 Linkfarbe 2 Ansichten x Farbschemata x 3
+      // Linkfarben
+      expect(plan([])).toBe(8 * 2 * 2 * 13 + 6 + 2 * 2 * 3);
+      expect(
+        plan([
+          "--views",
+          "seite-1024",
+          "--lang",
+          "de",
+          "--themes",
+          "light",
+          "--skip-once",
+          "--skip-links",
+        ]),
+      ).toBe(13);
+      expect(plan(["--themes", "dark", "--skip-once"])).toBe(
+        8 * 2 * 13 + 2 * 3,
+      );
+    });
+
+    it("Ausstieg 1 bei Fehlern, ohne Ergebnis und wenn die Zahl der Ergebnisse nicht zum Plan passt", () => {
+      const code = (results, planned) =>
+        py(
+          `print(json.dumps(b.exit_code(json.loads(${JSON.stringify(JSON.stringify(results))}), ${planned})))`,
+        );
+      const ok = { key: "x", ok: true, detail: {} };
+      const bad = { key: "y", ok: false, detail: {} };
+      expect(code([ok, ok, ok], 3)).toBe(0);
+      expect(code([ok, bad], 2)).toBe(1);
+      expect(code([], 0)).toBe(1);
+      // weniger als geplant (abgebrochene Ansicht) und mehr als geplant
+      // (neue Prüfung ohne angepassten Plan)
+      expect(code([ok, ok], 3)).toBe(1);
+      expect(code([ok, ok, ok, ok], 3)).toBe(1);
+    });
+  },
+);
