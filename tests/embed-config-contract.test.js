@@ -140,46 +140,28 @@ describe("Vertrag /config: Antwort des Servers -> Startvorschläge, Willkommensb
 });
 
 // KIE-576 Paket 3: courseCount nach dem Vertrag (issues/KIE-576/
-// KIE-576-kursanzahl.md, „Vertrag (wörtlich)“). Der Server liefert das Feld
-// nur mit gültiger Kursliste und Anzeige an, sonst fehlt es ganz; das
-// Widget übernimmt es geprüft (utils/layout.js courseCountValue), sonst null.
+// KIE-576-kursanzahl.md, „Vertrag (wörtlich)“, Fixliste r4 Nr. 2 und 4).
+// Der Server liefert das Feld nur als {count, word} mit gültiger, aktueller
+// Kursliste und Anzeige an, sonst fehlt es ganz; das Widget übernimmt es
+// geprüft (utils/layout.js courseCountValue), sonst null.
 describe("Vertrag /config: courseCount (KIE-576)", () => {
-  const EXAMPLE = {
-    count: 812,
-    offered: 837,
-    hidden: 14,
-    stand: "2026-10-24T08:00:00.000Z",
-    word: "Kurse",
-  };
-  const withCount = contract.cases.filter(
-    (c) => c.config?.courseCount && c.fork !== false,
-  );
-  // D-K5: älterer Server ohne hidden, das Widget nimmt 0
-  const olderServer = contract.cases.filter(
-    (c) => c.config?.courseCount && c.fork === false,
-  );
+  const EXAMPLE = { count: 812, word: "Kurse" };
+  const withCount = contract.cases.filter((c) => c.config?.courseCount);
   const without = contract.cases.filter((c) =>
     (c.configAbsent || []).includes("courseCount"),
   );
 
-  it("Fixture: ein Fall mit courseCount (Beispielwerte des Vertrags) und einer ohne", () => {
+  it("Fixture: ein Fall mit courseCount (nur count und word) und einer ohne", () => {
     expect(withCount.length).toBeGreaterThanOrEqual(1);
     expect(without.length).toBeGreaterThanOrEqual(1);
     for (const c of withCount) {
+      expect(c.fork, c.name).not.toBe(false);
       expect(c.config.courseCount, c.name).toEqual(EXAMPLE);
       expect(Object.keys(c.config.courseCount).sort(), c.name).toEqual([
         "count",
-        "hidden",
-        "offered",
-        "stand",
         "word",
       ]);
       expect(c.widget.courseCount, c.name).toEqual(EXAMPLE);
-    }
-    expect(olderServer.length).toBeGreaterThanOrEqual(1);
-    for (const c of olderServer) {
-      expect(c.config.courseCount, c.name).not.toHaveProperty("hidden");
-      expect(c.widget.courseCount, c.name).toEqual({ ...EXAMPLE, hidden: 0 });
     }
     for (const c of without) {
       expect(c.config, c.name).not.toHaveProperty("courseCount");
@@ -214,27 +196,18 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
     }
   });
 
-  // D-K5: Zeilen der Info-Karte wortgleich mit der Fixture (dieselben Texte
-  // zeigt die Vorschau im Design Center)
+  // Untertitel-Zeile wortgleich mit der Fixture (dieselbe Zeile zeigt die
+  // Vorschau im Design Center)
   it.each(contract.courseCountTexts.cases.map((c) => [c.name, c]))(
-    "Info-Karte: %s",
+    "Untertitel-Zeile: %s",
     async (_name, c) => {
+      expect(Object.keys(c.courseCount).sort()).toEqual(["count", "word"]);
       const s = await loadEmbedSettings(
         { ...BASE, language: c.language },
         fetchJson({ courseCount: c.courseCount }),
       );
       expect(s.courseCount).toEqual(c.courseCount);
-      const t = courseCountTexts(s, Date.parse(contract.courseCountTexts.now));
-      expect(
-        [
-          t.head,
-          t.scope,
-          t.hiddenLine,
-          t.missingLine,
-          t.gapHint,
-          t.stand,
-        ].filter(Boolean),
-      ).toEqual(c.lines);
+      expect(courseCountTexts(s).subtitle).toBe(c.subtitle);
     },
   );
 
@@ -242,7 +215,15 @@ describe("Vertrag /config: courseCount (KIE-576)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const s = await loadEmbedSettings(
       { ...BASE, courseCount: '{"count":5000}' },
-      fetchJson({ courseCount: { ...EXAMPLE, extra: "<b>x</b>" } }),
+      fetchJson({
+        courseCount: {
+          ...EXAMPLE,
+          offered: 837,
+          hidden: 14,
+          stand: "2026-10-24T08:00:00.000Z",
+          extra: "<b>x</b>",
+        },
+      }),
     );
     expect(s.courseCount).toEqual(EXAMPLE);
     const none = await loadEmbedSettings(
