@@ -282,8 +282,8 @@ export const UI_TEXTS = {
     courseCountHead: (n, w) => `${n} ${w} im KI-Berater`,
     courseCountScope: (w) =>
       `Enthalten sind die aktuellen ${w} aus unserem Kursprogramm.`,
-    courseCountHidden: (s, w) => `${s} ${w} sind ausgeblendet, weil sie voraussichtlich beendet sind.`,
-    courseCountHiddenOne: "1 Kurs ist ausgeblendet, weil er voraussichtlich beendet ist.",
+    courseCountHidden: (s, w) => `${s} ${w} sind ausgeblendet, da sie voraussichtlich beendet sind.`,
+    courseCountHiddenOne: "1 Kurs ist ausgeblendet, da er voraussichtlich beendet ist.",
     courseCountMissing: (m, w) => `Zurzeit fehlen ${m} ${w}.`,
     courseCountMissingOne: "Zurzeit fehlt 1 Kurs.",
     courseCountGap:
