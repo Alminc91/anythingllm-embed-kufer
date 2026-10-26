@@ -88,7 +88,7 @@ export function escapeLayerCount() {
 // Hält eine offene Ebene den Fokus? Eine Ebene ohne within (Ansicht über dem
 // ganzen Fenster) immer, eine mit within nur, wenn focused darin liegt.
 // PromptInput holt sich am Ende einer Antwort dann nicht den Fokus, sonst
-// schlösse sich etwa die Info-Karte der Kursanzahl mitten im Lesen (Fixliste
+// verlöre etwa das Kommentarfeld mitten im Schreiben den Fokus (Fixliste
 // KIE-576 r3 Nr. 1).
 export function escapeLayerHoldsFocus(focused) {
   return layers.some((layer) => layer.holds(focused));

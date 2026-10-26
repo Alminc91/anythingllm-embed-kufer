@@ -269,29 +269,13 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Nicht hilfreich",
     courses: "Genannte Kurse",
     moreCourses: "Weitere genannte Kurse",
-    // Kursanzahl im Untertitel und Info-Element (KIE-576 Paket 3, Wortlaut
-    // nach D-K5): n, s und m als formatierte Zahl, w die Bezeichnung
-    // (utils/courseCount.js). courseCountWord: Bezeichnung, wenn der Server
+    // Kursanzahl im Untertitel (KIE-576 Paket 3, „aktuell <n> <w>“,
+    // utils/courseCount.js). courseCountWord: Bezeichnung, wenn der Server
     // keine (gültige) liefert, wie der Standard des Design Centers
-    // (courseCountWord); nur mit ihr gibt es die Einzahl (…One). Nicht in
-    // PANEL_TEXTS: die Panel-Texte bleiben neutral für alle Kundenarten.
+    // (courseCountWord). Nicht in PANEL_TEXTS: die Panel-Texte bleiben
+    // neutral für alle Kundenarten.
     courseCountWord: "Kurse",
     courseCountLead: "aktuell",
-    courseCountInfo: "Was bedeutet die Zahl?",
-    courseCountDialog: "Info zur Kursanzahl",
-    courseCountHead: (n, w) => `${n} ${w} im KI-Berater`,
-    courseCountScope: (w) =>
-      `Enthalten sind die aktuellen ${w} aus unserem Kursprogramm.`,
-    courseCountHidden: (s, w) => `${s} ${w} sind ausgeblendet, da sie voraussichtlich beendet sind.`,
-    courseCountHiddenOne: "1 Kurs ist ausgeblendet, da er voraussichtlich beendet ist.",
-    courseCountMissing: (m, w) => `Zurzeit fehlen ${m} ${w}.`,
-    courseCountMissingOne: "Zurzeit fehlt 1 Kurs.",
-    courseCountGap:
-      "Für eine vollständige Suche nutzen Sie bitte die Kurssuche auf unserer Webseite.",
-    courseCountStand: (when) =>
-      `Stand: ${when}, stündlich aktualisiert. Verbindlich ist das Kursprogramm auf unserer Webseite.`,
-    today: "heute",
-    yesterday: "gestern",
   },
   en: {
     menuReset: "Reset chat",
@@ -326,21 +310,6 @@ export const UI_TEXTS = {
     moreCourses: "More courses mentioned",
     courseCountWord: "courses",
     courseCountLead: "currently",
-    courseCountInfo: "What does this number mean?",
-    courseCountDialog: "About the number of courses",
-    courseCountHead: (n, w) => `${n} ${w} in the AI advisor`,
-    courseCountScope: (w) =>
-      `This includes the current ${w} from our course program.`,
-    courseCountHidden: (s, w) => `${s} ${w} are hidden because they have probably ended.`,
-    courseCountHiddenOne: "1 course is hidden because it has probably ended.",
-    courseCountMissing: (m, w) => `${m} ${w} are currently missing.`,
-    courseCountMissingOne: "1 course is currently missing.",
-    courseCountGap:
-      "For a complete search, please use the course search on our website.",
-    courseCountStand: (when) =>
-      `Status: ${when}, updated hourly. The course program on our website is binding.`,
-    today: "today",
-    yesterday: "yesterday",
   },
 };
 export function uiTexts(settings = {}) {
@@ -785,9 +754,8 @@ function safeUrl(value) {
 
 // Bezeichnung der Kursanzahl (courseCountWord): getrimmt, 1 bis 20 Zeichen,
 // ein Wort aus Buchstaben (auch Umlaute), Teile nur mit Bindestrich
-// verbunden („Seminare“, „Online-Kurse“), kein Leerzeichen: so bleibt der
-// Dativ im Info-Element richtig („von 837 angebotenen Online-Kursen“).
-// Sonst undefined (es gilt der Standard der Sprache). Dieselbe Regel prüfen
+// verbunden („Seminare“, „Online-Kurse“), kein Leerzeichen. Sonst
+// undefined (es gilt der Standard der Sprache). Dieselbe Regel prüfen
 // Design Center und Server beim Speichern. Vorher NFC: „ä“ in zerlegter Form
 // (NFD, etwa aus einem PDF) ist sonst Buchstabe plus Zeichen ohne \p{L}
 // (Fixliste KIE-576 r3 Nr. 5).
@@ -800,44 +768,20 @@ export function courseCountWordValue(value) {
   return v;
 }
 
-// Zeitpunkt der Kursliste (stand = created des SystemSettings): ISO 8601 mit
-// Zeitzone (Z oder ±hh:mm), Sekunden und Bruchteile optional. Bruchteile
-// werden für Date.parse auf Millisekunden gekürzt (Python schreibt
-// Mikrosekunden). Rückgabe Millisekunden seit 1970 oder NaN.
-const ISO_STAND_RE =
-  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
-export function courseStandTime(value) {
-  if (typeof value !== "string" || value.length > 40) return NaN;
-  const m = ISO_STAND_RE.exec(value.trim());
-  if (!m) return NaN;
-  const fraction = m[2] ? `.${m[2].slice(0, 3).padEnd(3, "0")}` : "";
-  return Date.parse(`${m[1]}${fraction}${m[3]}`);
-}
-
 // Kursanzahl vom Server (GET /embed/:id/config, Feld courseCount, Vertrag
-// KIE-576): {count, offered, hidden, stand, word}. count = Kurse im
-// KI-Berater (ganze Zahl ab 1), offered = Kurse im Kursprogramm (ab count),
-// hidden = veraltete Kursdokumente, die der Server in der Suche ausblendet
-// (D-K5; fehlend wie beim älteren Server, negativ oder keine ganze Zahl: 0,
-// die Karte nennt dann keine), stand = Zeitpunkt der Kursliste, word =
-// Bezeichnung (ungültig oder fehlend: null, dann der Standard der Sprache).
-// Ungültige count, offered oder stand verwerfen das Feld: kein Untertitel
-// mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl. Weitere
-// Schlüssel des Objekts fallen weg.
+// KIE-576, Fixliste r4 Nr. 1): {count, word}. count = Kurse im KI-Berater
+// (ganze Zahl ab 1), word = Bezeichnung (ungültig oder fehlend: null, dann
+// der Standard der Sprache). Ungültiges count verwirft das Feld: kein
+// Untertitel mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl.
+// Weitere Schlüssel des Objekts fallen weg (auch offered, hidden und stand
+// eines Servers vor r4; ob die Kursliste aktuell ist, entscheidet der
+// Server).
 export function courseCountValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return undefined;
-  const { count, offered, hidden, stand, word } = value;
+  const { count, word } = value;
   if (!Number.isSafeInteger(count) || count < 1) return undefined;
-  if (!Number.isSafeInteger(offered) || offered < count) return undefined;
-  if (!Number.isFinite(courseStandTime(stand))) return undefined;
-  return {
-    count,
-    offered,
-    hidden: Number.isSafeInteger(hidden) && hidden > 0 ? hidden : 0,
-    stand,
-    word: courseCountWordValue(word) ?? null,
-  };
+  return { count, word: courseCountWordValue(word) ?? null };
 }
 
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte

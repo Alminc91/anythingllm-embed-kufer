@@ -105,8 +105,8 @@ export default function ChatWindowHeader({
   // mit "Frühere Chats" — siehe utils/theme.js.
   const iconButtonClass = headerButtonClass(settings);
   // Kursanzahl statt des Untertitels (KIE-576): nur im normalen Kopf, nicht
-  // kompakt; ohne gültige oder mit veralteter Kursanzahl (älter als 24 h)
-  // null, dann gilt der Untertitel wie bisher
+  // kompakt; ohne gültige Kursanzahl null (veraltete liefert der Server
+  // nicht), dann gilt der Untertitel wie bisher
   const courseCount = compact ? null : courseCountTexts(settings);
 
   // Icon container style based on iconStyle setting
@@ -316,9 +316,8 @@ export default function ChatWindowHeader({
 // Name mit Untertitel (assistantSubtitle); ohne Untertitel steht nur der
 // Name. Beide brechen bei Platzmangel um. Kompakt (mobil bei offener
 // Tastatur) steht nur der Name (E21). Mit Kursanzahl (courseCount, Texte aus
-// utils/courseCount.js) steht statt des Untertitels „aktuell 837 Kurse“ mit
-// Info-Knopf, immer in einer Zeile (KIE-576, keine Kombination mit dem
-// Untertitel).
+// utils/courseCount.js) steht statt des Untertitels „aktuell 837 Kurse“,
+// immer in einer Zeile (KIE-576, keine Kombination mit dem Untertitel).
 function BrandWithSubtitle({ settings, compact, courseCount = null }) {
   return (
     <div
@@ -333,9 +332,7 @@ function BrandWithSubtitle({ settings, compact, courseCount = null }) {
           {settings.brandText}
         </span>
       )}
-      {!compact && courseCount && (
-        <CourseCountSubtitle settings={settings} texts={courseCount} />
-      )}
+      {!compact && courseCount && <CourseCountSubtitle texts={courseCount} />}
       {!compact && !courseCount && (
         <span
           id="anything-llm-header-subtitle"

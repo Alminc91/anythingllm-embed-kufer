@@ -78,8 +78,8 @@ export default function PromptInput({
   // Seite): nur nach echtem Absenden aus dem Feld bzw. nach Klick auf die Leiste,
   // auf Touch nie automatisch (Tastatur + Seitensprung). In keinem Modus wird
   // einem anderen Element der Webseite der Fokus weggenommen, und keiner
-  // offenen Ebene im Widget (Info-Karte, Kommentarfeld mit Fokus, „Frühere
-  // Chats“, Datenschutz-Fenster; utils/escape.js, Fixliste KIE-576 r3 Nr. 1).
+  // offenen Ebene im Widget (Kommentarfeld mit Fokus, „Frühere Chats“,
+  // Datenschutz-Fenster; utils/escape.js, Fixliste KIE-576 r3 Nr. 1).
   useEffect(() => {
     if (!inputDisabled && textareaRef.current) {
       const requested = embedMode.consumeFocusRequest?.() === true;

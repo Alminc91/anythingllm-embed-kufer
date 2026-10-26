@@ -280,9 +280,9 @@ export const DEFAULT_SETTINGS = {
   // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
   assistantSubtitle: null,
   // Kursanzahl statt des Untertitels (KIE-576 Paket 3): nur vom Server
-  // (GET /embed/:id/config, {count, offered, stand, word}, geprüft mit
-  // utils/layout.js courseCountValue), null = keine. Älter als 24 h: der
-  // Kopf zeigt wieder den Untertitel (utils/courseCount.js).
+  // (GET /embed/:id/config, {count, word}, geprüft mit utils/layout.js
+  // courseCountValue), null = keine; eine veraltete Kursliste liefert der
+  // Server nicht (Fixliste r4 Nr. 1).
   courseCount: null,
   onlineDot: false,
   privacyNotice: "link",

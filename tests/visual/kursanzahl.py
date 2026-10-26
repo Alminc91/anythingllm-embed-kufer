@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Browser-Messung der Kursanzahl im Kopf (KIE-576 Paket 3, AK-K5;
-Spezifikation issues/KIE-576/KIE-576-kursanzahl.md, Abschnitt „Widget“).
+"""Browser-Messung der Kursanzahl im Kopf (KIE-576 Paket 3, AK-K5,
+Fixliste r4 Nr. 1; Spezifikation issues/KIE-576/KIE-576-kursanzahl.md,
+Abschnitt „Widget“ und Nachträge 26.10.2026).
 
 Gebautes dist, lokale Testseite und gemockter Server wie
-tests/visual/n3_header.py. Der gemockte Server liefert courseCount
-(Beispielwerte des Vertrags, stand = vor zwei Stunden bzw. vor 25 Stunden).
+tests/visual/n3_header.py. Der gemockte Server liefert courseCount nach dem
+Vertrag ab r4 ({count, word}); ein Fall liefert zusätzlich offered, hidden
+und einen 25 Stunden alten stand wie ein Server vor r4 (das Widget liest nur
+count und word, die 24-h-Regel entscheidet der Server).
 
 Aufruf (aus dem Repo-Wurzelverzeichnis, Bundle vorher bauen):
 
@@ -12,11 +15,11 @@ Aufruf (aus dem Repo-Wurzelverzeichnis, Bundle vorher bauen):
 
 Ergebnis: DIR/kursanzahl.json (Standard DIR = .test-storage/kursanzahl) und je
 Fall ein Bildschirmfoto. Fälle: Chatfenster 1440 x 900 (de, en), mobil
-390 x 780 (de), mobil mit Bildschirmtastatur (kompakt), veraltet (25 h).
-Prüfungen: Kopf 77 px (76 px plus Unterlinie, ±0,5 px), Kursanzahl eine
-Zeile, Info-Knopf 24 x 24 px und oben auf (elementFromPoint), Karte öffnet
-per Klick unter dem Kopf und innerhalb des Fensters, Escape schließt sie und
-gibt den Fokus an den Knopf zurück; kompakt und veraltet keine Zahl.
+390 x 780 (de, lange Bezeichnung), mobil mit Bildschirmtastatur (kompakt),
+älterer Server, ohne courseCount. Prüfungen: Kopf 77 px (76 px plus
+Unterlinie, ±0,5 px), Kursanzahl eine Zeile und links neben den Buttons des
+Kopfes, Zahl fett, kein Info-Knopf, kein Symbol und keine Karte in der
+Zeile; kompakt keine Zahl, ohne courseCount der Untertitel.
 """
 
 import argparse
@@ -39,32 +42,20 @@ def iso(hours_ago):
 MEASURE = r"""() => {
   const h = window.__q('#anything-llm-header');
   const line = window.__q('#anything-llm-header-course-count');
-  const btn = window.__q('#anything-llm-course-count-button');
   const sub = window.__q('#anything-llm-header-subtitle');
+  const opts = window.__q('button[aria-label="Optionen"], button[aria-label="Options"]');
   const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect();
     return { top: +b.top.toFixed(1), left: +b.left.toFixed(1), width: +b.width.toFixed(1),
              height: +b.height.toFixed(1), bottom: +b.bottom.toFixed(1), right: +b.right.toFixed(1) }; };
-  let onTop = null;
-  if (btn) { const b = btn.getBoundingClientRect();
-    const hit = window.__allmShadow.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-    onTop = !!hit && (hit === btn || btn.contains(hit)); }
+  const bold = line ? [...line.querySelectorAll('span')].find((e) => /^[0-9.,]+$/.test(e.textContent)) : null;
   return { header: r(h), line: r(line), lineText: line ? line.textContent : null,
            lineHeight: line ? parseFloat(getComputedStyle(line).lineHeight) : null,
-           button: r(btn), buttonOnTop: onTop, subtitle: sub ? sub.textContent : null,
+           boldWeight: bold ? getComputedStyle(bold).fontWeight : null,
+           infoButton: !!window.__q('#anything-llm-course-count-button'),
+           lineExtras: line ? line.querySelectorAll('button, svg, [role]').length : null,
+           dialog: !!window.__q('[role="dialog"]'),
+           options: r(opts), subtitle: sub ? sub.textContent : null,
            window: r(window.__q('#anything-llm-chat')) };
-}"""
-
-CARD = r"""() => {
-  const c = window.__q('[role="dialog"][aria-label]');
-  const btn = window.__q('#anything-llm-course-count-button');
-  if (!c) return null; const b = c.getBoundingClientRect();
-  const w = window.__q('#anything-llm-chat').getBoundingClientRect();
-  const h = window.__q('#anything-llm-header').getBoundingClientRect();
-  return { lines: [...c.children].map((e) => e.textContent), top: +b.top.toFixed(1),
-           headerBottom: +h.bottom.toFixed(1), inside: b.left >= w.left && b.right <= w.right + 0.5,
-           expanded: btn.getAttribute('aria-expanded'),
-           focusInCard: window.__allmShadow.activeElement === c,
-           bg: getComputedStyle(c).backgroundColor, color: getComputedStyle(c).color };
 }"""
 
 
@@ -83,64 +74,40 @@ def run(b, base, out, name, viewport, server, attrs_extra=None, compact=False):
         )
         tv.settle(page, 600)
     m = page.evaluate(MEASURE)
-    m["card"] = None
-    if m["button"]:
-        btn = m["button"]
-        page.mouse.click(btn["left"] + btn["width"] / 2, btn["top"] + btn["height"] / 2)
-        tv.settle(page, 300)
-        m["card"] = page.evaluate(CARD)
-        page.screenshot(path=str(out / f"kursanzahl-{name}-offen.png"))
-        page.keyboard.press("Escape")
-        tv.settle(page, 300)
-        m["afterEscape"] = page.evaluate(
-            """() => ({ card: !!window.__q('[role="dialog"][aria-label]'),
-                 chatOpen: !!window.__q('#anything-llm-chat'),
-                 focusOnButton: window.__allmShadow.activeElement === window.__q('#anything-llm-course-count-button') })"""
-        )
-    else:
-        page.screenshot(path=str(out / f"kursanzahl-{name}.png"))
+    page.screenshot(path=str(out / f"kursanzahl-{name}.png"))
     m["errors"] = [t for k, t in page.console_log if k in ("error", "pageerror")]
     ctx.close()
     return m
 
 
-def verdict(name, m):
+def verdict(name, m, expect_text=None):
     p = []
-    if name in ("kompakt", "veraltet"):
+    if m["infoButton"] or m["dialog"]:
+        p.append("Info-Knopf oder Karte vorhanden")
+    if m["errors"]:
+        p.append(f"Fehler: {m['errors']}")
+    if name in ("kompakt", "ohne"):
         if m["line"]:
             p.append("Zahl sichtbar")
-        if name == "veraltet" and not m["subtitle"]:
+        if name == "ohne" and not m["subtitle"]:
             p.append("kein Untertitel")
         return p
     if not m["line"]:
-        return ["keine Kursanzahl"]
+        return p + ["keine Kursanzahl"]
+    if expect_text and m["lineText"] != expect_text:
+        p.append(f"Text {m['lineText']!r} statt {expect_text!r}")
+    if m["subtitle"]:
+        p.append("Untertitel zusätzlich sichtbar")
     if abs(m["header"]["height"] - 77) > 0.5:
         p.append(f"Kopf {m['header']['height']} statt 77 px")
     if m["line"]["height"] > m["lineHeight"] * 1.5:
         p.append("Kursanzahl mehr als eine Zeile")
-    if (m["button"]["width"], m["button"]["height"]) != (24.0, 24.0):
-        p.append(f"Knopf {m['button']['width']} x {m['button']['height']}")
-    if not m["buttonOnTop"]:
-        p.append("Knopf verdeckt")
-    c = m["card"]
-    if not c:
-        p.append("Karte öffnet nicht")
-    else:
-        if c["top"] < c["headerBottom"]:
-            p.append("Karte überdeckt den Kopf")
-        if not c["inside"]:
-            p.append("Karte ragt aus dem Fenster")
-        if c["expanded"] != "true":
-            p.append("aria-expanded nicht true")
-    a = m.get("afterEscape") or {}
-    if a.get("card"):
-        p.append("Escape schließt die Karte nicht")
-    if not a.get("chatOpen"):
-        p.append("Escape schließt das Fenster statt der Karte")
-    if not a.get("focusOnButton"):
-        p.append("Fokus nach Escape nicht auf dem Knopf")
-    if m["errors"]:
-        p.append(f"Fehler: {m['errors']}")
+    if m["lineExtras"]:
+        p.append("Symbol oder Button in der Zeile")
+    if str(m["boldWeight"]) not in ("600", "700"):
+        p.append(f"Zahl nicht fett ({m['boldWeight']})")
+    if m["options"] and m["line"]["right"] > m["options"]["left"] + 0.5:
+        p.append("Zeile reicht unter die Buttons des Kopfes")
     return p
 
 
@@ -154,25 +121,29 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     from playwright.sync_api import sync_playwright
 
-    fresh = {"count": 812, "offered": 837, "hidden": 14, "stand": iso(2), "word": "Kurse"}
-    stale = {**fresh, "stand": iso(25)}
-    gap = {**fresh, "count": 612}
+    cc = {"count": 812, "word": "Kurse"}
+    older = {"count": 844, "offered": 900, "hidden": 14, "stand": iso(25), "word": "Kurse"}
     desktop = {"width": 1440, "height": 900}
     phone = {"width": 390, "height": 780}
     cases = [
-        ("desktop-de", desktop, {"courseCount": fresh}, None, False),
-        ("desktop-en", desktop, {"courseCount": {**gap, "word": "courses"}}, {"language": "en"}, False),
-        ("mobil-de", phone, {"courseCount": gap}, None, False),
-        ("kompakt", phone, {"courseCount": fresh}, None, True),
-        ("veraltet", desktop, {"courseCount": stale}, None, False),
+        ("desktop-de", desktop, {"courseCount": cc}, None, False, "aktuell 812 Kurse"),
+        ("desktop-en", desktop, {"courseCount": {"count": 1243, "word": "courses"}},
+         {"language": "en"}, False, "currently 1,243 courses"),
+        ("mobil-de", phone, {"courseCount": {"count": 1243, "word": None}}, None, False,
+         "aktuell 1.243 Kurse"),
+        ("mobil-lang", phone, {"courseCount": {"count": 12843, "word": "Weiterbildungskurse"}},
+         None, False, "aktuell 12.843 Weiterbildungskurse"),
+        ("kompakt", phone, {"courseCount": cc}, None, True, None),
+        ("aelterer-server", desktop, {"courseCount": older}, None, False, "aktuell 844 Kurse"),
+        ("ohne", desktop, {}, None, False, None),
     ]
     srv, base = tv.start_server(args.dist)
     res = {}
     with sync_playwright() as pw:
         b = pw.chromium.launch()
-        for name, vp, server, extra, compact in cases:
+        for name, vp, server, extra, compact, text in cases:
             m = run(b, base, out, name, vp, server, extra, compact)
-            m["probleme"] = verdict(name, m)
+            m["probleme"] = verdict(name, m, text)
             res[name] = m
         b.close()
     srv.shutdown()
@@ -180,9 +151,8 @@ def main():
     bad = 0
     for k, m in res.items():
         bad += bool(m["probleme"])
-        print(f"{k:12s} kopf={m['header']['height']} zeile={m['lineText']!r} "
-              f"untertitel={m['subtitle']!r} karte={(m['card'] or {}).get('lines')} "
-              f"probleme={m['probleme'] or 'keine'}")
+        print(f"{k:16s} kopf={m['header']['height']} zeile={m['lineText']!r} "
+              f"untertitel={m['subtitle']!r} probleme={m['probleme'] or 'keine'}")
     if bad and not args.no_assert:
         sys.exit(1)
 
