@@ -58,6 +58,7 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-course-cards-position` | Aussehen: Reihenfolge | `above` (Karten zuerst) |
 | `data-brand-text`, `data-assistant-name` | Inhalt: Name | `KI-Berater` (`en`: `AI Advisor`) |
 | `data-assistant-subtitle` | Inhalt: Untertitel | `Online-Berater mit künstlicher Intelligenz` (`en`: `Online advisor powered by artificial intelligence`) |
+| `data-course-count` | Inhalt: Name und Untertitel, Schalter „Kursanzahl im Untertitel“ und Feld „Bezeichnung“ (KIE-576; die Zahl berechnet nur der Server aus dem Kursprogramm) | an: mit gültiger Kursliste vom Server steht statt des Untertitels „aktuell <Zahl> Kurse“ (`en`: „currently <number> courses“), sonst der Untertitel |
 | `data-greeting`, `data-greeting-bubble-text` | Inhalt: Begrüßungstext | `Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?` |
 | `data-privacy-notice` | keine Auswahl mehr (seit 7.23) | immer der Link „Datenschutz“ unter der Eingabe; gespeicherte Altwerte wirken nicht |
 | `data-privacy-start-bubble` | Inhalt: Datenschutz-Hinweis, Schalter „Zusätzlich beim Start als Blase zeigen“ (seit 7.23-rc5, AK-12; nur der Server-Wert `privacyStartBubble: true` schaltet ihn ein) | aus: nur der Link „Datenschutz“ unter der Eingabe; an: zusätzlich die Datenschutz-Blase unter der Begrüßung (Überschrift, Text, Link zur Datenschutzerklärung), der Link bleibt |

@@ -52,6 +52,9 @@ export const DC_COVERED = [
   "brandText", // Name (Kopfzeile und über den Antworten)
   "assistantName",
   "assistantSubtitle", // Untertitel
+  // Kursanzahl im Untertitel (KIE-576): Schalter und Bezeichnung im Design
+  // Center, die Zahl selbst berechnet nur der Server (kein Skript-Attribut)
+  "courseCount",
   "greeting", // Begrüßungstext
   "greetingBubbleText",
   "greetingStyle", // Begrüßung (seit 7.23 immer als Blase, ohne Feld)
@@ -88,6 +91,8 @@ const DC_HINTS = {
   privacyNotice:
     "Der Datenschutz-Hinweis erscheint immer als Link „Datenschutz“ unter der Eingabe.",
   greetingStyle: "Die Begrüßung erscheint immer als Blase.",
+  courseCount:
+    "Die Kursanzahl berechnet der Server aus dem Kursprogramm, im Design Center lassen sich die Anzeige ein- oder ausschalten und die Bezeichnung festlegen.",
 };
 // Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
 // „Frühere Chats“, KIE-503; kein Feld des Design Centers)
@@ -274,6 +279,11 @@ export const DEFAULT_SETTINGS = {
   // Sprache („Online-Berater mit künstlicher Intelligenz“, Fixliste 7.22-rc8
   // R5), "" vom Server = bewusst keiner (im Design Center leer gespeichert)
   assistantSubtitle: null,
+  // Kursanzahl statt des Untertitels (KIE-576 Paket 3): nur vom Server
+  // (GET /embed/:id/config, {count, word}, geprüft mit utils/layout.js
+  // courseCountValue), null = keine; eine veraltete Kursliste liefert der
+  // Server nicht (Fixliste r4 Nr. 1).
+  courseCount: null,
   onlineDot: false,
   privacyNotice: "link",
   // Datenschutz zusätzlich beim Start als Blase unter der Begrüßung (AK-12,

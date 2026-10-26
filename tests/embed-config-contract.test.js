@@ -31,7 +31,8 @@ vi.mock("../src/main.jsx", () => ({
 }));
 
 import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
-import { PANEL_TEXTS } from "../src/utils/layout.js";
+import { courseCountWordValue, PANEL_TEXTS } from "../src/utils/layout.js";
+import { courseCountTexts } from "../src/utils/courseCount.js";
 
 const FIXTURE = join(__dirname, "fixtures", "embedConfigContract.json");
 const contract = JSON.parse(readFileSync(FIXTURE, "utf8"));
@@ -135,6 +136,105 @@ describe("Vertrag /config: Antwort des Servers -> Startvorschläge, Willkommensb
           c.widget.privacyStartBubble === false,
       ),
     ).toBe(true);
+  });
+});
+
+// KIE-576 Paket 3: courseCount nach dem Vertrag (issues/KIE-576/
+// KIE-576-kursanzahl.md, „Vertrag (wörtlich)“, Fixliste r4 Nr. 2 und 4).
+// Der Server liefert das Feld nur als {count, word} mit gültiger, aktueller
+// Kursliste und Anzeige an, sonst fehlt es ganz; das Widget übernimmt es
+// geprüft (utils/layout.js courseCountValue), sonst null.
+describe("Vertrag /config: courseCount (KIE-576)", () => {
+  const EXAMPLE = { count: 812, word: "Kurse" };
+  const withCount = contract.cases.filter((c) => c.config?.courseCount);
+  const without = contract.cases.filter((c) =>
+    (c.configAbsent || []).includes("courseCount"),
+  );
+
+  it("Fixture: ein Fall mit courseCount (nur count und word) und einer ohne", () => {
+    expect(withCount.length).toBeGreaterThanOrEqual(1);
+    expect(without.length).toBeGreaterThanOrEqual(1);
+    for (const c of withCount) {
+      expect(c.fork, c.name).not.toBe(false);
+      expect(c.config.courseCount, c.name).toEqual(EXAMPLE);
+      expect(Object.keys(c.config.courseCount).sort(), c.name).toEqual([
+        "count",
+        "word",
+      ]);
+      expect(c.widget.courseCount, c.name).toEqual(EXAMPLE);
+    }
+    for (const c of without) {
+      expect(c.config, c.name).not.toHaveProperty("courseCount");
+      expect(c.widget.courseCount, c.name).toBeNull();
+    }
+  });
+
+  // Fixliste r2b Nr. 2: Bezeichnung ein Wort, dieselbe Liste prüft der
+  // Server (Fixture wortgleich); ungültig = Standard der Sprache (word null)
+  it("Bezeichnung: gültige und ungültige Eingaben der Fixture", async () => {
+    const { valid, invalid } = contract.courseCountWords;
+    expect(valid.length).toBeGreaterThan(0);
+    expect(invalid.length).toBeGreaterThan(0);
+    for (const [input, output] of valid) {
+      expect(courseCountWordValue(input), JSON.stringify(input)).toBe(output);
+      const s = await loadEmbedSettings(
+        BASE,
+        fetchJson({ courseCount: { ...EXAMPLE, word: input } }),
+      );
+      expect(s.courseCount.word, JSON.stringify(input)).toBe(output);
+    }
+    for (const input of invalid) {
+      expect(
+        courseCountWordValue(input),
+        JSON.stringify(input),
+      ).toBeUndefined();
+      const s = await loadEmbedSettings(
+        BASE,
+        fetchJson({ courseCount: { ...EXAMPLE, word: input } }),
+      );
+      expect(s.courseCount.word, JSON.stringify(input)).toBeNull();
+    }
+  });
+
+  // Untertitel-Zeile wortgleich mit der Fixture (dieselbe Zeile zeigt die
+  // Vorschau im Design Center)
+  it.each(contract.courseCountTexts.cases.map((c) => [c.name, c]))(
+    "Untertitel-Zeile: %s",
+    async (_name, c) => {
+      expect(Object.keys(c.courseCount).sort()).toEqual(["count", "word"]);
+      const s = await loadEmbedSettings(
+        { ...BASE, language: c.language },
+        fetchJson({ courseCount: c.courseCount }),
+      );
+      expect(s.courseCount).toEqual(c.courseCount);
+      expect(courseCountTexts(s).subtitle).toBe(c.subtitle);
+    },
+  );
+
+  it("weitere Schlüssel im Feld fallen weg, ein Skript-Attribut wirkt nicht", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const s = await loadEmbedSettings(
+      { ...BASE, courseCount: '{"count":5000}' },
+      fetchJson({
+        courseCount: {
+          ...EXAMPLE,
+          offered: 837,
+          hidden: 14,
+          stand: "2026-10-24T08:00:00.000Z",
+          extra: "<b>x</b>",
+        },
+      }),
+    );
+    expect(s.courseCount).toEqual(EXAMPLE);
+    const none = await loadEmbedSettings(
+      { ...BASE, courseCount: '{"count":5000}' },
+      fetchJson({}),
+    );
+    expect(none.courseCount).toBeNull();
+    expect(warn.mock.calls.some(([m]) => /data-course-count/.test(m))).toBe(
+      true,
+    );
+    warn.mockRestore();
   });
 });
 

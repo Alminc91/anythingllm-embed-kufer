@@ -111,6 +111,12 @@ export const PRIVACY_TEXT_MAX_LEN = 1000;
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
+// Kursanzahl im Untertitel (KIE-576 Paket 3): Bezeichnung im Plural aus dem
+// Design Center (courseCountWord), ein Wort aus Buchstaben, Teile mit
+// Bindestrich verbunden, höchstens 20 Zeichen (Vertrag,
+// issues/KIE-576/KIE-576-kursanzahl.md; Fixliste r2b Nr. 2)
+export const COURSE_COUNT_WORD_MAX_LEN = 20;
+export const COURSE_COUNT_WORD_RE = /^\p{L}+(?:-\p{L}+)*$/u;
 
 // Standardtexte der Panel-Optik, des Datenschutz- und des KI-Hinweises:
 // EIN Mechanismus für alle diese Texte (panelTexts): Sprache des Widgets
@@ -263,6 +269,13 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Nicht hilfreich",
     courses: "Genannte Kurse",
     moreCourses: "Weitere genannte Kurse",
+    // Kursanzahl im Untertitel (KIE-576 Paket 3, „aktuell <n> <w>“,
+    // utils/courseCount.js). courseCountWord: Bezeichnung, wenn der Server
+    // keine (gültige) liefert, wie der Standard des Design Centers
+    // (courseCountWord). Nicht in PANEL_TEXTS: die Panel-Texte bleiben
+    // neutral für alle Kundenarten.
+    courseCountWord: "Kurse",
+    courseCountLead: "aktuell",
   },
   en: {
     menuReset: "Reset chat",
@@ -295,6 +308,8 @@ export const UI_TEXTS = {
     notHelpfulTitle: "Not helpful",
     courses: "Courses mentioned",
     moreCourses: "More courses mentioned",
+    courseCountWord: "courses",
+    courseCountLead: "currently",
   },
 };
 export function uiTexts(settings = {}) {
@@ -737,6 +752,38 @@ function safeUrl(value) {
   }
 }
 
+// Bezeichnung der Kursanzahl (courseCountWord): getrimmt, 1 bis 20 Zeichen,
+// ein Wort aus Buchstaben (auch Umlaute), Teile nur mit Bindestrich
+// verbunden („Seminare“, „Online-Kurse“), kein Leerzeichen. Sonst
+// undefined (es gilt der Standard der Sprache). Dieselbe Regel prüfen
+// Design Center und Server beim Speichern. Vorher NFC: „ä“ in zerlegter Form
+// (NFD, etwa aus einem PDF) ist sonst Buchstabe plus Zeichen ohne \p{L}
+// (Fixliste KIE-576 r3 Nr. 5).
+export function courseCountWordValue(value) {
+  const v = shortText(
+    typeof value === "string" ? value.normalize("NFC") : value,
+    COURSE_COUNT_WORD_MAX_LEN,
+  );
+  if (v === undefined || !COURSE_COUNT_WORD_RE.test(v)) return undefined;
+  return v;
+}
+
+// Kursanzahl vom Server (GET /embed/:id/config, Feld courseCount, Vertrag
+// KIE-576, Fixliste r4 Nr. 1): {count, word}. count = Kurse im KI-Berater
+// (ganze Zahl ab 1), word = Bezeichnung (ungültig oder fehlend: null, dann
+// der Standard der Sprache). Ungültiges count verwirft das Feld: kein
+// Untertitel mit Zahl, der Kopf zeigt den Untertitel wie ohne Kursanzahl.
+// Weitere Schlüssel des Objekts fallen weg (auch offered, hidden und stand
+// eines Servers vor r4; ob die Kursliste aktuell ist, entscheidet der
+// Server).
+export function courseCountValue(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const { count, word } = value;
+  if (!Number.isSafeInteger(count) || count < 1) return undefined;
+  return { count, word: courseCountWordValue(word) ?? null };
+}
+
 // Validatoren je Setting (von useScriptAttributes für Script- UND Server-Werte
 // genutzt). Rückgabe undefined = verwerfen.
 export const layoutValidations = {
@@ -797,6 +844,9 @@ export const layoutValidations = {
     return shortText(v, ASSISTANT_SUBTITLE_MAX_LEN);
   },
   onlineDot: bool,
+  // Kursanzahl im Untertitel (nur vom Server, KIE-576; ein Skript-Attribut
+  // verwirft useScriptAttributes vorher, DC_COVERED)
+  courseCount: courseCountValue,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
   // Datenschutz zusätzlich beim Start als Blase (AK-12, Design Center
   // „Zusätzlich beim Start als Blase zeigen“): nur genau true zählt, alles
