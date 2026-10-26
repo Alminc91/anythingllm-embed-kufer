@@ -256,8 +256,8 @@ export const UI_TEXTS = {
     courseCountHead: (n, w) => `${n} ${w} im KI-Berater`,
     courseCountScope: (w) =>
       `Enthalten sind die aktuellen ${w} aus unserem Kursprogramm.`,
-    courseCountHidden: (s, w) => `${s} beendete ${w} sind ausgeblendet.`,
-    courseCountHiddenOne: "1 beendeter Kurs ist ausgeblendet.",
+    courseCountHidden: (s, w) => `${s} ${w} sind ausgeblendet, weil sie voraussichtlich beendet sind.`,
+    courseCountHiddenOne: "1 Kurs ist ausgeblendet, weil er voraussichtlich beendet ist.",
     courseCountMissing: (m, w) => `Zurzeit fehlen ${m} ${w}.`,
     courseCountMissingOne: "Zurzeit fehlt 1 Kurs.",
     courseCountGap:
@@ -305,8 +305,8 @@ export const UI_TEXTS = {
     courseCountHead: (n, w) => `${n} ${w} in the AI advisor`,
     courseCountScope: (w) =>
       `This includes the current ${w} from our course program.`,
-    courseCountHidden: (s, w) => `${s} ended ${w} are hidden.`,
-    courseCountHiddenOne: "1 ended course is hidden.",
+    courseCountHidden: (s, w) => `${s} ${w} are hidden because they have probably ended.`,
+    courseCountHiddenOne: "1 course is hidden because it has probably ended.",
     courseCountMissing: (m, w) => `${m} ${w} are currently missing.`,
     courseCountMissingOne: "1 course is currently missing.",
     courseCountGap:

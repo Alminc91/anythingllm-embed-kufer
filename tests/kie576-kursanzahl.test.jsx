@@ -331,7 +331,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "812 Kurse im KI-Berater",
       SCOPE,
-      "14 beendete Kurse sind ausgeblendet.",
+      "14 Kurse sind ausgeblendet, weil sie voraussichtlich beendet sind.",
       "Zurzeit fehlen 25 Kurse.",
       STAND_LINE,
     ]);
@@ -345,7 +345,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "1.243 Kurse im KI-Berater",
       SCOPE,
-      "1.050 beendete Kurse sind ausgeblendet.",
+      "1.050 Kurse sind ausgeblendet, weil sie voraussichtlich beendet sind.",
       "Zurzeit fehlen 67 Kurse.",
       GAP,
       STAND_LINE,
@@ -359,7 +359,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "837 Kurse im KI-Berater",
       SCOPE,
-      "14 beendete Kurse sind ausgeblendet.",
+      "14 Kurse sind ausgeblendet, weil sie voraussichtlich beendet sind.",
       STAND_LINE,
     ]);
   });
@@ -381,7 +381,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "836 Kurse im KI-Berater",
       SCOPE,
-      "1 beendeter Kurs ist ausgeblendet.",
+      "1 Kurs ist ausgeblendet, weil er voraussichtlich beendet ist.",
       "Zurzeit fehlt 1 Kurs.",
       STAND_LINE,
     ]);
@@ -392,7 +392,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
       { courseCount: { ...CC, count: 836, hidden: 1, word: null } },
       NOW,
     );
-    expect(t.hiddenLine).toBe("1 beendeter Kurs ist ausgeblendet.");
+    expect(t.hiddenLine).toBe("1 Kurs ist ausgeblendet, weil er voraussichtlich beendet ist.");
     expect(t.missingLine).toBe("Zurzeit fehlt 1 Kurs.");
   });
 
@@ -413,7 +413,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "1.242 Angebote im KI-Berater",
       "Enthalten sind die aktuellen Angebote aus unserem Kursprogramm.",
-      "1 beendete Angebote sind ausgeblendet.",
+      "1 Angebote sind ausgeblendet, weil sie voraussichtlich beendet sind.",
       "Zurzeit fehlen 1 Angebote.",
       STAND_LINE,
     ]);
@@ -451,7 +451,7 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
     expect(cardLines()).toEqual([
       "1,243 courses in the AI advisor",
       "This includes the current courses from our course program.",
-      "14 ended courses are hidden.",
+      "14 courses are hidden because they have probably ended.",
       "67 courses are currently missing.",
       "For a complete search, please use the course search on our website.",
       "Status: today, 10:00 AM, updated hourly. The course program on our website is binding.",
@@ -467,9 +467,9 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
         },
         NOW,
       );
-    expect(en("courses").hiddenLine).toBe("1 ended course is hidden.");
+    expect(en("courses").hiddenLine).toBe("1 course is hidden because it has probably ended.");
     expect(en("courses").missingLine).toBe("1 course is currently missing.");
-    expect(en("workshops").hiddenLine).toBe("1 ended workshops are hidden.");
+    expect(en("workshops").hiddenLine).toBe("1 workshops are hidden because they have probably ended.");
     expect(en("workshops").missingLine).toBe(
       "1 workshops are currently missing.",
     );

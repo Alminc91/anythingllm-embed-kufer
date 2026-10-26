@@ -10,7 +10,7 @@ import { HEADER_ICON_STYLE } from "@/utils/theme";
 // (Trefferfläche 24 px, ohne die Zeile zu erhöhen: der Kopf bleibt 76 px).
 // Der Knopf öffnet eine kleine Dialogkarte unter dem Kopf (Muster
 // PrivacyNotice: role dialog, nur Text, Farben über --allmi-*): Kurse im
-// KI-Berater, Umfang, ausgeblendete beendete und fehlende Kurse (nur wenn
+// KI-Berater, Umfang, voraussichtlich beendete (ausgeblendete) und fehlende Kurse (nur wenn
 // es welche gibt), ab 5 % Lücke der Hinweis auf die Kurssuche, Stand (D-K5).
 // Schließen per Escape (Ebene in utils/escape.js, Fokus zurück auf den
 // Knopf), Klick daneben (im Widget und auf der Webseite), erneuten Klick
