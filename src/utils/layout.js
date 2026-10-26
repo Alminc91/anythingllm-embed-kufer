@@ -22,7 +22,16 @@ export const INLINE_CHIPS_MAX = 6;
 export const INLINE_MIN_HEIGHT_PX = 400;
 export const INLINE_MAX_HEIGHT_PX = 1200;
 export const INLINE_MIN_WIDTH_PX = 280;
-export const WINDOW_MIN_WIDTH_PX = 320;
+// Chatfenster ab 768 px nie schmaler (W12, Nutzer 24.10.2026): der
+// Platzhalter steht so einzeilig neben dem Mikrofon-Button; bis 7.23-rc2
+// 320 px. Wirksam über die Klassen (BUBBLE_WINDOW_CLASSES, dort als Zahl,
+// weil Tailwind nur feste Klassennamen erzeugt; ein Test prüft den
+// Gleichlauf). bubbleWindowCss liest die Konstanten nur für windowWidth und
+// windowHeight in den Settings: data-window-* am Skript wirken nicht
+// (useScriptAttributes IGNORED_HINTS), und der Server liefert beide seit dem
+// vereinfachten Design Center nicht mehr aus. Den Weg nutzen nur Testseiten
+// mit eigener Konfiguration (tests/visual/n3_header.py, fensterbreite.py).
+export const WINDOW_MIN_WIDTH_PX = 360;
 export const WINDOW_MIN_HEIGHT_PX = 400;
 export const OFFSET_MAX_PX = 200;
 export const INLINE_TEXT_MAX_LEN = 120;
@@ -61,16 +70,21 @@ export const DEFAULT_OVERLAY_EFFECT = "expand";
 export const INLINE_OPEN_ON_VALUES = ["submit", "focus"];
 export const DEFAULT_INLINE_OPEN_ON = "submit";
 
-// Panel-Optik (Mockup „Wunschfragen im Panel“), alles opt-in; Standard =
-// bisherige Darstellung. Vorschläge im leeren Chat als Balken ("bars") oder
-// kleine Pillen ("pills"); Begrüßung als zentrierter Text ("text") oder als
-// Assistenten-Blase ("bubble", der greeting-Text steht dann klein darunter).
+// Panel-Optik (Mockup „Wunschfragen im Panel“). Vorschläge im leeren Chat
+// als Balken ("bars") oder kleine Pillen ("pills", Standard). Die Begrüßung
+// ist seit 7.23 immer eine Assistenten-Blase ("bubble", LOCKED_STANDARDS,
+// Nutzer 24.10.2026); der frühere Wert "text" (zentrierter Text) gilt als
+// gültig (gespeicherter Altwert, keine Warnung), wirkt aber nicht.
 export const SUGGESTION_STYLE_VALUES = ["bars", "pills"];
 export const GREETING_STYLE_VALUES = ["text", "bubble"];
-// Datenschutz-Hinweis: keiner ("none"), als Absätze in der Begrüßungsblase
-// ("bubble", ohne Bestätigung) oder einmalig als Karte beim ersten Öffnen
-// ("modal", Bestätigung per Knopf, gespeichert in localStorage).
-export const PRIVACY_NOTICE_VALUES = ["none", "bubble", "modal"];
+// Datenschutz-Hinweis: seit 7.23 immer als Link „Datenschutz“ in der Zeile
+// des KI-Hinweises ("link", Nutzerentscheidung 23.10.2026, keine Auswahl im
+// Design Center). Die früheren Werte "none" (aus), "bubble" (Blase unter der
+// Begrüßung) und "modal" (Einmal-Hinweis mit Bestätigung) gelten als gültig
+// (gespeicherte Altwerte, keine Warnung), wirken aber nicht
+// (LOCKED_STANDARDS). Die Blase beim Start schaltet seit AK-12 allein
+// privacyStartBubble (zusätzlich zum Link, Nutzer 24.10.2026).
+export const PRIVACY_NOTICE_VALUES = ["link", "none", "bubble", "modal"];
 // Folgefragen: Vorschläge des Modells für die nächste Frage als Pillen unter
 // der letzten Antwort ("pills") oder keine ("none", Standard). Der Server
 // (Fork >= 7.14) liefert sie als Chunk "followUps" bzw. im Verlauf.
@@ -91,10 +105,9 @@ export const PRIVACY_TITLE_MAX_LEN = 120;
 export const PRIVACY_LINES_MAX = 12;
 export const PRIVACY_LINE_MAX_LEN = 500;
 export const PRIVACY_TEXT_MAX_LEN = 1000;
-export const PRIVACY_BUTTON_TEXT_MAX_LEN = 40;
 // Fester KI-Hinweis unter dem Eingabefeld ("footer") statt vom Modell
 // erzeugt; Text fest PANEL_TEXTS.aiDisclaimer (disclaimerText wird seit dem
-// vereinfachten Design Center ignoriert, AI_NOTICE).
+// vereinfachten Design Center ignoriert, LOCKED_STANDARDS).
 export const DISCLAIMER_VALUES = ["none", "footer"];
 export const DISCLAIMER_TEXT_MAX_LEN = 160;
 export const URL_MAX_LEN = 512;
@@ -122,26 +135,36 @@ export const COURSE_COUNT_WORD_RE = /^\p{L}+(?:-\p{L}+)*$/u;
 export const PANEL_TEXTS = {
   de: {
     greetingBubble: "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?",
-    // Überschrift der Datenschutz-Blase; leerer privacyTitle = keine
+    // Überschrift des Datenschutz-Fensters und der Blase beim Start (ohne
+    // eigenen privacyTitle)
     privacyTitle: "Datenschutz",
     privacyPoints: [
       "Ihre Anfragen bleiben auf Servern in Deutschland und werden nicht an Dritte weitergegeben.",
       "Mitarbeiter der Einrichtung können Gespräche zur Qualitätssicherung einsehen.",
       "Bitte teilen Sie nur Angaben, die für Ihre Anfrage nötig sind.",
     ],
-    privacyButton: "Start",
-    privacyMoreLead: "Weitere Informationen in der ",
-    privacyMoreLink: "Erklärung zum Datenschutz",
-    // Link am Ende der Datenschutz-Blase (nur mit privacyUrl)
+    // Link zur Datenschutzerklärung im Datenschutz-Fenster und in der Blase
+    // beim Start (nur mit privacyUrl)
     privacyBubbleLink: "Datenschutzerklärung",
-    // fest, nicht änderbar (disclaimerText wird ignoriert); Wortlaut
-    // Fixliste 7.22-rc8 R1 („Unsere KI …“, eindeutiger als „KI …“) in der
-    // Kurzfassung „prüfen“: die Langfassung „überprüfen“ bräuchte im
-    // Chatfenster bei 1280 px (320 px breit) unter 10 px Schrift
-    // (gemessen: 337 px bei 10 px, 304 px Platz; tests/visual/
-    // disclaimer_measure.py, Ergebnis in .test-storage/disclaimer-*.json)
-    aiDisclaimer:
-      "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten.",
+    // KI-Hinweis unter der Eingabe: fest, nicht änderbar (disclaimerText wird
+    // ignoriert, E24). Seit dem Link in der Fußzeile (Nutzerentscheidung
+    // 23.10.2026, Variante 1) die Kurzfassung „Unsere KI …“ ohne Bitte um
+    // Prüfung; diese steht als eigener Punkt im Datenschutz-Fenster
+    // (privacyAiTitle, privacyAiText). Die Zeile lautet KI-Hinweis + " · " +
+    // privacyLinkText, nur der Linktext ist klickbar (ChatContainer
+    // AiDisclaimer). Messung: tests/visual/disclaimer_measure.py.
+    aiDisclaimer: "Unsere KI kann Fehler machen",
+    // Link in der Zeile des KI-Hinweises, öffnet das Datenschutz-Fenster
+    privacyLinkText: "Datenschutz",
+    // eigener Punkt im Datenschutz-Fenster: ein Wortlaut für alle Kunden,
+    // ohne Kurs-Wörter (Nutzerentscheidung F8 vom 23.10.2026)
+    privacyAiTitle: "Hinweis zur KI",
+    privacyAiText:
+      "Unser KI-Berater ist auf richtige Auskünfte optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Kontrolle immer auf unserer Website.",
+    // Button unten im Datenschutz-Fenster und Beschriftung des
+    // Schließen-Symbols oben (für Screenreader)
+    privacyCloseText: "Schließen",
+    privacyCloseLabel: "Datenschutz schließen",
     // Standard für leere Felder (Name in der Titelleiste, Untertitel,
     // Platzhalter im Eingabefeld). Untertitel seit Fixliste 7.22-rc8 R5 auch
     // live der Standard, wenn der Server keinen liefert (assistantSubtitleText)
@@ -169,11 +192,14 @@ export const PANEL_TEXTS = {
       "Staff of the institution may view conversations for quality assurance.",
       "Please only share information that is necessary for your request.",
     ],
-    privacyButton: "Start",
-    privacyMoreLead: "More information in our ",
-    privacyMoreLink: "privacy statement",
     privacyBubbleLink: "Privacy statement",
-    aiDisclaimer: "Our AI can make mistakes. Please double-check the answers.",
+    aiDisclaimer: "Our AI can make mistakes",
+    privacyLinkText: "Privacy",
+    privacyAiTitle: "About the AI",
+    privacyAiText:
+      "Our AI advisor is optimised for accurate information. Like any AI, it can still make the occasional mistake. You can always check important details such as dates and prices on our website.",
+    privacyCloseText: "Close",
+    privacyCloseLabel: "Close privacy notice",
     assistantName: "AI Advisor",
     assistantSubtitle: "Online advisor powered by artificial intelligence",
     inputPlaceholder: "Ask your question here …",
@@ -323,7 +349,6 @@ export function uiTexts(settings = {}) {
 export const DEFAULT_GREETING_BUBBLE_TEXT = PANEL_TEXTS.de.greetingBubble;
 export const DEFAULT_PRIVACY_TITLE = PANEL_TEXTS.de.privacyTitle;
 export const DEFAULT_PRIVACY_POINTS = PANEL_TEXTS.de.privacyPoints;
-export const DEFAULT_PRIVACY_BUTTON_TEXT = PANEL_TEXTS.de.privacyButton;
 
 // Eingeklappte Inline-Leiste (inlineInput): Platzhalter und Knopftext. Ein
 // eigener Text (inlineInputPlaceholder bzw. inlineSendText, z. B. früher im
@@ -348,8 +373,8 @@ export function inlineBarTexts(settings = {}) {
 // unverändert (nur die Anzeige ändert sich).
 // Begrüßung: dieselben vier Texte für greeting und greetingBubbleText wie im
 // Fork (server/utils/chats/embedStandards.js LEGACY_DEFAULT_GREETINGS): alter
-// Widget-Standard von greeting (Datenschutzsatz, steht jetzt in der eigenen
-// Datenschutz-Blase), alte Design-Center-Vorbelegung und der bisherige
+// Widget-Standard von greeting (Datenschutzsatz, steht seit 7.23 im
+// Datenschutz-Fenster), alte Design-Center-Vorbelegung und der bisherige
 // Standard der Begrüßungsblase (de/en).
 const LEGACY_DEFAULT_GREETINGS = [
   "Dieser Chatbot nutzt künstliche Intelligenz (KI). Ihre Nachrichten werden nicht an Dritte weitergegeben, können aber zur Qualitätssicherung von uns eingesehen werden. Bitte geben Sie keine sensiblen personenbezogenen Daten ein.",
@@ -432,15 +457,6 @@ export function assistantSubtitleText(settings = {}) {
   return panelTexts(settings).assistantSubtitle;
 }
 
-// Überschrift der Datenschutz-Blase: "" = bewusst keine Überschrift (aus dem
-// Design Center: Feld geleert), null/undefined = Standard der Sprache.
-export function privacyTitleText(settings = {}) {
-  if (settings.privacyTitle === "") return "";
-  if (typeof settings.privacyTitle === "string" && settings.privacyTitle.trim())
-    return settings.privacyTitle.trim();
-  return panelTexts(settings).privacyTitle;
-}
-
 // Datenschutz-Text (privacyText), Regel seit Design Center vereinfacht:
 //  - Zeilen, die mit „•“, „-“ oder „–“ beginnen, werden Aufzählungspunkte
 //    (Zeichen entfernt), alle anderen Zeilen Absätze.
@@ -475,7 +491,20 @@ export function parsePrivacyText(text) {
     .filter((b) => b.text.length > 0);
 }
 
-// Wirksame Blöcke der Datenschutz-Blase: privacyText bzw. Standard der Sprache.
+// Überschrift des Datenschutz-Fensters und der Blase beim Start (AK-12):
+// gespeicherter Titel, sonst der Standard der Sprache („Datenschutz“ bzw.
+// „Privacy“). Das Fenster braucht immer eine Überschrift (aria-labelledby);
+// eine leere kommt gar nicht erst in die Einstellungen (privacyTitleValue,
+// W10).
+export function privacyDialogTitle(settings = {}) {
+  const own =
+    typeof settings.privacyTitle === "string"
+      ? settings.privacyTitle.trim()
+      : "";
+  return own || panelTexts(settings).privacyTitle;
+}
+
+// Wirksame Blöcke des Datenschutz-Texts: privacyText bzw. Standard der Sprache.
 export function privacyBlocks(settings = {}) {
   const own = parsePrivacyText(settings.privacyText);
   return own.length > 0
@@ -486,15 +515,36 @@ export function privacyBlocks(settings = {}) {
       }));
 }
 
-// privacyText -> Stichpunkte (Text ohne Aufzählungszeichen), leere verworfen
-// (für den früheren Einmal-Hinweis „modal“, der nicht mehr ausgeliefert wird).
-export function splitPrivacyPoints(text) {
-  return parsePrivacyText(text).map((b) => b.text);
+// Aufeinanderfolgende Aufzählungspunkte -> eine Liste; Absätze einzeln
+// (Darstellung im Datenschutz-Fenster und in der Blase beim Start).
+export function groupPrivacyBlocks(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    const last = out[out.length - 1];
+    if (b.type === "bullet") {
+      if (last?.type === "list") last.items.push(b.text);
+      else out.push({ type: "list", items: [b.text] });
+    } else out.push({ type: "paragraph", text: b.text });
+  }
+  return out;
 }
 
-// Wirksame Datenschutz-Punkte: privacyText bzw. Standard der Sprache.
-export function privacyPoints(settings = {}) {
-  return privacyBlocks(settings).map((b) => b.text);
+// Link zur Datenschutzerklärung (privacyUrl) im Datenschutz-Fenster und in
+// der Blase beim Start (AK-12): nur ein Wert, den safeUrl annimmt (absolute
+// https-URL oder Pfad der eigenen Seite), und nur, wenn er gegen die Adresse
+// der Seite aufgelöst http: oder https: ergibt (ein Pfad auf einer
+// file:-Seite wird nicht verlinkt). Prüft auch Werte, die nicht über
+// loadEmbedSettings kamen. Sonst null (kein Link).
+export function privacyHref(value) {
+  const url = safeUrl(value);
+  if (!url) return null;
+  try {
+    const base = typeof document !== "undefined" ? document.baseURI : undefined;
+    const { protocol } = new URL(url, base);
+    return protocol === "https:" || protocol === "http:" ? url : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Feste Standards (Design Center vereinfacht, 15.10.2026), ohne Feld im
@@ -502,13 +552,12 @@ export function privacyPoints(settings = {}) {
 // verfeinert sie; ohne Skript-Angabe gilt der feste Wert, auch gegen einen
 // Altwert vom Server (der Server liefert dieselben Werte). Dieselbe Regel
 // gilt für INLINE_STANDARDS (applyFixedStandards, Fixliste 7.22-rc18 C18).
-// Ausnahme greetingStyle: Ist der Datenschutz-Hinweis an, gilt "bubble"
-// (E26, applyFixedStandards).
+// Der Begrüßungsstil steht seit 7.23 nicht mehr hier: die Begrüßung ist
+// immer eine Blase (LOCKED_STANDARDS).
 // Randabstände der Chatblase (offsetX/offsetY, Standard 16 px), Max. Breite
 // der Inline-Box (inlineMaxWidth, Standard volle Breite des Platzhalters) und
 // Stil der Inline-Leiste (inlineTheme, Standard: folgt dem Farbschema).
 export const FIXED_STANDARDS = {
-  greetingStyle: "bubble",
   suggestionStyle: "pills",
   followUps: "pills",
   onlineDot: false,
@@ -517,11 +566,30 @@ export const FIXED_STANDARDS = {
   inlineMaxWidth: null,
   inlineTheme: null,
 };
-// KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
-// fest (PANEL_TEXTS.aiDisclaimer). Auf keinem Weg abschalt- oder änderbar,
-// weder per Skript-Angabe noch vom Server noch per CSS-Variable
-// (utils/theme.js AI_NOTICE_COLORS).
-export const AI_NOTICE = { disclaimer: "footer", disclaimerText: null };
+// Gesperrte Standards: gelten immer, auf keinem Weg änderbar, weder per
+// Skript-Angabe noch vom Server (anders als FIXED_STANDARDS). Ein Weg für
+// alle festen Werte (applyFixedStandards).
+// - KI-Hinweis (E24, Fixliste 7.22-rc17): fest unter dem Eingabefeld, Text
+//   fest (PANEL_TEXTS.aiDisclaimer), auch nicht per CSS-Variable
+//   (utils/theme.js AI_NOTICE_COLORS).
+// - In derselben Zeile immer der Link „Datenschutz“ (Nutzerentscheidung
+//   23.10.2026, 7.23): privacyNotice fest "link", ohne Auswahl im Design
+//   Center. Der Server liefert fest "link"; gespeicherte Altwerte ("bubble",
+//   "none", "modal"), ein fehlender Wert und ein Script-Attribut
+//   (data-privacy-notice, Gruppe A) ändern nichts. Eine Datenschutz-Blase
+//   beim Start gibt es nur zusätzlich zum Link, mit privacyStartBubble aus
+//   dem Design Center (AK-12, Gruppe A); kein Einmal-Hinweis mit
+//   Bestätigung (Hard Constraint 2).
+// - Begrüßung immer als Blase (Nutzer 24.10.2026: die Form der Begrüßung
+//   ist keine Einbau-Angabe): greetingStyle fest "bubble", der Server
+//   liefert fest "bubble"; data-greeting-style (Gruppe A) und ein
+//   gespeicherter Altwert "text" ändern nichts.
+export const LOCKED_STANDARDS = {
+  disclaimer: "footer",
+  disclaimerText: null,
+  privacyNotice: "link",
+  greetingStyle: "bubble",
+};
 
 // Inline: Standard wie die Demo-Seite (/var/docker/demo/site/app.js,
 // loadWidgetScript: data-inline-input "true", data-inline-open-on "focus",
@@ -541,19 +609,6 @@ export const INLINE_STANDARDS = {
   inlineStartState: "collapsed",
   inheritFont: true,
 };
-
-// Datenschutz-Hinweis (KIE-565 Nachtrag, Nutzer 15.10.2026; Gruppe A nach
-// E24): nur im Design Center abschaltbar (Schalter „Datenschutz-Hinweis
-// anzeigen“). Allein der Wert vom Server zählt: "none" = keine zweite Blase,
-// jeder andere und ein fehlender Wert = "bubble", auch das frühere "modal"
-// (Einmal-Hinweis entfällt). Ein Script-Attribut (data-privacy-notice) kann
-// den Hinweis weder ab- noch einschalten; ohne Antwort vom Server bleibt er
-// an.
-export function privacyNoticeSetting(serverValue) {
-  return oneOf(serverValue, PRIVACY_NOTICE_VALUES) === "none"
-    ? "none"
-    : "bubble";
-}
 
 // Willkommensblasen je Gerät (KIE-568, Nutzer 15.10.2026): wie der
 // Datenschutz-Hinweis zählt allein der Wert vom Server (Design Center
@@ -575,9 +630,10 @@ export function welcomeBubblesMode(settings = {}, phone = false) {
 
 // Einmal beim Laden (loadEmbedSettings): feste Standards und im Inline-Modus
 // die Inline-Standards setzen, außer das Skript gibt den Wert vor
-// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis fest,
-// Datenschutz-Hinweis und Willkommensblasen aus dem Server-Wert (server =
-// geprüfte Server-Konfiguration), ohne eigenen Namen den Standardnamen der
+// (scriptKeys, eine Regel für beide Tabellen), KI-Hinweis, Link
+// „Datenschutz“ und Begrüßungsblase fest (LOCKED_STANDARDS),
+// Willkommensblasen aus dem Server-Wert (server = geprüfte
+// Server-Konfiguration), ohne eigenen Namen den Standardnamen der
 // Sprache (brandText im Kopf, assistantName über den Antworten; „KI-Berater“
 // bzw. „AI Advisor“).
 export function applyFixedStandards(
@@ -585,26 +641,9 @@ export function applyFixedStandards(
   server = {},
   scriptKeys = new Set(),
 ) {
-  const out = {
-    ...settings,
-    ...AI_NOTICE,
-    privacyNotice: privacyNoticeSetting(server?.privacyNotice),
-  };
+  const out = { ...settings, ...LOCKED_STANDARDS };
   for (const [key, value] of Object.entries(FIXED_STANDARDS))
     if (!scriptKeys.has(key)) out[key] = value;
-  // Datenschutz-Hinweis an (Schalter im Design Center): Begrüßung als Blase,
-  // auch gegen data-greeting-style="text" (E26, Fixliste 7.22-rc18 W60). Nur
-  // die Begrüßungsblase trägt die Datenschutz-Blase (ChatHistory:
-  // PanelWelcome im leeren Chat, PanelGreeting im Verlauf); "text" wirkt nur
-  // bei abgeschaltetem Hinweis. Eine Warnzeile, wenn das Skript "text"
-  // vorgibt (Fixliste 7.22-rc20 W81).
-  if (out.privacyNotice === "bubble") {
-    if (scriptKeys.has("greetingStyle") && out.greetingStyle === "text")
-      console.warn(
-        '[AnythingLLM Embed] Einbau-Angabe data-greeting-style="text" wirkt nur bei abgeschaltetem Datenschutz-Hinweis (Schalter im Design Center), es gilt "bubble".',
-      );
-    out.greetingStyle = "bubble";
-  }
   // Willkommensblasen: nur der Server-Wert zählt, ohne gültigen Wert "first"
   // (data-bubble-persistence wirkt nicht, Gruppe A)
   for (const key of ["welcomeBubblesDesktop", "welcomeBubblesMobile"])
@@ -719,10 +758,11 @@ function privacyTextValue(value) {
   return lines.join("\n");
 }
 
-// Überschrift der Datenschutz-Blase: leer (nur Leerraum) = bewusst keine
-// Überschrift ("" bleibt erhalten), sonst Text bis 120 Zeichen.
+// Überschrift des Datenschutz-Fensters: Text bis 120 Zeichen; leer (nur
+// Leerraum) gilt wie nicht gesetzt, es greift der Standard der Sprache (seit
+// 7.23 dasselbe wie der Standard, kein eigener Zustand; W10, wie
+// privacyText). Bis 7.22.2 hieß "" „keine Überschrift“ in der Blase.
 function privacyTitleValue(value) {
-  if (typeof value === "string" && value.trim() === "") return "";
   return shortText(value, PRIVACY_TITLE_MAX_LEN);
 }
 
@@ -859,9 +899,13 @@ export const layoutValidations = {
   // verwirft useScriptAttributes vorher, DC_COVERED)
   courseCount: courseCountValue,
   privacyNotice: (v) => oneOf(v, PRIVACY_NOTICE_VALUES),
+  // Datenschutz zusätzlich beim Start als Blase (AK-12, Design Center
+  // „Zusätzlich beim Start als Blase zeigen“): nur genau true zählt, alles
+  // andere wird verworfen (der Server liefert den Schlüssel nur mit true;
+  // kein Wahrheitswert aus Text wie "true" oder "on", Gruppe A)
+  privacyStartBubble: (v) => (v === true ? true : undefined),
   privacyTitle: privacyTitleValue,
   privacyText: privacyTextValue,
-  privacyButtonText: (v) => shortText(v, PRIVACY_BUTTON_TEXT_MAX_LEN),
   privacyUrl: safeUrl,
   disclaimer: (v) => oneOf(v, DISCLAIMER_VALUES),
   // Folgefragen-Pillen: ungültig -> verworfen (Standard "none"), Warnung wie
@@ -889,7 +933,7 @@ export const layoutValidations = {
 // (gültiger Wert der anderen Quelle bzw. Standard). script/server = Rohwerte
 // (Script-Attribute bzw. nicht leere visual_config-Werte), settings = fertig
 // zusammengeführte Settings. Herkunft bei festen Standards (FIXED_STANDARDS,
-// INLINE_STANDARDS, KI-Hinweis AI_NOTICE und SERVER_FIXED_KEYS): ein
+// INLINE_STANDARDS, LOCKED_STANDARDS und SERVER_FIXED_KEYS): ein
 // Server-Wert ist dort kein Wert aus dem Design Center, es gilt das
 // Script-Attribut, wenn sein Wert wirkt, sonst der „Standard“
 // (applyFixedStandards; Fixliste 7.22-rc20 W82). Die Inline-Schlüssel
@@ -906,7 +950,7 @@ const ENUM_SOURCES = [
 const SERVER_FIXED_KEYS = ["courseCardsLayout"];
 function isFixedStandard(key) {
   return (
-    key in AI_NOTICE ||
+    key in LOCKED_STANDARDS ||
     key in FIXED_STANDARDS ||
     key in INLINE_STANDARDS ||
     SERVER_FIXED_KEYS.includes(key)
@@ -935,7 +979,7 @@ export function warnInvalidInlineEnums(
       if (value === undefined || value === null || value === "" || valid(src))
         continue;
       const scriptWins =
-        !(key in AI_NOTICE) &&
+        !(key in LOCKED_STANDARDS) &&
         valid("script") &&
         settings[key] === oneOf(raw.script[key], allowed);
       const origin = isFixedStandard(key)
@@ -1001,10 +1045,29 @@ export function panelPills(settings = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Blase: Größe des Chatfensters (Klassen am #anything-llm-chat, App.jsx).
+// Mobil (unter 768 px) Vollbild ohne Rundung; ab 768 px 40 %, ab 1280 px
+// 25 % der Breite, nie schmaler als WINDOW_MIN_WIDTH_PX (W12: 768 px ergibt
+// 360 statt 307 px, 1280 px 360 statt 320 px, 1366 px 360 statt 342 px;
+// ab 1440 px wie bisher, 1920 px 480 px), Höhe 77 %. Die 360 steht als
+// Zahl in den Klassen, weil Tailwind nur feste Klassennamen erzeugt
+// (tests/datenschutz-rc3.test.jsx prüft den Gleichlauf). Breiter als die
+// Seite minus Randabstand wird das Fenster damit nicht: 360 px plus 2 × 16
+// px (mit data-offset-x höchstens 200 px) passen ab 768 px immer.
+export const BUBBLE_WINDOW_CLASSES = [
+  "allm-inset-0 allm-w-full allm-h-full allm-rounded-none",
+  "md:allm-inset-auto md:allm-max-w-[max(40%,360px)] md:allm-max-h-[77%]",
+  "md:allm-rounded-[var(--allmi-radius,16px)] md:allm-mb-4",
+  "xl:allm-max-w-[max(25%,360px)]",
+].join(" ");
+
+// ---------------------------------------------------------------------------
 // Blase: CSS für Fenstergröße/Randabstand (nur Tablet/Desktop >=768px; mobil
 // bleibt Vollbild). Liefert "" wenn nichts gesetzt ist -> exakt bisheriges
 // Verhalten. Werte kommen validiert aus layoutValidations; hier zusätzlich
-// nochmals gegen die Whitelist geprüft, bevor sie in CSS-Text gehen.
+// nochmals gegen die Whitelist geprüft, bevor sie in CSS-Text gehen. Im
+// Betrieb wirkt nur der Randabstand (offsetX/offsetY, Gruppe B); eine
+// Fenstergröße kommt nur von Testseiten (siehe WINDOW_MIN_WIDTH_PX).
 // ---------------------------------------------------------------------------
 export function bubbleWindowCss(settings = {}, position = "bottom-right") {
   const width = layoutValidations.windowWidth(settings.windowWidth);

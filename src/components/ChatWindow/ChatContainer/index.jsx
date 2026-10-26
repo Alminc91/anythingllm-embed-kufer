@@ -1,18 +1,22 @@
-import { isImeEscape } from "@/utils/escape";
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import ChatHistory from "./ChatHistory";
 import PromptInput from "./PromptInput";
 import handleChat from "@/utils/chat";
 import ChatService from "@/models/chatService";
-import PrivacyNotice from "../PrivacyNotice";
-import { acknowledgePrivacy, privacyNoticePending } from "@/utils/privacy";
 import { panelTexts } from "@/utils/layout";
-import { AI_NOTICE_BG, AI_NOTICE_ID, AI_NOTICE_TEXT } from "@/utils/theme";
+import {
+  AI_NOTICE_BG,
+  AI_NOTICE_ID,
+  AI_NOTICE_TEXT,
+  AI_NOTICE_TEXT_ID,
+  DEFAULT_ACCENT,
+  PRIVACY_LINK_ID,
+} from "@/utils/theme";
 export const SEND_TEXT_EVENT = "anythingllm-embed-send-prompt";
 // id des Shadow-Hosts jedes Widgets (main.jsx)
 const WIDGET_HOST_ID = "anythingllm-embed-widget";
 // Vorschlag (Balken/Pille im leeren Chat, Folgefrage) senden: ChatContainer
-// hört auf SEND_TEXT_EVENT (während der Datenschutz-Sperre ignoriert).
+// hört auf SEND_TEXT_EVENT.
 // Security: das Ereignis startet am angeklickten Element (source) und steigt
 // nur bis zur Wurzel des EIGENEN ChatContainers auf (nicht composed: bleibt im
 // Shadow DOM) — bei zwei Widgets auf einer Seite sendet nur das angeklickte.
@@ -36,8 +40,10 @@ export default function ChatContainer({
   knownHistory = [],
   pendingFirstMessage = null,
   onPendingFirstMessageConsumed = null,
-  // Blasen-Modus: Escape im Datenschutz-Hinweis schließt das Fenster
-  onClose = null,
+  // Link „Datenschutz“ neben dem KI-Hinweis: öffnet das Datenschutz-Fenster
+  // (ChatWindow); die Ref zeigt auf den Link (Fokus nach dem Schließen)
+  onOpenPrivacy = null,
+  privacyLinkRef = null,
 }) {
   const rootRef = useRef(null);
   const [message, setMessage] = useState("");
@@ -50,35 +56,11 @@ export default function ChatContainer({
   // Effect-Cleanup wuerde den laufenden Stream sonst nach dem ersten Chunk toeten.
   const streamControllerRef = useRef(null);
   // Zuletzt verbrauchtes Ticket der Inline-Leiste: jedes Ticket genau einmal.
+  // Seit 7.23 ohne Datenschutz-Sperre: den Einmal-Hinweis mit Bestätigung
+  // („modal“, Knopf „Start“) gibt es nicht mehr (Hard Constraint 2 der
+  // Spezifikation datenschutz-fusszeile), der Datenschutz-Hinweis ist der
+  // Link neben dem KI-Hinweis.
   const lastConsumedTicketRef = useRef(null);
-  // Datenschutz-Hinweis (privacyNotice "modal"): bis zur Bestätigung (Knopf
-  // „Start“) ist die Eingabe gesperrt, Vorschläge/Fragen aus der Leiste
-  // warten. "bubble" = nur Text in der Begrüßungsblase, keine Sperre.
-  const [privacyLocked, setPrivacyLocked] = useState(() =>
-    privacyNoticePending(settings),
-  );
-  const privacyLockedRef = useRef(privacyLocked);
-  privacyLockedRef.current = privacyLocked;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  // Blasen-Modus (onClose; im Inline-Modus null, dort klappt InlineChat bei
-  // Escape ein): solange der Datenschutz-Hinweis sperrt, schließt Escape das
-  // Fenster wie der Schließen-Knopf, ohne zu bestätigen — auch wenn der Fokus
-  // auf der Webseite liegt (keydown aus dem Shadow DOM ist composed und kommt
-  // ebenfalls am document an). Keine Tastaturfalle.
-  const escapeCloses = privacyLocked && !!onClose;
-  useEffect(() => {
-    if (!escapeCloses) return;
-    const doc = rootRef.current?.ownerDocument || document;
-    const onKeyDown = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented || isImeEscape(e)) return;
-      e.preventDefault();
-      onCloseRef.current?.();
-    };
-    doc.addEventListener("keydown", onKeyDown);
-    return () => doc.removeEventListener("keydown", onKeyDown);
-  }, [escapeCloses]);
 
   // Resync history if the ref to known history changes
   // eg: cleared.
@@ -225,8 +207,6 @@ export default function ChatContainer({
   // ersten Wort), wird gewartet — sonst liefen zwei Anfragen parallel.
   // Entwurf (send false): ins Eingabefeld — ein dort schon getippter Text
   // bleibt stehen, der Entwurf wird angehängt.
-  // Datenschutz-Hinweis: das Ticket wartet bis zur Bestätigung
-  // (consumePending direkt im Klick, siehe acknowledge).
   const replyStreaming = isStreaming(chatHistory[chatHistory.length - 1]);
   const consumePending = () => {
     const pending = pendingFirstMessage;
@@ -239,21 +219,11 @@ export default function ChatContainer({
     else setMessage((current) => appendDraft(current, pending.text));
   };
   useEffect(() => {
-    if (!privacyLocked) consumePending();
-  }, [pendingFirstMessage, loadingResponse, replyStreaming, privacyLocked]);
-
-  // Knopf im Hinweis: Bestätigung speichern, Sperre lösen und eine wartende
-  // Frage im selben Klick senden (ein Commit: das Eingabefeld wird nicht
-  // erst frei und gleich wieder gesperrt).
-  const acknowledge = () => {
-    acknowledgePrivacy(settings?.embedId);
-    setPrivacyLocked(false);
     consumePending();
-  };
+  }, [pendingFirstMessage, loadingResponse, replyStreaming]);
 
   const handleAutofillEvent = (event) => {
     if (!event.detail.command) return;
-    if (privacyLockedRef.current) return;
     sendCommand(event.detail.command, [], []);
   };
   // Der Listener ruft immer den aktuellen Handler (Folgefragen kommen mitten
@@ -295,21 +265,13 @@ export default function ChatContainer({
     <div
       ref={rootRef}
       className="allm-h-full allm-w-full allm-flex allm-flex-col"
-      style={privacyLocked ? { position: "relative" } : undefined}
     >
-      {privacyLocked && (
-        <PrivacyNotice
-          settings={settings}
-          onAcknowledge={acknowledge}
-          suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
-        />
-      )}
       <div className="allm-flex-1 allm-min-h-0 allm-mb-8">
         <ChatHistory
           settings={settings}
           history={chatHistory}
           sessionId={sessionId}
-          canSend={!loadingResponse && !privacyLocked}
+          canSend={!loadingResponse}
         />
       </div>
       <div className="allm-flex-shrink-0 allm-mt-auto">
@@ -318,11 +280,15 @@ export default function ChatContainer({
           message={message}
           submit={handleSubmit}
           onChange={handleMessageChange}
-          inputDisabled={loadingResponse || privacyLocked}
-          buttonDisabled={loadingResponse || privacyLocked}
+          inputDisabled={loadingResponse}
+          buttonDisabled={loadingResponse}
           suppressAutoFocus={pendingFirstMessage?.suppressAutoFocus === true}
         />
-        <AiDisclaimer settings={settings} />
+        <AiDisclaimer
+          settings={settings}
+          onOpenPrivacy={onOpenPrivacy}
+          privacyLinkRef={privacyLinkRef}
+        />
       </div>
     </div>
   );
@@ -357,45 +323,113 @@ export function appendDraft(current, draft) {
 
 // Fester KI-Hinweis unter dem Eingabefeld, in allen Modi und immer (Design
 // Center vereinfacht, 15.10.2026: nicht abschaltbar, Text nicht änderbar;
-// disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht).
+// disclaimer/disclaimerText aus Script oder Konfiguration wirken nicht), seit
+// 7.23 in derselben Zeile der Link zum Datenschutz-Fenster (Nutzer-
+// entscheidung 23.10.2026, Variante 1): „Unsere KI kann Fehler machen ·
+// Datenschutz“ bzw. „Our AI can make mistakes · Privacy“. Nur „Datenschutz“
+// ist klickbar, ein echter <button> im Linkstil (Enter und Leertaste öffnen,
+// aria-haspopup="dialog"); immer da, unabhängig von privacyNotice.
 // Farben fest je Farbschema (E24, Fixliste 7.22-rc17, utils/theme.js
-// AI_NOTICE_COLORS): Schrift und eine eigene Fläche hinter dem Satz, damit
-// keine CSS-Variable der Seite (--allm-text-muted, --allm-surface, auch per
-// @property registrierte --allmi-*) ihn unsichtbar oder unlesbar macht. Die
-// festen Farben gelten als Regel direkt am Element (Theme-Stylesheet,
-// buildThemeCss, Fixliste 7.22-rc18 W62); die Werte im style gelten nur
-// ohne dieses Stylesheet.
+// AI_NOTICE_COLORS): Schrift und eine eigene Fläche hinter Satz, Trenner und
+// Link, damit keine CSS-Variable der Seite (--allm-text-muted, --allm-surface,
+// auch per @property registrierte --allmi-*) die Zeile unsichtbar oder
+// unlesbar macht. Der Link hat die Linkfarbe des Widgets mit mindestens
+// 4,5:1 zu dieser Fläche (privacyLinkColor). Die festen Farben gelten als
+// Regel direkt am Element (Theme-Stylesheet, buildThemeCss, Fixliste
+// 7.22-rc18 W62); die Werte im style gelten nur ohne dieses Stylesheet.
 // Text: Standard der Panel-Texte (utils/layout.js panelTexts: "en" englisch,
-// sonst deutsch; Wortlaut Fixliste 7.22-rc8 R1). Eine dezente Zeile, nur
-// Text, nicht anklickbar. Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22):
-// kein Umbruch. In schmalen Fenstern (Chatfenster bei 1280 px: 320 px breit,
-// 316 px Platz bei 2 px Rand; der Satz braucht bei 11 px etwa 345 px, bei
-// 10 px etwa 314 px in DejaVu Sans, in Segoe UI/Arial etwa 280 px) wird die
-// Schrift bis 10 px kleiner (Containerabfrage, .allm-ai-disclaimer in
-// main.jsx); reicht auch das nicht (noch breitere Schrift), endet die Zeile
-// mit „…“ (voller Text im title und für Screenreader). Seitenrand 2 px
-// (rc8, vorher 8 px): die Zeile ist zentriert, der Rand zählt nur, wenn der
-// Satz das Fenster fast ausfüllt (gemessen: tests/visual/disclaimer_measure.py).
-function AiDisclaimer({ settings }) {
-  const text = panelTexts(settings || {}).aiDisclaimer;
+// sonst deutsch). Immer genau eine Zeile (Fixliste 7.22-rc7 Nr. 22, Hard
+// Constraint 3): kein Umbruch; in schmalen Fenstern wird die Schrift bis
+// 10 px kleiner (Containerabfrage, .allm-ai-disclaimer in main.jsx); reicht
+// auch das nicht (sehr breite Seitenschrift), kürzt sich der KI-Satz mit
+// „…“ (voller Text im title und für Screenreader), der Link nie.
+// Trefferfläche des Links (AK-2): mindestens 24 px hoch, mobil und auf Touch
+// 44 px (main.jsx .allm-privacy-link); die Zeile wächst dafür, statt die
+// Fläche über Eingabefeld oder Fußbereich zu legen. Seitenrand 2 px (rc8):
+// die Zeile ist zentriert, der Rand zählt nur, wenn sie das Fenster fast
+// ausfüllt. Gemessen (tests/visual/disclaimer_measure.py, 23.10.2026): die
+// Zeile braucht bei 11 px deutsch 251,5 px (DejaVu Sans) bzw. 258 px
+// (geerbte Serifenschrift In der Seite), englisch 198 bzw. 203 px; das
+// Chatfenster ist ab 768 px mindestens 360 px breit (W12, bis 7.23-rc2 bei
+// 1280 px 320 px).
+function AiDisclaimer({
+  settings,
+  onOpenPrivacy = null,
+  privacyLinkRef = null,
+}) {
+  const texts = panelTexts(settings || {});
+  const text = texts.aiDisclaimer;
   return (
-    <div className="allm-ai-disclaimer-box">
+    // 2 px Abstand unten: der Fußbereich darunter (Sponsor-Zeile, z-10) darf
+    // die Trefferfläche des Links auch bei Rundung auf halbe Pixel nicht
+    // überdecken (gemessen In der Seite, 1024 bis 1920 px)
+    <div className="allm-ai-disclaimer-box" style={{ paddingBottom: "2px" }}>
       <p
         id={AI_NOTICE_ID}
         role="note"
-        title={text}
         className="allm-ai-disclaimer allm-font-sans"
         style={{
-          margin: "4px 2px 0",
-          lineHeight: 1.4,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "baseline",
           textAlign: "center",
+          margin: "0 2px",
+          lineHeight: 1.4,
           color: AI_NOTICE_TEXT,
           whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
+          minWidth: 0,
         }}
       >
-        <span style={{ backgroundColor: AI_NOTICE_BG }}>{text}</span>
+        <span
+          id={AI_NOTICE_TEXT_ID}
+          title={text}
+          style={{
+            backgroundColor: AI_NOTICE_BG,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {text}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            backgroundColor: AI_NOTICE_BG,
+            flex: "none",
+            whiteSpace: "pre",
+          }}
+        >
+          {" · "}
+        </span>
+        <button
+          ref={privacyLinkRef}
+          id={PRIVACY_LINK_ID}
+          type="button"
+          aria-haspopup="dialog"
+          onClick={() => onOpenPrivacy?.()}
+          className="allm-privacy-link"
+          style={{
+            flex: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: "24px",
+            margin: 0,
+            padding: "0 2px",
+            border: "none",
+            borderRadius: "4px",
+            backgroundColor: AI_NOTICE_BG,
+            color: `var(--allmi-link, ${DEFAULT_ACCENT})`,
+            font: "inherit",
+            lineHeight: "inherit",
+            whiteSpace: "nowrap",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+            cursor: "pointer",
+          }}
+        >
+          {texts.privacyLinkText}
+        </button>
       </p>
     </div>
   );

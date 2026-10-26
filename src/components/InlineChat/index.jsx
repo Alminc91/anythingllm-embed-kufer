@@ -1909,6 +1909,8 @@ export default function InlineChat({
                   compactHeader={isKeyboardOpen}
                   pendingFirstMessage={pendingFirstMessage}
                   onPendingFirstMessageConsumed={onPendingFirstMessageConsumed}
+                  // eingeklappt: ein offenes Datenschutz-Fenster schließt
+                  collapsed={view === "bar"}
                 />
               </div>
             </div>

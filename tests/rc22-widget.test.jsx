@@ -320,7 +320,10 @@ const WIDGET_KEYS = join(
   forkDir || "",
   "frontend/src/pages/GeneralSettings/ChatEmbedWidgets/EmbedAppearance/widgetKeys.js",
 );
-const FORMAT_ERROR = "Bitte einen Farbcode wie #01A5A9 angeben.";
+// Beispiel in der Meldung = Standard-Akzentfarbe (seit 7.22.2 Petrol
+// #007C82, Fork widgetKeys.js accentColorError); eine Quelle, damit die
+// Erwartung beim nächsten Farbwechsel nicht wieder veraltet (W14)
+const FORMAT_ERROR = `Bitte einen Farbcode wie ${theme.DEFAULT_ACCENT.toUpperCase()} angeben.`;
 const OPACITY_ERROR = "Bitte eine deckende Farbe ohne Transparenz angeben.";
 describeFork(
   forkDir

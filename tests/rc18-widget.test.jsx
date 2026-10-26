@@ -7,15 +7,20 @@ import tailwindConfig from "../tailwind.config.js";
 // fixliste-7.22-rc18.md, Details review-7.22-nachreview-rc17.md):
 // W60/E26 Datenschutz-Hinweis an: Begrüßung als Blase auch gegen
 //   data-greeting-style="text", die Datenschutz-Blase ist sichtbar (leerer
-//   Chat und Verlauf); Hinweis aus: "text" wirkt.
-// W61 Textzweig mit dem Begrüßungsstandard der Sprache.
+//   Chat und Verlauf); Hinweis aus: "text" wirkt. Bewusste Änderung (7.23):
+//   die Datenschutz-Blase entfällt (Link „Datenschutz“ in der Fußzeile),
+//   damit auch E26. Bewusste Änderung (7.23-rc3, W13, Nutzer 24.10.2026):
+//   die Begrüßung ist immer eine Blase, "text" wirkt nicht.
+// W61 Textzweig mit dem Begrüßungsstandard der Sprache; der Textzweig
+//   entfällt mit W13, der Standard der Sprache steht in der Blase.
 // W62 feste Farben des KI-Hinweises direkt am Element, Gruppe A auf jedem
 //   Element (gegen @property der Seite; der Browser-Beleg steht in
 //   tests/visual/rc18_farben.py).
 // E25 (feste Farben der Datenschutz-Blase) ist seit 23.10.2026 ersetzt
-//   (Nutzerentscheidung): die Datenschutz-Blase sieht aus wie die
-//   Begrüßungsblase und folgt denselben Variablen; --allm-text-muted
-//   erreicht sie weiter nicht.
+//   (Nutzerentscheidung): die Datenschutz-Blase sah aus wie die
+//   Begrüßungsblase. Seit 7.23 gibt es sie nicht mehr; das Datenschutz-
+//   Fenster folgt denselben Variablen (Fläche, Schrift, Schriftgröße, D2),
+//   --allm-text-muted erreicht es nicht.
 // W64 Logo-Rahmen mit Rand im kompakten Kopf: border-box, 57 px (seit
 //   Fixliste 7.22-rc20 E34 nur kompakt, normal content-box wie rc14).
 // N17 CSS-weite Schlüsselwörter in cssValue abgelehnt.
@@ -53,6 +58,7 @@ import { contrastRatio } from "../src/utils/contrast.js";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
+import PrivacyDialog from "../src/components/ChatWindow/PrivacyNotice/index.jsx";
 
 const { loadEmbedSettings } = scriptAttrs;
 const BASE = {
@@ -120,39 +126,32 @@ function rerender(el) {
 const $ = (sel) => container.querySelector(sel);
 
 // ---------------------------------------------------------------------------
-describe("W60/E26: Datenschutz-Hinweis an, Begrüßung als Blase auch gegen data-greeting-style=text", () => {
-  it("leerer Chat und Verlauf: Datenschutz-Blase sichtbar unter der Begrüßungsblase", async () => {
-    const s = await load({ greetingStyle: "text" });
-    expect(s.privacyNotice).toBe("bubble");
+// Bewusste Änderung (7.23): die Datenschutz-Blase entfällt, damit E26.
+// Bewusste Änderung (rc3, W13): data-greeting-style=text wirkt nicht mehr.
+describe("W60/E26 entfällt: keine Datenschutz-Blase, Begrüßung immer als Blase (W13)", () => {
+  it("leerer Chat und Verlauf: keine Datenschutz-Blase, Begrüßungsblase ohne Skript-Angabe", async () => {
+    const s = await load({});
+    expect(s.privacyNotice).toBe("link");
     expect(s.greetingStyle).toBe("bubble");
-    // leerer Chat (PanelWelcome)
     render(<ChatHistory settings={s} history={[]} />);
     const greeting = $("#anything-llm-greeting-bubble");
-    const privacy = $("#anything-llm-privacy-bubble");
     expect(greeting).not.toBeNull();
-    expect(privacy).not.toBeNull();
-    expect(greeting.nextElementSibling).toBe(privacy);
-    expect(privacy.textContent).toContain(
-      layout.PANEL_TEXTS.de.privacyPoints[0],
-    );
-    // mit Verlauf (PanelGreeting): Blase bleibt erstes Element
+    expect($("#anything-llm-privacy-bubble")).toBeNull();
+    expect(greeting.nextElementSibling).toBe(null);
     rerender(<ChatHistory settings={s} history={HISTORY} />);
-    const list = $("#chat-history").firstElementChild;
-    const welcome = list.firstElementChild;
+    const welcome = $("#chat-history").firstElementChild.firstElementChild;
     expect(welcome.id).toBe("anything-llm-panel-welcome");
-    expect(welcome.querySelector("#anything-llm-privacy-bubble")).not.toBe(
-      null,
-    );
+    expect(welcome.querySelector("#anything-llm-privacy-bubble")).toBe(null);
   });
 
-  it("auch ohne Antwort vom Server (Hinweis bleibt an) und im ganzen Chatfenster", async () => {
+  it("ohne Antwort vom Server und im ganzen Chatfenster: keine Blase, Link in der Fußzeile", async () => {
     const offline = await loadEmbedSettings(
       { ...BASE, greetingStyle: "text" },
       vi.fn(async () => {
         throw new Error("offline");
       }),
     );
-    expect(offline.privacyNotice).toBe("bubble");
+    expect(offline.privacyNotice).toBe("link");
     expect(offline.greetingStyle).toBe("bubble");
     render(
       <ChatContainer
@@ -162,28 +161,28 @@ describe("W60/E26: Datenschutz-Hinweis an, Begrüßung als Blase auch gegen data
         settings={{ ...offline, enableStt: false }}
       />,
     );
-    expect($("#anything-llm-privacy-bubble")).not.toBeNull();
+    expect($("#anything-llm-privacy-bubble")).toBeNull();
+    expect($("#anything-llm-privacy-link")).not.toBeNull();
   });
 
-  it("Gegenprobe: Datenschutz-Hinweis aus, dann wirkt data-greeting-style=text", async () => {
-    const s = await load({ greetingStyle: "text" }, PRIVACY_OFF);
-    expect(s.privacyNotice).toBe("none");
-    expect(s.greetingStyle).toBe("text");
-    render(<ChatHistory settings={s} history={[]} />);
-    expect($("#anything-llm-greeting-bubble")).toBeNull();
-    expect($("#anything-llm-privacy-bubble")).toBeNull();
-    // ohne Skript-Angabe weiter die Blase (ohne Datenschutz-Blase)
+  it("data-greeting-style=text wirkt mit keiner Server-Antwort (auch Altwert none oder bubble)", async () => {
+    for (const server of [SERVER_STANDARDS, PRIVACY_OFF]) {
+      const s = await load({ greetingStyle: "text" }, server);
+      expect(s.greetingStyle).toBe("bubble");
+      rerender(<ChatHistory settings={s} history={[]} />);
+      expect($("#anything-llm-greeting-bubble")).not.toBeNull();
+      expect($("#anything-llm-privacy-bubble")).toBeNull();
+    }
     const t = await load({}, PRIVACY_OFF);
     expect(t.greetingStyle).toBe("bubble");
-    rerender(<ChatHistory settings={t} history={[]} />);
-    expect($("#anything-llm-greeting-bubble")).not.toBeNull();
-    expect($("#anything-llm-privacy-bubble")).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-describe("W61: Textzweig mit dem Begrüßungsstandard der Sprache", () => {
-  const textOf = () => $("p.allm-text-center")?.textContent;
+// Bewusste Änderung (rc3, W13): den Textzweig gibt es nicht mehr; derselbe
+// Text (Standard der Sprache bzw. gespeichert und gekürzt) steht in der Blase
+describe("W61: Begrüßungsstandard der Sprache (seit W13 in der Blase)", () => {
+  const textOf = () => $("#anything-llm-greeting-bubble")?.textContent;
 
   it("ohne gespeicherte Begrüßung: Standard der Sprache statt „Send a chat to get started.“", async () => {
     const de = await load({ greetingStyle: "text" }, PRIVACY_OFF);
@@ -308,26 +307,30 @@ function resolveCss(value, decls, page = {}) {
   return v;
 }
 
-describe("Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026, ersetzt E25)", () => {
+// Bewusste Änderung (7.23): statt der Datenschutz-Blase das Datenschutz-
+// Fenster. Bis 7.23-rc1 nutzte es Fläche, Schrift und Schriftgröße der
+// Antwortblasen wie die Begrüßungsblase (D2). Bewusste Änderung (R1-D1,
+// 7.23-rc2): feste Farben je Farbschema als Regel am Element wie der
+// KI-Hinweis, keine Variable der Seite wirkt darauf; die Begrüßungsblase
+// folgt weiter data-assistant-bg-color und den Variablen der Seite.
+// Bewusste Änderung (AK-12, L1, 24.10.2026): Die Datenschutz-Blase beim
+// Start gibt es wieder (privacyStartBubble); ihre Kennung PRIVACY_BUBBLE_ID
+// steht in theme.js, und genau eine Regel nennt sie: die Farbe ihres Links
+// (privacyLinkColor). Ihre Fläche folgt wie die Begrüßung den Variablen.
+describe("Datenschutz-Fenster mit festen Farben, Begrüßungsblase wie bisher (R1-D1, ersetzt D2 und E25)", () => {
   const settings = { buttonColor: "#0b5f8a", userTextColor: "#FFFFFF" };
-  const PROPS = [
-    "backgroundColor",
-    "color",
-    "fontSize",
-    "lineHeight",
-    "padding",
-    "borderRadius",
-    "boxShadow",
-  ];
+  const dialogParts = () => ({
+    dialog: $("#anything-llm-privacy-dialog"),
+    body: $("#anything-llm-privacy-dialog-body"),
+  });
 
-  // Bewusste Änderung (vorher E25: Text, Überschrift und Fläche fest je
-  // Farbschema, Regel direkt am Element)
-  it("keine festen Farben der Datenschutz-Blase im Theme-Stylesheet, KI-Hinweis bleibt fest (hell und dunkel)", () => {
+  it("Theme-Stylesheet: feste Regeln für Fenster, KI-Hinweis und Link (hell und dunkel)", () => {
     for (const name of [
       "PRIVACY_NOTICE_COLORS",
       "PRIVACY_TEXT",
       "PRIVACY_TITLE",
       "PRIVACY_BG",
+      "PRIVACY_TITLE_ID",
     ])
       expect(theme[name], name).toBeUndefined();
     for (const mode of ["light", "dark"]) {
@@ -335,108 +338,82 @@ describe("Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung 23.10.
         { ...settings, assistantBgColor: "#fde68a" },
         mode,
       );
-      expect(ruleFor(css, "#anything-llm-privacy-bubble"), mode).toBe("");
-      expect(ruleFor(css, "#anything-llm-bubble-privacy-title"), mode).toBe("");
-      expect(css, mode).not.toContain("privacy");
+      const c = theme.PRIVACY_DIALOG_COLORS[mode];
+      expect(ruleFor(css, "#anything-llm-privacy-dialog"), mode).toBe(
+        `#anything-llm-privacy-dialog { color: ${c.text} !important; background-color: ${c.bg} !important; }`,
+      );
+      expect(
+        css.split("\n").filter((l) => l.includes("privacy-bubble")),
+        mode,
+      ).toEqual([
+        `#anything-llm-privacy-bubble a { color: ${theme.privacyLinkColor(settings, mode)} !important; }`,
+      ]);
       expect(ruleFor(css, "#anything-llm-ai-disclaimer"), mode).toBe(
         `#anything-llm-ai-disclaimer { color: ${theme.AI_NOTICE_COLORS[mode].text} !important; }`,
       );
+      // Link „Datenschutz“ neben dem KI-Hinweis: feste Regel am Element
+      expect(ruleFor(css, "#anything-llm-privacy-link"), mode).toBe(
+        `#anything-llm-privacy-link { color: ${theme.privacyLinkColor(settings, mode)} !important; background-color: ${theme.AI_NOTICE_COLORS[mode].bg} !important; }`,
+      );
     }
-    // Kennungen bleiben (Barrierefreiheit, Messungen)
-    expect(theme.PRIVACY_BUBBLE_ID).toBe("anything-llm-privacy-bubble");
-    expect(theme.PRIVACY_TITLE_ID).toBe("anything-llm-bubble-privacy-title");
+    expect(theme.PRIVACY_DIALOG_ID).toBe("anything-llm-privacy-dialog");
+    expect(theme.PRIVACY_DIALOG_TITLE_ID).toBe(
+      "anything-llm-privacy-dialog-title",
+    );
   });
 
-  it("im DOM: Fläche, Textfarbe, Schriftgröße, Zeilenhöhe und Innenabstand der Begrüßungsblase; Überschrift fett ohne eigene Farbe", async () => {
+  it("im DOM: Fenster ohne Variable der Antwortblasen, Schrift 14 px wie die Begrüßung, Überschrift fett ohne eigene Farbe", async () => {
     const s = await load({});
-    render(<ChatHistory settings={s} history={[]} />);
-    const greeting = $("#anything-llm-greeting-bubble");
-    const privacy = $("#anything-llm-privacy-bubble");
-    const title = $("#anything-llm-bubble-privacy-title");
-    for (const prop of PROPS)
-      expect(privacy.style[prop], prop).toBe(greeting.style[prop]);
-    expect(privacy.style.backgroundColor).toContain("--allmi-assistant-bg");
-    expect(privacy.style.color).toContain("--allmi-assistant-text");
-    expect(privacy.style.fontSize).toContain("--allmi-font-size");
-    expect(privacy.style.lineHeight).toBe("1.5");
-    expect(privacy.style.padding).toBe("11px 16px");
+    render(
+      <>
+        <ChatHistory settings={s} history={[]} />
+        <PrivacyDialog settings={s} onClose={() => {}} />
+      </>,
+    );
+    const { dialog, body } = dialogParts();
+    expect(body.style.fontSize).toBe("14px");
+    const title = dialog.querySelector("h2");
     expect(title.style.fontWeight).toBe("700");
     expect(title.style.color).toBe("");
-    // kein Element der Blase greift auf --allmi-text-muted oder eine eigene
-    // Datenschutz-Farbe zurück
-    for (const el of [privacy, ...privacy.querySelectorAll("*")])
+    // kein Element des Fensters greift auf Variablen der Antwortblasen,
+    // --allmi-text-muted oder eine eigene Datenschutz-Farbe zurück
+    for (const el of [dialog, ...dialog.querySelectorAll("*")])
       expect(el.getAttribute("style") || "", el.tagName).not.toMatch(
-        /text-muted|--allmi-privacy-/,
+        /text-muted|--allmi-privacy-|--allmi-assistant-|--allmi-font-size/,
       );
   });
 
-  it("hell und dunkel: folgt data-assistant-bg-color und --allm-assistant-bg der Seite wie die Begrüßung; --allm-text-muted: transparent ändert sie nicht", async () => {
+  it("hell und dunkel: Begrüßung folgt data-assistant-bg-color und --allm-assistant-bg der Seite, das Fenster nicht", async () => {
     const s = await load({ assistantBgColor: "#fde68a" });
     expect(s.assistantBgColor).toBe("#fde68a");
     render(<ChatHistory settings={s} history={[]} />);
     const greeting = $("#anything-llm-greeting-bubble");
-    const privacy = $("#anything-llm-privacy-bubble");
-    const title = $("#anything-llm-bubble-privacy-title");
     const cases = [
-      // [Seiten-CSS, Fläche hell, Fläche dunkel, Text hell, Text dunkel]
-      [{}, "#fde68a", theme.DARK.assistantBg, "#222628", theme.DARK.text],
-      [
-        { "--allm-assistant-bg": "#123456" },
-        "#123456",
-        "#123456",
-        "#222628",
-        theme.DARK.text,
-      ],
+      // [Seiten-CSS, Fläche der Begrüßung hell, dunkel]
+      [{}, "#fde68a", theme.DARK.assistantBg],
+      [{ "--allm-assistant-bg": "#123456" }, "#123456", "#123456"],
       [
         { "--allm-text-muted": "transparent" },
         "#fde68a",
         theme.DARK.assistantBg,
-        "#222628",
-        theme.DARK.text,
-      ],
-      [
-        {
-          "--allm-text-muted": "transparent",
-          "--allm-assistant-bg": "#ece7df",
-          "--allm-assistant-text": "#0b3d6b",
-        },
-        "#ece7df",
-        "#ece7df",
-        "#0b3d6b",
-        "#0b3d6b",
       ],
     ];
-    for (const [page, bgLight, bgDark, textLight, textDark] of cases)
+    for (const [page, bgLight, bgDark] of cases)
       for (const mode of ["light", "dark"]) {
-        const decls = themeDecls(theme.buildThemeCss(s, mode));
-        const at = (el, prop) => resolveCss(el.style[prop], decls, page);
+        const css = theme.buildThemeCss(s, mode);
+        const decls = themeDecls(css);
         const key = `${mode} ${JSON.stringify(page)}`;
-        for (const prop of PROPS)
-          expect(at(privacy, prop), `${key} ${prop}`).toBe(at(greeting, prop));
-        expect(at(privacy, "backgroundColor"), key).toBe(
-          mode === "dark" ? bgDark : bgLight,
+        expect(
+          resolveCss(greeting.style.backgroundColor, decls, page),
+          key,
+        ).toBe(mode === "dark" ? bgDark : bgLight);
+        // Fenster: feste Regel, unabhängig von Setting und Seite
+        const c = theme.PRIVACY_DIALOG_COLORS[mode];
+        expect(ruleFor(css, "#anything-llm-privacy-dialog"), key).toBe(
+          `#anything-llm-privacy-dialog { color: ${c.text} !important; background-color: ${c.bg} !important; }`,
         );
-        expect(at(privacy, "color"), key).toBe(
-          mode === "dark" ? textDark : textLight,
-        );
-        expect(at(privacy, "fontSize"), key).toBe("14px");
-        // ohne Seiten-CSS lesbar wie die Begrüßung
-        if (Object.keys(page).length === 0)
-          expect(
-            contrastRatio(at(privacy, "color"), at(privacy, "backgroundColor")),
-            key,
-          ).toBeGreaterThanOrEqual(4.5);
-        // Überschrift ohne eigene Farbe: erbt die Schrift der Blase
-        expect(title.style.color, key).toBe("");
+        expect(contrastRatio(c.text, c.bg), key).toBeGreaterThanOrEqual(4.5);
       }
-    // Gegenprobe des Prüfwerkzeugs: eine Angabe mit --allmi-text-muted
-    // folgte --allm-text-muted der Seite
-    const decls = themeDecls(theme.buildThemeCss(s, "light"));
-    expect(
-      resolveCss("var(--allmi-text-muted, #6b7280)", decls, {
-        "--allm-text-muted": "transparent",
-      }),
-    ).toBe("transparent");
   });
 });
 
@@ -538,7 +515,8 @@ describe("C18: eine Regel für feste Standards und Inline-Standards", () => {
       { privacyNotice: "none" },
       new Set(["inlineEffect"]),
     );
-    expect(out.privacyNotice).toBe("none");
+    // Bewusste Änderung (7.23): privacyNotice immer "link"
+    expect(out.privacyNotice).toBe("link");
     expect(out.inlineEffect).toBe("grow");
     expect(out.inlineLayout).toBe("overlay");
   });

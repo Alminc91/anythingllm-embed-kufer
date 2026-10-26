@@ -19,10 +19,12 @@
 //   ein Inline-Style auf dem Host sogar das Seiten-CSS.)
 // Ausnahmen (E23, E24): Variablen mit dc (Akzentfarbe und was der Server
 // daraus ableitet, Schrift auf der Akzentfarbe) stellt nur das Design
-// Center ein, die Farben des KI-Hinweises sind fest. Die Datenschutz-Blase
-// ist seit 23.10.2026 keine Ausnahme mehr (Nutzerentscheidung, ersetzt E25):
-// sie sieht aus wie die Begrüßungsblase. Die dc-Variablen setzt das Widget
-// direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
+// Center ein, die Farben des KI-Hinweises und des Datenschutz-Fensters (seit
+// 7.23-rc2, R1-D1, PRIVACY_DIALOG_COLORS) sind fest; die Datenschutz-Blase
+// beim Start (nur mit privacyStartBubble, AK-12) hat keine festen Farben, sie
+// folgt der Begrüßungsblase (PanelWelcome); nur ihr Link hat wie alle
+// Datenschutz-Links die feste Farbe privacyLinkColor (L1). Die dc-Variablen setzt das
+// Widget direkt und mit !important, ohne Rückgriff auf `--allm-*`, und zwar auf
 // `:host` UND auf jedem Element im Shadow-Root
 // (`:host, :host * { --allmi-accent: #007c82 !important; }`).
 // Nur am Host reichte nicht: Registriert die Seite die interne Variable per
@@ -90,17 +92,27 @@ export const AI_NOTICE_COLORS = {
 };
 export const AI_NOTICE_TEXT = "var(--allmi-ai-notice-text, #6b7280)";
 export const AI_NOTICE_BG = "var(--allmi-ai-notice-bg, #FFFFFF)";
-// Element mit festen Farben (Regeln direkt am Element, buildThemeCss)
+// Zeile mit festen Farben (Regeln direkt am Element, buildThemeCss): der
+// KI-Hinweis (Text AI_NOTICE_TEXT_ID) und daneben der Link „Datenschutz“
+// (PRIVACY_LINK_ID, seit 7.23)
 export const AI_NOTICE_ID = "anything-llm-ai-disclaimer";
-// Datenschutz-Blase und ihre Überschrift: feste Kennungen (Barrierefreiheit,
-// Tests, Messungen), aber keine festen Farben mehr. Seit 23.10.2026
-// (Nutzerentscheidung, ersetzt E25 aus Fixliste 7.22-rc18) sieht die Blase
-// aus wie die Begrüßungsblase und die Antwortblasen: Fläche, Schrift und
-// Schriftgröße folgen --allmi-assistant-bg, --allmi-assistant-text und
-// --allmi-font-size, also auch data-assistant-bg-color und den Variablen der
-// Seite (Gruppe B). --allm-text-muted erreicht sie nicht.
+export const AI_NOTICE_TEXT_ID = "anything-llm-ai-disclaimer-text";
+export const PRIVACY_LINK_ID = "anything-llm-privacy-link";
+// Datenschutz-Fenster (seit 7.23, ersetzt die Datenschutz-Blase unter der
+// Begrüßung): feste Kennungen für Barrierefreiheit (aria-labelledby), Tests
+// und Messungen.
+export const PRIVACY_DIALOG_ID = "anything-llm-privacy-dialog";
+export const PRIVACY_DIALOG_TITLE_ID = "anything-llm-privacy-dialog-title";
+export const PRIVACY_DIALOG_BODY_ID = "anything-llm-privacy-dialog-body";
+// Datenschutz-Blase beim Start (AK-12, PanelWelcome PrivacyBubble): Kennung
+// wie 7.22.2; hier, weil das Theme-Stylesheet ihren Link färbt (L1)
 export const PRIVACY_BUBBLE_ID = "anything-llm-privacy-bubble";
-export const PRIVACY_TITLE_ID = "anything-llm-bubble-privacy-title";
+// Textspalte des Datenschutz-Fensters bei „In der Seite“ (R1-D2, Fixliste
+// rc1): höchstens 70ch, linksbündig (ch = Breite der Ziffer 0; Text ergibt
+// gemessen rund 80 bis 90 Zeichen je Zeile); derselbe Wert wie in der
+// Vorschau im Design Center (WidgetPreview PRIVACY_TEXT_MAX_WIDTH).
+// Rückweg: Grenze weglassen.
+export const PRIVACY_TEXT_MAX_WIDTH = "70ch";
 
 // Schrift/Icon auf allen Flächen in Kundenfarbe (Senden-Button und
 // Icon-Kreis der Leiste, Chat-Button, gefüllte Pillen beim Hover/Fokus,
@@ -128,6 +140,30 @@ export const DARK = {
   hoverBg: "rgba(255, 255, 255, 0.08)",
 };
 
+// Farben des Datenschutz-Fensters (Fixliste datenschutz-fusszeile rc1,
+// R1-D1): fest je Farbschema wie der KI-Hinweis, als Regel direkt am
+// Element (buildThemeCss), keine Variable der Seite wirkt darauf. Fläche
+// und Schrift wie die Standard-Antwortblase (hell #222628 auf Weiß 15,3:1,
+// dunkel DARK.text auf DARK.assistantBg 12,8:1), Trennlinien wie die Linie
+// unter dem Kopf ohne eigene Kopffarbe, Hover des Schließen-Symbols wie die
+// Buttons im Kopf. Link und Fokusrahmen im Fenster: privacyLinkColor.
+// Rückweg: Fläche und Schrift wieder aus --allmi-assistant-bg und
+// --allmi-assistant-text (bis 7.23-rc1, D2).
+export const PRIVACY_DIALOG_COLORS = {
+  light: {
+    text: "#222628",
+    bg: "#FFFFFF",
+    line: "#E9E9E9",
+    hover: "#f3f4f6",
+  },
+  dark: {
+    text: DARK.text,
+    bg: DARK.assistantBg,
+    line: DARK.border,
+    hover: DARK.hoverBg,
+  },
+};
+
 // Standard-Akzentfarbe des Widgets (Kufer-Petrol, gleicher Farbton wie der
 // Würfel, nur dunkler): Weiß darauf 4,99:1, die Schrift nach Kontrast wird
 // damit Weiß (Nutzerentscheidung 23.10.2026, vorher Würfel-Türkis mit
@@ -140,6 +176,17 @@ const DEFAULTS = {
   userBg: DEFAULT_ACCENT,
   assistantBg: "#FFFFFF",
   link: DEFAULT_ACCENT,
+};
+
+// Fläche der Datenschutz-Blase beim Start, gegen die ihr Link gerechnet wird
+// (L1): die Standardfläche der Begrüßungsblase (assistant-bg), hell Weiß,
+// dunkel DARK.assistantBg. data-assistant-bg-color und --allm-assistant-bg
+// der Seite (Gruppe B) zählen nicht: Die Farbe der Datenschutz-Links ist
+// eine feste Regel, und Werte der Seite kann das Widget nicht verlässlich
+// lesen.
+export const PRIVACY_BUBBLE_BG = {
+  light: DEFAULTS.assistantBg,
+  dark: DARK.assistantBg,
 };
 
 // Werte aus Settings landen als CSS-Text im Stylesheet -> nur harmlose Zeichen
@@ -254,6 +301,35 @@ export function pillTextColor(settings = {}, mode = "light") {
   if (!text) return mode === "dark" ? DARK.text : "var(--allmi-accent)";
   const same = parseColor(text).every((v, i) => v === parseColor(accent)[i]);
   return same ? "var(--allmi-accent)" : text;
+}
+
+// Farbe aller Datenschutz-Links, eine Quelle (L1, Hinweis O1 zu AK-12): der
+// Link „Datenschutz“ neben dem KI-Hinweis (7.23), der Link
+// „Datenschutzerklärung“ und alle Fokusrahmen im Datenschutz-Fenster
+// (R1-D1) und der Link „Datenschutzerklärung“ in der Datenschutz-Blase beim
+// Start (AK-12; bis 7.23-rc5 dort die rohe Linkfarbe var(--allmi-link),
+// etwa #FFA102 auf Weiß 2,0:1). Die Linkfarbe des Widgets (hell aus dem
+// Design Center, Gruppe A; dunkel DARK.link) mit mindestens 4,5:1 zu allen
+// drei Flächen, der des KI-Hinweises (AI_NOTICE_COLORS), der des Fensters
+// (PRIVACY_DIALOG_COLORS) und der der Blase (PRIVACY_BUBBLE_BG); hell
+// abgedunkelt, dunkel aufgehellt, wenn nötig. Reicht die Linkfarbe, bleibt
+// sie unverändert. Gilt als Regel direkt am Element (buildThemeCss), damit
+// weder Seiten-CSS noch eine zu helle Kundenfarbe Link oder Fokusrahmen
+// unlesbar machen (Fokusrahmen brauchen 3:1, die Linkfarbe hat immer
+// 4,5:1). Die Vorschau im Design Center rechnet gleich
+// (WidgetPreview previewPrivacyLinkColor, Gegenprobe mit KUFER_EMBED_DIR).
+export function privacyLinkColor(settings = {}, mode = "light") {
+  const scheme = mode === "dark" ? "dark" : "light";
+  const link =
+    scheme === "dark" ? DARK.link : dcColor(settings.linkColor, DEFAULTS.link);
+  const text = accessibleTextColor(link, [
+    AI_NOTICE_COLORS[scheme].bg,
+    PRIVACY_DIALOG_COLORS[scheme].bg,
+    PRIVACY_BUBBLE_BG[scheme],
+  ]);
+  if (!text) return link;
+  const same = parseColor(text).every((v, i) => v === parseColor(link)[i]);
+  return same ? link : text;
 }
 
 // textSize: bisher Klasse `allm-text-[${textSize}px]` — die gab es im Build nur
@@ -519,11 +595,14 @@ export function buildThemeCss(settings = {}, mode = "light") {
         : `--allmi-${spec.name}: var(${pub});`,
     );
   }
-  // KI-Hinweis (E24) fest. Die Datenschutz-Blase hat seit 23.10.2026 keine
-  // festen Farben mehr (Nutzerentscheidung, ersetzt E25): sie folgt wie die
-  // Begrüßungsblase den Variablen der Antwortblasen.
+  // KI-Hinweis (E24), daneben der Link „Datenschutz“ (7.23), das
+  // Datenschutz-Fenster (R1-D1) und der Link in der Datenschutz-Blase (L1)
+  // fest
   const scheme = mode === "dark" ? "dark" : "light";
   const notice = AI_NOTICE_COLORS[scheme];
+  const dialog = PRIVACY_DIALOG_COLORS[scheme];
+  const link = privacyLinkColor(settings, scheme);
+  const D = `#${PRIVACY_DIALOG_ID}`;
   fixed.push(
     `--allmi-ai-notice-text: ${notice.text} !important;`,
     `--allmi-ai-notice-bg: ${notice.bg} !important;`,
@@ -555,6 +634,22 @@ export function buildThemeCss(settings = {}, mode = "light") {
     // feste Farben des KI-Hinweises direkt am Element, ohne Variable (W62)
     `#${AI_NOTICE_ID} { color: ${notice.text} !important; }\n` +
     `#${AI_NOTICE_ID} > span { background-color: ${notice.bg} !important; }\n` +
+    `#${PRIVACY_LINK_ID} { color: ${link} !important; background-color: ${notice.bg} !important; }\n` +
+    // Link zur Datenschutzerklärung in der Datenschutz-Blase beim Start
+    // (AK-12, L1): dieselbe Farbe wie die übrigen Datenschutz-Links; die
+    // Fläche der Blase bleibt die der Begrüßung (keine Regel)
+    `#${PRIVACY_BUBBLE_ID} a { color: ${link} !important; }\n` +
+    // Datenschutz-Fenster (R1-D1): Fläche, Schrift, Trennlinien, Link und
+    // Fokusrahmen fest, ohne Variable; Fokusrahmen mit Abstand, damit er nur
+    // an die Fensterfläche grenzt (auch beim Button in der Akzentfarbe).
+    // Textbereich und Schließen-Symbol (ohne eigene Fläche) innen, damit
+    // die Rundung des Panels (In der Seite 40 px) den Rahmen nicht schneidet
+    `${D} { color: ${dialog.text} !important; background-color: ${dialog.bg} !important; }\n` +
+    `${D} .allm-privacy-dialog-line { border-color: ${dialog.line} !important; }\n` +
+    `${D} a { color: ${link} !important; }\n` +
+    `${D} a:focus-visible, ${D} button:focus-visible { outline: 2px solid ${link} !important; outline-offset: 2px !important; }\n` +
+    `#${PRIVACY_DIALOG_BODY_ID}:focus-visible, ${D} .allm-privacy-dialog-close:focus-visible { outline: 2px solid ${link} !important; outline-offset: -2px !important; }\n` +
+    `@media (hover: hover) { ${D} .allm-privacy-dialog-close:hover { background-color: ${dialog.hover} !important; } }\n` +
     // Reduzierte Bewegung schlägt auch eine per Seiten-CSS gesetzte Dauer.
     // Aufklapp-Effekt der Inline-Box: bewusst NICHT hier über die Dauer,
     // sondern an genau einer Stelle per animation: none (main.jsx, .allm-effect).

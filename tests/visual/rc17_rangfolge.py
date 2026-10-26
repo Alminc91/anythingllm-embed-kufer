@@ -32,7 +32,7 @@ WIDGET = "https://widget.test"
 SITE = "https://kunde.test/"
 API = "https://praesentation.ki.kufer.de/api/embed"
 EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
-NOTICE_DE = "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten."
+NOTICE_DE = "Unsere KI kann Fehler machen"  # seit 7.23 (vorher mit „Bitte prüfen …“)
 # Liste eines Servers mit defaultMessagesStandard: die Beispiele bis 7.22-rc22.
 # Seit E42 (7.22-rc23) liefert der Fork [] (tests/e42-startvorschlaege.test.jsx);
 # die Probe zeigt, dass das Widget eine Serverliste so zeigt, wie sie kommt.
@@ -187,7 +187,7 @@ NOTICE_PROBE = """() => {
   const s = p.querySelector('span');
   const r = p.getBoundingClientRect();
   const cs = getComputedStyle(p), ss = getComputedStyle(s);
-  return { text: p.textContent, w: r.width, h: r.height, color: cs.color,
+  return { text: s.textContent, w: r.width, h: r.height, color: cs.color,
            bg: ss.backgroundColor, opacity: cs.opacity, visibility: cs.visibility,
            display: cs.display, fontSize: cs.fontSize };
 }"""

@@ -9,7 +9,10 @@ import tailwindConfig from "../tailwind.config.js";
 //   Farbnamen; var(), env(), attr() und currentcolor ergeben den Standard.
 //   Seit Fixliste 7.22-rc22 E41 auch Farbnamen (Bewusste Änderung E41).
 // W81 eine Warnzeile, wenn data-greeting-style="text" wegen des
-//   Datenschutz-Hinweises nicht wirkt (E26).
+//   Datenschutz-Hinweises nicht wirkt (E26). Bewusste Änderung (7.23): mit
+//   der Datenschutz-Blase entfallen E26 und die Warnzeile. Bewusste
+//   Änderung (7.23-rc3, W13): "text" wirkt nie, eine Warnzeile „wirkt nicht“
+//   wie bei jeder Angabe der Gruppe A.
 // W82 Herkunft in der Warnzeile bei festen Standards: „Standard“ statt
 //   „Design Center“.
 // W84/E34 border-box am Logo-Rahmen nur im kompakten Kopf, im normalen Kopf
@@ -162,8 +165,12 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
       },
     );
     const page = theme.buildThemeCss(s, "light");
-    expect(page).toContain(`--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`);
-    expect(page).toContain(`--allmi-user-bg: ${theme.DEFAULT_ACCENT} !important;`);
+    expect(page).toContain(
+      `--allmi-accent: ${theme.DEFAULT_ACCENT} !important;`,
+    );
+    expect(page).toContain(
+      `--allmi-user-bg: ${theme.DEFAULT_ACCENT} !important;`,
+    );
     expect(page).toContain(`--allmi-link: ${theme.DEFAULT_ACCENT} !important;`);
     expect(page).not.toContain("var(--allm-accent)");
     // Farbcodes wie im Design Center bleiben
@@ -199,30 +206,26 @@ describe("W80: dc-Variablen nur mit Farben, die nichts von der Seite holen", () 
 
 // ---------------------------------------------------------------------------
 const GREETING_HINT = 'data-greeting-style="text" wirkt nur bei abgeschaltetem';
-describe("W81: Warnzeile, wenn data-greeting-style=text wegen des Datenschutz-Hinweises nicht wirkt", () => {
-  it("Datenschutz-Hinweis an (Server und ohne Antwort): genau eine Warnzeile, es gilt bubble; Hinweis aus, ohne Angabe oder bubble: keine", async () => {
+// Bewusste Änderung (7.23): keine Datenschutz-Blase mehr, also keine
+// Ausnahme E26 und nicht mehr die Warnzeile W81. Bewusste Änderung (rc3,
+// W13): data-greeting-style wirkt nie, je Angabe eine Warnzeile der Gruppe A
+describe("W81 entfällt: data-greeting-style wirkt nicht, Warnzeile der Gruppe A (W13)", () => {
+  it("mit Server-Antwort, ohne Antwort und mit Altwert none: bubble, je Angabe eine Warnzeile „wirkt nicht“", async () => {
     const s = await load({ greetingStyle: "text" });
     expect(s.greetingStyle).toBe("bubble");
-    const hits = warnings().filter((w) => w.includes(GREETING_HINT));
-    expect(hits).toHaveLength(1);
-    expect(hits[0]).toMatch(/^\[AnythingLLM Embed\] Einbau-Angabe /);
-    expect(hits[0]).toContain('es gilt "bubble"');
-    expect(hits[0]).not.toMatch(/[–—]/);
-    warn.mockClear();
-    // ohne Antwort vom Server bleibt der Hinweis an
     const t = await loadEmbedSettings(
       { ...BASE, greetingStyle: "text" },
       vi.fn(async () => ({ ok: false })),
     );
     expect(t.greetingStyle).toBe("bubble");
-    expect(warnings().filter((w) => w.includes(GREETING_HINT))).toHaveLength(1);
-    warn.mockClear();
-    // keine Warnzeile: Hinweis aus, ohne Angabe oder mit bubble
     const off = await load({ greetingStyle: "text" }, PRIVACY_OFF);
-    expect(off.greetingStyle).toBe("text");
+    expect(off.greetingStyle).toBe("bubble");
     await load({});
     await load({ greetingStyle: "bubble" });
     expect(warnings().filter((w) => w.includes(GREETING_HINT))).toHaveLength(0);
+    const mine = warnings().filter((w) => w.includes("data-greeting-style"));
+    expect(mine).toHaveLength(4);
+    for (const w of mine) expect(w).toContain("wirkt nicht");
   });
 });
 
@@ -279,7 +282,9 @@ describe("W82: Herkunft in der Warnzeile bei festen Standards", () => {
     );
   });
 
-  it("Datenschutz-Hinweis an: gültiges text am Skript, ungültiger Server-Wert, es gilt bubble (Standard)", async () => {
+  // Bewusste Änderung (rc3, W13): das Skript gewinnt nicht mehr (Gruppe A,
+  // verworfen), es gilt der feste Wert "bubble"
+  it("text am Skript, ungültiger Server-Wert: es gilt bubble (Standard)", async () => {
     await load(
       { greetingStyle: "text" },
       { ...SERVER_STANDARDS, greetingStyle: "foo" },

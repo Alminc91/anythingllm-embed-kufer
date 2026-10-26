@@ -28,13 +28,14 @@ import { widgetLanguage } from "@/utils/language";
 //   (utils/theme.js, Variablen mit dc).
 // - Gruppe B: feste Standards ohne Feld (FIXED_STANDARDS, INLINE_STANDARDS
 //   und die übrige Optik). Die Skript-Angabe schlägt den Wert vom Server.
-//   Ausnahme: Ist der Datenschutz-Hinweis an, gilt greetingStyle "bubble"
-//   (E26, utils/layout.js applyFixedStandards).
 // - Gruppe C: Technik und Verhalten (Widget-ID, Adresse, Sprache, data-mount,
 //   data-username, KI-Overrides, Audio, Öffnen beim Laden, Menütexte,
 //   Sponsor-Zeile): wirken immer.
 // - E24: Der KI-Hinweis (disclaimer, disclaimerText) ist auf keinem Weg
-//   abschaltbar oder änderbar (utils/layout.js AI_NOTICE).
+//   abschaltbar oder änderbar (utils/layout.js LOCKED_STANDARDS), ebenso
+//   der Link „Datenschutz“ und die Begrüßung als Blase. Die Datenschutz-Blase
+//   beim Start (privacyStartBubble, AK-12) kommt nur zusätzlich zum Link
+//   und nur aus dem Design Center (Gruppe A).
 export const DC_COVERED = [
   "displayMode", // Darstellung
   "theme", // Farbschema
@@ -56,7 +57,9 @@ export const DC_COVERED = [
   "courseCount",
   "greeting", // Begrüßungstext
   "greetingBubbleText",
-  "privacyNotice", // Schalter Datenschutz-Hinweis
+  "greetingStyle", // Begrüßung (seit 7.23 immer als Blase, ohne Feld)
+  "privacyNotice", // Datenschutz-Hinweis (seit 7.23 immer der Link)
+  "privacyStartBubble", // zusätzlich beim Start als Blase (AK-12)
   "privacyTitle",
   "privacyText",
   "privacyUrl",
@@ -73,7 +76,9 @@ export const DC_COVERED = [
 // Altangaben, die schon früher nichts bewirkten (Fenstergröße: Bestands-
 // Snippets enthalten laut altem ATTRIBUTES.md-Beispiel data-window-height
 // "77%" und data-window-width "25%"; Online-Punkt: im Kopf entfallen).
-const IGNORED_HINTS = {
+// Exportiert für den Doku-Test (ATTRIBUTES.md, Tabelle „Ebenfalls ohne
+// Wirkung“, tests/datenschutz-rc4.test.jsx).
+export const IGNORED_HINTS = {
   disclaimer: "Der KI-Hinweis ist fest und lässt sich nicht abschalten.",
   disclaimerText: "Der Text des KI-Hinweises ist fest.",
   windowWidth: "Die Fenstergröße ist fest.",
@@ -84,7 +89,8 @@ const DC_HINTS = {
   bubblePersistence:
     "Für „einmal je Besuch“ im Design Center unter „Willkommensblasen anzeigen“ die Option „Bei jedem Besuch“ wählen.",
   privacyNotice:
-    "Den Datenschutz-Hinweis schaltet nur der Schalter im Design Center ein oder aus.",
+    "Der Datenschutz-Hinweis erscheint immer als Link „Datenschutz“ unter der Eingabe.",
+  greetingStyle: "Die Begrüßung erscheint immer als Blase.",
   courseCount:
     "Die Kursanzahl berechnet der Server aus dem Kursprogramm, im Design Center lässt sie sich nur ein- oder ausschalten.",
 };
@@ -118,9 +124,11 @@ export function dropIneffectiveAttributes(dataset = {}) {
 }
 
 // Leerer Server-Wert ist hier eine Angabe (nicht „nicht gesetzt“):
-// privacyTitle "" = keine Überschrift, assistantSubtitle "" = kein Untertitel
-// (Fixliste 7.22-rc8 R5; fehlt der Wert, gilt der Standard der Sprache)
-const EMPTY_MEANS_NONE = ["privacyTitle", "assistantSubtitle"];
+// assistantSubtitle "" = kein Untertitel (Fixliste 7.22-rc8 R5; fehlt der
+// Wert, gilt der Standard der Sprache). Eine leere Überschrift des
+// Datenschutz-Fensters gilt seit 7.23 wie der Standard (W10), wie jeder
+// andere leere Wert.
+const EMPTY_MEANS_NONE = ["assistantSubtitle"];
 // Kennzeichen der Startvorschläge vom Server (Vertrag mit dem Fork, GET
 // /embed/:id/config, Fixliste 7.22-rc13 F02): defaultMessagesSaved = im
 // Design Center gespeichert, auch als leere Liste; defaultMessagesStandard =
@@ -159,8 +167,8 @@ export const DEFAULT_SETTINGS = {
   brandText: null,
   // Begrüßungstext = Text der Begrüßungsblase (utils/layout.js greetingText:
   // greetingBubbleText > greeting > Standard der Sprache). null = Standard.
-  // Früher stand hier der Datenschutzsatz; der steht jetzt in der eigenen
-  // Datenschutz-Blase (privacyText).
+  // Früher stand hier der Datenschutzsatz; der steht jetzt im
+  // Datenschutz-Fenster (privacyText, Link „Datenschutz“ unter der Eingabe).
   greeting: null,
   buttonColor: DEFAULT_ACCENT, // must be hex color code
   buttonOutline: null, // button outline: "none", "white", "black"
@@ -182,12 +190,15 @@ export const DEFAULT_SETTINGS = {
   assistantName: null, // Name über den Antworten; null wie brandText
   assistantIcon:
     "https://www.kufer.de/typo3conf/ext/kubuslayout/Resources/Public/Icons/augenbrauen-3.png", // default assistant icon
-  // Fenstergröße der Blase (Tablet/Desktop) — NUR aus dem Design Center
-  // (Server-Config). null = bisherige Standardgröße (40 % / 25 % Breite, 77 %
-  // Höhe per Klassen). Früher standen hier "80%"/"25%", die aber nie ausgewertet
-  // wurden — NICHT wieder vorbelegen, sonst ändert sich das Aussehen aller
-  // Bestandskunden. data-window-width/-height am Script werden verworfen
-  // (IGNORED_HINTS, mit Warnung).
+  // Fenstergröße der Blase (Tablet/Desktop): null = Standardgröße (40 % /
+  // 25 % Breite, mindestens 360 px, 77 % Höhe per Klassen, utils/layout.js
+  // BUBBLE_WINDOW_CLASSES). Ein Wert wirkt nur aus der Konfiguration vom
+  // Server, und die enthält ihn seit dem vereinfachten Design Center nicht
+  // mehr (nur Testseiten mit eigener Konfiguration, utils/layout.js
+  // WINDOW_MIN_WIDTH_PX). data-window-width/-height am Script werden
+  // verworfen (IGNORED_HINTS, mit Warnung). Früher standen hier
+  // "80%"/"25%", die aber nie ausgewertet wurden; NICHT wieder vorbelegen,
+  // sonst ändert sich das Aussehen aller Bestandskunden.
   windowHeight: null, // z. B. "600px" | "80%" | "70vh"
   windowWidth: null, // z. B. "420px" | "25%" | "30vw"
   offsetX: null, // Randabstand Button/Fenster in px (0–200), null = 16px
@@ -254,10 +265,11 @@ export const DEFAULT_SETTINGS = {
   courseCardsLayout: DEFAULT_COURSE_CARDS_LAYOUT,
   // Panel-Optik, Standard seit Design Center vereinfacht (utils/layout.js
   // FIXED_STANDARDS, Gruppe B: eine Skript-Angabe verfeinert ihn, E23):
-  // Vorschläge als Pillen, Begrüßung als Blase, darunter die
-  // Datenschutz-Blase, Folgefragen als Pillen. KI-Hinweis fest unter der
-  // Eingabe (AI_NOTICE, E24). Die Datenschutz-Blase schaltet allein der
-  // Server ab (privacyNotice "none", utils/layout.js privacyNoticeSetting).
+  // Vorschläge als Pillen, Folgefragen als Pillen. Fest (utils/layout.js
+  // LOCKED_STANDARDS): Begrüßung immer als Blase, KI-Hinweis unter der
+  // Eingabe (E24), in derselben Zeile der Link „Datenschutz“ (privacyNotice
+  // immer "link"; eine Datenschutz-Blase beim Start nur zusätzlich mit
+  // privacyStartBubble, unten).
   // Icon-Bild = brandImageUrl (Kopfzeile) bzw. assistantIcon (Blase), im
   // Design Center per Logo gesetzt.
   suggestionStyle: "pills",
@@ -273,13 +285,18 @@ export const DEFAULT_SETTINGS = {
   // Kopf zeigt wieder den Untertitel (utils/courseCount.js).
   courseCount: null,
   onlineDot: false,
-  privacyNotice: "bubble",
-  // Datenschutz-Blase: Überschrift ("" = keine, null = Standard der Sprache),
-  // freier Text (Zeilen mit „•“/„-“ = Punkte, sonst Absätze; null = Standard
-  // der Sprache, utils/layout.js PANEL_TEXTS), Link zur Datenschutzerklärung
+  privacyNotice: "link",
+  // Datenschutz zusätzlich beim Start als Blase unter der Begrüßung (AK-12,
+  // Design Center „Zusätzlich beim Start als Blase zeigen“): nur true vom
+  // Server schaltet sie ein (utils/layout.js layoutValidations), der Link
+  // „Datenschutz“ bleibt immer. data-privacy-start-bubble wirkt nicht.
+  privacyStartBubble: false,
+  // Datenschutz-Fenster und Blase beim Start: Überschrift (null oder "" =
+  // Standard der Sprache), freier Text (Zeilen mit „•“/„-“ = Punkte, sonst
+  // Absätze; null = Standard der Sprache, utils/layout.js PANEL_TEXTS), Link
+  // zur Datenschutzerklärung
   privacyTitle: null, // max. 120 Zeichen
   privacyText: null, // max. 12 Zeilen à 500 Zeichen, 1000 Zeichen gesamt
-  privacyButtonText: null, // nur früherer Einmal-Hinweis („modal“)
   privacyUrl: null, // https-URL oder /pfad: Link zur Datenschutzerklärung
   disclaimer: "footer",
   disclaimerText: null, // ignoriert: Text fest (PANEL_TEXTS.aiDisclaimer)
@@ -351,8 +368,9 @@ export async function loadEmbedSettings(dataset = {}, fetchFn = fetch) {
     console.warn("[AnythingLLM Embed] Could not fetch server config:", e);
   }
 
-  // Nur nicht leere Server-Werte übernehmen (Ausnahme privacyTitle und
-  // assistantSubtitle: "" = im Design Center bewusst geleert)
+  // Nur nicht leere Server-Werte übernehmen; Ausnahme EMPTY_MEANS_NONE (dort
+  // ist "" eine Angabe, siehe oben). Jeder andere leere Wert gilt als nicht
+  // gesetzt, auch eine leere Überschrift des Datenschutz-Fensters (W10).
   const mergedServerConfig = {};
   for (const [key, value] of Object.entries(serverConfig || {})) {
     if (value === "" && EMPTY_MEANS_NONE.includes(key))

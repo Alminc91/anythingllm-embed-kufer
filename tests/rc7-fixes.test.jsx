@@ -198,7 +198,9 @@ describe("Nr. 3 (W01): Schrift auf der Kundenfarbe folgt der gezeigten Fläche (
   it("Seite setzt --allm-accent: wirkt nicht, Akzent und Schrift aus dem Design Center", () => {
     const { host, styleEl } = shadowStyle({ "--allm-accent": "#b45309" });
     theme.applyTheme(styleEl, { buttonColor: "#01a5a9" });
-    expect(styleEl.textContent).toContain("--allmi-accent: #01a5a9 !important;");
+    expect(styleEl.textContent).toContain(
+      "--allmi-accent: #01a5a9 !important;",
+    );
     expect(styleEl.textContent).toContain(
       "--allmi-on-accent: #222628 !important;",
     );
@@ -507,9 +509,13 @@ describe("Nr. 22 (W10): KI-Hinweis immer genau eine Zeile", () => {
     const note = $("#anything-llm-ai-disclaimer");
     expect(note).not.toBeNull();
     expect(note.style.whiteSpace).toBe("nowrap");
-    expect(note.style.overflow).toBe("hidden");
-    expect(note.style.textOverflow).toBe("ellipsis");
-    expect(note.getAttribute("title")).toBe(note.textContent);
+    // Bewusste Änderung (7.23): mit dem Link „Datenschutz“ in derselben
+    // Zeile kürzt sich notfalls nur der KI-Satz („…“, voller Text im title),
+    // der Link nie
+    const text = $("#anything-llm-ai-disclaimer-text");
+    expect(text.style.overflow).toBe("hidden");
+    expect(text.style.textOverflow).toBe("ellipsis");
+    expect(text.getAttribute("title")).toBe(text.textContent);
     // Schrift 11 px, in schmalen Fenstern bis 10 px (Containerabfrage)
     expect(note.parentElement.className).toContain("allm-ai-disclaimer-box");
     const { readFileSync } = await import("node:fs");
@@ -521,9 +527,10 @@ describe("Nr. 22 (W10): KI-Hinweis immer genau eine Zeile", () => {
       ".allm-ai-disclaimer-box { container-type: inline-size; }",
     );
     // Bewusste Änderung (Fixliste 7.22-rc8 R1): längerer Satz, Teiler 34
-    // statt 30 und 2 px statt 8 px Seitenrand (tests/rc8-fixes.test.jsx)
+    // statt 30 und 2 px statt 8 px Seitenrand (tests/rc8-fixes.test.jsx);
+    // Bewusste Änderung (7.23): kürzere Zeile mit Link, Teiler 25
     expect(css).toContain(
-      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 4px) / 34), 11px); }",
+      ".allm-ai-disclaimer { font-size: 11px; font-size: clamp(10px, calc((100cqi - 4px) / 25), 11px); }",
     );
   });
 });

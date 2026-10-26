@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 
 // Security-Sweep Widget: lineare Link-Regexe + Kappung (ReDoS/Client-DoS bei
 // Karten oben), Rohlängen vor dem Bereinigen, Sende-Ereignis nur an das
-// eigene Widget, Escape im Datenschutz-Hinweis (Blasen-Modus) ohne Falle.
+// eigene Widget. (Escape im früheren Datenschutz-Hinweis „modal“ entfällt
+// seit 7.23 mit dem Hinweis selbst.)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
@@ -38,10 +39,8 @@ import {
   teaserMap,
 } from "../src/utils/courseCards.js";
 import handleChat from "../src/utils/chat/index.js";
-import { privacyAckKey, _resetPrivacyMemory } from "../src/utils/privacy.js";
 import ChatContainer from "../src/components/ChatWindow/ChatContainer/index.jsx";
 import ChatHistory from "../src/components/ChatWindow/ChatContainer/ChatHistory/index.jsx";
-import { EmbedModeContext } from "../src/hooks/useEmbedMode.js";
 
 const BASE = "https://aw.donau.kufer.de/kurssuche/kurs";
 const YOGA = {
@@ -66,7 +65,6 @@ beforeEach(() => {
   root = createRoot(container);
   chatService.streamChat.mockClear();
   window.localStorage.clear();
-  _resetPrivacyMemory();
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -392,114 +390,8 @@ describe("3 · Sende-Ereignis nur an das eigene Widget", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("4 · Datenschutz-Karte: Escape ohne Tastaturfalle", () => {
-  const settings = {
-    embedId: "e-1",
-    baseApiUrl: "https://x.test/api/embed",
-    enableStt: false,
-    privacyNotice: "modal",
-  };
-  const escape = () =>
-    act(() => {
-      $("#anything-llm-privacy-notice button").dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
-    });
-
-  it("Blasen-Modus: Escape schließt das Fenster (onClose), ohne zu bestätigen", () => {
-    const onClose = vi.fn();
-    act(() =>
-      root.render(
-        <ChatContainer
-          sessionId="s"
-          knownHistory={[]}
-          settings={settings}
-          onClose={onClose}
-        />,
-      ),
-    );
-    escape();
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect($("#anything-llm-privacy-notice")).not.toBe(null);
-    expect(window.localStorage.getItem(privacyAckKey("e-1"))).toBe(null);
-    expect($("#message-input").disabled).toBe(true);
-  });
-
-  it("Blasen-Modus: Escape mit Fokus auf der Webseite schließt das Fenster; nach Bestätigung nicht mehr", () => {
-    const onClose = vi.fn();
-    act(() =>
-      root.render(
-        <ChatContainer
-          sessionId="s"
-          knownHistory={[]}
-          settings={settings}
-          onClose={onClose}
-        />,
-      ),
-    );
-    const field = document.createElement("input");
-    document.body.appendChild(field);
-    try {
-      field.focus();
-      expect(document.activeElement).toBe(field);
-      const pageEscape = () => {
-        const e = new KeyboardEvent("keydown", {
-          key: "Escape",
-          bubbles: true,
-          cancelable: true,
-        });
-        act(() => field.dispatchEvent(e));
-        return e;
-      };
-      expect(pageEscape().defaultPrevented).toBe(true);
-      expect(onClose).toHaveBeenCalledTimes(1);
-      expect(window.localStorage.getItem(privacyAckKey("e-1"))).toBe(null);
-      // andere Tasten nicht
-      act(() =>
-        field.dispatchEvent(
-          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-        ),
-      );
-      expect(onClose).toHaveBeenCalledTimes(1);
-      // bestätigt -> Escape gehört wieder der Seite
-      act(() => $("#anything-llm-privacy-notice button").click());
-      expect($("#anything-llm-privacy-notice")).toBe(null);
-      expect(pageEscape().defaultPrevented).toBe(false);
-      expect(onClose).toHaveBeenCalledTimes(1);
-    } finally {
-      field.remove();
-    }
-  });
-
-  it("Inline-Modus: Escape bleibt beim Bestehenden (ChatWindow gibt kein onClose, nicht verhindert)", () => {
-    const seen = [];
-    const spy = (e) => seen.push(e.defaultPrevented);
-    window.addEventListener("keydown", spy);
-    try {
-      act(() =>
-        root.render(
-          <EmbedModeContext.Provider
-            value={{
-              inline: true,
-              overlay: false,
-              consumeFocusRequest: () => false,
-            }}
-          >
-            <ChatContainer
-              sessionId="s"
-              knownHistory={[]}
-              settings={settings}
-              onClose={null}
-            />
-          </EmbedModeContext.Provider>,
-        ),
-      );
-      escape();
-    } finally {
-      window.removeEventListener("keydown", spy);
-    }
-    // das Ereignis erreicht den Escape-Listener der Leiste (InlineChat)
-    expect(seen).toEqual([false]);
-    expect(window.localStorage.getItem(privacyAckKey("e-1"))).toBe(null);
-  });
-});
+// Bewusste Änderung (7.23, Datenschutz in der Fußzeile): Die
+// Datenschutz-Karte mit Bestätigung („modal“) entfällt (Hard Constraint 2:
+// kein Pop-up mit Bestätigung vor dem Chat), damit auch ihre Escape-Regeln.
+// Escape im neuen Datenschutz-Fenster (Escape-Ebene, keine Tastaturfalle,
+// Escape der Webseite): tests/datenschutz-fenster.test.jsx.

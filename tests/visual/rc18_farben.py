@@ -3,6 +3,12 @@
 KI-Hinweises und der Gruppe A direkt am Element gegen Seiten-CSS und
 @property der Seite; Datenschutz-Blase wie die Begrüßungsblase
 (Nutzerentscheidung 23.10.2026, ersetzt E25: keine festen Farben mehr).
+Bewusste Änderung 7.23 (Datenschutz in der Fußzeile): keine Datenschutz-
+Blase mehr, E26 entfällt; geprüft werden statt der Blase der Link
+„Datenschutz“ neben dem KI-Hinweis (feste Farben am Element, auch gegen
+@property --allmi-link) und die Begrüßungsblase. Seit 7.23-rc3 (W13,
+Nutzer 24.10.2026) ist die Begrüßung immer eine Blase: data-greeting-style
+="text" wirkt nicht (Warnzeile), auch nicht bei Altwert privacyNotice none.
 
 Testseite per page.set_content (wie tests/visual/rc17_rangfolge.py), alle
 Aufrufe an den Server gemockt (/config wie ein Server ab 7.22). Seiten-CSS:
@@ -44,7 +50,7 @@ WIDGET = "https://widget.test"
 SITE = "https://kunde.test/"
 API = "https://praesentation.ki.kufer.de/api/embed"
 EMBED_ID = "78eda2c6-5bd0-44b5-b097-30d694a56677"
-NOTICE_DE = "Unsere KI kann Fehler machen. Bitte prüfen Sie die Antworten."
+NOTICE_DE = "Unsere KI kann Fehler machen"  # seit 7.23 (vorher mit „Bitte prüfen …“)
 GREETING_DE = "Hallo! Ich bin Ihr KI-Berater. Wie kann ich Ihnen helfen?"
 # Antwort eines Servers ab 7.22 (feste Standards wie embedStandards.js),
 # Akzentfarbe im Design Center gespeichert
@@ -77,10 +83,12 @@ SERVER = {
     "linkColor": "#0b5f8a",
 }
 ACCENT = (11, 95, 138)
-# feste Farben des KI-Hinweises (utils/theme.js AI_NOTICE_COLORS)
+# feste Farben des KI-Hinweises (utils/theme.js AI_NOTICE_COLORS) und des
+# Links „Datenschutz“ daneben (privacyLinkColor: hell die Linkfarbe aus dem
+# Design Center, dunkel DARK.link, Fläche des KI-Hinweises)
 WANT = {
-    "hell": {"notice": ((107, 114, 128), (255, 255, 255))},
-    "dunkel": {"notice": ((166, 168, 173), (29, 29, 33))},
+    "hell": {"notice": ((107, 114, 128), (255, 255, 255)), "link": ((11, 95, 138), (255, 255, 255))},
+    "dunkel": {"notice": ((166, 168, 173), (29, 29, 33)), "link": ((92, 200, 203), (29, 29, 33))},
 }
 # Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung 23.10.2026):
 # Textfarbe der Antwortblasen (hell #222628, dunkel DARK.text), Fläche nach
@@ -218,6 +226,7 @@ PROBE = r"""() => {
                           pad: col(el, 'padding') });
   const p = q('#anything-llm-ai-disclaimer');
   const span = p && p.querySelector('span');
+  const plink = q('#anything-llm-privacy-link');
   const priv = q('#anything-llm-privacy-bubble');
   const title = q('#anything-llm-bubble-privacy-title');
   const li = priv && priv.querySelector('li');
@@ -227,8 +236,10 @@ PROBE = r"""() => {
   const btn = q('#anything-llm-embed-chat-button') || q('#anything-llm-inline-send');
   const send = q('#send-message-button');
   return {
-    notice: p ? { text: p.textContent, color: col(p, 'color'), bg: col(span, 'backgroundColor'),
+    notice: p ? { text: span.textContent, color: col(p, 'color'), bg: col(span, 'backgroundColor'),
                   w: p.getBoundingClientRect().width } : null,
+    link: plink ? { text: plink.textContent, color: col(plink, 'color'), bg: col(plink, 'backgroundColor'),
+                    decoration: col(plink, 'textDecorationLine') } : null,
     privacy: priv ? { ...look(priv), title: col(title, 'color'), titleWeight: col(title, 'fontWeight'),
                       li: col(li, 'color'), link: col(link, 'color'),
                       text: priv.textContent.slice(0, 80) } : null,
@@ -248,22 +259,24 @@ def check(page, label, scheme, assert_on, want_bg, extra_key=""):
     record(f"{label} E24/W62: KI-Hinweis lesbar ({scheme}){extra_key}",
            n is not None and n["text"] == NOTICE_DE and (nt, nb) == want["notice"] and contrast(nt, nb) >= 4.5,
            {"color": n and n["color"], "bg": n and n["bg"], "kontrast": contrast(nt, nb)}, assert_on)
+    lk = st["link"]
+    lt, lb = (rgb(lk["color"]), rgb(lk["bg"])) if lk else (None, None)
+    record(f"{label} 7.23: Link „Datenschutz“ mit festen Farben lesbar ({scheme}){extra_key}",
+           lk is not None and lk["text"] == "Datenschutz" and (lt, lb) == want["link"]
+           and contrast(lt, lb) >= 4.5 and "underline" in (lk["decoration"] or ""),
+           {"link": lk, "kontrast": contrast(lt, lb) if lk else None}, assert_on)
     pr, gr = st["privacy"], st["greeting"]
-    if pr is None or gr is None:
-        record(f"{label} Datenschutz- und Begrüßungsblase vorhanden ({scheme}){extra_key}", False, st, assert_on)
+    record(f"{label} 7.23: keine Datenschutz-Blase ({scheme}){extra_key}", pr is None,
+           {"datenschutz": pr}, assert_on)
+    if gr is None:
         return st
-    # Datenschutz-Blase wie die Begrüßungsblase (Nutzerentscheidung
-    # 23.10.2026, ersetzt E25); --allm-text-muted: transparent wirkt nicht
-    pt, pb = rgb(pr["color"]), rgb(pr["bg"])
-    same = all(pr[k] == gr[k] for k in ("color", "bg", "size", "lh", "pad"))
-    ok = (same and pt == BUBBLE_TEXT[scheme] and pb == want_bg
-          and rgb(pr["title"]) == pt and rgb(pr["li"]) == pt
-          and float(pr["titleWeight"] or 0) >= 700 and contrast(pt, pb) >= 4.5)
-    record(f"{label} Datenschutz-Blase wie die Begrüßungsblase, lesbar ({scheme}){extra_key}", ok,
-           {"datenschutz": {k: pr[k] for k in ("color", "bg", "size", "lh", "pad", "title", "titleWeight", "li")},
-            "begrüßung": {k: gr[k] for k in ("color", "bg", "size", "lh", "pad")},
-            "fläche_soll": want_bg, "kontrast": contrast(pt, pb), "link": pr["link"]},
-           assert_on)
+    # Begrüßungsblase: Fläche nach data-assistant-bg-color bzw. --allm-assistant-bg
+    # der Seite, Text der Antwortblasen, lesbar
+    gt, gb = rgb(gr["color"]), rgb(gr["bg"])
+    record(f"{label} Begrüßungsblase lesbar, Fläche wie gesetzt ({scheme}){extra_key}",
+           gt == BUBBLE_TEXT[scheme] and gb == want_bg and contrast(gt, gb) >= 4.5,
+           {"begrüßung": {k: gr[k] for k in ("color", "bg", "size")}, "fläche_soll": want_bg,
+            "kontrast": contrast(gt, gb)}, assert_on)
     return st
 
 
@@ -294,9 +307,14 @@ def case_bubble(browser, dist, out, label, dark, assert_on):
         page.wait_for_timeout(700)
         # --allm-assistant-bg der Seite gilt vor data-assistant-bg-color
         st = check(page, label, scheme, assert_on, PAGE_BG_WANT[scheme], " mit --allm-assistant-bg der Seite")
-        record(f"{label} E26/W60: Datenschutz an, Begrüßung als Blase trotz data-greeting-style=text ({scheme})",
-               st["greeting"] is not None and st["privacy"] is not None and st["greeting"]["text"] == GREETING_DE,
-               {"begrüßung": st["greeting"], "mittig": st["centered"]}, assert_on)
+        # W13 (7.23-rc3): data-greeting-style=text wirkt nicht, Begrüßung als
+        # Blase, eine Warnzeile
+        hint = [t for (k, t) in page.console_log
+                if "data-greeting-style wirkt nicht" in t]
+        record(f"{label} W13: data-greeting-style=text wirkt nicht, Begrüßung als Blase ({scheme})",
+               st["greeting"] is not None and st["greeting"]["text"] == GREETING_DE
+               and st["privacy"] is None and st["centered"] is None and len(hint) == 1,
+               {"begrüßung": st["greeting"], "mittig": st["centered"], "warnzeile": hint}, assert_on)
         page.screenshot(path=str(out / f"{label}-chatfenster-{scheme}.png"))
         # Gruppe A: Akzent des Chat-Buttons (nach dem Schließen sichtbar)
         page.evaluate("() => { const b = [...window.__allmShadow.querySelectorAll('button')].find((x) => /schließen|close/i.test(x.getAttribute('aria-label') || '')); if (b) b.click(); }")
@@ -334,8 +352,9 @@ def case_inline(browser, dist, out, label, assert_on):
 
 
 def case_text(browser, dist, out, label, assert_on):
-    # Gegenprobe: Datenschutz aus -> data-greeting-style=text wirkt, Text mit
-    # dem Begrüßungsstandard der Sprache (W61)
+    # Gegenprobe: Altwert Datenschutz aus und data-greeting-style=text ->
+    # trotzdem die Begrüßungsblase mit dem Standard der Sprache (W13; bis
+    # 7.23-rc2 Text mittig, W61)
     config = {**SERVER, "privacyNotice": "none"}
     ctx, page = open_page(browser, dist, config, {"greeting-style": "text", "open-on-load": "on"},
                           page_css(TRAP["hell"]))
@@ -343,10 +362,11 @@ def case_text(browser, dist, out, label, assert_on):
         wait(page, "#anything-llm-ai-disclaimer")
         page.wait_for_timeout(600)
         st = page.evaluate(PROBE)
-        record(f"{label} Gegenprobe E26/W61: Datenschutz aus, Text mittig mit Begrüßungsstandard",
-               st["privacy"] is None and st["greeting"] is None and st["centered"] == GREETING_DE,
-               {"mittig": st["centered"], "datenschutz": st["privacy"]}, assert_on)
-        page.screenshot(path=str(out / f"{label}-text-ohne-datenschutz.png"))
+        record(f"{label} W13 (Altwert privacyNotice none, data-greeting-style=text): Blase mit Begrüßungsstandard",
+               st["privacy"] is None and st["centered"] is None and st["greeting"] is not None
+               and st["greeting"]["text"] == GREETING_DE,
+               {"mittig": st["centered"], "begrüßung": st["greeting"], "datenschutz": st["privacy"]}, assert_on)
+        page.screenshot(path=str(out / f"{label}-blase-ohne-datenschutz.png"))
     finally:
         ctx.close()
 

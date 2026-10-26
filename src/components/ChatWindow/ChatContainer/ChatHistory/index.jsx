@@ -26,7 +26,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, CircleNotch } from "@phosphor-icons/react";
 import { embedderSettings } from "@/main";
 import { suggestionFontSize } from "@/utils/theme";
-import { greetingText, panelTexts, uiTexts } from "@/utils/layout";
+import { panelTexts, uiTexts } from "@/utils/layout";
 import debounce from "lodash.debounce";
 import { sendSuggestion } from "..";
 
@@ -243,34 +243,16 @@ export default function ChatHistory({
   );
 
   if (history.length === 0) {
-    // Panel-Optik: Pillen statt Balken, Begrüßung als Blase. Ist der
-    // Datenschutz-Hinweis an, steht greetingStyle immer auf "bubble"
-    // (utils/layout.js applyFixedStandards, E26): nur die Begrüßungsblase
-    // trägt die Datenschutz-Blase. "text" nur bei abgeschaltetem Hinweis.
-    const bubble = settings?.greetingStyle === "bubble";
+    // Panel-Optik: Begrüßung immer als Blase (utils/layout.js
+    // LOCKED_STANDARDS, Nutzer 24.10.2026), darunter Pillen (Standard) oder
+    // mit data-suggestion-style="bars" Balken.
     const suggestions =
       settings?.suggestionStyle === "pills" ? (
-        <SuggestedPills
-          settings={settings}
-          align={bubble ? "start" : "center"}
-        />
+        <SuggestedPills settings={settings} align="start" />
       ) : (
         <SuggestedMessages settings={settings} />
       );
-    if (bubble)
-      return <PanelWelcome settings={settings} suggestions={suggestions} />;
-    return (
-      <div className="allm-h-full allm-box-border allm-overflow-y-auto allm-px-2 allm-py-4 allm-flex allm-flex-col allm-justify-start allm-no-scroll">
-        <div className="allm-flex allm-h-full allm-flex-col allm-items-center allm-justify-center">
-          <p className="allm-text-[color:var(--allmi-text-muted,#94a3b8)] allm-text-sm allm-font-sans allm-py-4 allm-text-center">
-            {/* Begrüßung wie in der Blase: gespeichert (gekürzt) oder
-                Standard der Sprache (Fixliste 7.22-rc18 W61) */}
-            {greetingText(settings)}
-          </p>
-          {suggestions}
-        </div>
-      </div>
-    );
+    return <PanelWelcome settings={settings} suggestions={suggestions} />;
   }
 
   // allm-box-border: Höhe inklusive Polsterung (im Shadow DOM gilt kein
@@ -291,13 +273,10 @@ export default function ChatHistory({
       })}
     >
       <div ref={contentRef} className="allm-flex allm-flex-col allm-gap-y-4">
-        {/* Begrüßungsblase (greetingStyle "bubble") bleibt als festes erstes
-            Element über dem Verlauf — kein Chat-Eintrag; die Vorschläge
-            darunter gibt es nur im leeren Chat. Mit greetingStyle "text"
-            unverändert. */}
-        {settings?.greetingStyle === "bubble" && (
-          <PanelGreeting settings={settings} />
-        )}
+        {/* Begrüßungsblase bleibt als festes erstes Element über dem
+            Verlauf, kein Chat-Eintrag; die Vorschläge darunter gibt es nur
+            im leeren Chat. */}
+        <PanelGreeting settings={settings} />
         {history.map((props, index) => {
           const isLastMessage = index === history.length - 1;
           const live =
