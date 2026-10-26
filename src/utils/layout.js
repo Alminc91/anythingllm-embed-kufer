@@ -788,9 +788,14 @@ function safeUrl(value) {
 // verbunden („Seminare“, „Online-Kurse“), kein Leerzeichen: so bleibt der
 // Dativ im Info-Element richtig („von 837 angebotenen Online-Kursen“).
 // Sonst undefined (es gilt der Standard der Sprache). Dieselbe Regel prüfen
-// Design Center und Server beim Speichern.
+// Design Center und Server beim Speichern. Vorher NFC: „ä“ in zerlegter Form
+// (NFD, etwa aus einem PDF) ist sonst Buchstabe plus Zeichen ohne \p{L}
+// (Fixliste KIE-576 r3 Nr. 5).
 export function courseCountWordValue(value) {
-  const v = shortText(value, COURSE_COUNT_WORD_MAX_LEN);
+  const v = shortText(
+    typeof value === "string" ? value.normalize("NFC") : value,
+    COURSE_COUNT_WORD_MAX_LEN,
+  );
   if (v === undefined || !COURSE_COUNT_WORD_RE.test(v)) return undefined;
   return v;
 }

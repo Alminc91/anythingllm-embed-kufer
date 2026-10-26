@@ -92,7 +92,7 @@ const DC_HINTS = {
     "Der Datenschutz-Hinweis erscheint immer als Link „Datenschutz“ unter der Eingabe.",
   greetingStyle: "Die Begrüßung erscheint immer als Blase.",
   courseCount:
-    "Die Kursanzahl berechnet der Server aus dem Kursprogramm, im Design Center lässt sie sich nur ein- oder ausschalten.",
+    "Die Kursanzahl berechnet der Server aus dem Kursprogramm, im Design Center lassen sich die Anzeige ein- oder ausschalten und die Bezeichnung festlegen.",
 };
 // Vom Server bestimmt, auch gegen eine Skript-Angabe (Widget-Einstellung
 // „Frühere Chats“, KIE-503; kein Feld des Design Centers)

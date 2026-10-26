@@ -36,6 +36,7 @@ import {
 } from "../src/hooks/useScriptAttributes.js";
 import ChatWindowHeader from "../src/components/ChatWindow/Header/index.jsx";
 import InlineChat from "../src/components/InlineChat/index.jsx";
+import PromptInput from "../src/components/ChatWindow/ChatContainer/PromptInput/index.jsx";
 import {
   activeCourseCount,
   courseCountTexts,
@@ -392,7 +393,9 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
       { courseCount: { ...CC, count: 836, hidden: 1, word: null } },
       NOW,
     );
-    expect(t.hiddenLine).toBe("1 Kurs ist ausgeblendet, da er voraussichtlich beendet ist.");
+    expect(t.hiddenLine).toBe(
+      "1 Kurs ist ausgeblendet, da er voraussichtlich beendet ist.",
+    );
     expect(t.missingLine).toBe("Zurzeit fehlt 1 Kurs.");
   });
 
@@ -467,9 +470,13 @@ describe("Info-Element: Inhalt (Wortlaut D-K5)", () => {
         },
         NOW,
       );
-    expect(en("courses").hiddenLine).toBe("1 course is hidden because it has probably ended.");
+    expect(en("courses").hiddenLine).toBe(
+      "1 course is hidden because it has probably ended.",
+    );
     expect(en("courses").missingLine).toBe("1 course is currently missing.");
-    expect(en("workshops").hiddenLine).toBe("1 workshops are hidden because they have probably ended.");
+    expect(en("workshops").hiddenLine).toBe(
+      "1 workshops are hidden because they have probably ended.",
+    );
     expect(en("workshops").missingLine).toBe(
       "1 workshops are currently missing.",
     );
@@ -669,6 +676,97 @@ describe("Info-Element: Bedienung (Klick, Escape, Klick daneben, Tab)", () => {
     await header({ courseCount: CC });
     click(button());
     expect(Number(card().style.zIndex)).toBeGreaterThan(60);
+  });
+
+  // Fixliste r3 Nr. 1 (r3-W1): PromptInput holt sich am Ende einer Antwort
+  // den Fokus nicht, solange eine offene Ebene ihn hält. Im Shadow Root wie
+  // im Widget: document.activeElement ist dann der Host, nicht die Karte.
+  async function headerAndInput(server = {}) {
+    const settings = {
+      ...(await load({}, server)),
+      loaded: true,
+      enableStt: false,
+    };
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const mount = document.createElement("div");
+    shadow.appendChild(mount);
+    embedderSettings.shadowRoot = shadow;
+    embedderSettings.hostElement = host;
+    const shadowReactRoot = createRoot(mount);
+    const ui = (inputDisabled) => (
+      <>
+        <ChatWindowHeader settings={settings} />
+        <PromptInput
+          settings={settings}
+          message=""
+          submit={() => {}}
+          onChange={() => {}}
+          inputDisabled={inputDisabled}
+          buttonDisabled={inputDisabled}
+        />
+      </>
+    );
+    act(() => shadowReactRoot.render(ui(true)));
+    return {
+      q: (sel) => shadow.querySelector(sel),
+      focused: () => shadow.activeElement,
+      answerEnds: () => act(() => shadowReactRoot.render(ui(false))),
+      done: () => {
+        act(() => shadowReactRoot.unmount());
+        host.remove();
+      },
+    };
+  }
+
+  it("Antwort endet bei offener Karte: die Karte bleibt offen, der Fokus bleibt in der Karte", async () => {
+    const w = await headerAndInput({ courseCount: CC });
+    try {
+      click(w.q("#anything-llm-course-count-button"));
+      const openCard = w.q('[role="dialog"]');
+      expect(w.focused()).toBe(openCard);
+      w.answerEnds();
+      expect(w.q('[role="dialog"]')).not.toBeNull();
+      expect(w.focused()).toBe(openCard);
+      expect(
+        w.q("#anything-llm-course-count-button").getAttribute("aria-expanded"),
+      ).toBe("true");
+    } finally {
+      w.done();
+    }
+  });
+
+  it("Antwort endet ohne offene Karte: das Eingabefeld holt den Fokus wie bisher", async () => {
+    const w = await headerAndInput({ courseCount: CC });
+    try {
+      expect(w.q('[role="dialog"]')).toBeNull();
+      w.answerEnds();
+      expect(w.focused()).toBe(w.q("#message-input"));
+    } finally {
+      w.done();
+    }
+  });
+
+  it("Knopf: Hintergrund inline nur bei offener Karte, geschlossen wirkt der Hover der Klasse (r3-W3)", async () => {
+    await header({ courseCount: CC });
+    expect(button().style.backgroundColor).toBe("");
+    expect(button().className).toContain("allm-bg-transparent");
+    expect(button().className).toContain("hover:allm-bg-");
+    click(button());
+    expect(button().style.backgroundColor).not.toBe("");
+  });
+
+  it("Karte: aria-describedby nennt jede angezeigte Zeile (r3-W4)", async () => {
+    for (const cc of [CC, { ...CC, hidden: 0, offered: 812 }]) {
+      await header({ courseCount: cc });
+      click(button());
+      const ids = card().getAttribute("aria-describedby").split(" ");
+      expect(ids.map((id) => document.getElementById(id))).toEqual([
+        ...card().children,
+      ]);
+      click(button());
+    }
   });
 });
 

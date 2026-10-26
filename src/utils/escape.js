@@ -85,6 +85,15 @@ export function escapeLayerCount() {
   return layers.length;
 }
 
+// Hält eine offene Ebene den Fokus? Eine Ebene ohne within (Ansicht über dem
+// ganzen Fenster) immer, eine mit within nur, wenn focused darin liegt.
+// PromptInput holt sich am Ende einer Antwort dann nicht den Fokus, sonst
+// schlösse sich etwa die Info-Karte der Kursanzahl mitten im Lesen (Fixliste
+// KIE-576 r3 Nr. 1).
+export function escapeLayerHoldsFocus(focused) {
+  return layers.some((layer) => layer.holds(focused));
+}
+
 // Fokus auf keinem bestimmten Element im Widget (Host selbst, <body>)
 function noFocus(el) {
   return !el || el === document.body || el === document.documentElement;
@@ -103,15 +112,22 @@ export function useEscapeLayer(active, onClose, options = {}) {
   optionsRef.current = options;
   useEffect(() => {
     if (!active) return;
+    const contains = (focused) =>
+      (optionsRef.current.within() || []).some(
+        (el) => !!el && (el === focused || el.contains?.(focused)),
+      );
     const layer = {
       takes: (origin, focused) => {
         const within = optionsRef.current?.within;
         if (typeof within !== "function") return true;
         if (origin === "page") return false;
         if (origin === "none" || noFocus(focused)) return true;
-        return (within() || []).some(
-          (el) => !!el && (el === focused || el.contains?.(focused)),
-        );
+        return contains(focused);
+      },
+      holds: (focused) => {
+        const within = optionsRef.current?.within;
+        if (typeof within !== "function") return true;
+        return !noFocus(focused) && contains(focused);
       },
       close: (restoreFocus) => {
         const target = restoreFocus

@@ -24,6 +24,20 @@ export default function CourseCountSubtitle({ settings, texts }) {
   const ui = uiTexts(settings);
   const id = useId();
   const cardId = `anything-llm-course-count-info${id.replace(/:/g, "")}`;
+  // Zeilen der Karte mit ID: aria-describedby der Karte nennt die
+  // angezeigten (Fixliste KIE-576 r3 Nr. 2)
+  const lineId = (key) => `${cardId}-${key}`;
+  const describedBy = [
+    "head",
+    "scope",
+    texts.hiddenLine && "hidden",
+    texts.missingLine && "missing",
+    texts.gapHint && "gap",
+    "stand",
+  ]
+    .filter(Boolean)
+    .map(lineId)
+    .join(" ");
 
   useEscapeLayer(open, () => setOpen(false), {
     within: () => [buttonRef.current, cardRef.current],
@@ -121,16 +135,18 @@ export default function CourseCountSubtitle({ settings, texts }) {
         aria-expanded={open}
         aria-controls={open ? cardId : undefined}
         onClick={() => setOpen((v) => !v)}
-        className="allm-cursor-pointer allm-border-none allm-p-0 allm-flex allm-items-center allm-justify-center allm-flex-shrink-0 hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)]"
+        className="allm-cursor-pointer allm-border-none allm-bg-transparent allm-p-0 allm-flex allm-items-center allm-justify-center allm-flex-shrink-0 hover:allm-bg-[color:var(--allmi-hover-bg,#f3f4f6)]"
         style={{
           ...HEADER_ICON_STYLE,
           width: "24px",
           height: "24px",
           margin: "-4px 0",
           borderRadius: "50%",
-          backgroundColor: open
-            ? "var(--allmi-hover-bg, #e5e7eb)"
-            : "transparent",
+          // inline nur bei offener Karte: geschlossen wirkt der Hover der
+          // Klasse (Fixliste KIE-576 r3 Nr. 2)
+          ...(open
+            ? { backgroundColor: "var(--allmi-hover-bg, #e5e7eb)" }
+            : {}),
         }}
       >
         <Info size={15} weight="bold" aria-hidden="true" />
@@ -141,6 +157,7 @@ export default function CourseCountSubtitle({ settings, texts }) {
           id={cardId}
           role="dialog"
           aria-label={ui.courseCountDialog}
+          aria-describedby={describedBy}
           tabIndex={-1}
           className="allm-font-sans"
           style={{
@@ -170,12 +187,20 @@ export default function CourseCountSubtitle({ settings, texts }) {
             outline: "none",
           }}
         >
-          <span style={{ fontWeight: 600 }}>{texts.head}</span>
-          <span>{texts.scope}</span>
-          {texts.hiddenLine && <span>{texts.hiddenLine}</span>}
-          {texts.missingLine && <span>{texts.missingLine}</span>}
-          {texts.gapHint && <span>{texts.gapHint}</span>}
-          <span style={{ opacity: 0.82 }}>{texts.stand}</span>
+          <span id={lineId("head")} style={{ fontWeight: 600 }}>
+            {texts.head}
+          </span>
+          <span id={lineId("scope")}>{texts.scope}</span>
+          {texts.hiddenLine && (
+            <span id={lineId("hidden")}>{texts.hiddenLine}</span>
+          )}
+          {texts.missingLine && (
+            <span id={lineId("missing")}>{texts.missingLine}</span>
+          )}
+          {texts.gapHint && <span id={lineId("gap")}>{texts.gapHint}</span>}
+          <span id={lineId("stand")} style={{ opacity: 0.82 }}>
+            {texts.stand}
+          </span>
         </div>
       )}
     </div>
