@@ -160,7 +160,7 @@ export const PANEL_TEXTS = {
     // ohne Kurs-Wörter (Nutzerentscheidung F8 vom 23.10.2026)
     privacyAiTitle: "Hinweis zur KI",
     privacyAiText:
-      "Unser KI-Berater ist auf richtige Auskünfte optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Kontrolle immer auf unserer Website.",
+      "Unsere KI ist auf richtige Auskünfte optimiert. Wie jede KI kann sie sich dennoch einmal irren. Bitte prüfen Sie wichtige Angaben.",
     // Button unten im Datenschutz-Fenster und Beschriftung des
     // Schließen-Symbols oben (für Screenreader)
     privacyCloseText: "Schließen",
@@ -197,7 +197,7 @@ export const PANEL_TEXTS = {
     privacyLinkText: "Privacy",
     privacyAiTitle: "About the AI",
     privacyAiText:
-      "Our AI advisor is optimised for accurate information. Like any AI, it can still make the occasional mistake. You can always check important details such as dates and prices on our website.",
+      "Our AI is optimized for accurate answers. Like any AI, it can still make mistakes. Please verify important information.",
     privacyCloseText: "Close",
     privacyCloseLabel: "Close privacy notice",
     assistantName: "AI Advisor",
