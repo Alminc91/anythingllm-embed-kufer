@@ -67,7 +67,7 @@ Gruppe A. Diese Attribute wirken nicht, auch wenn im Design Center nichts gespei
 | `data-default-messages` | Inhalt: Startvorschläge | keine: der Standard vom Server ist leer (E42, 7.22-rc23); es gilt nur eine im Design Center gespeicherte Liste (E10 neu: gespeichert, auch leer, vor Standard) |
 | `data-send-message-text` | Inhalt: Platzhalter im Eingabefeld | `Ihre Frage eingeben` (`en`: `Enter your question`) |
 | `data-chatbot-bubbles-messages`, `data-display-chatbot-bubbles`, `data-bubble-persistence`, `data-welcome-bubbles-desktop`, `data-welcome-bubbles-mobile` | Inhalt: Willkommensblasen und „Willkommensblasen anzeigen“ (je Gerät Aus, Erster Besuch, Jeder Besuch) | Standardblasen der Sprache, beim ersten Besuch |
-| `data-support-email` | Inhalt: Support-E-Mail | `info@kufer.de` |
+| `data-support-email` | Inhalt: E-Mail für Besucher (Gruppe „Kontakt“, bis 8.1 „Support-E-Mail“) | keine: ohne gültige Adresse kein Menüpunkt „E-Mail Support“ und kein Kontaktsatz in der Fehlerblase (bis 8.1 `info@kufer.de`); mit Adresse der Menüpunkt wie bisher und in der Fehlerblase „Gern hilft Ihnen unser Team persönlich weiter: <Adresse>“ |
 
 Ebenfalls ohne Wirkung (mit Warnzeile), aber nicht aus dem Design Center:
 
