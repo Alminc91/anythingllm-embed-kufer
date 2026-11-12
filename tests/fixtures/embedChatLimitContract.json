@@ -1,0 +1,255 @@
+{
+  "_comment": "Vertrag Server und Widget für die Grenzen des Widgets (issues/widget-grenzen-kontakt.md, AK-11, AK-16, §11 E5). Wörtlich: (1) Erreicht eine Anfrage an den öffentlichen Chat-Endpunkt des Widgets (POST /api/embed/:embedId/stream-chat) eine Grenze, antwortet der Server wie heute mit HTTP 429 und JSON {id, type: \"abort\", textResponse: null, sources: [], close: true, error, errorMsg (falls heute vorhanden)} und zusätzlich dem Feld errorCode. (2) errorCode \"session_limit\": Grenze max_chats_per_session (Fragen je Besucher und Tag) erreicht. (3) errorCode \"daily_limit\": Grenze max_chats_per_day (Fragen aller Besucher je Tag) erreicht. (4) Beide Grenzen zählen Nachrichten seit 0:00 Uhr Europe/Berlin des laufenden Kalendertags (nicht mehr die letzten 24 Stunden); 0 oder leer = unbegrenzt wie heute. (5) Jede andere Fehlerantwort trägt keinen dieser beiden errorCode-Werte; das Widget zeigt dann den technischen Text. (6) supportEmail kommt nur aus visual_config (Design Center) über GET /api/embed/:uuid/config; der Server liefert keinen Standardwert, der Standard des Widgets ist \"\" (bisher \"info@kufer.de\"). (7) Texte im Widget: texts unten, <E-Mail> = gültige supportEmail als mailto-Link ohne Betreff, kein Punkt dahinter; ohne gültige E-Mail entfällt der Kontaktsatz ganz, nie eine Kufer-Adresse als Ersatz. Das Widget entscheidet nur nach errorCode und übernimmt ihn nur aus der 429-Antwort (src/utils/chatLimits.js). Aufbau: errorCodes = die beiden Kennungen wörtlich; limitResponses = Antworten des Servers an der Grenze (status, body; id ist je Antwort eine neue UUID, hier ein Beispiel) -> notice (Text im Widget); otherErrors = Fehlerantworten ohne Grenze -> immer technical; streamErrors = Fehler als Chunk im Stream (z. B. Kontingent des Workspaces) -> technical; supportEmailConfig = gespeicherte visual_config -> Antwort von /config (config, configAbsent) -> supportEmail im Widget; supportEmailValues = Eingaben, die das Widget als Adresse annimmt bzw. verwirft. Fälle mit fork: false gelten nur dem Widget (Abwehr gegen Antworten außerhalb des Vertrags). Wortgleiche Kopie für den Fork: server/__tests__/utils/chats/fixtures/embedChatLimitContract.json (mit KUFER_FORK_DIR prüft tests/widget-grenzen-kontakt-vertrag.test.js die Kopie und die Kennungen in server/utils/middleware/embedMiddleware.js).",
+  "errorCodes": {
+    "session": "session_limit",
+    "daily": "daily_limit"
+  },
+  "limitResponses": [
+    {
+      "name": "Grenze je Besucher (max_chats_per_session)",
+      "limit": "max_chats_per_session",
+      "status": 429,
+      "body": {
+        "id": "0b9f6c1e-3d0a-4c55-9a59-2f1e5d7c8a11",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Your quota for this chat has been reached. Try again later or contact the site owner.",
+        "errorCode": "session_limit"
+      },
+      "notice": "session_limit"
+    },
+    {
+      "name": "Grenze aller Besucher (max_chats_per_day)",
+      "limit": "max_chats_per_day",
+      "status": 429,
+      "body": {
+        "id": "6a3d2f40-8e1b-4f7c-b2a4-91c0e5d3f722",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Rate limit exceeded",
+        "errorMsg": "The quota for this chat has been reached. Try again later or contact the site owner.",
+        "errorCode": "daily_limit"
+      },
+      "notice": "daily_limit"
+    }
+  ],
+  "otherErrors": [
+    {
+      "name": "Leere Nachricht (400)",
+      "status": 400,
+      "body": {
+        "id": "c1f0a9e2-5b7d-4e3a-8f61-0d2b4c6a9e33",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Message is empty."
+      },
+      "notice": "technical"
+    },
+    {
+      "name": "Serverfehler in der Prüfung der Grenzen (500)",
+      "status": 500,
+      "body": {
+        "id": "f4e2b8a1-9c3d-4a6b-b5e7-3a1d0c9f8e44",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Invalid request."
+      },
+      "notice": "technical"
+    },
+    {
+      "name": "429 ohne errorCode (älterer Server)",
+      "status": 429,
+      "body": {
+        "id": "9d8c7b6a-5e4f-4a3b-9c2d-1e0f9a8b7c55",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Rate limit exceeded",
+        "errorMsg": "The quota for this chat has been reached. Try again later or contact the site owner."
+      },
+      "notice": "technical",
+      "fork": false
+    },
+    {
+      "name": "429 mit unbekanntem errorCode",
+      "status": 429,
+      "body": {
+        "id": "2b4d6f80-1a3c-4e5f-8a7b-9c0d1e2f3a66",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Rate limit exceeded",
+        "errorCode": "rate_limit"
+      },
+      "notice": "technical",
+      "fork": false
+    },
+    {
+      "name": "429 mit errorCode in anderer Schreibweise",
+      "status": 429,
+      "body": {
+        "id": "3c5e7a91-2b4d-4f6a-9b8c-0d1e2f3a4b77",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Rate limit exceeded",
+        "errorCode": "SESSION_LIMIT"
+      },
+      "notice": "technical",
+      "fork": false
+    },
+    {
+      "name": "500 mit errorCode der Grenze (außerhalb des Vertrags)",
+      "status": 500,
+      "body": {
+        "id": "4d6f8b02-3c5e-4a7b-8c9d-1e2f3a4b5c88",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Invalid request.",
+        "errorCode": "session_limit"
+      },
+      "notice": "technical",
+      "fork": false
+    },
+    {
+      "name": "503 ohne JSON (Proxy)",
+      "status": 503,
+      "body": null,
+      "notice": "technical",
+      "fork": false
+    }
+  ],
+  "streamErrors": [
+    {
+      "name": "Kontingent des Workspaces erschöpft (Chunk im Stream)",
+      "chunk": {
+        "uuid": "5e7a9c13-4d6f-4b8a-9c0d-2e3f4a5b6c99",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Das Nachrichtenkontingent ist erschöpft."
+      },
+      "notice": "technical"
+    },
+    {
+      "name": "Chunk im Stream mit errorCode der Grenze (außerhalb des Vertrags)",
+      "chunk": {
+        "uuid": "6f8b0d24-5e7a-4c9b-8d1e-3f4a5b6c7d00",
+        "type": "abort",
+        "textResponse": null,
+        "sources": [],
+        "close": true,
+        "error": "Das Nachrichtenkontingent ist erschöpft.",
+        "errorCode": "daily_limit"
+      },
+      "notice": "technical",
+      "fork": false
+    }
+  ],
+  "supportEmailConfig": [
+    {
+      "name": "nichts gespeichert: kein Standard vom Server, im Widget leer",
+      "visualConfig": {},
+      "configAbsent": ["supportEmail"],
+      "widget": ""
+    },
+    {
+      "name": "leer gespeichert: wie nichts gespeichert",
+      "visualConfig": { "supportEmail": "" },
+      "configAbsent": ["supportEmail"],
+      "widget": ""
+    },
+    {
+      "name": "eigene Adresse gespeichert",
+      "visualConfig": { "supportEmail": "info@vhs-beispiel.de" },
+      "config": { "supportEmail": "info@vhs-beispiel.de" },
+      "widget": "info@vhs-beispiel.de"
+    },
+    {
+      "name": "Skript-Attribut ohne Wirkung (Gruppe A)",
+      "visualConfig": {},
+      "configAbsent": ["supportEmail"],
+      "script": { "supportEmail": "skript@example.org" },
+      "widget": "",
+      "fork": false
+    }
+  ],
+  "supportEmailValues": {
+    "valid": [
+      ["info@vhs-beispiel.de", "info@vhs-beispiel.de"],
+      ["  kontakt@vhs.example.org  ", "kontakt@vhs.example.org"],
+      ["Anmeldung.Kurse+web@vhs-münchen.de", "Anmeldung.Kurse+web@vhs-münchen.de"],
+      ["o'brien@vhs.de", "o'brien@vhs.de"]
+    ],
+    "invalid": [
+      "",
+      "   ",
+      "info",
+      "info@",
+      "@vhs.de",
+      "info@vhs",
+      "info@vhs.d",
+      "info@.de",
+      "info@vhs..de",
+      "info@@vhs.de",
+      "info @vhs.de",
+      "info@vhs.de, kontakt@vhs.de",
+      "info@vhs.de;kontakt@vhs.de",
+      "info@vhs.de?subject=Hallo",
+      "info@vhs.de?cc=fremd@example.org",
+      "info@vhs.de#x",
+      "mailto:info@vhs.de",
+      "javascript:alert(1)//@vhs.de",
+      "<img src=x onerror=alert(1)>@vhs.de",
+      "<b>info</b>@vhs.de",
+      "\"info\"@vhs.de",
+      "info@vhs.de\nBcc: fremd@example.org",
+      "info%40vhs.de",
+      "info@vhs.de/pfad"
+    ]
+  },
+  "texts": {
+    "de": {
+      "session_limit": {
+        "withEmail": "Für heute ist die Anzahl Ihrer Fragen erreicht. Gern hilft Ihnen unser Team persönlich weiter: <E-Mail>",
+        "withoutEmail": "Für heute ist die Anzahl Ihrer Fragen erreicht."
+      },
+      "daily_limit": {
+        "withEmail": "Unser Chatbot steht für heute nicht mehr zur Verfügung. Morgen ist er wieder für Sie da. Gern hilft Ihnen unser Team persönlich weiter: <E-Mail>",
+        "withoutEmail": "Unser Chatbot steht für heute nicht mehr zur Verfügung. Morgen ist er wieder für Sie da."
+      },
+      "technical": {
+        "withEmail": "Unser Chatbot ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut. Gern hilft Ihnen unser Team persönlich weiter: <E-Mail>",
+        "withoutEmail": "Unser Chatbot ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut."
+      }
+    },
+    "en": {
+      "session_limit": {
+        "withEmail": "You have reached today's limit of questions. Our team will be happy to help you personally: <E-Mail>",
+        "withoutEmail": "You have reached today's limit of questions."
+      },
+      "daily_limit": {
+        "withEmail": "Our chatbot is no longer available today. It will be back for you tomorrow. Our team will be happy to help you personally: <E-Mail>",
+        "withoutEmail": "Our chatbot is no longer available today. It will be back for you tomorrow."
+      },
+      "technical": {
+        "withEmail": "Our chatbot is temporarily unavailable. Please try again later. Our team will be happy to help you personally: <E-Mail>",
+        "withoutEmail": "Our chatbot is temporarily unavailable. Please try again later."
+      }
+    }
+  }
+}
