@@ -6,6 +6,19 @@ import {
   stripCardsMarker,
 } from "@/utils/courseCards";
 import { DISPLAYED_VALUES } from "@/utils/layout";
+import { errorResponse, withoutErrorCode } from "@/utils/chatLimits";
+
+// Fehler, den onopen schon an handleChat gemeldet hat: onerror meldet ihn
+// nicht ein zweites Mal (widget-grenzen-kontakt). fetch-event-source ruft
+// onerror auch für Fehler aus onopen; mit dem Signal des Aufrufers
+// (ChatContainer) bricht ctrl?.abort() vorher nichts ab, und die zweite,
+// technische Meldung ersetzte die Antwort des Servers samt errorCode.
+const REPORTED = Symbol("reported");
+function reportedError(message) {
+  const err = new Error(message);
+  err[REPORTED] = true;
+  return err;
+}
 
 const ChatService = {
   // Check if embed is enabled (returns true if enabled, false if disabled)
@@ -175,23 +188,13 @@ const ChatService = {
         if (response.ok) {
           return; // everything's good
         } else if (response.status >= 400) {
-          await response
-            .json()
-            .then((serverResponse) => {
-              handleChat(serverResponse);
-            })
-            .catch(() => {
-              handleChat({
-                id: v4(),
-                type: "abort",
-                textResponse: null,
-                sources: [],
-                close: true,
-                error: `An error occurred while streaming response. Code ${response.status}`,
-              });
-            });
+          // Fehlerantwort als eine Nachricht: errorCode der Grenze nur bei
+          // 429 (utils/chatLimits.js errorResponse), ohne JSON die
+          // technische Meldung wie bisher
+          const serverResponse = await response.json().catch(() => null);
+          handleChat(errorResponse(response.status, serverResponse, v4()));
           ctrl?.abort();
-          throw new Error();
+          throw reportedError();
         } else {
           handleChat({
             id: v4(),
@@ -202,16 +205,20 @@ const ChatService = {
             error: `An error occurred while streaming response. Unknown Error.`,
           });
           ctrl?.abort();
-          throw new Error("Unknown Error");
+          throw reportedError("Unknown Error");
         }
       },
       async onmessage(msg) {
         try {
-          const chatResult = JSON.parse(msg.data);
+          // Grenzen kommen nur als 429-Antwort: ein errorCode im Stream
+          // (z. B. Kontingent des Workspaces) gilt nicht
+          const chatResult = withoutErrorCode(JSON.parse(msg.data));
           handleChat(chatResult);
         } catch {}
       },
       onerror(err) {
+        // schon gemeldet (onopen): nur beenden, keine zweite Meldung
+        if (err?.[REPORTED]) throw err;
         handleChat({
           id: v4(),
           type: "abort",
