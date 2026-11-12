@@ -229,6 +229,21 @@ describe("Vertrag Grenzen: gemeinsame Fixture mit dem Fork (embedLimitContract.j
     }
   });
 
+  // 8.2-rc2 W7 (Review R20): Der Vertragstext beschreibt, was das Widget tut
+  // (W1): errorCode zählt nur in der 429-Antwort, der Text von error nie.
+  it("Vertragstext: nur errorCode der 429-Antwort, nie der Text von error", async () => {
+    expect(shared._comment).toContain(
+      "Das Widget entscheidet nur nach errorCode der 429-Antwort, nie nach dem Text von error.",
+    );
+    expect(shared._comment).not.toMatch(/nie nach Status/);
+    const { errorResponse } = await limits();
+    const response = shared.limitResponses[0].response;
+    expect(errorResponse(429, response, "x").errorCode).toBe(
+      response.errorCode,
+    );
+    expect(errorResponse(500, response, "x")).not.toHaveProperty("errorCode");
+  });
+
   it.each(
     [...shared.limitResponses, ...shared.otherResponses].map((c) => [
       c.name,
