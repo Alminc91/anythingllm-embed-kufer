@@ -1,11 +1,12 @@
 import { forwardRef, memo, useState } from "react";
-import { Warning, CircleNotch, CaretDown } from "@phosphor-icons/react";
+import { CircleNotch, CaretDown } from "@phosphor-icons/react";
 import renderMarkdown from "@/utils/chat/markdown";
 import { embedderSettings } from "@/main";
 import AnythingLLMIcon from "@/assets/anything-llm-icon.svg";
 import { formatDate } from "@/utils/date";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import AssistantName from "../AssistantName";
+import ErrorNotice from "../ErrorNotice";
 import {
   BUBBLE_RADIUS,
   BUBBLE_SHADOW,
@@ -97,7 +98,18 @@ const ReplyFrame = ({ nameInWrapper, rowRef, children, after }) => (
 // appendReplyText); ein noch offener Marker kommt hier als pending an.
 const PromptReply = forwardRef(
   (
-    { reply, pending, error, sources = [], sentAt, nameInWrapper = false },
+    {
+      reply,
+      pending,
+      error,
+      // Kennung der Grenze (utils/chatLimits.js) und settings für Sprache
+      // und E-Mail für Besucher der Fehlerblase (ErrorNotice)
+      errorCode = null,
+      settings = null,
+      sources = [],
+      sentAt,
+      nameInWrapper = false,
+    },
     ref,
   ) => {
     if (!reply && sources.length === 0 && !pending && !error) return null;
@@ -150,14 +162,7 @@ const PromptReply = forwardRef(
         <ReplyFrame nameInWrapper={nameInWrapper}>
           <div className="allm-py-[11px] allm-px-4 allm-rounded-lg allm-flex allm-flex-col allm-bg-amber-100 allm-shadow-[0_4px_14px_rgba(0,0,0,0.25)] allm-mr-[37px] allm-ml-[9px]">
             <div className="allm-flex allm-gap-x-5">
-              <span className="allm-inline-block allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
-                <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
-                Unser Chatbot ist vorübergehend nicht verfügbar.
-                <br />
-                <span className="allm-text-xs">
-                  Bitte versuchen Sie es später erneut.
-                </span>
-              </span>
+              <ErrorNotice settings={settings} errorCode={errorCode} />
             </div>
           </div>
         </ReplyFrame>

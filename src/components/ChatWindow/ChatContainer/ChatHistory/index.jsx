@@ -302,6 +302,8 @@ export default function ChatHistory({
                 pending={props.pending}
                 sources={props.sources}
                 error={props.error}
+                errorCode={props.errorCode}
+                settings={settings}
                 closed={props.closed}
                 nameInWrapper={above}
               />
@@ -328,6 +330,7 @@ export default function ChatHistory({
                 sessionId={sessionId}
                 error={props.error}
                 errorMsg={props.errorMsg}
+                errorCode={props.errorCode}
                 nameInWrapper={above}
                 followUps={
                   isLastMessage && followUps.length > 0 ? followUps : null
