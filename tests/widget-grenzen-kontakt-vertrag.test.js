@@ -102,7 +102,13 @@ async function ask(fetchImpl, { signal = true } = {}) {
     question.userMessage,
     (chatResult) => {
       results.push(chatResult);
-      handleChat(chatResult, setLoading, setChatHistory, remHistory, _chatHistory);
+      handleChat(
+        chatResult,
+        setLoading,
+        setChatHistory,
+        remHistory,
+        _chatHistory,
+      );
     },
     "c-1",
     signal ? controller.signal : null,
@@ -123,9 +129,7 @@ async function ask(fetchImpl, { signal = true } = {}) {
 describe("Vertrag Grenzen: Fixture (AK-11)", () => {
   it("Kennungen wörtlich, Grenzen mit 429 und den Feldern von heute plus errorCode", () => {
     expect(CODES).toEqual(["session_limit", "daily_limit"]);
-    expect(contract.limitResponses.map((c) => c.body.errorCode)).toEqual(
-      CODES,
-    );
+    expect(contract.limitResponses.map((c) => c.body.errorCode)).toEqual(CODES);
     for (const c of contract.limitResponses) {
       expect(c.status, c.name).toBe(429);
       expect(c.notice, c.name).toBe(c.body.errorCode);
@@ -166,7 +170,8 @@ describe("Vertrag Grenzen: Fixture (AK-11)", () => {
         expect(t.withEmail.startsWith(`${t.withoutEmail} `)).toBe(true);
         expect(`${t.withEmail}${t.withoutEmail}`).not.toMatch(/[–—]/);
         expect(t.withoutEmail).not.toMatch(/kufer/i);
-        if (lang === "de") expect(t.withEmail).not.toMatch(/\b(du|dich|dir|dein)\b/i);
+        if (lang === "de")
+          expect(t.withEmail).not.toMatch(/\b(du|dich|dir|dein)\b/i);
       }
   });
 });
@@ -306,7 +311,10 @@ describe("Vertrag Grenzen: 429 -> streamChat -> handleChat -> Nachricht (AK-11)"
 
 describe("Vertrag Grenzen: supportEmail aus /config ohne Standard (AK-16)", () => {
   const fetchJson = (config) =>
-    vi.fn(async () => ({ ok: true, json: async () => structuredClone(config) }));
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => structuredClone(config),
+    }));
 
   it("Standard des Widgets ist leer", () => {
     expect(DEFAULT_SETTINGS.supportEmail).toBe("");

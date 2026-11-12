@@ -46,7 +46,10 @@ import { loadEmbedSettings } from "../src/hooks/useScriptAttributes.js";
 import { UI_TEXTS } from "../src/utils/layout.js";
 
 const contract = JSON.parse(
-  readFileSync(join(__dirname, "fixtures", "embedChatLimitContract.json"), "utf8"),
+  readFileSync(
+    join(__dirname, "fixtures", "embedChatLimitContract.json"),
+    "utf8",
+  ),
 );
 const TEXTS = contract.texts;
 const KINDS = ["session_limit", "daily_limit", "technical"];
@@ -77,7 +80,10 @@ function render(el) {
 }
 const $ = (sel) => container.querySelector(sel);
 const $$ = (sel) => [...container.querySelectorAll(sel)];
-const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+const norm = (s) =>
+  String(s || "")
+    .replace(/\s+/g, " ")
+    .trim();
 const expected = (lang, kind, email) =>
   email
     ? TEXTS[lang][kind].withEmail.replace("<E-Mail>", email)
@@ -143,7 +149,10 @@ describe("Fehlerblase je errorCode im Verlauf (HistoricalMessage, AK-7 bis AK-10
         expectNotice(el, lang, kind, EMAIL);
       });
       it(`${lang} ${kind} ohne E-Mail: kein Kontaktsatz, keine Kufer-Adresse`, () => {
-        const el = historical({ language: lang, supportEmail: "" }, codeOf(kind));
+        const el = historical(
+          { language: lang, supportEmail: "" },
+          codeOf(kind),
+        );
         expectNotice(el, lang, kind, null);
       });
     }
@@ -155,7 +164,12 @@ describe("Fehlerblase je errorCode im Verlauf (HistoricalMessage, AK-7 bis AK-10
       "daily_limit",
       EMAIL,
     );
-    expectNotice(historical({ supportEmail: EMAIL }, "session_limit"), "de", "session_limit", EMAIL);
+    expectNotice(
+      historical({ supportEmail: EMAIL }, "session_limit"),
+      "de",
+      "session_limit",
+      EMAIL,
+    );
   });
 
   it("Standard des Widgets (nichts gespeichert): kein Kontaktsatz (AK-10, AK-16)", async () => {
@@ -167,7 +181,13 @@ describe("Fehlerblase je errorCode im Verlauf (HistoricalMessage, AK-7 bis AK-10
   it("fehlende settings: Standard der Sprache aus embedderSettings, ohne Adresse", () => {
     embedderSettings.settings = { language: "en", supportEmail: EMAIL };
     render(
-      <HistoricalMessage uuid="m-1" message={null} role="assistant" error="x" errorCode="daily_limit" />,
+      <HistoricalMessage
+        uuid="m-1"
+        message={null}
+        role="assistant"
+        error="x"
+        errorCode="daily_limit"
+      />,
     );
     expectNotice($("[data-error-notice]"), "en", "daily_limit", EMAIL);
   });
@@ -183,7 +203,12 @@ describe("Fehlerblase während der Antwort (PromptReply, AK-7 bis AK-10, AK-13)"
           kind,
           EMAIL,
         );
-        expectNotice(live({ language: lang, supportEmail: "" }, codeOf(kind)), lang, kind, null);
+        expectNotice(
+          live({ language: lang, supportEmail: "" }, codeOf(kind)),
+          lang,
+          kind,
+          null,
+        );
       });
 });
 
@@ -233,20 +258,30 @@ describe("ChatHistory reicht errorCode und settings an beide Blasen (AK-11 Widge
 });
 
 describe("Kein HTML, mailto nur mit gültiger Adresse (NAK-3)", () => {
-  it.each(contract.supportEmailValues.invalid.map((v) => [JSON.stringify(v), v]))(
+  it.each(
+    contract.supportEmailValues.invalid.map((v) => [JSON.stringify(v), v]),
+  )(
     "supportEmail %s: kein Link, kein Kontaktsatz, kein Element aus der Eingabe",
     (_label, value) => {
       for (const kind of KINDS) {
-        const el = historical({ language: "de", supportEmail: value }, codeOf(kind));
+        const el = historical(
+          { language: "de", supportEmail: value },
+          codeOf(kind),
+        );
         expect(norm(el.textContent)).toBe(expected("de", kind, null));
-        expect(el.querySelectorAll("a, img, b, script, iframe")).toHaveLength(0);
+        expect(el.querySelectorAll("a, img, b, script, iframe")).toHaveLength(
+          0,
+        );
       }
     },
   );
 
   it("Adresse mit Apostroph erscheint als Text, href unverändert", () => {
     const email = "o'brien@vhs.de";
-    const el = historical({ language: "de", supportEmail: email }, "session_limit");
+    const el = historical(
+      { language: "de", supportEmail: email },
+      "session_limit",
+    );
     expectNotice(el, "de", "session_limit", email);
     expect(el.innerHTML).toContain("o'brien@vhs.de");
   });
@@ -263,7 +298,8 @@ describe("Kein HTML, mailto nur mit gültiger Adresse (NAK-3)", () => {
 });
 
 describe("Andere Fehler nie mit dem Grenzentext (NAK-4)", () => {
-  const limitWords = /für heute|Morgen ist er|today's limit|no longer available today/i;
+  const limitWords =
+    /für heute|Morgen ist er|today's limit|no longer available today/i;
   it.each([
     ["ohne errorCode", undefined],
     ["unbekannte Kennung", "rate_limit"],
@@ -313,7 +349,9 @@ describe("Kontakt im Menü der Titelleiste nur mit Adresse (AK-15, §7 Betreff)"
     expect(header({ supportEmail: "kontakt(at)vhs.de" })).toHaveLength(0);
     act(() => root.unmount());
     root = createRoot(container);
-    expect(header({ supportEmail: "a@vhs.de?bcc=fremd@example.org" })).toHaveLength(0);
+    expect(
+      header({ supportEmail: "a@vhs.de?bcc=fremd@example.org" }),
+    ).toHaveLength(0);
   });
 
   it("mit Adresse wie bisher: Betreff und Text der Mail unverändert", async () => {
@@ -345,15 +383,19 @@ describe("Texte im Code (Textregeln)", () => {
   it("de und en gepflegt, wortgleich mit der Fixture, keine Gedankenstriche", () => {
     for (const lang of ["de", "en"]) {
       const t = UI_TEXTS[lang];
-      for (const key of ["errorSessionLimit", "errorDailyLimit", "errorTechnical"]) {
+      for (const key of [
+        "errorSessionLimit",
+        "errorDailyLimit",
+        "errorTechnical",
+      ]) {
         expect(Array.isArray(t[key]), `${lang} ${key}`).toBe(true);
         expect(t[key].join(" ")).not.toMatch(/[–—]/);
       }
       expect(typeof t.errorContact).toBe("string");
       expect(t.errorContact.endsWith(":")).toBe(true);
-      expect(`${t.errorSessionLimit.join(" ")} ${t.errorContact} <E-Mail>`).toBe(
-        TEXTS[lang].session_limit.withEmail,
-      );
+      expect(
+        `${t.errorSessionLimit.join(" ")} ${t.errorContact} <E-Mail>`,
+      ).toBe(TEXTS[lang].session_limit.withEmail);
       expect(`${t.errorDailyLimit.join(" ")} ${t.errorContact} <E-Mail>`).toBe(
         TEXTS[lang].daily_limit.withEmail,
       );
