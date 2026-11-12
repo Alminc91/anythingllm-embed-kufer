@@ -280,7 +280,8 @@ export const UI_TEXTS = {
     // utils/chatLimits.js errorNotice): je Art die Sätze, der erste als
     // Überschrift; danach der Kontaktsatz, nur mit gültiger E-Mail für
     // Besucher, die Adresse folgt als Link ohne Punkt. Wortgleich mit
-    // tests/fixtures/embedChatLimitContract.json (texts).
+    // tests/fixtures/embedLimitWidgetCases.json (texts) und dem Vertrag
+    // tests/fixtures/embedLimitContract.json.
     errorSessionLimit: ["Für heute ist die Anzahl Ihrer Fragen erreicht."],
     errorDailyLimit: [
       "Unser Chatbot steht für heute nicht mehr zur Verfügung.",

@@ -6,7 +6,8 @@ AK-13, AK-15, NAK-3, NAK-4, §8 Prüfmatrix).
 Gebautes dist, lokale Testseite (tests/visual/fixtures/widget.html), Server
 gemockt wie datenschutz_fenster.py (theme_visual.Mock); POST /stream-chat
 antwortet je Frage aus einer Warteschlange: 429 mit errorCode nach dem
-Vertrag (tests/fixtures/embedChatLimitContract.json), 500, 503 ohne JSON
+Vertrag (tests/fixtures/embedLimitContract.json, Fälle und Texte aus
+embedLimitWidgetCases.json), 500, 503 ohne JSON
 oder ein SSE-Stream. Je Ansicht (Chatfenster und In der Seite, 1440 x 900
 und 390 x 800), Farbschema (hell, dunkel), Sprache (de, en) und mit bzw.
 ohne gespeicherte E-Mail für Besucher drei Fragen nacheinander:
@@ -47,7 +48,7 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = tv.ROOT
 OUT_DIR = ROOT / ".test-storage"
-CONTRACT = json.loads((ROOT / "tests" / "fixtures" / "embedChatLimitContract.json").read_text("utf-8"))
+CONTRACT = json.loads((ROOT / "tests" / "fixtures" / "embedLimitWidgetCases.json").read_text("utf-8"))
 RESULTS = []
 TAG = "neu"
 EMAIL = "info@vhs-beispiel.de"

@@ -4,12 +4,18 @@ import { join } from "node:path";
 
 // Vertrag Server und Widget für die Grenzen des Widgets
 // (issues/widget-grenzen-kontakt.md, AK-11, AK-16, NAK-3, NAK-4, §11 E5):
-// tests/fixtures/embedChatLimitContract.json. Hier die Widget-Seite:
-// 429-Antwort des Servers -> ChatService.streamChat (echtes
-// fetch-event-source, fetch gemockt) -> handleChat -> Nachricht im Verlauf
-// mit errorCode; andere Fehler ohne errorCode; supportEmail aus /config
-// ohne Standard. Mit KUFER_FORK_DIR (Checkout des Forks) zusätzlich die
-// Gegenprobe: wortgleiche Fixture-Kopie im Fork und beide Kennungen in
+// gemeinsam tests/fixtures/embedLimitContract.json (wortgleiche Kopie von
+// server/__tests__/utils/chats/fixtures/embedLimitContract.json im Fork,
+// dort prüft server/__tests__/utils/middleware/embedLimits.test.js die
+// Server-Seite und mit KUFER_EMBED_DIR die Kopie hier), dazu die Fälle des
+// Widgets in tests/fixtures/embedLimitWidgetCases.json (Abwehr außerhalb
+// des Vertrags, E-Mail-Prüfung, Texte mit und ohne Adresse; hier gegen den
+// Vertrag abgeglichen). Hier die Widget-Seite: 429-Antwort des Servers ->
+// ChatService.streamChat (echtes fetch-event-source, fetch gemockt) ->
+// handleChat -> Nachricht im Verlauf mit errorCode; andere Fehler ohne
+// errorCode; supportEmail aus /config ohne Standard. Mit KUFER_FORK_DIR
+// (Checkout des Forks) zusätzlich die Gegenprobe: Vertrag im Fork
+// wortgleich und beide Kennungen in
 // server/utils/middleware/embedMiddleware.js. Ohne die Variable übersprungen
 // (wie tests/embed-config-contract.test.js).
 // Neue Funktionen (src/utils/chatLimits.js) werden je Test dynamisch
@@ -34,7 +40,9 @@ import {
   loadEmbedSettings,
 } from "../src/hooks/useScriptAttributes.js";
 
-const FIXTURE = join(__dirname, "fixtures", "embedChatLimitContract.json");
+const SHARED = join(__dirname, "fixtures", "embedLimitContract.json");
+const shared = JSON.parse(readFileSync(SHARED, "utf8"));
+const FIXTURE = join(__dirname, "fixtures", "embedLimitWidgetCases.json");
 const contract = JSON.parse(readFileSync(FIXTURE, "utf8"));
 const CODES = [contract.errorCodes.session, contract.errorCodes.daily];
 const BASE = {
@@ -173,6 +181,68 @@ describe("Vertrag Grenzen: Fixture (AK-11)", () => {
         if (lang === "de")
           expect(t.withEmail).not.toMatch(/\b(du|dich|dir|dein)\b/i);
       }
+  });
+});
+
+describe("Vertrag Grenzen: gemeinsame Fixture mit dem Fork (embedLimitContract.json, AK-11)", () => {
+  const withoutId = ({ id: _id, ...rest }) => rest;
+
+  it("Kennungen, Status und Endpunkt wie in den Fällen des Widgets", async () => {
+    const { LIMIT_ERROR_CODES } = await limits();
+    expect(Object.keys(shared.errorCodes)).toEqual(CODES);
+    expect(LIMIT_ERROR_CODES).toEqual(Object.keys(shared.errorCodes));
+    expect(shared.errorCodes).toEqual({
+      session_limit: "max_chats_per_session",
+      daily_limit: "max_chats_per_day",
+    });
+    expect(shared.limitStatus).toBe(429);
+    expect(shared.endpoint).toBe("POST /api/embed/:embedId/stream-chat");
+    for (const c of shared.limitResponses) {
+      expect(c.status, c.name).toBe(429);
+      expect(shared.errorCodes[c.response.errorCode], c.name).toBe(c.setting);
+      expect(c.widget, c.name).toBe(c.response.errorCode);
+      const mine = contract.limitResponses.find((m) => m.notice === c.widget);
+      expect(mine, c.name).toBeDefined();
+      expect(mine.limit).toBe(c.setting);
+      expect(withoutId(mine.body)).toEqual(c.response);
+    }
+    for (const c of shared.otherResponses) {
+      expect(c.widget, c.name).toBe("technical");
+      expect(CODES, c.name).not.toContain(c.response.errorCode);
+    }
+    expect(shared.supportEmail.serverDefault).toBeNull();
+    expect(shared.supportEmail.widgetDefault).toBe(
+      DEFAULT_SETTINGS.supportEmail,
+    );
+  });
+
+  it("Texte wortgleich mit den Fällen des Widgets (mit und ohne Adresse)", () => {
+    for (const lang of ["de", "en"]) {
+      const t = shared.texts[lang];
+      const mine = contract.texts[lang];
+      for (const code of CODES) {
+        expect(mine[code].withEmail, `${lang} ${code}`).toBe(t[code]);
+        expect(`${mine[code].withoutEmail} ${t.contact}`).toBe(t[code]);
+      }
+      expect(mine.technical.withoutEmail).toBe(t.technical);
+      expect(mine.technical.withEmail).toBe(`${t.technical} ${t.contact}`);
+    }
+  });
+
+  it.each(
+    [...shared.limitResponses, ...shared.otherResponses].map((c) => [
+      c.name,
+      c,
+    ]),
+  )("%s: Antwort -> streamChat -> Nachricht", async (_name, c) => {
+    const { noticeKind } = await limits();
+    const r = await ask(async () => errorResponse(c.status, c.response));
+    expect(r.results).toHaveLength(1);
+    expect(r.message.error).toBe(c.response.error);
+    expect(noticeKind(r.message)).toBe(c.widget);
+    if (c.widget === "technical")
+      expect(r.message).not.toHaveProperty("errorCode");
+    else expect(r.message.errorCode).toBe(c.widget);
   });
 });
 
@@ -363,15 +433,13 @@ describeFork(
     ? "Vertrag Grenzen: Gegenprobe gegen den Fork (KUFER_FORK_DIR)"
     : "Vertrag Grenzen: Gegenprobe gegen den Fork (übersprungen: KUFER_FORK_DIR nicht gesetzt)",
   () => {
-    it("Fixture-Kopie im Fork wortgleich", () => {
+    it("Vertrag im Fork wortgleich (embedLimitContract.json)", () => {
       const copy = join(
         forkDir,
-        "server/__tests__/utils/chats/fixtures/embedChatLimitContract.json",
+        "server/__tests__/utils/chats/fixtures/embedLimitContract.json",
       );
-      expect(existsSync(copy), `Fixture-Kopie im Fork fehlt: ${copy}`).toBe(
-        true,
-      );
-      expect(JSON.parse(readFileSync(copy, "utf8"))).toEqual(contract);
+      expect(existsSync(copy), `Fixture im Fork fehlt: ${copy}`).toBe(true);
+      expect(JSON.parse(readFileSync(copy, "utf8"))).toEqual(shared);
     });
 
     it("beide Kennungen als Text in der Middleware des Forks", () => {

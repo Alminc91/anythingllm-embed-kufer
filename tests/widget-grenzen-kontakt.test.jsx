@@ -9,7 +9,7 @@ import { join } from "node:path";
 // mit gültiger Adresse (NAK-3), andere Fehler nie mit dem Grenzentext
 // (NAK-4), Kontakt im Menü der Titelleiste nur mit Adresse und mit
 // unverändertem Betreff (AK-15, §7). Texte aus der Vertrags-Fixture
-// tests/fixtures/embedChatLimitContract.json (texts). Der Weg der 429-
+// tests/fixtures/embedLimitWidgetCases.json (texts). Der Weg der 429-
 // Antwort bis in die Nachricht: tests/widget-grenzen-kontakt-vertrag.test.js.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,7 +47,7 @@ import { UI_TEXTS } from "../src/utils/layout.js";
 
 const contract = JSON.parse(
   readFileSync(
-    join(__dirname, "fixtures", "embedChatLimitContract.json"),
+    join(__dirname, "fixtures", "embedLimitWidgetCases.json"),
     "utf8",
   ),
 );

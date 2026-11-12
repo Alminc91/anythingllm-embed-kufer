@@ -2,7 +2,8 @@ import { uiTexts } from "@/utils/layout";
 
 // Grenzen des Widgets und Kontakt für Besucher (issues/widget-grenzen-
 // kontakt.md, AK-7 bis AK-11, AK-16, NAK-3, NAK-4, §11 E5). Vertrag mit dem
-// Fork (tests/fixtures/embedChatLimitContract.json): Erreicht eine Frage an
+// Fork (tests/fixtures/embedLimitContract.json, wortgleich im Fork; Fälle
+// des Widgets in embedLimitWidgetCases.json): Erreicht eine Frage an
 // POST /embed/:id/stream-chat eine Grenze, antwortet der Server mit HTTP 429
 // und JSON {id, type "abort", textResponse null, sources [], close true,
 // error, errorMsg (falls vorhanden)} plus errorCode:
