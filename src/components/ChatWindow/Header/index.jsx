@@ -20,6 +20,7 @@ import {
 } from "@/utils/theme";
 import { panelTexts, uiTexts } from "@/utils/layout";
 import { courseCountTexts } from "@/utils/courseCount";
+import { supportEmailValue } from "@/utils/chatLimits";
 import CourseCountSubtitle from "./CourseCount";
 
 // Name und Untertitel immer ausgeschrieben, Standard wie eigener Text des
@@ -460,7 +461,11 @@ function SessionID({ sessionId, conversationId, settings }) {
   );
 }
 
+// Kontakt im Menü der Titelleiste: nur mit gültiger E-Mail für Besucher
+// (widget-grenzen-kontakt AK-15, kein Standard mehr), Betreff und Text der
+// Mail wie bisher
 function ContactSupport({ email = null, settings, sessionId, conversationId }) {
+  email = supportEmailValue(email);
   if (!email) return null;
 
   const subject = uiTexts(settings).mailSubject(
