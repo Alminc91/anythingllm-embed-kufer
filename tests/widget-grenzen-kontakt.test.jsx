@@ -185,7 +185,7 @@ describe("Fehlerblase je errorCode im Verlauf (HistoricalMessage, AK-7 bis AK-10
       expectNotice(historical(settings, codeOf(kind)), "de", kind, null);
   });
 
-  it("fehlende settings: Standard der Sprache aus embedderSettings, ohne Adresse", () => {
+  it("fehlende settings: Sprache und Adresse aus embedderSettings", () => {
     embedderSettings.settings = { language: "en", supportEmail: EMAIL };
     render(
       <HistoricalMessage
