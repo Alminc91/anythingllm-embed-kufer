@@ -8,11 +8,12 @@ import {
 import { DISPLAYED_VALUES } from "@/utils/layout";
 import { errorResponse, withoutErrorCode } from "@/utils/chatLimits";
 
-// Fehler, den onopen schon an handleChat gemeldet hat: onerror meldet ihn
-// nicht ein zweites Mal (widget-grenzen-kontakt). fetch-event-source ruft
-// onerror auch für Fehler aus onopen; mit dem Signal des Aufrufers
-// (ChatContainer) bricht ctrl?.abort() vorher nichts ab, und die zweite,
-// technische Meldung ersetzte die Antwort des Servers samt errorCode.
+// Fehler, der schon an handleChat gemeldet ist (onopen oder onerror): onerror
+// meldet ihn nicht ein zweites Mal (widget-grenzen-kontakt), streamChat
+// endet danach ohne Ablehnung (8.2-rc2 W6). fetch-event-source ruft onerror
+// auch für Fehler aus onopen; mit dem Signal des Aufrufers (ChatContainer)
+// bricht ctrl?.abort() vorher nichts ab, und die zweite, technische Meldung
+// ersetzte die Antwort des Servers samt errorCode.
 const REPORTED = Symbol("reported");
 function reportedError(message) {
   const err = new Error(message);
@@ -172,6 +173,11 @@ const ChatService = {
     // Abbruch (z.B. Reset-Remount / Unmount). Ohne uebergebenes Signal dient der
     // lokale Controller nur als Fallback fuer die bestehenden Fehlerpfade.
     const ctrl = signal ? null : new AbortController();
+    // Gemeldete Fehler beenden den Stream (Wurf in onerror, sonst wiederholt
+    // fetch-event-source die Anfrage) und kommen hier an: abfangen, damit
+    // beim Aufrufer kein unbehandeltes Promise bleibt (8.2-rc2 W6, je
+    // Grenzentreffer „Uncaught (in promise)“ auf der Seite des Kunden).
+    // Andere Fehler lehnen weiter ab.
     await fetchEventSource(`${baseApiUrl}/${embedId}/stream-chat`, {
       method: "POST",
       body: JSON.stringify({
@@ -228,8 +234,11 @@ const ChatService = {
           error: `An error occurred while streaming response. ${err.message}`,
         });
         ctrl?.abort();
-        throw new Error();
+        // jetzt gemeldet: beenden ohne neuen Versuch
+        throw reportedError(err?.message);
       },
+    }).catch((err) => {
+      if (!err?.[REPORTED]) throw err;
     });
   },
 

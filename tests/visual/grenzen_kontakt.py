@@ -7,12 +7,12 @@ Gebautes dist, lokale Testseite (tests/visual/fixtures/widget.html), Server
 gemockt wie datenschutz_fenster.py (theme_visual.Mock); POST /stream-chat
 antwortet je Frage aus einer Warteschlange: 429 mit errorCode nach dem
 Vertrag (tests/fixtures/embedLimitContract.json, Fälle und Texte aus
-embedLimitWidgetCases.json), 500, 503 ohne JSON
-oder ein SSE-Stream. Je Ansicht (Chatfenster und In der Seite, 1440 x 900
-und 390 x 800), Farbschema (hell, dunkel), Sprache (de, en) und mit bzw.
-ohne gespeicherte E-Mail für Besucher drei Fragen nacheinander:
+embedLimitWidgetCases.json), 500, 503 ohne JSON, Netzfehler (Anfrage
+abgebrochen) oder ein SSE-Stream. Je Ansicht (Chatfenster und In der Seite,
+1440 x 900 und 390 x 800), Farbschema (hell, dunkel), Sprache (de, en) und
+mit bzw. ohne gespeicherte E-Mail für Besucher vier Fragen nacheinander:
 
-  - session_limit, daily_limit, technischer Fehler (500): Wortlaut der Blase
+  - session_limit, daily_limit, technischer Fehler (500, Netzfehler): Wortlaut der Blase
     wörtlich wie die Fixture, Art (data-error-notice), mailto-Link ohne
     Betreff nur mit Adresse (Linktext = Adresse, nichts dahinter), ohne
     Adresse kein Link und kein @; Kontrast Überschrift, Sätze und Link zur
@@ -21,6 +21,9 @@ ohne gespeicherte E-Mail für Besucher drei Fragen nacheinander:
     waagerechter Bildlauf (Seite, Verlauf, Blase), Blase ganz im Fenster
   - Menü der Titelleiste: „E-Mail Support“ nur mit Adresse, Betreff wie
     bisher (layout.js mailSubject)
+  - Konsole: kein unbehandeltes Promise (pageerror, „Uncaught“; 8.2-rc2 W6),
+    sonst nur ANYTHING_LLM_CHAT_WIDGET_ERROR und die Meldungen des Browsers
+    zum Status der Antwort bzw. zum Netzfehler
 Einmalig (de, hell, Chatfenster 1440): lange Adresse bricht um ohne
 waagerechten Bildlauf (auch 390), ungültige Adresse ohne Link, 503 ohne
 JSON und eine normale Antwort danach (Regression: kein Fehlertext).
@@ -67,7 +70,10 @@ SEQUENCE = [
     ("session_limit", ("json", 429, LIMITS["session_limit"]["body"])),
     ("daily_limit", ("json", 429, LIMITS["daily_limit"]["body"])),
     ("technical", ("json", 500, SERVER_ERROR["body"])),
+    ("technical", ("abort",)),
 ]
+# Meldungen des Browsers zu den Antworten oben (Status bzw. Netzfehler)
+BROWSER_ERRORS = ("status of 429", "status of 500", "status of 503", "net::ERR_FAILED")
 SUBJECT = {
     "de": 'Anfrage zum Chatbot "{name}" von {host}',
     "en": 'Question about the chatbot "{name}" from {host}',
@@ -87,7 +93,7 @@ def expected(lang, kind, email):
 
 class LimitMock(tv.Mock):
     """Mock mit Warteschlange für /stream-chat: ("json", status, body),
-    ("html", status) oder ("sse", [Ereignisse])."""
+    ("html", status), ("abort",) (Netzfehler) oder ("sse", [Ereignisse])."""
 
     def __init__(self, config, queue):
         super().__init__(config=config)
@@ -103,6 +109,8 @@ class LimitMock(tv.Mock):
                 return route.fulfill(status=item[1], body=json.dumps(item[2]), content_type="application/json")
             if item[0] == "html":
                 return route.fulfill(status=item[1], body="<html><body>Bad Gateway</body></html>", content_type="text/html")
+            if item[0] == "abort":
+                return route.abort("failed")
             body = "".join(f"data: {json.dumps(ev)}\n\n" for ev in item[1])
             return route.fulfill(status=200, body=body, headers={"Content-Type": "text/event-stream"})
         return super().handle(route)
@@ -215,6 +223,17 @@ def check_menu(page, tag, lang, email, shot):
     page.evaluate("() => { const b = window.__q('button[aria-label=Optionen], button[aria-label=Options]'); b && b.click(); }")
 
 
+def check_console(page, tag):
+    # 8.2-rc2 W6: kein unbehandeltes Promise je Fehlerantwort (bis rc1 je
+    # Antwort ein pageerror „Error“, in der Konsole „Uncaught (in promise)“)
+    uncaught = [t for (k, t) in page.console_log if k == "pageerror" or "Uncaught" in t]
+    record(f"Konsole ohne Uncaught ({tag})", not uncaught, {"uncaught": len(uncaught), "erste": uncaught[:3]})
+    errs = [e for e in tv.errors_of(page)
+            if e not in uncaught and "ANYTHING_LLM_CHAT_WIDGET_ERROR" not in e
+            and not any(b in e for b in BROWSER_ERRORS)]
+    record(f"Konsole ohne weitere Fehler ({tag})", not errs, {"weitere": errs[:3]})
+
+
 def check_view(browser, base_url, name, display, width, height, theme, lang, with_email):
     which = "mit" if with_email else "ohne"
     tag = f"{lang} {name} {theme} {which}"
@@ -233,18 +252,7 @@ def check_view(browser, base_url, name, display, width, height, theme, lang, wit
                {"blasen": st["count"], "anfragen": mock.asked})
         page.screenshot(path=str(OUT_DIR / f"grenzen-{TAG}-{lang}-{name}-{theme}-{which}.png"))
         check_menu(page, tag, lang, email, OUT_DIR / f"grenzen-{TAG}-menue-{lang}-{name}-{theme}-{which}.png")
-        # bekannt und unverändert seit vor 8.2: je Fehlerantwort ein
-        # unbehandeltes Promise (streamChat lehnt nach handleChat ab,
-        # ChatContainer fängt es nicht; pageerror „Error“) sowie die
-        # Meldungen ANYTHING_LLM_CHAT_WIDGET_ERROR und die des Browsers zum
-        # Status der Antwort
-        all_errs = tv.errors_of(page)
-        known = [e for e in all_errs if e == "Error"]
-        errs = [e for e in all_errs
-                if e != "Error" and "ANYTHING_LLM_CHAT_WIDGET_ERROR" not in e
-                and "status of 429" not in e and "status of 500" not in e]
-        record(f"Konsole ohne weitere Fehler ({tag})", not errs and len(known) <= len(SEQUENCE),
-               {"weitere": errs[:3], "bekannt_unbehandelt": len(known)})
+        check_console(page, tag)
     finally:
         ctx.close()
 
@@ -262,6 +270,7 @@ def check_once(browser, base_url):
             st = page.evaluate(MEASURE_JS)
             check_notice(st, tag, "de", "daily_limit", LONG_EMAIL, width < 768)
             page.screenshot(path=str(OUT_DIR / f"grenzen-{TAG}-lange-adresse-{name}.png"))
+            check_console(page, tag)
         finally:
             ctx.close()
     # ungültige Adresse, 503 ohne JSON, danach eine normale Antwort
@@ -290,6 +299,7 @@ def check_once(browser, base_url):
         record(f"normale Antwort nach Fehlern ohne Fehlerblase ({tag})", st["count"] == 2, {"blasen": st["count"]})
         page.screenshot(path=str(OUT_DIR / f"grenzen-{TAG}-ungueltig-regression.png"))
         check_menu(page, tag, "de", None, OUT_DIR / f"grenzen-{TAG}-menue-ungueltig.png")
+        check_console(page, tag)
     finally:
         ctx.close()
 

@@ -379,6 +379,118 @@ describe("Vertrag Grenzen: 429 -> streamChat -> handleChat -> Nachricht (AK-11)"
   });
 });
 
+// 8.2-rc2 W6 (Review R5): Ist der Fehler an handleChat gemeldet (Grenze,
+// andere Fehlerantwort, Netzfehler), endet streamChat ohne Ablehnung. Bis
+// rc1 lehnte es danach trotzdem ab; ChatContainer ruft fetchReply() ohne
+// catch auf, auf der Seite des Kunden blieb je Grenzentreffer ein
+// unbehandeltes Promise („Uncaught (in promise) Error“, onunhandledrejection).
+// Das Signal kommt wie im ChatContainer vom Aufrufer.
+describe("Kein unbehandeltes Promise nach einer gemeldeten Fehlerantwort (8.2-rc2 W6)", () => {
+  // Stream, der nach dem ersten Chunk abreißt (Verbindung unterbrochen)
+  function brokenStreamResponse(chunk) {
+    let sent = false;
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => "text/event-stream" },
+      body: new ReadableStream({
+        // erster Lesevorgang: der Chunk, zweiter: Abbruch der Verbindung
+        pull(ctrl) {
+          if (sent) return ctrl.error(new TypeError("network error"));
+          sent = true;
+          ctrl.enqueue(
+            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`),
+          );
+        },
+      }),
+    };
+  }
+  const cases = [
+    ...contract.limitResponses.map((c) => [
+      c.name,
+      async () => errorResponse(c.status, c.body),
+    ]),
+    ...contract.otherErrors.map((c) => [
+      c.name,
+      async () => errorResponse(c.status, c.body),
+    ]),
+    [
+      "Netzfehler vor der Antwort",
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    ],
+    [
+      "Antwort ohne Erfolg und ohne Fehlerstatus (Unknown Error)",
+      async () => ({ ok: false, status: 0, headers: { get: () => null } }),
+    ],
+  ];
+
+  it.each(cases)(
+    "%s: streamChat endet ohne Ablehnung, genau eine Meldung, keine zweite Anfrage",
+    async (_name, impl) => {
+      const r = await ask(impl);
+      expect(r.rejected).toBeNull();
+      expect(r.results).toHaveLength(1);
+      expect(r.results[0]).toMatchObject({ type: "abort", close: true });
+      expect(r.fetchFn).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("Stream reißt nach dem ersten Chunk ab: Meldung, keine Ablehnung", async () => {
+    const r = await ask(async () =>
+      brokenStreamResponse({
+        uuid: "a-1",
+        type: "textResponseChunk",
+        textResponse: "Ja,",
+        sources: [],
+        close: false,
+      }),
+    );
+    expect(r.rejected).toBeNull();
+    expect(r.results.map((c) => c.type)).toEqual([
+      "textResponseChunk",
+      "abort",
+    ]);
+    expect(r.message.error).toMatch(/network error/);
+    expect(r.fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keine zweite Anfrage nach der Grenze (fetch-event-source wiederholt nicht)", async () => {
+    const c = contract.limitResponses[0];
+    const r = await ask(async () => errorResponse(c.status, c.body));
+    // ohne Wurf in onerror stünde nach 1 s (DefaultRetryInterval) die
+    // nächste Anfrage an
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(r.fetchFn).toHaveBeenCalledTimes(1);
+    expect(r.results).toHaveLength(1);
+  });
+
+  it("andere Fehler (nicht gemeldet) lehnen weiter ab", async () => {
+    // onerror selbst scheitert (handleChat wirft): kein Verschlucken
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    window.fetch = globalThis.fetch;
+    const broken = new Error("handleChat kaputt");
+    await expect(
+      ChatService.streamChat(
+        "s-1",
+        BASE,
+        "Frage",
+        () => {
+          throw broken;
+        },
+        "c-1",
+        new AbortController().signal,
+      ),
+    ).rejects.toBe(broken);
+  });
+});
+
 describe("Vertrag Grenzen: supportEmail aus /config ohne Standard (AK-16)", () => {
   const fetchJson = (config) =>
     vi.fn(async () => ({
