@@ -219,7 +219,17 @@
       "\"info\"@vhs.de",
       "info@vhs.de\nBcc: fremd@example.org",
       "info%40vhs.de",
-      "info@vhs.de/pfad"
+      "info@vhs.de/pfad",
+      "in\u00adfo@vhs.de",
+      "info@vhs\u00ad.de",
+      "info\u200b@vhs.de",
+      "info@vhs\u200b.de",
+      "info\u2060@vhs.de",
+      "info@vhs.\u2060de",
+      "info\u202e@vhs.de",
+      "info@\u202evhs.de",
+      "info\u0085@vhs.de",
+      "info@vhs.de\u0085"
     ]
   },
   "texts": {

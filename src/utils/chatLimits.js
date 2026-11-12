@@ -59,13 +59,17 @@ export function withoutErrorCode(chunk) {
 
 // E-Mail für Besucher (Design Center, visual_config supportEmail): einfache
 // Prüfung auf genau eine Adresse, getrimmt; sonst null (kein Link, kein
-// Kontaktsatz). Verboten sind Leerzeichen und Steuerzeichen, Trenner mehrerer
-// Adressen (Komma, Semikolon), Zeichen, die einen mailto-Link um Betreff,
-// Kopie oder Pfad erweitern (? # & % /), HTML-Zeichen (< > ") und Klammern
-// sowie der Doppelpunkt (kein "mailto:" oder "javascript:"). Domain mit
-// mindestens zwei Teilen, die Endung mindestens zwei Zeichen lang.
-const EMAIL_CHARS = '[^\\s\\u0000-\\u001f\\u007f@<>()\\[\\]\\\\,;:"?#&%/]';
-const EMAIL_LABEL = '[^\\s\\u0000-\\u001f\\u007f@<>()\\[\\]\\\\,;:"?#&%/.]';
+// Kontaktsatz). Verboten sind Leerzeichen, Steuerzeichen (\p{Cc}, auch C1
+// wie U+0085) und unsichtbare Formatzeichen (\p{Cf}: weiches Trennzeichen
+// U+00AD, Nullbreite U+200B und U+2060, Bidi-Steuerzeichen wie U+202E; eine
+// so kopierte Adresse sieht richtig aus, die Mail kommt aber zurück),
+// Trenner mehrerer Adressen (Komma, Semikolon), Zeichen, die einen
+// mailto-Link um Betreff, Kopie oder Pfad erweitern (? # & % /),
+// HTML-Zeichen (< > ") und Klammern sowie der Doppelpunkt (kein "mailto:"
+// oder "javascript:"). Domain mit mindestens zwei Teilen, die Endung
+// mindestens zwei Zeichen lang.
+const EMAIL_CHARS = '[^\\s\\p{Cc}\\p{Cf}@<>()\\[\\]\\\\,;:"?#&%/]';
+const EMAIL_LABEL = '[^\\s\\p{Cc}\\p{Cf}@<>()\\[\\]\\\\,;:"?#&%/.]';
 const EMAIL_RX = new RegExp(
   `^${EMAIL_CHARS}+@(?:${EMAIL_LABEL}+\\.)+${EMAIL_LABEL}{2,}$`,
   "u",

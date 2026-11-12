@@ -90,6 +90,13 @@ const expected = (lang, kind, email) =>
     : TEXTS[lang][kind].withoutEmail;
 // errorCode der Fixture je Art (technical = ohne Kennung)
 const codeOf = (kind) => (kind === "technical" ? undefined : kind);
+// Name des Testfalls: unsichtbare Zeichen (Steuer- und Formatzeichen) als
+// \uXXXX lesbar machen
+const label = (v) =>
+  String(JSON.stringify(v)).replace(
+    /[\p{Cc}\p{Cf}]/gu,
+    (c) => `\\u${c.codePointAt(0).toString(16).padStart(4, "0")}`,
+  );
 
 function historical(settings, errorCode, error = "Rate limit exceeded") {
   render(
@@ -258,9 +265,7 @@ describe("ChatHistory reicht errorCode und settings an beide Blasen (AK-11 Widge
 });
 
 describe("Kein HTML, mailto nur mit gültiger Adresse (NAK-3)", () => {
-  it.each(
-    contract.supportEmailValues.invalid.map((v) => [JSON.stringify(v), v]),
-  )(
+  it.each(contract.supportEmailValues.invalid.map((v) => [label(v), v]))(
     "supportEmail %s: kein Link, kein Kontaktsatz, kein Element aus der Eingabe",
     (_label, value) => {
       for (const kind of KINDS) {
