@@ -198,7 +198,9 @@ describe("W50: Gruppe A (im Design Center einstellbar) nur aus dem Design Center
       assistantSubtitle: "Online-Berater mit künstlicher Intelligenz",
       greetingBubbleText: null,
       sendMessageText: null,
-      supportEmail: "info@kufer.de",
+      // Standard des Widgets seit widget-grenzen-kontakt AK-16 leer (bis
+      // 8.1 "info@kufer.de")
+      supportEmail: "",
       brandImageUrl: scriptAttrs.DEFAULT_SETTINGS.brandImageUrl,
       courseCardsPosition: "above",
     });

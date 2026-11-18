@@ -17,6 +17,7 @@ import {
 import { applyTheme, userTextColorFor, DEFAULT_ACCENT } from "@/utils/theme";
 import { syncI18nLanguage } from "@/i18n";
 import { widgetLanguage } from "@/utils/language";
+import { supportEmailValue } from "@/utils/chatLimits";
 
 // Rangfolge der Einbau-Angaben (Fixliste 7.22-rc17, E23 und E24):
 // - Gruppe A (DC_COVERED): im Design Center 2.0 einstellbar (je ein Feld im
@@ -70,7 +71,7 @@ export const DC_COVERED = [
   "bubblePersistence",
   "welcomeBubblesDesktop",
   "welcomeBubblesMobile",
-  "supportEmail", // Support-E-Mail
+  "supportEmail", // E-Mail für Besucher
 ];
 // Ohne Wirkung, aber nicht aus dem Design Center: der KI-Hinweis (E24) und
 // Altangaben, die schon früher nichts bewirkten (Fenstergröße: Bestands-
@@ -320,7 +321,12 @@ export const DEFAULT_SETTINGS = {
 
   // behaviors
   openOnLoad: "off", // or "on"
-  supportEmail: "info@kufer.de", // string of email for contact
+  // E-Mail für Besucher (Design Center „E-Mail für Besucher“, Gruppe A):
+  // Kontakt im Menü der Titelleiste und Kontaktsatz der Fehlerblase. Kein
+  // Standard (widget-grenzen-kontakt AK-16, bis 8.1 "info@kufer.de"), der
+  // Server liefert auch keinen; ohne gültige Adresse (utils/chatLimits.js
+  // supportEmailValue) kein Link und kein Kontaktsatz.
+  supportEmail: "",
   username: null, // The display or readable name set on a script
   // Startvorschläge (Liste von Strings): gespeichert im Design Center (auch
   // leer) vor dem Standard der Sprache vom Server (applyDefaultMessagesOrder,
@@ -488,6 +494,8 @@ const validations = {
 
   defaultMessages: messageList,
   chatbotBubblesMessages: messageList,
+  // ungültige Adresse -> verworfen, es gilt der Standard "" (kein Link)
+  supportEmail: (value) => supportEmailValue(value) ?? undefined,
 };
 
 // Startvorschläge und Willkommensblasen: Der Server liefert ein Array von

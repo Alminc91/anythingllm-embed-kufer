@@ -276,6 +276,22 @@ export const UI_TEXTS = {
     // neutral für alle Kundenarten.
     courseCountWord: "Kurse",
     courseCountLead: "aktuell",
+    // Fehlerblase (widget-grenzen-kontakt, AK-7 bis AK-9, Nutzer 12.11.2026,
+    // utils/chatLimits.js errorNotice): je Art die Sätze, der erste als
+    // Überschrift; danach der Kontaktsatz, nur mit gültiger E-Mail für
+    // Besucher, die Adresse folgt als Link ohne Punkt. Wortgleich mit
+    // tests/fixtures/embedLimitWidgetCases.json (texts) und dem Vertrag
+    // tests/fixtures/embedLimitContract.json.
+    errorSessionLimit: ["Für heute ist die Anzahl Ihrer Fragen erreicht."],
+    errorDailyLimit: [
+      "Unser Chatbot steht für heute nicht mehr zur Verfügung.",
+      "Morgen ist er wieder für Sie da.",
+    ],
+    errorTechnical: [
+      "Unser Chatbot ist vorübergehend nicht verfügbar.",
+      "Bitte versuchen Sie es später erneut.",
+    ],
+    errorContact: "Gern hilft Ihnen unser Team persönlich weiter:",
   },
   en: {
     menuReset: "Reset chat",
@@ -310,6 +326,17 @@ export const UI_TEXTS = {
     moreCourses: "More courses mentioned",
     courseCountWord: "courses",
     courseCountLead: "currently",
+    // §11 E4 (widget-grenzen-kontakt)
+    errorSessionLimit: ["You have reached today's limit of questions."],
+    errorDailyLimit: [
+      "Our chatbot is no longer available today.",
+      "It will be back for you tomorrow.",
+    ],
+    errorTechnical: [
+      "Our chatbot is temporarily unavailable.",
+      "Please try again later.",
+    ],
+    errorContact: "Our team will be happy to help you personally:",
   },
 };
 export function uiTexts(settings = {}) {

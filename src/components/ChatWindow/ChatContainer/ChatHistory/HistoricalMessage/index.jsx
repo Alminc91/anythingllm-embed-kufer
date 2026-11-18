@@ -7,7 +7,6 @@ import React, {
   useRef,
 } from "react";
 import {
-  Warning,
   CaretDown,
   SpeakerHigh,
   Stop,
@@ -25,6 +24,7 @@ import ChatService from "@/models/chatService";
 import CourseCards from "../CourseCards";
 import AssistantName from "../AssistantName";
 import FollowUps from "../FollowUps";
+import ErrorNotice from "../ErrorNotice";
 import { stripThink, THINK_BLOCK_RX } from "@/utils/chat/think";
 import {
   courseCardsLayout,
@@ -514,6 +514,8 @@ const HistoricalMessage = forwardRef(
       nameInWrapper = false,
       error = false,
       errorMsg = null,
+      // Kennung der Grenze (utils/chatLimits.js): Text der Fehlerblase
+      errorCode = null,
       sentAt,
       chatId = null,
       feedbackScore = null,
@@ -659,15 +661,7 @@ const HistoricalMessage = forwardRef(
           >
             <div className="allm-flex allm-flex-col">
               {error ? (
-                <div className="allm-p-2 allm-rounded-lg allm-bg-amber-50 allm-text-amber-700">
-                  <span className="allm-inline-block">
-                    <Warning className="allm-h-4 allm-w-4 allm-mb-1 allm-inline-block" />{" "}
-                    Unser Chatbot ist vorübergehend nicht verfügbar.
-                  </span>
-                  <p className="allm-text-xs allm-mt-2">
-                    Bitte versuchen Sie es später erneut.
-                  </p>
-                </div>
+                <ErrorNotice settings={settings} errorCode={errorCode} />
               ) : (
                 <>
                   {role === "assistant" && thoughts.length > 0 && (

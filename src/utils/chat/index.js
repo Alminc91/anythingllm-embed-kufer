@@ -5,6 +5,7 @@ import {
   splitFollowUpsLine,
   stripCardsMarker,
 } from "@/utils/courseCards";
+import { limitErrorCode } from "@/utils/chatLimits";
 
 // For handling of synchronous chats that are not utilizing streaming or chat requests.
 // Karten-Marker ("[[KARTEN: …]]", ältere Server) wird hier bei der Aufnahme
@@ -51,23 +52,11 @@ export default function handleChat(
   const sentAt = lastMessage?.sentAt;
 
   if (type === "abort") {
-    setLoadingResponse(false);
-    setChatHistory([
-      ...remHistory,
-      {
-        uuid,
-        content: textResponse,
-        role: "assistant",
-        sources,
-        closed: true,
-        error,
-        errorMsg,
-        animate: false,
-        pending: false,
-        sentAt,
-      },
-    ]);
-    _chatHistory.push({
+    // Grenze erreicht (widget-grenzen-kontakt): Kennung nur aus der
+    // 429-Antwort (models/chatService.js), hier nur die beiden Werte
+    // wörtlich; die Fehlerblase wählt danach ihren Text (ErrorNotice)
+    const code = limitErrorCode(chatResult.errorCode);
+    const entry = () => ({
       uuid,
       content: textResponse,
       role: "assistant",
@@ -75,10 +64,14 @@ export default function handleChat(
       closed: true,
       error,
       errorMsg,
+      ...(code ? { errorCode: code } : {}),
       animate: false,
       pending: false,
       sentAt,
     });
+    setLoadingResponse(false);
+    setChatHistory([...remHistory, entry()]);
+    _chatHistory.push(entry());
   } else if (type === "textResponse") {
     // Vollständige Antwort in einem Stück. Gibt es zur uuid schon eine
     // (wartende) Antwort — angelegt vom courseSources-/courseTeasers-Chunk —,
