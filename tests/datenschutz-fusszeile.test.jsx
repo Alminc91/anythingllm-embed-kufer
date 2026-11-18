@@ -16,7 +16,7 @@ describe("Vertrag: Texte de/en wortgleich mit dem Fork", () => {
       privacyLinkText: "Datenschutz",
       privacyAiTitle: "Hinweis zur KI",
       privacyAiText:
-        "Unser KI-Berater ist auf richtige Auskünfte optimiert. Wie jede KI kann er sich dennoch einmal irren. Wichtige Angaben wie Termine und Preise finden Sie zur Kontrolle immer auf unserer Website.",
+        "Unsere KI ist auf richtige Auskünfte optimiert. Wie jede KI kann sie sich dennoch einmal irren. Bitte prüfen Sie wichtige Angaben.",
       privacyCloseText: "Schließen",
       privacyCloseLabel: "Datenschutz schließen",
       privacyTitle: "Datenschutz",
@@ -27,7 +27,7 @@ describe("Vertrag: Texte de/en wortgleich mit dem Fork", () => {
       privacyLinkText: "Privacy",
       privacyAiTitle: "About the AI",
       privacyAiText:
-        "Our AI advisor is optimised for accurate information. Like any AI, it can still make the occasional mistake. You can always check important details such as dates and prices on our website.",
+        "Our AI is optimized for accurate answers. Like any AI, it can still make mistakes. Please verify important information.",
       privacyCloseText: "Close",
       privacyCloseLabel: "Close privacy notice",
       privacyTitle: "Privacy",
@@ -66,7 +66,7 @@ describe("Vertrag: Texte de/en wortgleich mit dem Fork", () => {
         expect(value).not.toMatch(/\*innen|:innen|Innen\b|_innen/);
       }
     // nur Sie-Form, kein Du
-    expect(CONTRACT.de.privacyAiText).toMatch(/finden Sie/);
+    expect(CONTRACT.de.privacyAiText).toMatch(/prüfen Sie/);
     expect(CONTRACT.de.privacyAiText).not.toMatch(/\b(du|dein|dich|dir)\b/i);
   });
 
