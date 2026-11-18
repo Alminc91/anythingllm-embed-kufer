@@ -17,7 +17,9 @@ mit bzw. ohne gespeicherte E-Mail für Besucher vier Fragen nacheinander:
     Betreff nur mit Adresse (Linktext = Adresse, nichts dahinter), ohne
     Adresse kein Link und kein @; Kontrast Überschrift, Sätze und Link zur
     Fläche der Blase mindestens 4,5:1; Mail-Link mindestens 44 px hoch
-    (Trefferfläche, Sollwert §8 mobil, hier in jeder Ansicht); kein
+    (Trefferfläche, Sollwert §8 mobil, hier in jeder Ansicht); Adresse in
+    eigener Zeile am Zeilenanfang unter dem ganzen Kontaktsatz, der Satz
+    nur normal umbrochen (R35, 18.11.2026); innerText mit dem Wortlaut; kein
     waagerechter Bildlauf (Seite, Verlauf, Blase), Blase ganz im Fenster
   - Menü der Titelleiste: „E-Mail Support“ nur mit Adresse, Betreff wie
     bisher (layout.js mailSubject)
@@ -138,9 +140,24 @@ MEASURE_JS = r"""
   const a = n.querySelector('a');
   const title = n.querySelector('span');
   const ps = [...n.querySelectorAll('p')];
+  // R35: Zeilen des Kontaktsatzes vor dem Link (Range bis vor den Link)
+  let lead = null;
+  if (a) {
+    const cp = a.parentElement;
+    const rg = document.createRange();
+    rg.setStart(cp, 0);
+    rg.setEndBefore(a);
+    const rs = [...rg.getClientRects()].filter((b) => b.width > 0.5);
+    const tops = [...new Set(rs.map((b) => Math.round(b.top)))].sort((x, y) => x - y);
+    const lh = parseFloat(getComputedStyle(cp).lineHeight);
+    lead = { lines: tops.length, tops, lineHeight: lh, left: +cp.getBoundingClientRect().left.toFixed(1),
+      bottom: rs.length ? +Math.max(...rs.map((b) => b.bottom)).toFixed(1) : null };
+  }
   Object.assign(out, {
     kind: n.getAttribute('data-error-notice'),
     text: n.textContent.replace(/\s+/g, ' ').trim(),
+    inner: n.innerText.replace(/\s+/g, ' ').trim(),
+    lead,
     bg: getComputedStyle(n).backgroundColor,
     title: { color: getComputedStyle(title).color, size: getComputedStyle(title).fontSize },
     ps: ps.map((p) => ({ color: getComputedStyle(p).color, size: getComputedStyle(p).fontSize })),
@@ -193,11 +210,24 @@ def check_notice(st, tag, lang, kind, email, mobile):
         if link:
             record(f"Trefferfläche Mail-Link >= 44 px ({tag} {kind})", link["rect"]["h"] >= 44,
                    {"h": link["rect"]["h"], "w": link["rect"]["w"], "mobil": mobile})
+            # R35 (18.11.2026): Adresse in eigener Zeile unter dem ganzen
+            # Kontaktsatz, am Zeilenanfang; der Satz bricht nur normal um
+            # (Zeilenabstand = Zeilenhöhe, keine Lücke wie bis rc11 bei 390)
+            ld = st["lead"]
+            steps = [b - a for a, b in zip(ld["tops"], ld["tops"][1:])]
+            ok = (ld["bottom"] is not None and link["rect"]["y"] >= ld["bottom"] - 0.5
+                  and abs(link["rect"]["x"] - ld["left"]) <= 0.5
+                  and all(d <= ld["lineHeight"] + 1 for d in steps))
+            record(f"Adresse in eigener Zeile unter dem Satz ({tag} {kind})", ok,
+                   {"satz": ld, "link": link["rect"], "abstand_unten": round(st["rect"]["bottom"] - link["rect"]["bottom"], 1)})
             c = contrast(link["color"], st["bg"])
             record(f"Kontrast Mail-Link >= 4,5 ({tag} {kind})", c >= 4.5, {"kontrast": c, "fg": link["color"], "bg": st["bg"]})
     else:
         record(f"ohne Adresse kein Link, kein @ ({tag} {kind})", link is None and "@" not in (st.get("text") or ""),
                {"link": link, "text": st.get("text")})
+    # Text der Seite (Vorlesen, Kopieren): auch innerText mit dem Wortlaut,
+    # Satz und Adresse nur durch Leerraum getrennt (R35)
+    record(f"innerText mit Wortlaut ({tag} {kind})", st.get("inner") == exp, {"inner": st.get("inner")})
     cs = [contrast(st["title"]["color"], st["bg"])] + [contrast(p["color"], st["bg"]) for p in st["ps"]]
     record(f"Kontrast Text >= 4,5 ({tag} {kind})", min(cs) >= 4.5, {"kontrast": cs, "bg": st["bg"]})
     vw = st["viewport"]["w"]

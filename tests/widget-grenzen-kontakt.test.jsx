@@ -384,6 +384,51 @@ describe("Kontakt im Menü der Titelleiste nur mit Adresse (AK-15, §7 Betreff)"
   });
 });
 
+// R35 (Nutzerentscheidung 18.11.2026): die Adresse steht in jeder Breite in
+// einer eigenen Zeile unter dem Kontaktsatz; bis rc11 lief der Link als
+// inline-flex im Satz mit, bei 390 px stand „weiter:“ abgetrennt mit großer
+// Lücke hinter „persönlich“. jsdom rechnet kein Layout, deshalb prüft der
+// Test die Anzeigeart des Links; die Lage misst tests/visual/grenzen_kontakt.py.
+describe("Mail-Adresse in eigener Zeile unter dem Kontaktsatz (R35)", () => {
+  const INLINE = /^allm-inline(-flex|-block)?$/;
+  for (const lang of ["de", "en"])
+    it(`${lang}: Link als Block, Satz zusammen, Trefferfläche und Optik wie bisher`, () => {
+      const el = historical(
+        { language: lang, supportEmail: EMAIL },
+        "daily_limit",
+      );
+      const a = el.querySelector("a");
+      const cls = [...a.classList];
+      // eigene Zeile: Blockelement (flex), nie inline im Satz
+      expect(cls).toContain("allm-flex");
+      expect(cls.filter((c) => INLINE.test(c))).toEqual([]);
+      // Trefferfläche nur so breit wie die Adresse, nicht die ganze Blase
+      expect(cls).toContain("allm-w-fit");
+      expect(cls).not.toContain("allm-w-full");
+      // bleibt: 44 px, amber-800, unterstrichen, halbfett, Umbruch, Höhe
+      for (const c of [
+        "allm-min-h-[44px]",
+        "allm-max-w-full",
+        "allm-items-center",
+        "allm-font-semibold",
+        "allm-text-amber-800",
+        "allm-underline",
+      ])
+        expect(cls, c).toContain(c);
+      expect(a.style.overflowWrap).toBe("anywhere");
+      expect(a.style.wordBreak).toBe("break-word");
+      // Satz und Adresse im selben Absatz, dazwischen ein Leerzeichen im
+      // Text der Seite; der Satz selbst ohne festen Umbruch oder nowrap
+      const p = a.parentElement;
+      expect(p.tagName).toBe("P");
+      expect(p.classList.contains("allm-mb-0")).toBe(true);
+      expect(p.textContent).toBe(`${UI_TEXTS[lang].errorContact} ${EMAIL}`);
+      expect(p.querySelectorAll("br")).toHaveLength(0);
+      expect(p.className).not.toMatch(/nowrap/);
+      expect(a.getAttribute("href")).toBe(`mailto:${EMAIL}`);
+    });
+});
+
 describe("Texte im Code (Textregeln)", () => {
   it("de und en gepflegt, wortgleich mit der Fixture, keine Gedankenstriche", () => {
     for (const lang of ["de", "en"]) {

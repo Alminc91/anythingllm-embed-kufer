@@ -16,7 +16,12 @@ const LINK_WRAP = { overflowWrap: "anywhere", wordBreak: "break-word" };
 // (Vorlesen, Kopieren) zusammen. Der Mail-Link hat mindestens 44 px Höhe
 // als Trefferfläche (Prüfmatrix §8) und bricht lange Adressen um; sein
 // Kasten ersetzt den unteren Rand des Kontaktsatzes (allm-mb-0), so bleibt
-// der Abstand unten wie bei der Blase ohne Kontakt.
+// der Abstand unten wie bei der Blase ohne Kontakt. Der Link ist ein Block
+// (flex, so breit wie die Adresse): die Adresse steht in jeder Breite in
+// einer eigenen Zeile unter dem ganzen Kontaktsatz, der Satz bricht nur
+// normal um (R35, Nutzerentscheidung 18.11.2026; inline-flex trennte bei
+// 390 px „weiter:“ mit großer Lücke ab). Das Leerzeichen davor bleibt im
+// Text der Seite.
 export default function ErrorNotice({ settings = null, errorCode = null }) {
   const notice = errorNotice(settings || embedderSettings.settings, errorCode);
   return (
@@ -44,7 +49,7 @@ export default function ErrorNotice({ settings = null, errorCode = null }) {
             {notice.contact.lead}{" "}
             <a
               href={`mailto:${notice.contact.email}`}
-              className="allm-inline-flex allm-items-center allm-min-h-[44px] allm-max-w-full allm-font-semibold allm-text-amber-800 allm-underline"
+              className="allm-flex allm-w-fit allm-items-center allm-min-h-[44px] allm-max-w-full allm-font-semibold allm-text-amber-800 allm-underline"
               style={LINK_WRAP}
             >
               {notice.contact.email}
